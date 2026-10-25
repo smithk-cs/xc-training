@@ -27,6 +27,7 @@ def cmd_gen_keys(_):
     print(f"TOKEN_KEY={generate_token_key()}")
     print(f"GARMIN_WEBHOOK_SECRET={secrets.token_urlsafe(24)}")
     print(f"CRON_SECRET={secrets.token_urlsafe(32)}")
+    print(f"SETUP_CODE={secrets.token_urlsafe(18)}")
 
 
 def cmd_init_db(_):
@@ -144,7 +145,7 @@ def cmd_check(_):
 def main(argv=None):
     p = argparse.ArgumentParser(prog="python -m xcapp.cli", description="XC Training command-line tools")
     sub = p.add_subparsers(dest="cmd", required=True)
-    sub.add_parser("gen-keys", help="print new SECRET_KEY, TOKEN_KEY, GARMIN_WEBHOOK_SECRET and CRON_SECRET values").set_defaults(fn=cmd_gen_keys)
+    sub.add_parser("gen-keys", help="print new SECRET_KEY, TOKEN_KEY, GARMIN_WEBHOOK_SECRET, CRON_SECRET and SETUP_CODE values").set_defaults(fn=cmd_gen_keys)
     sub.add_parser("init-db", help="create the database tables").set_defaults(fn=cmd_init_db)
     sub.add_parser("check", help="check the settings").set_defaults(fn=cmd_check)
     c = sub.add_parser("create-user", help="create a staff account")

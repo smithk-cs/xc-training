@@ -37,3 +37,8 @@ node_modules/
 
 # Supabase JWT signing keys
 supabase/signing_keys.json
+
+# Cloudflare Wrangler local state and local secrets
+.wrangler/
+.dev.vars
+.dev.vars.*

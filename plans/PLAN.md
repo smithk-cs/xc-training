@@ -17,7 +17,7 @@ briefing, so the staff can adjust training before athletes get hurt.
 | Design | Jesuit red and gold; phone mockups of every athlete screen on the design canvas. |
 | Garmin developer program | **Approved.** Credentials not yet added to the app. |
 | Garmin notification format | **Not yet verified** against Garmin's documentation (needs the Activity API docs). |
-| Hosting | **Not started.** Needs a server and an https address from school IT. |
+| Hosting | **In progress.** No school server, so: Cloudflare Containers (app) + Supabase (database), deployed from GitHub. Steps in `DEPLOY.md`. |
 | School approvals | **Not started.** Athletic director / district data approval; communications office permission for name and logo. |
 | Claude API account | **Not started.** Decide who owns it and pays. |
 | Logo | Placeholder. Waiting on the approved file. |
@@ -34,7 +34,7 @@ briefing, so the staff can adjust training before athletes get hurt.
 - [ ] Confirm girls' training-group cutoffs; send the easy-pace column and VDOT rows below 48
 
 ### Phase 2: go live with staff (after hosting is up, about 1-2 weeks)
-- [ ] Deploy with Docker; run `python -m xcapp.cli check`
+- [ ] Deploy to Cloudflare + Supabase (`DEPLOY.md`); create the first admin with `SETUP_CODE`
 - [ ] Add Garmin credentials and notification endpoints
 - [ ] Coach connects his own watch, runs, and checks the Sync log and athlete page
 - [ ] Import last season's results and this season's goals
@@ -69,7 +69,7 @@ briefing, so the staff can adjust training before athletes get hurt.
 | Show athletes their group and VDOT? | Coaches | On by default; one switch on the Groups page. |
 | Who owns the Claude API account | AD / booster club | Billing owner. |
 | Data retention after graduation | AD / district | Admin can delete an athlete and all their data. |
-| Hosting location and address | School IT | Needs https. |
+| Hosting location and address | Coach | Cloudflare `workers.dev` address to start; a school address later if wanted. Name Cloudflare and Supabase in the district data approval. |
 
 ## Related plans
 

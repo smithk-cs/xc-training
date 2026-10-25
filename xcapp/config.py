@@ -35,6 +35,7 @@ class Settings:
     anthropic_base_url: str
     nightly_hour: int
     cron_secret: str  # shared with the hosting platform's timer that calls POST /cron/nightly
+    setup_code: str  # lets the first admin be created on the sign-in page when no staff accounts exist
     team_name: str
     team_logo_file: str  # path to the approved logo (png, jpg, svg or webp)
     as_of_date: str  # optional fixed "today" (YYYY-MM-DD) for demos and testing
@@ -78,6 +79,7 @@ class Settings:
             anthropic_base_url=os.getenv("ANTHROPIC_BASE_URL", ""),
             nightly_hour=int(os.getenv("NIGHTLY_HOUR", "4")),
             cron_secret=os.getenv("CRON_SECRET", ""),
+            setup_code=os.getenv("SETUP_CODE", ""),
             team_name=os.getenv("TEAM_NAME", "XC Training"),
             team_logo_file=os.getenv("TEAM_LOGO_FILE", ""),
             as_of_date=os.getenv("AS_OF_DATE", ""),
@@ -102,6 +104,8 @@ class Settings:
                 out.append("AS_OF_DATE must look like 2026-10-25.")
         if self.cron_secret and len(self.cron_secret) < 32:
             out.append("CRON_SECRET must be at least 32 characters (run: python -m xcapp.cli gen-keys).")
+        if self.setup_code and len(self.setup_code) < 20:
+            out.append("SETUP_CODE must be at least 20 characters (run: python -m xcapp.cli gen-keys).")
         if self.garmin_client_id and not self.garmin_webhook_secret:
             out.append("GARMIN_WEBHOOK_SECRET is required once Garmin is configured.")
         return out

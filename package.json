@@ -2,9 +2,14 @@
   "name": "xc-training",
   "private": true,
   "scripts": {
-    "supabase": "supabase"
+    "supabase": "supabase",
+    "test:worker": "node --test cloudflare/app.test.js",
+    "deploy": "wrangler deploy"
   },
   "devDependencies": {
-    "supabase": "^2.122.0"
-  }
+    "@cloudflare/containers": "^0.3.7",
+    "supabase": "^2.122.0",
+    "wrangler": "^4.152.0"
+  },
+  "type": "module"
 }

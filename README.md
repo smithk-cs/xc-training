@@ -41,6 +41,10 @@ Open http://localhost:8000 and sign in.
 
 ## Run it for real
 
+**Cloudflare and Supabase (no server needed):** follow **DEPLOY.md**. GitHub tests and deploys every change.
+
+**Your own server with Docker:**
+
 1. **Server and address.** Any Linux server with Docker and a DNS name pointed at it (school IT can usually
    provide a small virtual machine). Garmin requires HTTPS; the included Caddy proxy gets a certificate automatically.
 2. **Settings.** `cp .env.example .env`, fill it in (`python -m xcapp.cli gen-keys` makes the secrets). Never change

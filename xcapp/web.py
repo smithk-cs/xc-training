@@ -93,6 +93,13 @@ class _LoginLimiter:
         self.fails.pop(key, None)
 
 
+def clean_username(raw) -> str:
+    name = str(raw or "").strip().lower()
+    if not name or not name.replace(".", "").replace("_", "").replace("-", "").isalnum():
+        raise ValueError("Usernames can use letters, numbers, dots, dashes and underscores.")
+    return name
+
+
 def create_app() -> FastAPI:
     s = settings()
     problems = s.problems()
@@ -205,7 +212,36 @@ def create_app() -> FastAPI:
     @app.get("/login", response_class=HTMLResponse)
     def login_page(request: Request, db: Session = Depends(get_db, scope="function")):
         first_run = db.scalar(select(func.count(StaffUser.id))) == 0
-        return render(request, "login.html", first_run=first_run)
+        return render(request, "login.html", first_run=first_run, setup_ready=bool(s.setup_code))
+
+    @app.post("/setup")
+    async def first_admin(request: Request, db: Session = Depends(get_db, scope="function")):
+        """Create the first admin from the sign-in page (hosts without a command line). Gone once any staff account exists."""
+        form = await form_checked(request)
+        if not s.setup_code or db.scalar(select(func.count(StaffUser.id))):
+            raise HTTPException(404, "Not found.")
+        key = request.client.host if request.client else "?"
+        if limiter.blocked(key):
+            flash(request, "Too many attempts. Wait 10 minutes and try again.", "error")
+            return back("/login")
+        if not hmac.compare_digest(str(form.get("setup_code", "")).strip().encode(), s.setup_code.encode()):
+            limiter.fail(key)
+            flash(request, "That setup code is not right.", "error")
+            return back("/login")
+        try:
+            user = StaffUser(username=clean_username(form.get("username")), role="admin",
+                             password_hash=hash_password(str(form.get("password", ""))))
+        except ValueError as exc:
+            flash(request, str(exc), "error")
+            return back("/login")
+        db.add(user)
+        db.flush()
+        log(db, "admin", f"First admin account {user.username} created on the sign-in page.")
+        limiter.clear(key)
+        request.session.clear()
+        request.session["uid"] = user.id
+        flash(request, f"Welcome, {user.username}. Add your other staff under Staff.")
+        return back("/")
 
     @app.post("/login")
     async def login(request: Request, db: Session = Depends(get_db, scope="function")):
@@ -623,9 +659,7 @@ def create_app() -> FastAPI:
     async def staff_add(request: Request, user=Depends(staff("admin"), scope="function"), db: Session = Depends(get_db, scope="function")):
         f = await form_checked(request)
         try:
-            name = str(f.get("username", "")).strip().lower()
-            if not name or not name.replace(".", "").replace("_", "").replace("-", "").isalnum():
-                raise ValueError("Usernames can use letters, numbers, dots, dashes and underscores.")
+            name = clean_username(f.get("username"))
             if f.get("role") not in ROLES:
                 raise ValueError("Pick a role.")
             if db.scalar(select(StaffUser).where(StaffUser.username == name)):
