@@ -11,7 +11,19 @@ sys.path.insert(0, str(ROOT))
 @pytest.fixture(autouse=True)
 def env(tmp_path, monkeypatch):
     from cryptography.fernet import Fernet
-    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path}/t.db")
+    # TEST_DATABASE_URL runs the suite on Postgres (e.g. postgresql+psycopg://...); it is wiped before each test.
+    pg_url = os.getenv("TEST_DATABASE_URL")
+    if pg_url:
+        from sqlalchemy import create_engine, text
+        from xcapp import db as _db
+        if _db._engine is not None:  # release the previous test's connections so the wipe can't block
+            _db._engine.dispose()
+        eng = create_engine(pg_url)
+        with eng.begin() as conn:
+            conn.execute(text("DROP SCHEMA public CASCADE"))
+            conn.execute(text("CREATE SCHEMA public"))
+        eng.dispose()
+    monkeypatch.setenv("DATABASE_URL", pg_url or f"sqlite:///{tmp_path}/t.db")
     monkeypatch.setenv("SECRET_KEY", "s" * 48)
     monkeypatch.setenv("TOKEN_KEY", Fernet.generate_key().decode())
     monkeypatch.setenv("SECURE_COOKIES", "false")

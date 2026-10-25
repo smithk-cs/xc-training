@@ -9,4 +9,5 @@ itsdangerous==2.2.0
 cryptography==46.0.6
 anthropic==2.2.0
 garmin-fit-sdk==21.218.0
-# For Postgres instead of SQLite, also install: psycopg[binary]
+# Postgres driver (Supabase). SQLite needs nothing extra.
+psycopg[binary]==3.3.6
