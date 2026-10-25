@@ -12,7 +12,7 @@
 <body class="{% block bodyclass %}{% endblock %}">
 {% if user %}
 <header class="top">
-  <a class="brand" href="/">{% if has_logo %}<img src="/branding/logo" alt="">{% endif %}<span>{{ team_name }}</span></a>
+  <a class="brand" href="/">{% if has_logo() %}<img src="/branding/logo" alt="">{% endif %}<span>{{ team_name }}</span></a>
   <nav aria-label="Main">
     {% set p = request.url.path %}
     <a href="/dashboard" {% if p == '/dashboard' %}aria-current="page"{% endif %}>Dashboard</a>

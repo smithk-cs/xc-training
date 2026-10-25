@@ -94,9 +94,10 @@ runners can be added as results only.
 
 ## 6. Logo and team name
 
-Once the communications office approves it, copy the logo file into the server's data folder (for example
-`/data/team-logo.png`), set `TEAM_LOGO_FILE=/data/team-logo.png` and `TEAM_NAME=Jesuit Cross Country` in `.env`, and
-restart. It appears on every coach page and every athlete page.
+Once the communications office approves it, sign in as admin, open **Staff**, and under **Team logo** upload the file
+(PNG, JPEG, WebP or SVG, up to 1 MB). It appears on every coach page and every athlete page right away, and is kept in
+the database, so it survives restarts and new versions. Set `TEAM_NAME=Jesuit Cross Country` in the app's settings.
+(On a Docker server you can instead set `TEAM_LOGO_FILE=/data/team-logo.png`; an uploaded logo takes priority.)
 
 ## 7. What athletes do after each run (and on days they don't)
 

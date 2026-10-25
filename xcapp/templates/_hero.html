@@ -1,5 +1,5 @@
 <header class="hero">
-  <div class="team">{% if has_logo %}<img src="/branding/logo" alt="">{% endif %}<span>{{ team_name }}</span></div>
+  <div class="team">{% if has_logo() %}<img src="/branding/logo" alt="">{% endif %}<span>{{ team_name }}</span></div>
   {% if back_url %}<a class="back" href="{{ back_url }}">‹ {{ back_label }}</a>{% endif %}
   <h1>{{ hero_title }}</h1>
   {% if hero_text %}<p>{{ hero_text }}</p>{% endif %}

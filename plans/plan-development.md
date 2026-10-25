@@ -10,7 +10,7 @@ Run the checks after any change: `pip install -r requirements-dev.txt && pytest 
 | 1 | Verify Garmin notification fields against Garmin's docs; adjust and update tests | `xcapp/garmin.py`, `tests/test_garmin.py` | Activity API docs |
 | 2 | Build and run the Docker image once (not possible in the build environment) | `Dockerfile`, `docker-compose.yml` | A server |
 | 3 | Visual check of every page on real phones and a laptop, light and dark mode | `xcapp/templates/`, `xcapp/static/app.css` | Hosting |
-| 4 | Add the approved logo | `TEAM_LOGO_FILE` in `.env` | Communications office |
+| 4 | Add the approved logo | Staff page, Team logo (admin upload) | Communications office |
 
 ## Data from the coaches (no code)
 

@@ -1,6 +1,7 @@
 """Web application. Start with:  uvicorn --factory xcapp.web:create_app"""
 from __future__ import annotations
 
+import base64
 import datetime as dt
 import hmac
 import json
@@ -28,7 +29,7 @@ from .db import SessionLocal, create_all
 from .fitfile import MAX_FIT_BYTES, FitError, parse_fit
 from .imports import GROUPS, ImportErrors, import_goals, import_results, import_roster, parse_date, set_goal
 from .ingest import ingest, log, rematch_day
-from .models import (Activity, AiRun, Athlete, GarminConnection, Injury, MissedDay, PainReport, PlannedWorkout, Result,
+from .models import (Activity, AiRun, AppSetting, Athlete, GarminConnection, Injury, MissedDay, PainReport, PlannedWorkout, Result,
                      StaffUser, SyncLog, TrainingGroup, utcnow)
 from .security import csrf_ok, csrf_token, hash_password, new_link_token, verify_password
 
@@ -41,6 +42,25 @@ ROLES = ("admin", "coach", "trainer")
 FEELS = ("Fresh", "Normal", "Heavy", "Sore")
 EFFORT_WORDS = {0: "Rest", 1: "Very easy", 2: "Easy", 3: "Moderate", 4: "Somewhat hard", 5: "Hard", 7: "Very hard", 10: "Max"}
 LOGO_TYPES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".svg": "image/svg+xml", ".webp": "image/webp"}
+MAX_LOGO_BYTES = 1024 * 1024
+# The uploaded logo lives in app_settings (type and base64 data) so it survives hosts without a lasting disk.
+LOGO_TYPE_KEY, LOGO_DATA_KEY = "team_logo_type", "team_logo"
+# Served images are inert: no scripts (an SVG can carry them), no loads, and sandboxed if opened directly.
+LOGO_CSP = "default-src 'none'; style-src 'unsafe-inline'; sandbox"
+
+
+def logo_type_of(raw: bytes) -> str | None:
+    """The image type from the file's contents, not its name."""
+    if raw.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    if raw.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    if raw[:4] == b"RIFF" and raw[8:12] == b"WEBP":
+        return "image/webp"
+    head = raw[:2048].lstrip(b"\xef\xbb\xbf \t\r\n").lower()
+    if (head.startswith(b"<svg") or head.startswith(b"<?xml")) and b"<svg" in head:
+        return "image/svg+xml"
+    return None
 
 
 def get_db():
@@ -86,7 +106,13 @@ def create_app() -> FastAPI:
     app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
     templates = Jinja2Templates(directory=HERE / "templates")
     logo_path = Path(s.team_logo_file) if s.team_logo_file else None
-    has_logo = bool(logo_path and logo_path.is_file() and logo_path.suffix.lower() in LOGO_TYPES)
+    file_logo = bool(logo_path and logo_path.is_file() and logo_path.suffix.lower() in LOGO_TYPES)
+
+    def has_logo() -> bool:
+        if file_logo:
+            return True
+        with SessionLocal() as db:
+            return db.get(AppSetting, LOGO_TYPE_KEY) is not None
     templates.env.globals.update(fmt_time=A.fmt_time, EVENTS=list(A.EVENTS), GROUPS=GROUPS, team_name=s.team_name,
                                  has_logo=has_logo, FEELS=FEELS, EFFORT_WORDS=EFFORT_WORDS, RUN_TYPES=A.RUN_TYPES,
                                  MISSED_REASONS=A.MISSED_REASONS, SIDES=A.SIDES, STARTED=A.STARTED, SEEN_BY=A.SEEN_BY,
@@ -590,7 +616,8 @@ def create_app() -> FastAPI:
 
     @app.get("/staff", response_class=HTMLResponse)
     def staff_page(request: Request, user=Depends(staff("admin"), scope="function"), db: Session = Depends(get_db, scope="function")):
-        return render(request, "staff.html", user, rows=db.scalars(select(StaffUser).order_by(StaffUser.username)).all(), roles=ROLES)
+        return render(request, "staff.html", user, rows=db.scalars(select(StaffUser).order_by(StaffUser.username)).all(), roles=ROLES,
+                      uploaded_logo=db.get(AppSetting, LOGO_TYPE_KEY) is not None)
 
     @app.post("/staff")
     async def staff_add(request: Request, user=Depends(staff("admin"), scope="function"), db: Session = Depends(get_db, scope="function")):
@@ -711,11 +738,51 @@ def create_app() -> FastAPI:
     # ---------- branding ----------
 
     @app.get("/branding/logo")
-    def team_logo():
-        if not has_logo:
+    def team_logo(db: Session = Depends(get_db, scope="function")):
+        kind = db.get(AppSetting, LOGO_TYPE_KEY)
+        data = db.get(AppSetting, LOGO_DATA_KEY)
+        if kind and data:
+            raw, media = base64.b64decode(data.value), kind.value
+        elif file_logo:
+            raw, media = logo_path.read_bytes(), LOGO_TYPES[logo_path.suffix.lower()]
+        else:
             raise HTTPException(404, "No logo configured.")
-        return Response(logo_path.read_bytes(), media_type=LOGO_TYPES[logo_path.suffix.lower()],
-                        headers={"Cache-Control": "public, max-age=86400"})
+        return Response(raw, media_type=media, headers={"Cache-Control": "public, max-age=300", "Content-Security-Policy": LOGO_CSP})
+
+    @app.post("/branding/logo")
+    async def team_logo_upload(request: Request, user=Depends(staff("admin"), scope="function"), db: Session = Depends(get_db, scope="function")):
+        f = await form_checked(request)
+        up = f.get("logo")
+        if not up or not getattr(up, "filename", ""):
+            flash(request, "Choose an image file first.", "error")
+            return back("/staff")
+        raw = await up.read(MAX_LOGO_BYTES + 1)
+        media = logo_type_of(raw)
+        if len(raw) > MAX_LOGO_BYTES:
+            flash(request, "That image is over 1 MB. Save a smaller copy and try again.", "error")
+        elif media is None:
+            flash(request, "That file is not a PNG, JPEG, WebP or SVG image.", "error")
+        else:
+            for key, value in ((LOGO_DATA_KEY, base64.b64encode(raw).decode()), (LOGO_TYPE_KEY, media)):
+                row = db.get(AppSetting, key)
+                if row is None:
+                    db.add(AppSetting(key=key, value=value))
+                else:
+                    row.value = value
+            log(db, "admin", f"{user.username} uploaded a new team logo.")
+            flash(request, "Logo updated. It now shows on every page.")
+        return back("/staff")
+
+    @app.post("/branding/logo/delete")
+    async def team_logo_delete(request: Request, user=Depends(staff("admin"), scope="function"), db: Session = Depends(get_db, scope="function")):
+        await form_checked(request)
+        for key in (LOGO_TYPE_KEY, LOGO_DATA_KEY):
+            row = db.get(AppSetting, key)
+            if row is not None:
+                db.delete(row)
+        log(db, "admin", f"{user.username} removed the uploaded team logo.")
+        flash(request, "Uploaded logo removed." + (" The logo file from the server settings shows instead." if file_logo else ""))
+        return back("/staff")
 
     # ---------- per-athlete charts ----------
 
