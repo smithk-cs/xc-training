@@ -27,8 +27,8 @@ from .db import SessionLocal, create_all
 from .fitfile import MAX_FIT_BYTES, FitError, parse_fit
 from .imports import GROUPS, ImportErrors, import_goals, import_results, import_roster, parse_date, set_goal
 from .ingest import ingest, log, rematch_day
-from .models import (Activity, AiRun, Athlete, GarminConnection, Injury, PainReport, PlannedWorkout, Result,
-                     StaffUser, SyncLog, TrainingGroup)
+from .models import (Activity, AiRun, Athlete, GarminConnection, Injury, MissedDay, PainReport, PlannedWorkout, Result,
+                     StaffUser, SyncLog, TrainingGroup, utcnow)
 from .security import csrf_ok, csrf_token, hash_password, new_link_token, verify_password
 
 HERE = Path(__file__).parent
@@ -88,6 +88,8 @@ def create_app() -> FastAPI:
     has_logo = bool(logo_path and logo_path.is_file() and logo_path.suffix.lower() in LOGO_TYPES)
     templates.env.globals.update(fmt_time=A.fmt_time, EVENTS=list(A.EVENTS), GROUPS=GROUPS, team_name=s.team_name,
                                  has_logo=has_logo, FEELS=FEELS, EFFORT_WORDS=EFFORT_WORDS, RUN_TYPES=A.RUN_TYPES,
+                                 MISSED_REASONS=A.MISSED_REASONS, SIDES=A.SIDES, STARTED=A.STARTED, SEEN_BY=A.SEEN_BY,
+                                 MORE_DAYS=A.MORE_DAYS, missed_label=A.missed_label,
                                  run_type_of=A.run_type_of)
     limiter = _LoginLimiter()
     garmin_origin = "{0.scheme}://{0.netloc}".format(urlparse(s.garmin_authorize_url))
@@ -314,9 +316,10 @@ def create_app() -> FastAPI:
         results = db.scalars(select(Result).where(Result.athlete_id == a.id).order_by(Result.date.desc())).all()
         run_pain = {p.activity_id: p for p in a.pain_reports if p.activity_id}
         ability = A.abilities(db, A.team_today()).get(a.id, {})
+        missed = db.scalars(select(MissedDay).where(MissedDay.athlete_id == a.id).order_by(MissedDay.date.desc()).limit(20)).all()
         group_names = [g.name for g in db.scalars(select(TrainingGroup).order_by(TrainingGroup.position)).all()]
         return render(request, "athlete_detail.html", user, a=a, acts=acts, results=results, run_pain=run_pain,
-                      ability=ability, group_names=group_names,
+                      ability=ability, group_names=group_names, missed=missed,
                       injuries=sorted(a.injuries, key=lambda i: i.onset_date, reverse=True),
                       pains=sorted(a.pain_reports, key=lambda p: p.date, reverse=True)[:10],
                       goals=sorted(a.goals, key=lambda g: (g.season, g.event)), show_notes=user.role in ("admin", "trainer"))
@@ -501,7 +504,9 @@ def create_app() -> FastAPI:
         rows = db.scalars(select(Injury).options(selectinload(Injury.athlete)).order_by(Injury.onset_date.desc())).all()
         pains = db.scalars(select(PainReport).options(selectinload(PainReport.athlete))
                            .where(PainReport.date >= A.team_today() - dt.timedelta(days=28)).order_by(PainReport.date.desc())).all()
-        return render(request, "injuries.html", user, rows=rows, pains=pains, athletes=athletes_sorted(db),
+        missed = db.scalars(select(MissedDay).options(selectinload(MissedDay.athlete))
+                            .where(MissedDay.date >= A.team_today() - dt.timedelta(days=28)).order_by(MissedDay.date.desc())).all()
+        return render(request, "injuries.html", user, rows=rows, pains=pains, missed=missed, athletes=athletes_sorted(db),
                       types=INJURY_TYPES, areas=BODY_AREAS, today=A.team_today(), show_notes=user.role in ("admin", "trainer"))
 
     @app.post("/injuries")
@@ -890,7 +895,13 @@ def create_app() -> FastAPI:
         acts = db.scalars(select(Activity).where(Activity.athlete_id == a.id).options(selectinload(Activity.planned))
                           .order_by(Activity.start_utc.desc()).limit(60)).all()
         pains = {p.activity_id: p for p in a.pain_reports if p.activity_id}
-        return render(request, "athlete_runs.html", None, a=a, acts=acts, pains=pains, token=token)
+        today = A.team_today()
+        oldest = acts[-1].local_date if acts else today - dt.timedelta(days=14)
+        reports = db.scalars(select(MissedDay).where(MissedDay.athlete_id == a.id, MissedDay.date >= min(oldest, today - dt.timedelta(days=14)))).all()
+        items = [("run", act.local_date, act) for act in acts] + [("missed", m.date, m) for m in reports] \
+            + [("gap", d, None) for d in A.unlogged_days(db, a, today)]
+        items.sort(key=lambda x: (x[1], x[0] == "run"), reverse=True)
+        return render(request, "athlete_runs.html", None, a=a, items=items, pains=pains, token=token)
 
     @app.get("/a/{token}/runs/{activity_id}", response_class=HTMLResponse)
     def athlete_run(request: Request, token: str, activity_id: int, db: Session = Depends(get_db, scope="function")):
@@ -944,6 +955,106 @@ def create_app() -> FastAPI:
             msg += " That’s a lot of pain: please also tell your coach or athletic trainer in person."
         flash(request, msg)
         return back(f"/a/{token}/runs")
+
+    # ---------- athlete: a day I didn't run ----------
+
+    def _missed_day(token: str, day: str, db: Session) -> tuple[Athlete, dt.date]:
+        a = athlete_by_token(db, token)
+        try:
+            d = dt.date.fromisoformat(day)
+        except ValueError:
+            raise HTTPException(404, "That date isn’t valid.")
+        today = A.team_today()
+        if d > today or d < today - dt.timedelta(days=60):
+            raise HTTPException(400, "You can report a missed day from the last 60 days, up to today.")
+        return a, d
+
+    @app.get("/a/{token}/missed")
+    def athlete_missed_start(token: str, db: Session = Depends(get_db, scope="function")):
+        a = athlete_by_token(db, token)
+        gaps = A.unlogged_days(db, a, A.team_today())
+        return back(f"/a/{token}/missed/{(gaps[0] if gaps else A.team_today()).isoformat()}")
+
+    @app.get("/a/{token}/missed/{day}", response_class=HTMLResponse)
+    def athlete_missed(request: Request, token: str, day: str, edit: int = 0, db: Session = Depends(get_db, scope="function")):
+        a, d = _missed_day(token, day, db)
+        report = db.scalar(select(MissedDay).where(MissedDay.athlete_id == a.id, MissedDay.date == d))
+        ran = db.scalar(select(func.count(Activity.id)).where(Activity.athlete_id == a.id, Activity.local_date == d))
+        return render(request, "athlete_missed.html", None, a=a, day=d, report=report, editing=bool(edit or report is None),
+                      ran=ran, token=token, areas=BODY_AREAS, today=A.team_today().isoformat())
+
+    @app.post("/a/{token}/missed/{day}")
+    async def athlete_missed_save(request: Request, token: str, day: str, db: Session = Depends(get_db, scope="function")):
+        f = await form_checked(request)
+        a, d = _missed_day(token, day, db)
+        url = f"/a/{token}/missed/{d.isoformat()}"
+        reason = f.get("reason", "")
+        if reason not in A.MISSED_REASONS:
+            flash(request, "Pick why you didn’t run.", "error")
+            return back(url + "?edit=1")
+        m = db.scalar(select(MissedDay).where(MissedDay.athlete_id == a.id, MissedDay.date == d)) or MissedDay(athlete_id=a.id, date=d)
+        m.reason = reason
+        if reason == "Injury":
+            area, side, started, seen, more = (f.get(k, "") for k in ("body_area", "side", "started", "seen_by", "more_days"))
+            try:
+                pain = int(f.get("pain", ""))
+            except ValueError:
+                pain = 0
+            missing = [label for ok, label in ((area in BODY_AREAS, "where it hurts"), (side in A.SIDES, "which side"),
+                                               (1 <= pain <= 10, "how much it hurts")) if not ok]
+            if missing:
+                flash(request, "Please add " + " and ".join(missing) + ".", "error")
+                return back(url + "?edit=1")
+            m.body_area, m.side, m.pain = area, side, pain
+            m.started = started if started in A.STARTED else ""
+            m.seen_by = seen if seen in A.SEEN_BY else ""
+            m.more_days = more if more in A.MORE_DAYS else ""
+            m.description = str(f.get("description", "")).strip()[:1000]
+        else:
+            m.body_area = m.side = m.started = m.seen_by = m.more_days = ""
+            m.pain = None
+            m.description = str(f.get("note", "")).strip()[:1000]
+        m.updated_at = utcnow()
+        db.add(m)
+        msg = "Sent to your coaches."
+        if reason == "Injury" and (m.pain or 0) >= A.PAIN_FLAG:
+            msg += " That’s a lot of pain: please also tell your coach or athletic trainer in person today."
+        flash(request, msg)
+        return back(url)
+
+    @app.post("/a/{token}/missed/{day}/delete")
+    async def athlete_missed_delete(request: Request, token: str, day: str, db: Session = Depends(get_db, scope="function")):
+        await form_checked(request)
+        a, d = _missed_day(token, day, db)
+        m = db.scalar(select(MissedDay).where(MissedDay.athlete_id == a.id, MissedDay.date == d))
+        if m is not None:
+            db.delete(m)
+            flash(request, "Report removed.")
+        return back(f"/a/{token}/runs")
+
+    @app.post("/missed/{mid}/log-injury")
+    async def missed_to_injury(request: Request, mid: int, user=Depends(medical, scope="function"), db: Session = Depends(get_db, scope="function")):
+        f = await form_checked(request)
+        m = db.get(MissedDay, mid)
+        if m is None or m.reason != "Injury":
+            raise HTTPException(404, "Report not found.")
+        kind = f.get("injury", "")
+        if kind not in INJURY_TYPES:
+            flash(request, "Pick an injury type.", "error")
+            return back("/injuries")
+        try:
+            onset = parse_date(f.get("onset_date", "")) if f.get("onset_date") else m.date
+        except ValueError as exc:
+            flash(request, str(exc), "error")
+            return back("/injuries")
+        area = m.body_area if m.body_area in BODY_AREAS else "Other"
+        inj = Injury(athlete_id=m.athlete_id, onset_date=onset, injury=kind, body_area=area, logged_by=user.username,
+                     notes=("Athlete report: " + m.description) if user.role in ("admin", "trainer") and m.description else "")
+        db.add(inj)
+        db.flush()
+        m.injury_id = inj.id
+        flash(request, f"Added {kind} for {m.athlete.name} to the injury log.")
+        return back("/injuries")
 
     # ---------- Garmin ----------
 

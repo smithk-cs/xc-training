@@ -1,5 +1,24 @@
 # Getting the whole team connected
 
+## Garmin approved: switching it on
+
+1. **Host the app first.** Garmin sends athletes back to the app and delivers runs to it, so it needs its public
+   https address (for example `https://xc.jesuithighschool.org`) before anything else. See README, "Run it for real".
+2. **Credentials.** From your app in the Garmin Developer Portal, copy the client ID and client secret into `.env` as
+   `GARMIN_CLIENT_ID` and `GARMIN_CLIENT_SECRET`, and restart.
+3. **Redirect address.** If the portal asks for one, use `https://your-address/garmin/callback`.
+4. **Notifications.** Sign in as admin: the home page shows your private notification address
+   (`https://your-address/garmin/webhook/...`). In the portal's endpoint settings, point these at it: activity
+   summaries, activity files (FIT), deregistrations, and user permission changes. If the portal offers a choice of
+   push or ping, either works.
+5. **Check the notification format.** Garmin's Activity API documentation (in the portal now that you're approved)
+   shows the exact notification fields. The app reads them in one place, `handle_notification` in `xcapp/garmin.py`;
+   compare the field names before the team connects.
+6. **Test with your own watch.** Add yourself as an athlete, open your link, connect Garmin, go for a short run with a
+   few laps, sync, and check **Sync log** and your athlete page. Then try **Disconnect** and reconnect.
+7. **Pilot, then the team.** Connect your assistants and three to five athletes for a week or two, then follow the
+   steps below for everyone.
+
 Plan on about two weeks for approvals, then one 15-minute "connect night" at practice.
 
 ## 1. Approvals first (week 1)
@@ -79,13 +98,18 @@ Once the communications office approves it, copy the logo file into the server's
 `/data/team-logo.png`), set `TEAM_LOGO_FILE=/data/team-logo.png` and `TEAM_NAME=Jesuit Cross Country` in `.env`, and
 restart. It appears on every coach page and every athlete page.
 
-## 7. What athletes do after each run
+## 7. What athletes do after each run (and on days they don't)
 
 1. Their watch syncs, and the run appears on their page within minutes.
 2. They tap **Add effort** (or open **My runs**) and pick how hard the run felt (0 = rest, 10 = max), how their legs
    felt, and any pain: where and how much. The optional note goes to coaches and the athletic trainer only.
 3. Their **My training** chart lets them switch between miles, load ratio, effort, heart rate, pace and benchmark
    times, over the past week, past month, this season or all years.
+
+4. On a practice day with no run, **My runs** shows "Tell coaches why". The athlete picks the reason; for an
+   injury they say where, which side, how much it hurts, when it started, describe it in their own words, and say
+   who has looked at it and whether they expect to miss more days. It reaches your watch list right away and the
+   **Injuries** page, where the athletic trainer can add it to the injury log in one click.
 
 Effort takes ten seconds per run. Ask for it after every workout and long run at minimum: effort and pain, alongside
 mileage, are what make the injury picture clear.

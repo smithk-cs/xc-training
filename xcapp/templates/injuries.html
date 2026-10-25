@@ -40,6 +40,27 @@
   </tbody></table>
 </div>
 <div class="card scroll">
+  <h2>Days missed, reported by athletes, last 4 weeks</h2>
+  <p class="small muted">An athlete’s injury report isn’t in the injury log until a trainer or coach adds it, so it doesn’t change injured weeks or the load ratio until then.</p>
+  <table class="list"><thead><tr><th>Date</th><th>Athlete</th><th>Reason</th><th>Details</th><th>In the injury log?</th></tr></thead><tbody>
+  {% for m in missed %}
+  <tr>
+    <td>{{ m.date.strftime('%a %b %-d') }}</td><td>{{ m.athlete.name }}</td>
+    <td>{% if m.reason == 'Injury' %}<span class="pill bad">Injury</span>{% else %}{{ m.reason }}{% endif %}</td>
+    <td class="small">{% if m.reason == 'Injury' %}{{ m.body_area }}, {{ m.side|lower }}; pain {{ m.pain }}/10{% if m.started %}; started {{ m.started|lower }}{% endif %}{% if m.seen_by %}; seen by: {{ m.seen_by|lower }}{% endif %}{% if m.more_days %}; more days out: {{ m.more_days|lower }}{% endif %}{% endif %}
+      {% if m.description %}<br><span class="muted">“{{ m.description }}”</span>{% endif %}</td>
+    <td>{% if m.reason != 'Injury' %}{% elif m.injury_id %}<span class="pill good">Added</span>{% else %}
+      <form method="post" action="/missed/{{ m.id }}/log-injury" class="form-row" style="margin:0">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <select name="injury" aria-label="Injury type">{% for t in types %}<option>{{ t }}</option>{% endfor %}</select>
+        <input type="date" name="onset_date" value="{{ m.date.isoformat() }}" aria-label="Date it started">
+        <button type="submit" class="secondary">Add to injury log</button>
+      </form>{% endif %}</td>
+  </tr>
+  {% else %}<tr><td colspan="5" class="muted">No missed days reported.</td></tr>{% endfor %}
+  </tbody></table>
+</div>
+<div class="card scroll">
   <h2>Pain reports from athletes, last 4 weeks</h2>
   <table class="list"><thead><tr><th>Date</th><th>Athlete</th><th>Where</th><th class="num">Pain (0-10)</th><th>Note</th></tr></thead><tbody>
   {% for p in pains %}<tr><td>{{ p.date.strftime('%b %-d') }}</td><td>{{ p.athlete.name }}</td><td>{{ p.body_area }}</td><td class="num">{% if p.severity >= 4 %}<span class="pill bad">{{ p.severity }}</span>{% else %}{{ p.severity }}{% endif %}</td><td class="small">{{ p.note }}</td></tr>

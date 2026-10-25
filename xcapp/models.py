@@ -201,6 +201,27 @@ class PainReport(Base):
     athlete: Mapped[Athlete] = relationship(back_populates="pain_reports")
 
 
+class MissedDay(Base):
+    """An athlete's report of a day they didn't run, and why. Injury details are the athlete's own words."""
+    __tablename__ = "missed_days"
+    __table_args__ = (UniqueConstraint("athlete_id", "date"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    athlete_id: Mapped[int] = mapped_column(ForeignKey("athletes.id", ondelete="CASCADE"), index=True)
+    date: Mapped[dt.date] = mapped_column(Date)
+    reason: Mapped[str] = mapped_column(String(30))  # Injury | Sick | Planned rest day | School or family | Other
+    body_area: Mapped[str] = mapped_column(String(60), default="")
+    side: Mapped[str] = mapped_column(String(10), default="")
+    pain: Mapped[int | None] = mapped_column(Integer, nullable=True)  # 1-10
+    started: Mapped[str] = mapped_column(String(40), default="")
+    seen_by: Mapped[str] = mapped_column(String(40), default="")
+    more_days: Mapped[str] = mapped_column(String(30), default="")
+    description: Mapped[str] = mapped_column(Text, default="")  # never sent to the AI
+    injury_id: Mapped[int | None] = mapped_column(ForeignKey("injuries.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
+    athlete: Mapped[Athlete] = relationship()
+
+
 class Insight(Base):
     __tablename__ = "insights"
     id: Mapped[int] = mapped_column(primary_key=True)

@@ -17,7 +17,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from .config import settings
-from .models import Activity, AppSetting, Athlete, Goal, Injury, PainReport, PlannedWorkout, Result, TrainingGroup
+from .models import Activity, AppSetting, Athlete, Goal, Injury, MissedDay, PainReport, PlannedWorkout, Result, TrainingGroup
 
 METERS_PER_MILE = 1609.344
 # Coaching flags. The dashboard page uses the same three numbers; change both together.
@@ -124,6 +124,35 @@ def local_date(start_utc: dt.datetime) -> dt.date:
 # ---------- VDOT (estimated VO2max) and ability groups ----------
 
 RUN_TYPES = ("Easy", "Long", "Workout", "Race", "Recovery", "Other")
+MISSED_REASONS = ("Injury", "Sick", "Planned rest day", "School or family", "Other")
+SIDES = ("Left", "Right", "Both")
+STARTED = ("Today", "This week", "Over a week ago", "An old injury is back")
+SEEN_BY = ("Not yet", "Athletic trainer", "Doctor or physical therapist")
+MORE_DAYS = ("Just today", "A few days", "Not sure yet")
+PRACTICE_DAYS = (0, 1, 2, 3, 4, 5)  # Monday to Saturday; a day with no run on these asks the athlete why
+
+
+def missed_label(m: MissedDay) -> str:
+    if m.reason == "Injury":
+        where = ", ".join(x for x in (m.body_area, (m.side or "").lower()) if x)
+        return "Injury" + (f": {where.lower()}" if where else "")
+    return m.reason
+
+
+def unlogged_days(db: Session, athlete: Athlete, as_of: dt.date, days: int = 14) -> list[dt.date]:
+    """Practice days in the last two weeks (not today) with no run and no report, after the athlete's first run."""
+    first = db.scalar(select(func.min(Activity.local_date)).where(Activity.athlete_id == athlete.id))
+    if first is None:
+        return []
+    ran = {d for (d,) in db.execute(select(Activity.local_date).where(
+        Activity.athlete_id == athlete.id, Activity.local_date >= as_of - dt.timedelta(days=days))).all()}
+    told = {d for (d,) in db.execute(select(MissedDay.date).where(MissedDay.athlete_id == athlete.id)).all()}
+    out = []
+    for k in range(1, days + 1):
+        d = as_of - dt.timedelta(days=k)
+        if d >= first and d.weekday() in PRACTICE_DAYS and d not in ran and d not in told:
+            out.append(d)
+    return out
 
 
 def vdot(distance_m: float, time_s: float) -> float:
@@ -372,6 +401,7 @@ def athlete_series(db: Session, athlete: Athlete, as_of: dt.date) -> dict:
                       "injured": any(_injury_is_on(i.onset_date, i.return_date, ws, ws + dt.timedelta(days=6)) for i in injuries)})
     results = db.scalars(select(Result).where(Result.athlete_id == athlete.id).order_by(Result.date)).all()
     pains = db.scalars(select(PainReport).where(PainReport.athlete_id == athlete.id).order_by(PainReport.date)).all()
+    missed = db.scalars(select(MissedDay).where(MissedDay.athlete_id == athlete.id, MissedDay.date <= as_of).order_by(MissedDay.date)).all()
     s0, s1 = season_range(as_of)
     return {
         "athlete": athlete.name, "today": as_of.isoformat(), "first_run": runs[0]["date"] if runs else None,
@@ -379,7 +409,9 @@ def athlete_series(db: Session, athlete: Athlete, as_of: dt.date) -> dict:
         "load_ratio_flag": LOAD_RATIO_FLAG, "runs": runs, "weeks": weeks,
         "results": [{"date": r.date.isoformat(), "event": r.event, "time": round(r.time_s, 1), "season": r.season,
                      "course": r.course, "pace": round(r.time_s / EVENTS[r.event] * METERS_PER_MILE, 1)} for r in results if r.event in EVENTS],
-        "pain": [{"date": p.date.isoformat(), "area": p.body_area, "severity": p.severity} for p in pains],
+        "pain": sorted([{"date": p.date.isoformat(), "area": p.body_area, "severity": p.severity} for p in pains]
+                       + [{"date": m.date.isoformat(), "area": "Missed run: " + missed_label(m).lower(), "severity": m.pain}
+                          for m in missed if m.reason in ("Injury", "Sick")], key=lambda x: x["date"]),
         "injuries": [{"onset": i.onset_date.isoformat(), "return": i.return_date.isoformat() if i.return_date else None,
                       "injury": i.injury} for i in injuries],
     }
@@ -405,11 +437,21 @@ def injury_rows(db: Session, as_of: dt.date) -> list[dict]:
 
 
 def pain_rows(db: Session, as_of: dt.date, days: int = 28) -> list[dict]:
+    """Athlete pain reports, plus days missed through injury or sickness (those carry a reason)."""
     since = as_of - dt.timedelta(days=days)
     q = (select(PainReport, Athlete).join(Athlete, Athlete.id == PainReport.athlete_id)
-         .where(Athlete.active.is_(True), PainReport.date >= since, PainReport.date <= as_of).order_by(PainReport.date))
-    return [{"report_id": f"P{p.id:03d}", "athlete_id": a.code, "athlete": a.name, "date": p.date.isoformat(),
-             "body_area": p.body_area, "severity": p.severity} for p, a in db.execute(q).all()]
+         .where(Athlete.active.is_(True), PainReport.date >= since, PainReport.date <= as_of))
+    rows = [{"report_id": f"P{p.id:03d}", "athlete_id": a.code, "athlete": a.name, "date": p.date.isoformat(),
+             "body_area": p.body_area, "severity": p.severity, "reason": ""} for p, a in db.execute(q).all()]
+    q = (select(MissedDay, Athlete).join(Athlete, Athlete.id == MissedDay.athlete_id)
+         .where(Athlete.active.is_(True), MissedDay.date >= since, MissedDay.date <= as_of, MissedDay.reason.in_(("Injury", "Sick"))))
+    for m, a in db.execute(q).all():
+        where = ", ".join(x for x in (m.body_area, (m.side or "").lower()) if x)
+        rows.append({"report_id": f"M{m.id:03d}", "athlete_id": a.code, "athlete": a.name, "date": m.date.isoformat(),
+                     "body_area": where, "severity": m.pain if m.pain is not None else "",
+                     "reason": "Missed run (injury)" if m.reason == "Injury" else "Missed run (sick)"})
+    rows.sort(key=lambda r: (r["date"], r["report_id"]))
+    return rows
 
 
 def target_pace(db: Session, athlete_id: int, pw: PlannedWorkout) -> float | None:
@@ -542,7 +584,9 @@ def watchlist(weekly, injuries, summaries, roster, pain=None, flag=LOAD_RATIO_FL
         wk = next((r for r in weekly if r["athlete_id"] == aid and r["week_start"] == now), None)
         inj = next((i for i in injuries if i["athlete_id"] == aid and i["status"] == "Active"), None)
         ws = next((s for s in summaries if s["athlete_id"] == aid and s["date"] == last), None)
-        sore = [p for p in (pain or []) if p["athlete_id"] == aid and p["date"] >= now and (num(p["severity"]) or 0) >= pain_flag]
+        mine = [p for p in (pain or []) if p["athlete_id"] == aid and p["date"] >= now]
+        sore = [p for p in mine if not p.get("reason") and (num(p["severity"]) or 0) >= pain_flag]
+        missed = [p for p in mine if p.get("reason")]
         why = []
         if inj:
             why.append("Injured: " + inj["injury"])
@@ -554,6 +598,10 @@ def watchlist(weekly, injuries, summaries, roster, pain=None, flag=LOAD_RATIO_FL
         if sore:
             worst = max(sore, key=lambda p: num(p["severity"]))
             why.append(f"Pain {int(num(worst['severity']))}/10: {worst['body_area']}")
+        if missed:
+            m = missed[-1]
+            sev = num(m["severity"])
+            why.append(m["reason"] + (f": {m['body_area']}" if m["body_area"] else "") + (f", {int(sev)}/10" if sev is not None else ""))
         if why:
             out.append({"athlete_id": aid, "athlete": a["athlete"], "group": a["group"],
                         "miles": _f(wk, "miles") if wk else None, "acwr": acwr,

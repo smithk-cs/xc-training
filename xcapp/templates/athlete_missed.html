@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}{{ day.strftime('%b %-d') }} · {{ team_name }}{% endblock %}
+{% block bodyclass %}athlete-page{% endblock %}
+{% block flashes %}{% endblock %}
+{% block content %}
+{% with hero_title=day.strftime('%A, %b %-d'), hero_text=("A run from this day is already in, but you can still tell your coaches what happened." if ran else "No run came in from your watch for this day. Let your coaches know why."), back_url="/a/" ~ token ~ "/runs", back_label="My runs" %}{% include "_hero.html" %}{% endwith %}
+<div class="stack">
+  {% for level, text in messages %}<div class="flash {{ level }}" role="status">{{ text }}</div>{% endfor %}
+  {% if editing %}
+  <form method="post" action="/a/{{ token }}/missed/{{ day.isoformat() }}" class="panel" aria-labelledby="m-h">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <h2 id="m-h">Why didn’t you run?</h2>
+    <fieldset class="pick"><legend>Reason</legend>
+      <div class="chips">{% for r in MISSED_REASONS %}<label class="chip"><input type="radio" name="reason" value="{{ r }}" required {% if (report and report.reason == r) or (not report and r == 'Injury') %}checked{% endif %}><span>{{ r }}</span></label>{% endfor %}</div>
+    </fieldset>
+    <div id="injury-fields" style="display:flex; flex-direction:column; gap:14px">
+      <fieldset class="pick"><legend>Where is the injury?</legend>
+        <div class="chips">{% for b in areas %}<label class="chip"><input type="radio" name="body_area" value="{{ b }}" {% if report and report.body_area == b %}checked{% endif %}><span>{{ b }}</span></label>{% endfor %}</div>
+      </fieldset>
+      <fieldset class="pick"><legend>Which side?</legend>
+        <div class="chips">{% for s in SIDES %}<label class="chip"><input type="radio" name="side" value="{{ s }}" {% if report and report.side == s %}checked{% endif %}><span>{{ s }}</span></label>{% endfor %}</div>
+      </fieldset>
+      <fieldset class="pick"><legend>How much does it hurt right now?</legend>
+        <div class="lvls">{% for n in range(1, 11) %}<label class="lvl"><input type="radio" name="pain" value="{{ n }}" {% if report and report.pain == n %}checked{% endif %} aria-label="Pain {{ n }} out of 10"><span>{{ n }}</span></label>{% endfor %}</div>
+        <div class="scale-ends"><span>1 = a little</span><span>10 = worst</span></div>
+      </fieldset>
+      <fieldset class="pick"><legend>When did it start?</legend>
+        <div class="chips">{% for s in STARTED %}<label class="chip"><input type="radio" name="started" value="{{ s }}" {% if report and report.started == s %}checked{% endif %}><span>{{ s }}</span></label>{% endfor %}</div>
+      </fieldset>
+      <label>Describe the injury
+        <textarea name="description" rows="5" maxlength="1000" placeholder="Where exactly it hurts, what it feels like, and what makes it worse. For example: sharp pain on the inside of my shin, worse running downhill.">{{ report.description if report and report.reason == 'Injury' else '' }}</textarea>
+      </label>
+      <fieldset class="pick"><legend>Has anyone looked at it?</legend>
+        <div class="chips">{% for s in SEEN_BY %}<label class="chip"><input type="radio" name="seen_by" value="{{ s }}" {% if report and report.seen_by == s %}checked{% endif %}><span>{{ s }}</span></label>{% endfor %}</div>
+      </fieldset>
+      <fieldset class="pick"><legend>Do you think you’ll miss more days?</legend>
+        <div class="chips">{% for s in MORE_DAYS %}<label class="chip"><input type="radio" name="more_days" value="{{ s }}" {% if report and report.more_days == s %}checked{% endif %}><span>{{ s }}</span></label>{% endfor %}</div>
+      </fieldset>
+    </div>
+    <label id="other-note">Anything your coaches should know? (optional)
+      <textarea name="note" rows="3" maxlength="1000" placeholder="e.g. fever since Thursday night">{{ report.description if report and report.reason != 'Injury' else '' }}</textarea>
+    </label>
+    <p class="muted small" style="margin:0">Only your coaches and athletic trainer see this.</p>
+    <button type="submit" class="big-btn">Send to coaches</button>
+    <script>
+      (function () {
+        var form = document.currentScript.closest('form');
+        var inj = form.querySelector('#injury-fields'), note = form.querySelector('#other-note');
+        function sync() { var r = form.querySelector('input[name=reason]:checked'); var isInj = !r || r.value === 'Injury'; inj.hidden = !isInj; note.hidden = isInj; }
+        form.querySelectorAll('input[name=reason]').forEach(function (el) { el.addEventListener('change', sync); });
+        sync();
+      })();
+    </script>
+  </form>
+  {% else %}
+  <section class="panel" aria-labelledby="s-h">
+    <h2 id="s-h"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg>Sent to your coaches</h2>
+    <dl class="facts" style="grid-template-columns:1fr">
+      <div><dt>Reason</dt><dd>{{ report.reason }}</dd></div>
+      {% if report.reason == 'Injury' %}
+      <div><dt>Where</dt><dd>{{ report.body_area }}, {{ report.side|lower }}</dd></div>
+      <div><dt>Pain right now</dt><dd>{{ report.pain }} out of 10</dd></div>
+      {% if report.started %}<div><dt>Started</dt><dd>{{ report.started }}</dd></div>{% endif %}
+      {% if report.seen_by %}<div><dt>Looked at by</dt><dd>{{ report.seen_by }}</dd></div>{% endif %}
+      {% if report.more_days %}<div><dt>More days out</dt><dd>{{ report.more_days }}</dd></div>{% endif %}
+      {% endif %}
+      {% if report.description %}<div><dt>What you told us</dt><dd>{{ report.description }}</dd></div>{% endif %}
+    </dl>
+    <p class="muted">If it gets better or worse, update this before your next practice.</p>
+    <a class="button big-btn" href="/a/{{ token }}/missed/{{ day.isoformat() }}?edit=1">Update</a>
+    <a class="ghost-btn button" href="/a/{{ token }}/runs" style="background:var(--color-panel); color:var(--brand-red)">Back to my runs</a>
+    <form method="post" action="/a/{{ token }}/missed/{{ day.isoformat() }}/delete">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <button type="submit" class="link" style="min-height:44px">I did run this day: remove this report</button>
+    </form>
+  </section>
+  {% endif %}
+</div>
+{% endblock %}

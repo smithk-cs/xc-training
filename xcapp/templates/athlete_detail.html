@@ -36,7 +36,8 @@
   {% for i in injuries %}<tr><td>{{ i.onset_date.strftime('%b %-d') }}</td><td>{{ i.injury }} ({{ i.body_area }})</td><td>{{ 'returned ' + i.return_date.strftime('%b %-d') if i.return_date else 'no return date' }}</td></tr>
   {% if show_notes and i.notes %}<tr><td></td><td colspan="2" class="small muted">{{ i.notes }}</td></tr>{% endif %}{% endfor %}
   {% for p in pains %}<tr><td>{{ p.date.strftime('%b %-d') }}</td><td>Pain {{ p.severity }}/10: {{ p.body_area }}</td><td class="small">{{ p.note }}</td></tr>{% endfor %}
-  {% if not injuries and not pains %}<tr><td class="muted">Nothing logged.</td></tr>{% endif %}
+  {% for m in missed %}<tr><td>{{ m.date.strftime('%b %-d') }}</td><td>Missed run ({{ m.reason|lower }}){% if m.reason == 'Injury' %}: {{ m.body_area|lower }}, {{ m.side|lower }}{% endif %}{% if m.pain %}, pain {{ m.pain }}/10{% endif %}</td><td class="small">{{ m.description }}</td></tr>{% endfor %}
+  {% if not injuries and not pains and not missed %}<tr><td class="muted">Nothing logged.</td></tr>{% endif %}
   </tbody></table>
 </div>
 {% if user.role != 'trainer' %}

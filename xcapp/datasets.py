@@ -17,7 +17,7 @@ COLUMNS = {
     "goals": ["athlete_id", "event", "goal_sec", "season"],
     "weekly_load": ["athlete_id", "athlete", "group", "week_start", "miles", "acwr", "injured", "srpe"],
     "injuries": ["injury_id", "athlete_id", "athlete", "onset_date", "injury", "body_area", "days_missed", "status", "return_date"],
-    "pain_reports": ["report_id", "athlete_id", "athlete", "date", "body_area", "severity"],
+    "pain_reports": ["report_id", "athlete_id", "athlete", "date", "body_area", "severity", "reason"],
     "segments": ["workout_id", "date", "workout", "athlete_id", "athlete", "rep", "rep_m", "target_pace_sec_mi",
                  "pace_sec_mi", "avg_hr", "max_hr", "hr_drop_60s", "device"],
     "ai_insights": ["insight_id", "priority", "scope", "athlete_id", "category", "headline", "insight", "action",
@@ -81,8 +81,20 @@ def snapshot(db: Session, as_of: dt.date | None = None) -> dict[str, list[dict]]
     data["risk_bands"] = A.risk_bands(data["weekly_load"], data["injuries"])
     data["injury_peaks"] = A.injury_peaks(data["injuries"], data["weekly_load"])
     data["recent_runs"] = recent_runs(db, as_of)
+    data["missed_days"] = missed_days(db, as_of)
     data["as_of"] = as_of
     return data
+
+
+def missed_days(db: Session, as_of: dt.date, days: int = 14) -> list[dict]:
+    """Days athletes reported not running. The athlete's written description is left out on purpose."""
+    from .models import Athlete, MissedDay
+    q = (select(MissedDay, Athlete).join(Athlete, Athlete.id == MissedDay.athlete_id)
+         .where(Athlete.active.is_(True), MissedDay.date > as_of - dt.timedelta(days=days), MissedDay.date <= as_of)
+         .order_by(MissedDay.date))
+    return [{"athlete_id": a.code, "date": m.date.isoformat(), "reason": m.reason, "area": m.body_area or None,
+             "side": m.side or None, "pain": m.pain, "started": m.started or None, "seen_by": m.seen_by or None,
+             "more_days": m.more_days or None} for m, a in db.execute(q).all()]
 
 
 def recent_runs(db: Session, as_of: dt.date, days: int = 7) -> list[dict]:

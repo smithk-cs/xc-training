@@ -16,6 +16,7 @@ For getting athletes connected and using the charts, read **TEAM_SETUP.md**.
 | Benchmarks and goals | 1 mile, 1.5 mile, 2 mile and 5K (track 1600 m / 3200 m converted). Season-over-season change and gap to goal. CSV import from XC Stats or Athletic.net exports. |
 | Charts | Career progression, compare up to six athletes, improvement vs last season, top-7 team average. On each athlete's own page and the coach's athlete page: one chart with two dropdowns, chart type (miles, load ratio, effort, heart rate, pace, benchmark times) and time range (past week, past month, this season, all years), with injuries and pain reports marked. |
 | My runs (athletes) | For every synced run, athletes add effort (0-10), how their legs felt, any pain (where and how much) and a private note for coaches. Pain of 4/10 or more reaches the watch list; effort x minutes becomes a weekly effort load the AI briefing reads. |
+| Days without a run | My runs lists practice days (Monday to Saturday) with no run and asks why: injury, sick, planned rest day, school or family, or other. For an injury the athlete gives where, which side, pain (1-10), when it started, a description, who has looked at it, and whether they expect to miss more days. Injury and sickness reports reach the watch list and the Injuries page, where a trainer adds an injury report to the injury log in one click. The AI gets the structured answers, never the description. |
 | Run type and workout | Athletes (on their run page) and coaches (on the coach run page) set the type of run (easy, long, workout, race, recovery, other) and which planned team workout it was, from workouts within three days of the run. A choice made by hand is kept: automatic matching never overwrites it. |
 | Training groups | Jesuit's groups: Platinum (VDOT 73+), Gold (68-72), Silver (62-67), Bronze (58-61), Emerald (54-57), Aquamarine (49-53) and Ivory (48 and below), in the team sheet's colors, with each athlete's 800 and 1600 targets from the team's VDOT table. Rename, recolor, add or remove groups and edit the table on the Groups page. VDOT is worked out from each athlete's best 1 mile, 1.5 mile, 2 mile or 5K in the look-back window (365 days by default) and read on the team table's scale: a result counts as VDOT 60 if its 1600-equivalent reaches the table's 4:57. Separate boys' and girls' cutoffs are supported. Coaches can pin an athlete to a group; planned workouts can target a group; athletes see their group unless you switch that off. Garmin's watch VO2max is not shared through Garmin's developer API, so the estimate comes from results. |
 | Look | Jesuit red and gold, team name and logo from `TEAM_NAME` / `TEAM_LOGO_FILE`, fonts stored in the app (SIL Open Font License), phone-first athlete pages, light and dark mode. |
@@ -57,14 +58,14 @@ Backups: the database is one file in the `xcdata` volume (`/data/xc.db`); copy i
 
 ## How it was validated
 
-* `pytest` (43 tests). Real Garmin `.FIT` files are generated and decoded with Garmin's official FIT SDK; Garmin
+* `pytest` (47 tests). Real Garmin `.FIT` files are generated and decoded with Garmin's official FIT SDK; Garmin
   OAuth, token refresh and every notification type are exercised against a mock Garmin; the AI layer is checked for
   de-identification, reply validation, retries and failures; the web app for sign-in, CSRF, roles, private injury
   notes, athlete link pages, uploads and imports.
 * The largest test loads the 62-athlete sample team as about 7,800 runs with second-by-second heart rate, through
   the same ingest code real files use, and checks that weekly mileage, injury weeks, load ratios, every rep's pace,
   heart rate and 60-second recovery, the headline numbers and the watch list all come back out matching the sample.
-* `scripts/e2e.py` (38 checks) starts the real server with stand-in Garmin and Claude services and walks through a
+* `scripts/e2e.py` (41 checks) starts the real server with stand-in Garmin and Claude services and walks through a
   coach signing in, an athlete connecting Garmin, a webhook delivering a workout, the AI briefing and a coach
   question (verifying no names reach Claude), an athlete adding effort and pain to a synced run, and then renders the dashboard, charts and both athlete pages (all 24 chart/time-range combinations) in a headless browser
   (`scripts/harness.mjs`, needs `npm install jsdom@24`) and checks every number against the server's own calculation.
@@ -103,4 +104,4 @@ Starting the new version on an existing database adds the new columns automatica
 
 `xcapp/` app code: `garmin.py` (connection, webhooks), `fitfile.py` + `reps.py` (FIT decoding, reps, recovery),
 `ingest.py`, `analysis.py` (all coaching math), `ai.py`, `web.py`, `cli.py`, `demo.py`, `templates/`, `static/`
-(`dashboard_body.html` is the same dashboard page as the published prototype). `tests/`, `scripts/`.
+(`dashboard_body.html` is the dashboard page; the published prototype runs an earlier copy of it). `tests/`, `scripts/`.

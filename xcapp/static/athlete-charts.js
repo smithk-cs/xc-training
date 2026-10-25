@@ -119,7 +119,8 @@
       const tri = d3.symbol(d3.symbolTriangle, 46);
       svg.append('g').selectAll('path').data(pains).join('path').attr('d', tri)
         .attr('transform', (p) => `translate(${x(p.d) + Math.max(3, (x(addDays(p.d, 1)) - x(p.d)) / 2)},${bottom - 7})`).attr('fill', C.flag);
-      pains.forEach((p) => points.push({ x: x(p.d) + 3, y: bottom - 7, lines: [d3.utcFormat('%a, %b %-d')(p.d), `Pain ${p.severity}/10: ${p.area}`] }));
+      pains.forEach((p) => points.push({ x: x(p.d) + 3, y: bottom - 7, lines: [d3.utcFormat('%a, %b %-d')(p.d),
+        /^Missed run/.test(p.area) ? p.area + (p.severity != null ? `, pain ${p.severity}/10` : '') : `Pain ${p.severity}/10: ${p.area}`] }));
       inj.forEach((i) => points.push({ x: x(i.a < rg.start ? rg.start : i.a) + 4, y: top + 8, lines: [i.injury, 'From ' + d3.utcFormat('%b %-d')(i.a) + (i.return ? ' to ' + d3.utcFormat('%b %-d')(i.b) : ', no return date yet')] }));
       return { inj: inj.length, pain: pains.length };
     }
@@ -149,7 +150,7 @@
         s.append(i, document.createTextNode(text)); return s;
       }));
     }
-    const overlayLegend = (o) => [...(o.inj ? [[C.flag, 'Injured', 'soft']] : []), ...(o.pain ? [[C.flag, 'Pain report']] : [])];
+    const overlayLegend = (o) => [...(o.inj ? [[C.flag, 'Injured', 'soft']] : []), ...(o.pain ? [[C.flag, 'Pain or missed-run report']] : [])];
     function layout(svg, W, H, yTicks, fmt) {
       const ml = Math.ceil(Math.max(20, ...yTicks.map((v) => textW(svg, fmt(v))))) + 12;
       return { ml, mr: 10, top: 12, bottom: H - 28 };

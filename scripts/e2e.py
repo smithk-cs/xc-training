@@ -157,6 +157,17 @@ try:
     check("Coach sees the effort, legs, pain and note on the athlete page", "6/10 Lower leg" in detail and "Athlete note: shin tight" in detail and ">Heavy<" in detail)
     check("Pain from the run puts the athlete on the watch list", "Pain 6/10: Lower leg" in c.get("/").text)
 
+    r = a.post(f"{link}/missed/2026-10-24", data={"csrf": csrf, "reason": "Injury", "body_area": "Ankle", "side": "Left", "pain": "5",
+                                                "started": "Today", "description": "rolled it on a trail", "seen_by": "Not yet", "more_days": "Not sure yet"})
+    check("Athlete reports a day missed through injury", r.status_code == 303 and "Sent to your coaches" in a.get(f"{link}/missed/2026-10-24").text)
+    check("The missed-run injury reaches the watch list and the injuries page",
+          "Missed run (injury): Ankle, left, 5/10" in c.get("/").text and "rolled it on a trail" in c.get("/injuries").text)
+    out = subprocess.run(["node", "harness.mjs", "dashboard", APP + "/dashboard", cookie], cwd=HERE, capture_output=True, text=True, timeout=120)
+    dash2 = json.loads(out.stdout or "{}") if out.returncode == 0 else {"errors": [out.stderr[-500:]]}
+    check("Dashboard watch list shows the missed-run injury (same rule as the server)",
+          not dash2.get("errors") and any(r_[0] == "Test Garmin" and "Missed run (injury): Ankle, left, 5/10" in r_[-1] for r_ in dash2.get("watch", [])),
+          [r_ for r_ in dash2.get("watch", []) if r_[0] == "Test Garmin"])
+
     r = a.post(link + "/disconnect", data={"csrf": csrf})
     check("Athlete disconnect deregisters at Garmin", httpx.get(FAKE + "/_log").json()["deletes"] == 1 and "Connect Garmin" in a.get(link).text)
     r = run("nightly")

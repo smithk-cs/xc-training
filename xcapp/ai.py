@@ -31,6 +31,8 @@ Definitions:
 - recovery_bpm: how far heart rate fell in the first 60 seconds of rest between reps. Under 25 is flagged.
 - rpe: the athlete's own effort rating for a run, 0-10. effort_load: rpe x minutes, summed per week.
   legs: how the athlete said their legs felt (Fresh, Normal, Heavy, Sore). Missing values mean not reported.
+- days_missed_last_14: days the athlete reported not running, with the reason; for injuries also where, which side,
+  pain (1-10), when it started, who has seen it, and whether they expect to miss more days.
 - Times are in seconds; paces are seconds per mile. Lower is faster.
 
 Rules:
@@ -140,6 +142,8 @@ def build_payload(snap: dict) -> tuple[dict, dict[str, dict]]:
             "injured_weeks_last_6": [int(w["injured"]) for w in rows[-6:]],
             "effort_load_last_6": [w.get("srpe", 0) for w in rows[-6:]],
             "runs_last_7_days": effort.get(aid, []),
+            "days_missed_last_14": [{k: v for k, v in m.items() if k not in ("athlete_id", "date")} | {"days_ago": _days_ago(as_of, m["date"])}
+                                    for m in snap.get("missed_days", []) if m["athlete_id"] == aid],
             "active_injury": None if not active else {"injury": active["injury"], "onset_days_ago": _days_ago(as_of, active["onset_date"])},
             "pain_reports": [{"days_ago": _days_ago(as_of, p["date"]), "body_area": p["body_area"], "severity": p["severity"]}
                              for p in pain if p["athlete_id"] == aid],

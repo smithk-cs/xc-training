@@ -3,24 +3,40 @@
 {% block bodyclass %}athlete-page{% endblock %}
 {% block flashes %}{% endblock %}
 {% block content %}
-{% with hero_title="My runs", hero_text="Tap a run to add how hard it felt, how your legs felt, and any pain.", back_url="/a/" ~ token, back_label="My page" %}{% include "_hero.html" %}{% endwith %}
+{% with hero_title="My runs", hero_text="Tap a run to add how hard it felt, how your legs felt, and any pain. Didn’t run? Tell your coaches why.", back_url="/a/" ~ token, back_label="My page" %}{% include "_hero.html" %}{% endwith %}
 <div class="stack">
   {% for level, text in messages %}<div class="flash {{ level }}" role="status">{{ text }}</div>{% endfor %}
-  <section class="panel" aria-label="Runs">
+  <a class="ghost-btn button" href="/a/{{ token }}/missed" style="background:var(--color-panel); color:var(--brand-red)">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+    Log a day I didn’t run
+  </a>
+  <section class="panel" aria-label="Runs and missed days">
     <ul class="runs">
-      {% for act in acts %}
-      {% set pain = pains.get(act.id) %}
-      <li><a class="row" href="/a/{{ token }}/runs/{{ act.id }}">
-        <span class="l"><span class="d">{{ act.local_date.strftime('%a, %b %-d') }}</span>
-          <span style="display:flex; flex-wrap:wrap; gap:6px">
-            {% if act.planned %}<span class="tag">{{ act.planned.title }}</span>{% endif %}
-            {% if pain %}<span class="pill bad">Pain {{ pain.severity }}/10 {{ pain.body_area }}</span>{% endif %}
-          </span></span>
-        <span class="r"><span class="mi">{{ '%.1f' % (act.distance_m / 1609.344) }} <small>mi</small></span>
-          {% if act.rpe is not none %}<span class="pill good">Effort {{ act.rpe }}{% if act.feel %} · {{ act.feel }}{% endif %}</span>{% else %}<span class="pill" style="color:var(--brand-red); border-color:var(--brand-red)">Add effort</span>{% endif %}</span>
-      </a></li>
+      {% for kind, day, obj in items %}
+      <li>
+      {% if kind == 'run' %}
+        {% set act = obj %}{% set pain = pains.get(act.id) %}
+        <a class="row" href="/a/{{ token }}/runs/{{ act.id }}">
+          <span class="l"><span class="d">{{ day.strftime('%a, %b %-d') }}</span>
+            <span style="display:flex; flex-wrap:wrap; gap:6px">
+              {% if act.planned %}<span class="tag">{{ act.planned.title }}</span>{% elif act.run_type in ('Long', 'Race') %}<span class="tag">{{ 'Long run' if act.run_type == 'Long' else 'Race' }}</span>{% endif %}
+              {% if pain %}<span class="pill bad">Pain {{ pain.severity }}/10 {{ pain.body_area }}</span>{% endif %}
+            </span></span>
+          <span class="r"><span class="mi">{{ '%.1f' % (act.distance_m / 1609.344) }} <small>mi</small></span>
+            {% if act.rpe is not none %}<span class="pill good">Effort {{ act.rpe }}{% if act.feel %} · {{ act.feel }}{% endif %}</span>{% else %}<span class="pill" style="color:var(--brand-red); border-color:var(--brand-red); background:var(--color-panel)">Add effort</span>{% endif %}</span>
+        </a>
+      {% else %}
+        <a class="row" href="/a/{{ token }}/missed/{{ day.isoformat() }}">
+          <span class="l"><span class="d">{{ day.strftime('%a, %b %-d') }}</span>
+            {% if kind == 'missed' %}<span><span class="tag">{{ missed_label(obj) }}</span></span>{% endif %}</span>
+          <span class="r"><span class="muted" style="font-weight:600">No run</span>
+            {% if kind == 'missed' %}<span class="pill good">Coaches told</span>{% else %}<span class="pill" style="color:var(--brand-red); border-color:var(--brand-red); background:var(--color-panel)">Tell coaches why</span>{% endif %}</span>
+        </a>
+      {% endif %}
+      </li>
       {% else %}<li class="row muted">No runs yet.</li>{% endfor %}
     </ul>
   </section>
+  <p class="foot" style="margin:0 4px">Effort takes about ten seconds. Your coaches use it with your mileage to spot when training is piling up.</p>
 </div>
 {% endblock %}
