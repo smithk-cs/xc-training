@@ -1,0 +1,261 @@
+{% extends "base.html" %}
+{% block title %}Charts · XC Training{% endblock %}
+{% block mainclass %}wide{% endblock %}
+{% block head %}
+<script src="/static/d3.v7.9.0.min.js"></script>
+<style>
+.xcc-multi { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr)); gap: var(--cds-gap-md); }
+.xcc-panel { border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: var(--cds-pad-sm) var(--cds-pad-md); position: relative; min-width: 0; }
+.xcc-panel h3 { font-size: var(--cds-font-size-caption); margin: 0; display: flex; justify-content: space-between; }
+.xcc-chart { position: relative; min-height: 120px; }
+.xcc-picks { display: flex; flex-wrap: wrap; gap: 4px 14px; max-height: 9rem; overflow: auto; margin-bottom: var(--cds-gap-sm); }
+.xcc-legend { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: var(--cds-font-size-caption); margin-bottom: 6px; }
+.xcc-legend i { display: inline-block; width: 14px; height: 0; border-top: 3px solid; margin-right: 6px; vertical-align: middle; }
+svg text { font-family: var(--font-anthropic-sans); }
+.t { fill: var(--color-fg-muted); font-size: 11px; }
+.v { fill: var(--color-fg); font-size: 11px; }
+.tip { position: absolute; pointer-events: none; background: var(--cds-surface-popover); border: 1px solid var(--cds-border); border-radius: var(--cds-radius); box-shadow: var(--cds-shadow-popover); padding: 4px 8px; font-size: 12px; z-index: 3; max-width: 16rem; }
+.empty { color: var(--color-fg-muted); font-size: var(--cds-font-size-caption); padding: 1rem 0; }
+</style>
+{% endblock %}
+{% block content %}
+<h1>Results charts</h1>
+<p class="muted">Built from every benchmark result in the system: races, time trials and converted track times. Higher on a chart is always faster.</p>
+<div class="card" id="career">
+  <div class="form-row"><h2 style="flex:1">Career</h2><label>Athlete<select id="c-athlete"></select></label></div>
+  <p class="small muted">Each benchmark event over time. The larger dot is the personal record. Hover a dot for the date, course and season.</p>
+  <div class="xcc-multi" id="c-chart"></div>
+</div>
+<div class="card" id="compare">
+  <div class="form-row"><h2 style="flex:1">Compare athletes</h2><label>Event<select id="m-event"></select></label><label>Season<select id="m-season"></select></label></div>
+  <p class="small muted">Tick up to six athletes. Each line is one athlete’s results through the season.</p>
+  <div class="xcc-picks" id="m-picks"></div>
+  <div class="xcc-legend" id="m-legend"></div>
+  <div class="xcc-chart" id="m-chart"></div>
+</div>
+<div class="card" id="improve">
+  <div class="form-row"><h2 style="flex:1">Improvement vs last season</h2><label>Event<select id="i-event"></select></label><label>Team<select id="i-gender"><option>Boys</option><option>Girls</option></select></label></div>
+  <p class="small muted">This cross country season’s best minus last season’s, for athletes with both. Green is faster.</p>
+  <div class="xcc-chart" id="i-chart"></div>
+</div>
+<div class="card" id="top7">
+  <h2>Top-7 team average, 5K</h2>
+  <p class="small muted">For each date with at least seven 5K results from one team, the average of the seven fastest. Import each meet’s results to build this through the season; courses differ, so compare meets on the same course when you can.</p>
+  <div class="xcc-chart" id="t-chart"></div>
+</div>
+<script>
+(async () => {
+  'use strict';
+  const EVENTS = ['1 Mile', '1.5 Mile', '2 Mile', '5K'];
+  const COLORS = ['var(--dash-c1)', 'var(--dash-c2)', 'var(--dash-c3)', 'var(--dash-c4)', 'var(--dash-c5)', 'var(--dash-c6)'];
+  const fmt = (s) => { const t = Math.round(s * 10) / 10; const m = Math.floor(t / 60); return m + ':' + (t - m * 60).toFixed(1).padStart(4, '0'); };
+  const fmtTick = (s) => { const t = Math.round(s); const m = Math.floor(t / 60); return m + ':' + String(t - m * 60).padStart(2, '0'); };
+  const parseDay = (s) => new Date(s + 'T00:00:00Z');
+  const fmtDay = d3.utcFormat('%b %-d, %Y');
+  const fmtShort = d3.utcFormat('%b %-d');
+  const seasonKey = (x) => parseInt(x, 10) * 2 + (/XC$/.test(x) ? 1 : 0);
+  const $ = (id) => document.getElementById(id);
+  const el = (tag, cls) => { const e = document.createElement(tag); if (cls) e.className = cls; return e; };
+  const empty = (box, text) => { const d = el('div', 'empty'); d.textContent = text; box.replaceChildren(d); };
+  let data;
+  try {
+    const r = await fetch('/api/charts/results.json', { credentials: 'same-origin' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    data = await r.json();
+  } catch (e) {
+    ['c-chart', 'm-chart', 'i-chart', 't-chart'].forEach((id) => empty($(id), 'Results could not be loaded. Reload the page to try again.'));
+    return;
+  }
+  const results = data.results.map((r) => ({ ...r, t: Number(r.time_sec), d: parseDay(r.date) }));
+  const roster = data.roster.slice().sort((a, b) => a.athlete.localeCompare(b.athlete));
+  const seasons = [...new Set(results.map((r) => r.season))].sort((a, b) => seasonKey(a) - seasonKey(b));
+  const xcSeasons = seasons.filter((x) => /XC$/.test(x));
+  const curXC = xcSeasons[xcSeasons.length - 1];
+  const lastXC = curXC ? (parseInt(curXC, 10) - 1) + ' XC' : null;
+
+  const tipIn = (box) => { let t = box.querySelector(':scope > .tip'); if (!t) { t = el('div', 'tip'); t.hidden = true; box.append(t); } return t; };
+  const showTip = (box, event, lines) => {
+    const t = tipIn(box);
+    t.replaceChildren(...lines.map((l) => { const d = el('div'); d.textContent = l; return d; }));
+    t.hidden = false;
+    const [x, y] = d3.pointer(event, box);
+    const w = t.offsetWidth, W = box.clientWidth || 600;
+    t.style.left = (x + 12 + w > W ? Math.max(0, x - w - 12) : x + 12) + 'px';
+    t.style.top = Math.max(0, y - 20) + 'px';
+  };
+  const hideTip = (box) => { const t = box.querySelector(':scope > .tip'); if (t) t.hidden = true; };
+  const textW = (svg, str) => { const n = svg.append('text').attr('class', 't').text(str); const w = n.node().getComputedTextLength(); n.remove(); return w; };
+  const fill = (sel, values, label) => { sel.replaceChildren(...values.map((v) => new Option(label ? label(v) : v, v))); };
+
+  // ---- career
+  fill($('c-athlete'), roster.map((r) => r.athlete_id), (id) => roster.find((r) => r.athlete_id === id).athlete);
+  function drawCareer() {
+    const box = $('c-chart');
+    const id = $('c-athlete').value;
+    const mine = results.filter((r) => r.athlete_id === id);
+    if (!mine.length) { empty(box, 'No results yet for this athlete.'); return; }
+    const extent = d3.extent(mine, (r) => r.d);
+    const x0 = new Date(+extent[0] - 20 * 864e5), x1 = new Date(+extent[1] + 20 * 864e5);
+    box.replaceChildren();
+    for (const ev of EVENTS) {
+      const rs = mine.filter((r) => r.event === ev).sort((a, b) => a.d - b.d);
+      const panel = el('div', 'xcc-panel');
+      const h = el('h3');
+      const name = el('span'); name.textContent = ev;
+      const pr = el('span', 'muted'); pr.textContent = rs.length ? 'PR ' + fmt(d3.min(rs, (r) => r.t)) : '';
+      h.append(name, pr);
+      panel.append(h);
+      box.append(panel);
+      const W = Math.max(240, panel.clientWidth || 280), H = 150, m = { t: 18, r: 10, b: 22, l: 10 };
+      const svg = d3.select(panel).append('svg').attr('width', '100%').attr('viewBox', `0 0 ${W} ${H}`);
+      if (!rs.length) { svg.append('text').attr('class', 't').attr('x', W / 2).attr('y', H / 2).attr('text-anchor', 'middle').text('No results'); continue; }
+      const lo = d3.min(rs, (r) => r.t), hi = d3.max(rs, (r) => r.t), pad = Math.max(2, (hi - lo) * 0.2);
+      const y = d3.scaleLinear([hi + pad, lo - pad], [H - m.b, m.t]);
+      const x = d3.scaleUtc([x0, x1], [m.l, W - m.r]);
+      const ticks = x.ticks(4);
+      svg.append('g').selectAll('text').data(ticks).join('text').attr('class', 't').attr('x', x).attr('y', H - 6).attr('text-anchor', 'middle').text(d3.utcFormat("%b '%y"));
+      svg.append('path').datum(rs).attr('d', d3.line().x((r) => x(r.d)).y((r) => y(r.t))).attr('fill', 'none').attr('stroke', COLORS[0]).attr('stroke-width', 2).attr('stroke-linejoin', 'round');
+      svg.append('g').selectAll('circle').data(rs).join('circle').attr('cx', (r) => x(r.d)).attr('cy', (r) => y(r.t))
+        .attr('r', (r) => (r.t === lo ? 6 : 3.5)).attr('fill', COLORS[0])
+        .on('pointermove', (event, r) => showTip(panel, event, [fmtDay(r.d), r.event + ' ' + fmt(r.t), r.season + (r.course ? ', ' + r.course : '')]))
+        .on('pointerleave', () => hideTip(panel));
+      const prRow = rs.find((r) => r.t === lo);
+      svg.append('text').attr('class', 'v').attr('x', Math.min(W - m.r - 30, Math.max(m.l + 30, x(prRow.d)))).attr('y', y(lo) - 9).attr('text-anchor', 'middle').text(fmt(lo));
+    }
+  }
+
+  // ---- compare
+  fill($('m-event'), EVENTS);
+  $('m-event').value = '5K';
+  fill($('m-season'), seasons.slice().reverse());
+  const picked = new Set();
+  function drawPicks() {
+    const ev = $('m-event').value, se = $('m-season').value;
+    const ids = [...new Set(results.filter((r) => r.event === ev && r.season === se).map((r) => r.athlete_id))];
+    const best = (id) => d3.min(results.filter((r) => r.athlete_id === id && r.event === ev && r.season === se), (r) => r.t);
+    ids.sort((a, b) => best(a) - best(b));
+    for (const id of [...picked]) if (!ids.includes(id)) picked.delete(id);
+    if (!picked.size) ids.slice(0, 3).forEach((id) => picked.add(id));
+    $('m-picks').replaceChildren(...ids.map((id) => {
+      const lab = el('label', 'check');
+      const cb = el('input'); cb.type = 'checkbox'; cb.value = id; cb.checked = picked.has(id);
+      cb.disabled = !cb.checked && picked.size >= 6;
+      cb.addEventListener('change', () => { if (cb.checked && picked.size >= 6) { cb.checked = false; return; } if (cb.checked) picked.add(id); else picked.delete(id); drawPicks(); drawCompare(); });
+      const sp = el('span'); sp.textContent = (roster.find((r) => r.athlete_id === id) || {}).athlete + ' (' + fmt(best(id)) + ')';
+      lab.append(cb, sp);
+      return lab;
+    }));
+  }
+  function drawCompare() {
+    const box = $('m-chart'), ev = $('m-event').value, se = $('m-season').value;
+    const ids = [...picked];
+    const rs = results.filter((r) => r.event === ev && r.season === se && picked.has(r.athlete_id));
+    $('m-legend').replaceChildren(...ids.map((id, i) => {
+      const s = el('span'); const sw = el('i'); sw.style.borderColor = COLORS[i % COLORS.length];
+      const t = el('span'); t.textContent = (roster.find((r) => r.athlete_id === id) || {}).athlete; s.append(sw, t); return s;
+    }));
+    if (!rs.length) { empty(box, 'No results for this event and season yet.'); return; }
+    box.replaceChildren();
+    const W = Math.max(320, box.clientWidth || 700), H = 280;
+    const svg = d3.select(box).append('svg').attr('width', '100%').attr('viewBox', `0 0 ${W} ${H}`);
+    const lo = d3.min(rs, (r) => r.t), hi = d3.max(rs, (r) => r.t), pad = Math.max(2, (hi - lo) * 0.1);
+    const y = d3.scaleLinear([hi + pad, lo - pad], [H - 26, 12]);
+    const yt = y.ticks(5);
+    const ml = Math.ceil(Math.max(...yt.map((v) => textW(svg, fmtTick(v))))) + 12;
+    const ext = d3.extent(rs, (r) => r.d);
+    const x = d3.scaleUtc([new Date(+ext[0] - 5 * 864e5), new Date(+ext[1] + 5 * 864e5)], [ml, W - 12]);
+    svg.append('g').selectAll('line').data(yt).join('line').attr('x1', ml).attr('x2', W - 12).attr('y1', y).attr('y2', y).attr('stroke', 'var(--cds-chart-grid)');
+    svg.append('g').selectAll('text').data(yt).join('text').attr('class', 't').attr('x', ml - 8).attr('y', y).attr('dy', '0.32em').attr('text-anchor', 'end').text(fmtTick);
+    svg.append('g').selectAll('text').data(x.ticks(Math.max(2, Math.floor(W / 110)))).join('text').attr('class', 't').attr('x', x).attr('y', H - 8).attr('text-anchor', 'middle').text(fmtShort);
+    ids.forEach((id, i) => {
+      const mine = rs.filter((r) => r.athlete_id === id).sort((a, b) => a.d - b.d);
+      const c = COLORS[i % COLORS.length];
+      svg.append('path').datum(mine).attr('d', d3.line().x((r) => x(r.d)).y((r) => y(r.t))).attr('fill', 'none').attr('stroke', c).attr('stroke-width', 2).attr('stroke-linejoin', 'round');
+      svg.append('g').selectAll('circle').data(mine).join('circle').attr('cx', (r) => x(r.d)).attr('cy', (r) => y(r.t)).attr('r', 4).attr('fill', c)
+        .on('pointermove', (event, r) => showTip(box, event, [r.athlete, fmtDay(r.d) + ': ' + fmt(r.t), r.course || '']))
+        .on('pointerleave', () => hideTip(box));
+    });
+  }
+
+  // ---- improvement
+  fill($('i-event'), EVENTS);
+  $('i-event').value = '5K';
+  function drawImprove() {
+    const box = $('i-chart'), ev = $('i-event').value, g = $('i-gender').value;
+    if (!curXC) { empty(box, 'No cross country results yet.'); return; }
+    const best = (id, se) => d3.min(results.filter((r) => r.athlete_id === id && r.event === ev && r.season === se), (r) => r.t);
+    const rows = roster.filter((r) => r.gender === g).map((r) => ({ name: r.athlete, cur: best(r.athlete_id, curXC), last: best(r.athlete_id, lastXC) }))
+      .filter((r) => r.cur != null && r.last != null).map((r) => ({ ...r, change: Math.round((r.cur - r.last) * 10) / 10 }))
+      .sort((a, b) => a.change - b.change);
+    if (!rows.length) { empty(box, 'Nobody has a ' + ev + ' in both ' + lastXC + ' and ' + curXC + ' yet.'); return; }
+    box.replaceChildren();
+    const W = Math.max(320, box.clientWidth || 700), H = rows.length * 22 + 30;
+    const svg = d3.select(box).append('svg').attr('width', '100%').attr('viewBox', `0 0 ${W} ${H}`);
+    const ml = Math.ceil(Math.max(...rows.map((r) => textW(svg, r.name)))) + 12;
+    const lab = (v) => (v < 0 ? '−' : '+') + Math.abs(v).toFixed(1) + ' s';
+    const mr = Math.ceil(Math.max(...rows.map((r) => textW(svg, lab(r.change))))) + 10;
+    const lo = Math.min(0, d3.min(rows, (r) => r.change)), hi = Math.max(0, d3.max(rows, (r) => r.change));
+    const x = d3.scaleLinear([lo, hi || 1], [ml + mr, W - mr]);
+    const y = d3.scaleBand(rows.map((r) => r.name), [10, H - 20]).padding(0.25);
+    svg.append('line').attr('x1', x(0)).attr('x2', x(0)).attr('y1', 6).attr('y2', H - 16).attr('stroke', 'var(--cds-chart-axis)');
+    svg.append('g').selectAll('text').data(rows).join('text').attr('class', 't').attr('x', ml - 8).attr('y', (r) => y(r.name) + y.bandwidth() / 2).attr('dy', '0.32em').attr('text-anchor', 'end').text((r) => r.name);
+    svg.append('g').selectAll('rect').data(rows).join('rect').attr('x', (r) => x(Math.min(0, r.change))).attr('width', (r) => Math.max(1, Math.abs(x(r.change) - x(0))))
+      .attr('y', (r) => y(r.name)).attr('height', y.bandwidth()).attr('rx', 3)
+      .attr('fill', (r) => (r.change < 0 ? 'var(--color-ok)' : 'var(--color-bad)'))
+      .on('pointermove', (event, r) => showTip(box, event, [r.name, lastXC + ': ' + fmt(r.last), curXC + ': ' + fmt(r.cur)]))
+      .on('pointerleave', () => hideTip(box));
+    svg.append('g').selectAll('text.vv').data(rows).join('text').attr('class', 'v')
+      .attr('x', (r) => (r.change < 0 ? x(r.change) - 4 : x(r.change) + 4)).attr('text-anchor', (r) => (r.change < 0 ? 'end' : 'start'))
+      .attr('y', (r) => y(r.name) + y.bandwidth() / 2).attr('dy', '0.32em').text((r) => lab(r.change));
+  }
+
+  // ---- top 7
+  function drawTop7() {
+    const box = $('t-chart');
+    const groups = d3.groups(results.filter((r) => r.event === '5K'), (r) => r.gender, (r) => r.date);
+    const series = groups.map(([g, byDate]) => ({
+      g, pts: byDate.map(([date, rs]) => ({ d: parseDay(date), n: rs.length, avg: rs.length >= 7 ? d3.mean(rs.map((r) => r.t).sort((a, b) => a - b).slice(0, 7)) : null }))
+        .filter((p) => p.avg != null).sort((a, b) => a.d - b.d),
+    })).filter((s) => s.pts.length);
+    if (!series.length) { empty(box, 'No date has seven 5K results from one team yet.'); return; }
+    box.replaceChildren();
+    const W = Math.max(320, box.clientWidth || 700), H = 240;
+    const svg = d3.select(box).append('svg').attr('width', '100%').attr('viewBox', `0 0 ${W} ${H}`);
+    const all = series.flatMap((s) => s.pts);
+    const lo = d3.min(all, (p) => p.avg), hi = d3.max(all, (p) => p.avg), pad = Math.max(5, (hi - lo) * 0.1);
+    const y = d3.scaleLinear([hi + pad, lo - pad], [H - 26, 14]);
+    const yt = y.ticks(5);
+    const ml = Math.ceil(Math.max(...yt.map((v) => textW(svg, fmtTick(v))))) + 12;
+    const ext = d3.extent(all, (p) => p.d);
+    const x = d3.scaleUtc([new Date(+ext[0] - 20 * 864e5), new Date(+ext[1] + 20 * 864e5)], [ml, W - 70]);
+    svg.append('g').selectAll('line').data(yt).join('line').attr('x1', ml).attr('x2', W - 70).attr('y1', y).attr('y2', y).attr('stroke', 'var(--cds-chart-grid)');
+    svg.append('g').selectAll('text').data(yt).join('text').attr('class', 't').attr('x', ml - 8).attr('y', y).attr('dy', '0.32em').attr('text-anchor', 'end').text(fmtTick);
+    svg.append('g').selectAll('text').data(x.ticks(Math.max(2, Math.floor(W / 130)))).join('text').attr('class', 't').attr('x', x).attr('y', H - 8).attr('text-anchor', 'middle').text(d3.utcFormat("%b '%y"));
+    const ends = [];
+    series.forEach((s, i) => {
+      const c = COLORS[i % COLORS.length];
+      svg.append('path').datum(s.pts).attr('d', d3.line().x((p) => x(p.d)).y((p) => y(p.avg))).attr('fill', 'none').attr('stroke', c).attr('stroke-width', 2);
+      svg.append('g').selectAll('circle').data(s.pts).join('circle').attr('cx', (p) => x(p.d)).attr('cy', (p) => y(p.avg)).attr('r', 4).attr('fill', c)
+        .on('pointermove', (event, p) => showTip(box, event, [s.g + ', ' + fmtDay(p.d), 'Top-7 average ' + fmt(p.avg), p.n + ' runners with a 5K that day']))
+        .on('pointerleave', () => hideTip(box));
+      const last = s.pts[s.pts.length - 1];
+      ends.push({ c, text: s.g + ' ' + fmt(last.avg), y: y(last.avg), x: x(last.d) });
+    });
+    ends.sort((a, b) => a.y - b.y);
+    for (let i = 1; i < ends.length; i++) if (ends[i].y - ends[i - 1].y < 14) ends[i].y = ends[i - 1].y + 14;
+    ends.forEach((e) => svg.append('text').attr('class', 'v').attr('x', e.x + 8).attr('y', e.y).attr('dy', '0.32em').attr('fill', e.c).text(e.text));
+  }
+
+  const redraw = () => { drawCareer(); drawPicks(); drawCompare(); drawImprove(); drawTop7(); };
+  $('c-athlete').addEventListener('change', drawCareer);
+  $('m-event').addEventListener('change', () => { picked.clear(); drawPicks(); drawCompare(); });
+  $('m-season').addEventListener('change', () => { picked.clear(); drawPicks(); drawCompare(); });
+  $('i-event').addEventListener('change', drawImprove);
+  $('i-gender').addEventListener('change', drawImprove);
+  let rt = null;
+  window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(redraw, 150); });
+  redraw();
+  window.__chartsReady = true;
+})();
+</script>
+{% endblock %}

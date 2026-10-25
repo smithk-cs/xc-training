@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}{{ a.name }}, {{ act.local_date.strftime('%b %-d') }} · {{ team_name }}{% endblock %}
+{% block content %}
+<p><a href="/athletes/{{ a.id }}">‹ {{ a.name }}</a></p>
+<h1>{{ act.local_date.strftime('%A, %b %-d, %Y') }}</h1>
+{% set miles = act.distance_m / 1609.344 %}
+<div class="grid">
+<div class="card">
+  <h2>The run</h2>
+  <div class="facts" style="margin-bottom:12px">
+    <div><span class="k">Distance</span><span class="big">{{ '%.2f' % miles }} mi</span></div>
+    <div><span class="k">Time</span><span class="big">{{ fmt_time(act.duration_s)[:-2] }}</span></div>
+    <div><span class="k">Average pace</span><span class="big">{{ fmt_time(act.duration_s / miles)[:-2] if miles > 0.2 else '—' }}</span></div>
+    <div><span class="k">Average heart rate</span><span class="big">{{ act.avg_hr|round|int if act.avg_hr else '—' }}</span></div>
+  </div>
+  {% set reps = act.laps|selectattr('is_rep')|list %}
+  {% if reps %}
+  <div class="scroll"><table class="list"><thead><tr><th>Rep</th><th class="num">Distance</th><th class="num">Pace /mi</th><th class="num">Avg HR</th><th class="num">Max HR</th><th class="num">HR drop in 60 s</th></tr></thead><tbody>
+  {% for l in reps %}<tr><td>{{ l.rep_num }}</td><td class="num">{{ l.distance_m|round|int }} m</td><td class="num">{{ fmt_time(l.timer_s / l.distance_m * 1609.344)[:-2] }}</td><td class="num">{{ l.avg_hr|round|int if l.avg_hr else '' }}</td><td class="num">{{ l.max_hr|round|int if l.max_hr else '' }}</td><td class="num">{{ l.hr_drop_60s|int if l.hr_drop_60s is not none else '' }}</td></tr>{% endfor %}
+  </tbody></table></div>
+  {% else %}<p class="muted small">No reps found in this run’s laps.</p>{% endif %}
+  {% if act.device %}<p class="muted small">Recorded on {{ act.device }}.</p>{% endif %}
+</div>
+<div class="card">
+  <h2>From the athlete</h2>
+  {% if act.rpe is not none %}
+  <p>Effort <b>{{ act.rpe }}/10</b>{% if act.feel %}, legs <b>{{ act.feel|lower }}</b>{% endif %}.</p>
+  {% if pain %}<p><span class="pill bad">Pain {{ pain.severity }}/10: {{ pain.body_area }}</span></p>{% endif %}
+  {% if act.athlete_note %}<p class="muted">“{{ act.athlete_note }}”</p>{% endif %}
+  {% else %}<p class="muted">No effort rating yet.</p>{% endif %}
+</div>
+<div class="card">
+  <h2>Type and workout</h2>
+  {% if user.role != 'trainer' %}
+  <form method="post" action="/athletes/{{ a.id }}/runs/{{ act.id }}">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <div class="form-row">
+      <label>Type of run<select name="run_type">{% for t in RUN_TYPES %}<option {% if run_type_of(act) == t %}selected{% endif %}>{{ t }}</option>{% endfor %}</select></label>
+      <label>Team workout<select name="workout">
+        <option value="none" {% if not act.planned_workout_id %}selected{% endif %}>Not a team workout</option>
+        {% for w in choices %}<option value="{{ w.id }}" {% if act.planned_workout_id == w.id %}selected{% endif %}>{{ w.title }} ({{ w.date.strftime('%a, %b %-d') }})</option>{% endfor %}
+      </select></label>
+      <button type="submit">Save</button>
+    </div>
+  </form>
+  <p class="small muted">{% if act.workout_locked %}The workout was chosen by hand, so automatic matching leaves it alone.{% else %}Matched automatically. Choosing a workout here fixes it in place.{% endif %} Workouts within three days of the run are listed.</p>
+  {% else %}<p>{{ run_type_of(act) }}{% if act.planned %}: {{ act.planned.title }}{% endif %}</p>{% endif %}
+</div>
+</div>
+{% endblock %}

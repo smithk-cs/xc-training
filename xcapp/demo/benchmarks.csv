@@ -1,0 +1,519 @@
+athlete_id,athlete,gender,group,season,event,time_sec
+A01,Mateo Jaramillo,Boys,JV,2026 XC,1 Mile,306.9
+A01,Mateo Jaramillo,Boys,JV,2026 XC,1.5 Mile,479.4
+A01,Mateo Jaramillo,Boys,JV,2026 XC,2 Mile,656.8
+A01,Mateo Jaramillo,Boys,JV,2026 XC,5K,1048.1
+A02,Owen Ishikawa,Boys,Development,2026 XC,1 Mile,362.7
+A02,Owen Ishikawa,Boys,Development,2026 XC,1.5 Mile,562.9
+A02,Owen Ishikawa,Boys,Development,2026 XC,2 Mile,766.4
+A02,Owen Ishikawa,Boys,Development,2026 XC,5K,1234.7
+A03,Lucas Estrada,Boys,Development,2026 XC,1 Mile,352.1
+A03,Lucas Estrada,Boys,Development,2026 XC,1.5 Mile,542.8
+A03,Lucas Estrada,Boys,Development,2026 XC,2 Mile,734.6
+A03,Lucas Estrada,Boys,Development,2026 XC,5K,1192.3
+A04,Ethan Thorne,Boys,Development,2026 XC,1 Mile,387.8
+A04,Ethan Thorne,Boys,Development,2026 XC,1.5 Mile,598.1
+A04,Ethan Thorne,Boys,Development,2026 XC,2 Mile,823.9
+A04,Ethan Thorne,Boys,Development,2026 XC,5K,1317.6
+A05,Diego Gallagher,Boys,Development,2026 XC,1 Mile,379.8
+A05,Diego Gallagher,Boys,Development,2026 XC,1.5 Mile,588.7
+A05,Diego Gallagher,Boys,Development,2026 XC,2 Mile,800.8
+A05,Diego Gallagher,Boys,Development,2026 XC,5K,1295.3
+A06,Caleb Esposito,Boys,Varsity,2025 XC,1 Mile,280.4
+A06,Caleb Esposito,Boys,Varsity,2025 XC,1.5 Mile,435.3
+A06,Caleb Esposito,Boys,Varsity,2025 XC,2 Mile,589.6
+A06,Caleb Esposito,Boys,Varsity,2025 XC,5K,962.0
+A06,Caleb Esposito,Boys,Varsity,2026 Track,1 Mile,272.0
+A06,Caleb Esposito,Boys,Varsity,2026 Track,2 Mile,586.9
+A06,Caleb Esposito,Boys,Varsity,2026 XC,1 Mile,270.2
+A06,Caleb Esposito,Boys,Varsity,2026 XC,1.5 Mile,419.3
+A06,Caleb Esposito,Boys,Varsity,2026 XC,2 Mile,574.8
+A06,Caleb Esposito,Boys,Varsity,2026 XC,5K,935.2
+A07,Noah Ramos,Boys,Development,2025 XC,1 Mile,397.0
+A07,Noah Ramos,Boys,Development,2025 XC,1.5 Mile,613.5
+A07,Noah Ramos,Boys,Development,2025 XC,2 Mile,830.9
+A07,Noah Ramos,Boys,Development,2025 XC,5K,1343.6
+A07,Noah Ramos,Boys,Development,2026 Track,1 Mile,386.2
+A07,Noah Ramos,Boys,Development,2026 Track,2 Mile,819.0
+A07,Noah Ramos,Boys,Development,2026 XC,1 Mile,379.6
+A07,Noah Ramos,Boys,Development,2026 XC,1.5 Mile,590.3
+A07,Noah Ramos,Boys,Development,2026 XC,2 Mile,812.4
+A07,Noah Ramos,Boys,Development,2026 XC,5K,1296.7
+A08,Julian Ellison,Boys,JV,2025 XC,1 Mile,316.2
+A08,Julian Ellison,Boys,JV,2025 XC,1.5 Mile,484.0
+A08,Julian Ellison,Boys,JV,2025 XC,2 Mile,659.7
+A08,Julian Ellison,Boys,JV,2025 XC,5K,1066.9
+A08,Julian Ellison,Boys,JV,2026 Track,1 Mile,307.6
+A08,Julian Ellison,Boys,JV,2026 Track,2 Mile,653.9
+A08,Julian Ellison,Boys,JV,2026 XC,1 Mile,303.9
+A08,Julian Ellison,Boys,JV,2026 XC,1.5 Mile,471.1
+A08,Julian Ellison,Boys,JV,2026 XC,2 Mile,637.0
+A08,Julian Ellison,Boys,JV,2026 XC,5K,1031.8
+A09,Isaac Vasquez,Boys,Varsity,2025 XC,1 Mile,289.7
+A09,Isaac Vasquez,Boys,Varsity,2025 XC,1.5 Mile,449.9
+A09,Isaac Vasquez,Boys,Varsity,2025 XC,2 Mile,612.5
+A09,Isaac Vasquez,Boys,Varsity,2025 XC,5K,991.7
+A09,Isaac Vasquez,Boys,Varsity,2026 Track,1 Mile,281.7
+A09,Isaac Vasquez,Boys,Varsity,2026 Track,2 Mile,605.6
+A09,Isaac Vasquez,Boys,Varsity,2026 XC,1 Mile,280.1
+A09,Isaac Vasquez,Boys,Varsity,2026 XC,1.5 Mile,431.5
+A09,Isaac Vasquez,Boys,Varsity,2026 XC,2 Mile,586.6
+A09,Isaac Vasquez,Boys,Varsity,2026 XC,5K,951.6
+A10,Gavin Underwood,Boys,JV,2026 XC,1 Mile,305.7
+A10,Gavin Underwood,Boys,JV,2026 XC,1.5 Mile,466.6
+A10,Gavin Underwood,Boys,JV,2026 XC,2 Mile,640.0
+A10,Gavin Underwood,Boys,JV,2026 XC,5K,1025.3
+A11,Rowan Valdez,Boys,JV,2025 XC,1 Mile,342.5
+A11,Rowan Valdez,Boys,JV,2025 XC,1.5 Mile,535.6
+A11,Rowan Valdez,Boys,JV,2025 XC,2 Mile,720.4
+A11,Rowan Valdez,Boys,JV,2025 XC,5K,1142.6
+A11,Rowan Valdez,Boys,JV,2026 Track,1 Mile,335.7
+A11,Rowan Valdez,Boys,JV,2026 Track,2 Mile,711.8
+A11,Rowan Valdez,Boys,JV,2026 XC,1 Mile,331.7
+A11,Rowan Valdez,Boys,JV,2026 XC,1.5 Mile,512.2
+A11,Rowan Valdez,Boys,JV,2026 XC,2 Mile,694.6
+A11,Rowan Valdez,Boys,JV,2026 XC,5K,1139.6
+A12,Elias Garza,Boys,Development,2025 XC,1 Mile,354.3
+A12,Elias Garza,Boys,Development,2025 XC,1.5 Mile,552.5
+A12,Elias Garza,Boys,Development,2025 XC,2 Mile,763.4
+A12,Elias Garza,Boys,Development,2025 XC,5K,1228.1
+A12,Elias Garza,Boys,Development,2026 Track,1 Mile,344.3
+A12,Elias Garza,Boys,Development,2026 Track,2 Mile,746.4
+A12,Elias Garza,Boys,Development,2026 XC,1 Mile,343.8
+A12,Elias Garza,Boys,Development,2026 XC,1.5 Mile,538.1
+A12,Elias Garza,Boys,Development,2026 XC,2 Mile,731.0
+A12,Elias Garza,Boys,Development,2026 XC,5K,1195.0
+A13,Marcus Ochoa,Boys,JV,2026 XC,1 Mile,311.7
+A13,Marcus Ochoa,Boys,JV,2026 XC,1.5 Mile,487.9
+A13,Marcus Ochoa,Boys,JV,2026 XC,2 Mile,663.0
+A13,Marcus Ochoa,Boys,JV,2026 XC,5K,1076.7
+A14,Theo Fischer,Boys,Development,2025 XC,1 Mile,372.9
+A14,Theo Fischer,Boys,Development,2025 XC,1.5 Mile,579.9
+A14,Theo Fischer,Boys,Development,2025 XC,2 Mile,797.8
+A14,Theo Fischer,Boys,Development,2025 XC,5K,1284.8
+A14,Theo Fischer,Boys,Development,2026 Track,1 Mile,365.6
+A14,Theo Fischer,Boys,Development,2026 Track,2 Mile,784.7
+A14,Theo Fischer,Boys,Development,2026 XC,1 Mile,357.3
+A14,Theo Fischer,Boys,Development,2026 XC,1.5 Mile,555.6
+A14,Theo Fischer,Boys,Development,2026 XC,2 Mile,758.3
+A14,Theo Fischer,Boys,Development,2026 XC,5K,1219.4
+A15,Adrian Iverson,Boys,Varsity,2025 XC,1 Mile,279.3
+A15,Adrian Iverson,Boys,Varsity,2025 XC,1.5 Mile,428.6
+A15,Adrian Iverson,Boys,Varsity,2025 XC,2 Mile,585.3
+A15,Adrian Iverson,Boys,Varsity,2025 XC,5K,931.9
+A15,Adrian Iverson,Boys,Varsity,2026 Track,1 Mile,270.7
+A15,Adrian Iverson,Boys,Varsity,2026 Track,2 Mile,575.2
+A15,Adrian Iverson,Boys,Varsity,2026 XC,1 Mile,269.0
+A15,Adrian Iverson,Boys,Varsity,2026 XC,1.5 Mile,420.3
+A15,Adrian Iverson,Boys,Varsity,2026 XC,2 Mile,570.1
+A15,Adrian Iverson,Boys,Varsity,2026 XC,5K,917.1
+A16,Wesley Prescott,Boys,JV,2025 XC,1 Mile,303.6
+A16,Wesley Prescott,Boys,JV,2025 XC,1.5 Mile,467.2
+A16,Wesley Prescott,Boys,JV,2025 XC,2 Mile,635.9
+A16,Wesley Prescott,Boys,JV,2025 XC,5K,1007.6
+A16,Wesley Prescott,Boys,JV,2026 Track,1 Mile,296.2
+A16,Wesley Prescott,Boys,JV,2026 Track,2 Mile,626.3
+A16,Wesley Prescott,Boys,JV,2026 XC,1 Mile,299.1
+A16,Wesley Prescott,Boys,JV,2026 XC,1.5 Mile,456.2
+A16,Wesley Prescott,Boys,JV,2026 XC,2 Mile,627.1
+A16,Wesley Prescott,Boys,JV,2026 XC,5K,992.0
+A17,Felix Lockhart,Boys,Varsity,2025 XC,1 Mile,268.2
+A17,Felix Lockhart,Boys,Varsity,2025 XC,1.5 Mile,422.4
+A17,Felix Lockhart,Boys,Varsity,2025 XC,2 Mile,572.4
+A17,Felix Lockhart,Boys,Varsity,2025 XC,5K,934.4
+A17,Felix Lockhart,Boys,Varsity,2026 Track,1 Mile,265.3
+A17,Felix Lockhart,Boys,Varsity,2026 Track,2 Mile,573.7
+A17,Felix Lockhart,Boys,Varsity,2026 XC,1 Mile,266.9
+A17,Felix Lockhart,Boys,Varsity,2026 XC,1.5 Mile,413.5
+A17,Felix Lockhart,Boys,Varsity,2026 XC,2 Mile,570.3
+A17,Felix Lockhart,Boys,Varsity,2026 XC,5K,923.0
+A18,Jonah Abbott,Boys,Development,2025 XC,1 Mile,388.4
+A18,Jonah Abbott,Boys,Development,2025 XC,1.5 Mile,608.2
+A18,Jonah Abbott,Boys,Development,2025 XC,2 Mile,819.0
+A18,Jonah Abbott,Boys,Development,2025 XC,5K,1330.1
+A18,Jonah Abbott,Boys,Development,2026 Track,1 Mile,379.5
+A18,Jonah Abbott,Boys,Development,2026 Track,2 Mile,808.7
+A18,Jonah Abbott,Boys,Development,2026 XC,1 Mile,381.3
+A18,Jonah Abbott,Boys,Development,2026 XC,1.5 Mile,587.3
+A18,Jonah Abbott,Boys,Development,2026 XC,2 Mile,800.3
+A18,Jonah Abbott,Boys,Development,2026 XC,5K,1284.1
+A19,Silas Mercado,Boys,Varsity,2025 XC,1 Mile,289.1
+A19,Silas Mercado,Boys,Varsity,2025 XC,1.5 Mile,446.5
+A19,Silas Mercado,Boys,Varsity,2025 XC,2 Mile,610.4
+A19,Silas Mercado,Boys,Varsity,2025 XC,5K,982.9
+A19,Silas Mercado,Boys,Varsity,2026 Track,1 Mile,280.9
+A19,Silas Mercado,Boys,Varsity,2026 Track,2 Mile,598.7
+A19,Silas Mercado,Boys,Varsity,2026 XC,1 Mile,277.0
+A19,Silas Mercado,Boys,Varsity,2026 XC,1.5 Mile,436.0
+A19,Silas Mercado,Boys,Varsity,2026 XC,2 Mile,594.5
+A19,Silas Mercado,Boys,Varsity,2026 XC,5K,958.2
+A20,Damian Quintero,Boys,Development,2025 XC,1 Mile,365.4
+A20,Damian Quintero,Boys,Development,2025 XC,1.5 Mile,560.0
+A20,Damian Quintero,Boys,Development,2025 XC,2 Mile,765.8
+A20,Damian Quintero,Boys,Development,2025 XC,5K,1216.3
+A20,Damian Quintero,Boys,Development,2026 Track,1 Mile,355.1
+A20,Damian Quintero,Boys,Development,2026 Track,2 Mile,747.6
+A20,Damian Quintero,Boys,Development,2026 XC,1 Mile,354.2
+A20,Damian Quintero,Boys,Development,2026 XC,1.5 Mile,540.9
+A20,Damian Quintero,Boys,Development,2026 XC,2 Mile,745.3
+A20,Damian Quintero,Boys,Development,2026 XC,5K,1187.9
+A21,Kai Hargrove,Boys,Varsity,2025 XC,1 Mile,284.5
+A21,Kai Hargrove,Boys,Varsity,2025 XC,1.5 Mile,447.5
+A21,Kai Hargrove,Boys,Varsity,2025 XC,2 Mile,605.8
+A21,Kai Hargrove,Boys,Varsity,2025 XC,5K,975.4
+A21,Kai Hargrove,Boys,Varsity,2026 Track,1 Mile,279.4
+A21,Kai Hargrove,Boys,Varsity,2026 Track,2 Mile,604.7
+A21,Kai Hargrove,Boys,Varsity,2026 XC,1 Mile,279.5
+A21,Kai Hargrove,Boys,Varsity,2026 XC,1.5 Mile,429.8
+A21,Kai Hargrove,Boys,Varsity,2026 XC,2 Mile,594.3
+A21,Kai Hargrove,Boys,Varsity,2026 XC,5K,962.7
+A22,Reid Whitaker,Boys,JV,2025 XC,1 Mile,307.0
+A22,Reid Whitaker,Boys,JV,2025 XC,1.5 Mile,481.6
+A22,Reid Whitaker,Boys,JV,2025 XC,2 Mile,657.9
+A22,Reid Whitaker,Boys,JV,2025 XC,5K,1062.4
+A22,Reid Whitaker,Boys,JV,2026 Track,1 Mile,303.5
+A22,Reid Whitaker,Boys,JV,2026 Track,2 Mile,655.5
+A22,Reid Whitaker,Boys,JV,2026 XC,1 Mile,300.0
+A22,Reid Whitaker,Boys,JV,2026 XC,1.5 Mile,466.0
+A22,Reid Whitaker,Boys,JV,2026 XC,2 Mile,640.2
+A22,Reid Whitaker,Boys,JV,2026 XC,5K,1040.9
+A23,Andre Rasmussen,Boys,Development,2026 XC,1 Mile,371.2
+A23,Andre Rasmussen,Boys,Development,2026 XC,1.5 Mile,569.6
+A23,Andre Rasmussen,Boys,Development,2026 XC,2 Mile,784.6
+A23,Andre Rasmussen,Boys,Development,2026 XC,5K,1261.6
+A24,Tomas Kearney,Boys,JV,2025 XC,1 Mile,323.2
+A24,Tomas Kearney,Boys,JV,2025 XC,1.5 Mile,493.0
+A24,Tomas Kearney,Boys,JV,2025 XC,2 Mile,673.7
+A24,Tomas Kearney,Boys,JV,2025 XC,5K,1080.1
+A24,Tomas Kearney,Boys,JV,2026 Track,1 Mile,319.3
+A24,Tomas Kearney,Boys,JV,2026 Track,2 Mile,675.9
+A24,Tomas Kearney,Boys,JV,2026 XC,1 Mile,319.8
+A24,Tomas Kearney,Boys,JV,2026 XC,1.5 Mile,493.2
+A24,Tomas Kearney,Boys,JV,2026 XC,2 Mile,671.2
+A24,Tomas Kearney,Boys,JV,2026 XC,5K,1087.4
+A25,Luca Yamada,Boys,Development,2025 XC,1 Mile,369.4
+A25,Luca Yamada,Boys,Development,2025 XC,1.5 Mile,571.4
+A25,Luca Yamada,Boys,Development,2025 XC,2 Mile,780.7
+A25,Luca Yamada,Boys,Development,2025 XC,5K,1258.1
+A25,Luca Yamada,Boys,Development,2026 Track,1 Mile,365.2
+A25,Luca Yamada,Boys,Development,2026 Track,2 Mile,783.9
+A25,Luca Yamada,Boys,Development,2026 XC,1 Mile,370.1
+A25,Luca Yamada,Boys,Development,2026 XC,1.5 Mile,566.7
+A25,Luca Yamada,Boys,Development,2026 XC,2 Mile,777.1
+A25,Luca Yamada,Boys,Development,2026 XC,5K,1251.9
+A26,Brody Delgado,Boys,Development,2026 XC,1 Mile,352.4
+A26,Brody Delgado,Boys,Development,2026 XC,1.5 Mile,550.3
+A26,Brody Delgado,Boys,Development,2026 XC,2 Mile,760.1
+A26,Brody Delgado,Boys,Development,2026 XC,5K,1231.1
+A27,Emmett Alvarez,Boys,JV,2025 XC,1 Mile,314.1
+A27,Emmett Alvarez,Boys,JV,2025 XC,1.5 Mile,490.6
+A27,Emmett Alvarez,Boys,JV,2025 XC,2 Mile,661.9
+A27,Emmett Alvarez,Boys,JV,2025 XC,5K,1065.3
+A27,Emmett Alvarez,Boys,JV,2026 Track,1 Mile,304.9
+A27,Emmett Alvarez,Boys,JV,2026 Track,2 Mile,653.7
+A27,Emmett Alvarez,Boys,JV,2026 XC,1 Mile,300.8
+A27,Emmett Alvarez,Boys,JV,2026 XC,1.5 Mile,469.3
+A27,Emmett Alvarez,Boys,JV,2026 XC,2 Mile,633.5
+A27,Emmett Alvarez,Boys,JV,2026 XC,5K,1023.7
+A28,Nico Sandoval,Boys,JV,2025 XC,1 Mile,321.5
+A28,Nico Sandoval,Boys,JV,2025 XC,1.5 Mile,496.4
+A28,Nico Sandoval,Boys,JV,2025 XC,2 Mile,671.2
+A28,Nico Sandoval,Boys,JV,2025 XC,5K,1081.2
+A28,Nico Sandoval,Boys,JV,2026 Track,1 Mile,311.4
+A28,Nico Sandoval,Boys,JV,2026 Track,2 Mile,669.3
+A28,Nico Sandoval,Boys,JV,2026 XC,1 Mile,311.1
+A28,Nico Sandoval,Boys,JV,2026 XC,1.5 Mile,477.7
+A28,Nico Sandoval,Boys,JV,2026 XC,2 Mile,653.9
+A28,Nico Sandoval,Boys,JV,2026 XC,5K,1038.8
+A29,Grant Wilder,Boys,Development,2025 XC,1 Mile,342.0
+A29,Grant Wilder,Boys,Development,2025 XC,1.5 Mile,533.0
+A29,Grant Wilder,Boys,Development,2025 XC,2 Mile,722.6
+A29,Grant Wilder,Boys,Development,2025 XC,5K,1179.6
+A29,Grant Wilder,Boys,Development,2026 Track,1 Mile,333.5
+A29,Grant Wilder,Boys,Development,2026 Track,2 Mile,729.5
+A29,Grant Wilder,Boys,Development,2026 XC,1 Mile,331.7
+A29,Grant Wilder,Boys,Development,2026 XC,1.5 Mile,521.7
+A29,Grant Wilder,Boys,Development,2026 XC,2 Mile,712.7
+A29,Grant Wilder,Boys,Development,2026 XC,5K,1167.2
+A30,Simon Hollis,Boys,Development,2025 XC,1 Mile,380.2
+A30,Simon Hollis,Boys,Development,2025 XC,1.5 Mile,588.2
+A30,Simon Hollis,Boys,Development,2025 XC,2 Mile,800.0
+A30,Simon Hollis,Boys,Development,2025 XC,5K,1307.5
+A30,Simon Hollis,Boys,Development,2026 Track,1 Mile,366.3
+A30,Simon Hollis,Boys,Development,2026 Track,2 Mile,793.4
+A30,Simon Hollis,Boys,Development,2026 XC,1 Mile,364.4
+A30,Simon Hollis,Boys,Development,2026 XC,1.5 Mile,564.6
+A30,Simon Hollis,Boys,Development,2026 XC,2 Mile,779.5
+A30,Simon Hollis,Boys,Development,2026 XC,5K,1259.2
+A31,Jasper Lindqvist,Boys,Varsity,2025 XC,1 Mile,283.3
+A31,Jasper Lindqvist,Boys,Varsity,2025 XC,1.5 Mile,439.9
+A31,Jasper Lindqvist,Boys,Varsity,2025 XC,2 Mile,595.5
+A31,Jasper Lindqvist,Boys,Varsity,2025 XC,5K,952.8
+A31,Jasper Lindqvist,Boys,Varsity,2026 Track,1 Mile,277.9
+A31,Jasper Lindqvist,Boys,Varsity,2026 Track,2 Mile,589.0
+A31,Jasper Lindqvist,Boys,Varsity,2026 XC,1 Mile,274.5
+A31,Jasper Lindqvist,Boys,Varsity,2026 XC,1.5 Mile,425.4
+A31,Jasper Lindqvist,Boys,Varsity,2026 XC,2 Mile,574.1
+A31,Jasper Lindqvist,Boys,Varsity,2026 XC,5K,921.3
+A32,Cole Zeller,Boys,Development,2025 XC,1 Mile,402.0
+A32,Cole Zeller,Boys,Development,2025 XC,1.5 Mile,626.3
+A32,Cole Zeller,Boys,Development,2025 XC,2 Mile,844.5
+A32,Cole Zeller,Boys,Development,2025 XC,5K,1355.3
+A32,Cole Zeller,Boys,Development,2026 Track,1 Mile,388.3
+A32,Cole Zeller,Boys,Development,2026 Track,2 Mile,834.2
+A32,Cole Zeller,Boys,Development,2026 XC,1 Mile,382.3
+A32,Cole Zeller,Boys,Development,2026 XC,1.5 Mile,590.1
+A32,Cole Zeller,Boys,Development,2026 XC,2 Mile,802.5
+A32,Cole Zeller,Boys,Development,2026 XC,5K,1279.7
+A33,Rafael Flores,Boys,Development,2025 XC,1 Mile,364.3
+A33,Rafael Flores,Boys,Development,2025 XC,1.5 Mile,562.0
+A33,Rafael Flores,Boys,Development,2025 XC,2 Mile,773.6
+A33,Rafael Flores,Boys,Development,2025 XC,5K,1246.1
+A33,Rafael Flores,Boys,Development,2026 Track,1 Mile,357.4
+A33,Rafael Flores,Boys,Development,2026 Track,2 Mile,762.8
+A33,Rafael Flores,Boys,Development,2026 XC,1 Mile,356.8
+A33,Rafael Flores,Boys,Development,2026 XC,1.5 Mile,550.4
+A33,Rafael Flores,Boys,Development,2026 XC,2 Mile,746.9
+A33,Rafael Flores,Boys,Development,2026 XC,5K,1215.8
+A34,Desmond Lozano,Boys,JV,2025 XC,1 Mile,340.2
+A34,Desmond Lozano,Boys,JV,2025 XC,1.5 Mile,526.1
+A34,Desmond Lozano,Boys,JV,2025 XC,2 Mile,716.3
+A34,Desmond Lozano,Boys,JV,2025 XC,5K,1151.1
+A34,Desmond Lozano,Boys,JV,2026 Track,1 Mile,330.9
+A34,Desmond Lozano,Boys,JV,2026 Track,2 Mile,708.0
+A34,Desmond Lozano,Boys,JV,2026 XC,1 Mile,326.0
+A34,Desmond Lozano,Boys,JV,2026 XC,1.5 Mile,500.7
+A34,Desmond Lozano,Boys,JV,2026 XC,2 Mile,689.0
+A34,Desmond Lozano,Boys,JV,2026 XC,5K,1092.9
+A35,Ava Grayson,Girls,Varsity,2025 XC,1 Mile,329.3
+A35,Ava Grayson,Girls,Varsity,2025 XC,1.5 Mile,509.6
+A35,Ava Grayson,Girls,Varsity,2025 XC,2 Mile,698.9
+A35,Ava Grayson,Girls,Varsity,2025 XC,5K,1129.4
+A35,Ava Grayson,Girls,Varsity,2026 Track,1 Mile,325.5
+A35,Ava Grayson,Girls,Varsity,2026 Track,2 Mile,698.0
+A35,Ava Grayson,Girls,Varsity,2026 XC,1 Mile,326.1
+A35,Ava Grayson,Girls,Varsity,2026 XC,1.5 Mile,511.7
+A35,Ava Grayson,Girls,Varsity,2026 XC,2 Mile,693.0
+A35,Ava Grayson,Girls,Varsity,2026 XC,5K,1119.8
+A36,Lena Jensen,Girls,Development,2025 XC,1 Mile,443.7
+A36,Lena Jensen,Girls,Development,2025 XC,1.5 Mile,687.6
+A36,Lena Jensen,Girls,Development,2025 XC,2 Mile,943.7
+A36,Lena Jensen,Girls,Development,2025 XC,5K,1519.0
+A36,Lena Jensen,Girls,Development,2026 Track,1 Mile,440.8
+A36,Lena Jensen,Girls,Development,2026 Track,2 Mile,941.2
+A36,Lena Jensen,Girls,Development,2026 XC,1 Mile,441.5
+A36,Lena Jensen,Girls,Development,2026 XC,1.5 Mile,677.7
+A36,Lena Jensen,Girls,Development,2026 XC,2 Mile,935.3
+A36,Lena Jensen,Girls,Development,2026 XC,5K,1482.7
+A37,Maya Okafor,Girls,JV,2025 XC,1 Mile,355.9
+A37,Maya Okafor,Girls,JV,2025 XC,1.5 Mile,550.4
+A37,Maya Okafor,Girls,JV,2025 XC,2 Mile,752.7
+A37,Maya Okafor,Girls,JV,2025 XC,5K,1189.0
+A37,Maya Okafor,Girls,JV,2026 Track,1 Mile,352.2
+A37,Maya Okafor,Girls,JV,2026 Track,2 Mile,749.8
+A37,Maya Okafor,Girls,JV,2026 XC,1 Mile,357.1
+A37,Maya Okafor,Girls,JV,2026 XC,1.5 Mile,549.7
+A37,Maya Okafor,Girls,JV,2026 XC,2 Mile,751.6
+A37,Maya Okafor,Girls,JV,2026 XC,5K,1185.2
+A38,Sofia Brennan,Girls,JV,2025 XC,1 Mile,378.6
+A38,Sofia Brennan,Girls,JV,2025 XC,1.5 Mile,581.4
+A38,Sofia Brennan,Girls,JV,2025 XC,2 Mile,784.8
+A38,Sofia Brennan,Girls,JV,2025 XC,5K,1250.7
+A38,Sofia Brennan,Girls,JV,2026 Track,1 Mile,365.0
+A38,Sofia Brennan,Girls,JV,2026 Track,2 Mile,778.7
+A38,Sofia Brennan,Girls,JV,2026 XC,1 Mile,358.6
+A38,Sofia Brennan,Girls,JV,2026 XC,1.5 Mile,554.5
+A38,Sofia Brennan,Girls,JV,2026 XC,2 Mile,751.9
+A38,Sofia Brennan,Girls,JV,2026 XC,5K,1202.3
+A39,Claire Nolan,Girls,Development,2025 XC,1 Mile,466.1
+A39,Claire Nolan,Girls,Development,2025 XC,1.5 Mile,719.0
+A39,Claire Nolan,Girls,Development,2025 XC,2 Mile,967.9
+A39,Claire Nolan,Girls,Development,2025 XC,5K,1549.1
+A39,Claire Nolan,Girls,Development,2026 Track,1 Mile,447.8
+A39,Claire Nolan,Girls,Development,2026 Track,2 Mile,965.1
+A39,Claire Nolan,Girls,Development,2026 XC,1 Mile,447.7
+A39,Claire Nolan,Girls,Development,2026 XC,1.5 Mile,694.8
+A39,Claire Nolan,Girls,Development,2026 XC,2 Mile,948.9
+A39,Claire Nolan,Girls,Development,2026 XC,5K,1510.2
+A40,Nora Beltran,Girls,Development,2026 XC,1 Mile,434.4
+A40,Nora Beltran,Girls,Development,2026 XC,1.5 Mile,666.1
+A40,Nora Beltran,Girls,Development,2026 XC,2 Mile,898.0
+A40,Nora Beltran,Girls,Development,2026 XC,5K,1428.1
+A41,Isla Pruitt,Girls,JV,2025 XC,1 Mile,386.5
+A41,Isla Pruitt,Girls,JV,2025 XC,1.5 Mile,603.4
+A41,Isla Pruitt,Girls,JV,2025 XC,2 Mile,817.5
+A41,Isla Pruitt,Girls,JV,2025 XC,5K,1315.9
+A41,Isla Pruitt,Girls,JV,2026 Track,1 Mile,371.7
+A41,Isla Pruitt,Girls,JV,2026 Track,2 Mile,791.1
+A41,Isla Pruitt,Girls,JV,2026 XC,1 Mile,365.8
+A41,Isla Pruitt,Girls,JV,2026 XC,1.5 Mile,564.0
+A41,Isla Pruitt,Girls,JV,2026 XC,2 Mile,770.8
+A41,Isla Pruitt,Girls,JV,2026 XC,5K,1238.3
+A42,Priya Keller,Girls,Varsity,2025 XC,1 Mile,315.9
+A42,Priya Keller,Girls,Varsity,2025 XC,1.5 Mile,485.6
+A42,Priya Keller,Girls,Varsity,2025 XC,2 Mile,671.0
+A42,Priya Keller,Girls,Varsity,2025 XC,5K,1085.5
+A42,Priya Keller,Girls,Varsity,2026 Track,1 Mile,305.2
+A42,Priya Keller,Girls,Varsity,2026 Track,2 Mile,655.4
+A42,Priya Keller,Girls,Varsity,2026 XC,1 Mile,303.5
+A42,Priya Keller,Girls,Varsity,2026 XC,1.5 Mile,477.6
+A42,Priya Keller,Girls,Varsity,2026 XC,2 Mile,648.3
+A42,Priya Keller,Girls,Varsity,2026 XC,5K,1063.7
+A43,Hazel Pellegrini,Girls,JV,2026 XC,1 Mile,363.2
+A43,Hazel Pellegrini,Girls,JV,2026 XC,1.5 Mile,565.6
+A43,Hazel Pellegrini,Girls,JV,2026 XC,2 Mile,774.3
+A43,Hazel Pellegrini,Girls,JV,2026 XC,5K,1264.0
+A44,Elena Kowalski,Girls,Varsity,2025 XC,1 Mile,322.4
+A44,Elena Kowalski,Girls,Varsity,2025 XC,1.5 Mile,498.1
+A44,Elena Kowalski,Girls,Varsity,2025 XC,2 Mile,673.7
+A44,Elena Kowalski,Girls,Varsity,2025 XC,5K,1087.5
+A44,Elena Kowalski,Girls,Varsity,2026 Track,1 Mile,313.5
+A44,Elena Kowalski,Girls,Varsity,2026 Track,2 Mile,669.4
+A44,Elena Kowalski,Girls,Varsity,2026 XC,1 Mile,313.5
+A44,Elena Kowalski,Girls,Varsity,2026 XC,1.5 Mile,485.0
+A44,Elena Kowalski,Girls,Varsity,2026 XC,2 Mile,659.3
+A44,Elena Kowalski,Girls,Varsity,2026 XC,5K,1044.2
+A45,Ruby Haddad,Girls,JV,2026 XC,1 Mile,340.5
+A45,Ruby Haddad,Girls,JV,2026 XC,1.5 Mile,531.0
+A45,Ruby Haddad,Girls,JV,2026 XC,2 Mile,720.4
+A45,Ruby Haddad,Girls,JV,2026 XC,5K,1171.5
+A46,Tessa Oyelaran,Girls,JV,2025 XC,1 Mile,369.7
+A46,Tessa Oyelaran,Girls,JV,2025 XC,1.5 Mile,571.0
+A46,Tessa Oyelaran,Girls,JV,2025 XC,2 Mile,771.2
+A46,Tessa Oyelaran,Girls,JV,2025 XC,5K,1244.1
+A46,Tessa Oyelaran,Girls,JV,2026 Track,1 Mile,359.8
+A46,Tessa Oyelaran,Girls,JV,2026 Track,2 Mile,771.5
+A46,Tessa Oyelaran,Girls,JV,2026 XC,1 Mile,357.8
+A46,Tessa Oyelaran,Girls,JV,2026 XC,1.5 Mile,560.7
+A46,Tessa Oyelaran,Girls,JV,2026 XC,2 Mile,760.5
+A46,Tessa Oyelaran,Girls,JV,2026 XC,5K,1218.1
+A47,Camila Takahashi,Girls,Development,2025 XC,1 Mile,408.6
+A47,Camila Takahashi,Girls,Development,2025 XC,1.5 Mile,630.4
+A47,Camila Takahashi,Girls,Development,2025 XC,2 Mile,854.0
+A47,Camila Takahashi,Girls,Development,2025 XC,5K,1378.5
+A47,Camila Takahashi,Girls,Development,2026 Track,1 Mile,398.3
+A47,Camila Takahashi,Girls,Development,2026 Track,2 Mile,856.5
+A47,Camila Takahashi,Girls,Development,2026 XC,1 Mile,401.1
+A47,Camila Takahashi,Girls,Development,2026 XC,1.5 Mile,619.3
+A47,Camila Takahashi,Girls,Development,2026 XC,2 Mile,848.5
+A47,Camila Takahashi,Girls,Development,2026 XC,5K,1369.6
+A48,June Acosta,Girls,Varsity,2025 XC,1 Mile,316.7
+A48,June Acosta,Girls,Varsity,2025 XC,1.5 Mile,487.2
+A48,June Acosta,Girls,Varsity,2025 XC,2 Mile,666.1
+A48,June Acosta,Girls,Varsity,2025 XC,5K,1084.6
+A48,June Acosta,Girls,Varsity,2026 Track,1 Mile,309.5
+A48,June Acosta,Girls,Varsity,2026 Track,2 Mile,665.5
+A48,June Acosta,Girls,Varsity,2026 XC,1 Mile,309.0
+A48,June Acosta,Girls,Varsity,2026 XC,1.5 Mile,476.5
+A48,June Acosta,Girls,Varsity,2026 XC,2 Mile,651.2
+A48,June Acosta,Girls,Varsity,2026 XC,5K,1066.1
+A49,Leah Castillo,Girls,Varsity,2025 XC,1 Mile,336.3
+A49,Leah Castillo,Girls,Varsity,2025 XC,1.5 Mile,518.5
+A49,Leah Castillo,Girls,Varsity,2025 XC,2 Mile,715.8
+A49,Leah Castillo,Girls,Varsity,2025 XC,5K,1149.0
+A49,Leah Castillo,Girls,Varsity,2026 Track,1 Mile,327.5
+A49,Leah Castillo,Girls,Varsity,2026 Track,2 Mile,694.3
+A49,Leah Castillo,Girls,Varsity,2026 XC,1 Mile,322.6
+A49,Leah Castillo,Girls,Varsity,2026 XC,1.5 Mile,495.7
+A49,Leah Castillo,Girls,Varsity,2026 XC,2 Mile,677.0
+A49,Leah Castillo,Girls,Varsity,2026 XC,5K,1089.3
+A50,Ingrid Fontaine,Girls,JV,2025 XC,1 Mile,398.9
+A50,Ingrid Fontaine,Girls,JV,2025 XC,1.5 Mile,621.0
+A50,Ingrid Fontaine,Girls,JV,2025 XC,2 Mile,842.1
+A50,Ingrid Fontaine,Girls,JV,2025 XC,5K,1339.6
+A50,Ingrid Fontaine,Girls,JV,2026 Track,1 Mile,385.8
+A50,Ingrid Fontaine,Girls,JV,2026 Track,2 Mile,823.7
+A50,Ingrid Fontaine,Girls,JV,2026 XC,1 Mile,385.2
+A50,Ingrid Fontaine,Girls,JV,2026 XC,1.5 Mile,588.5
+A50,Ingrid Fontaine,Girls,JV,2026 XC,2 Mile,797.8
+A50,Ingrid Fontaine,Girls,JV,2026 XC,5K,1286.0
+A51,Talia Cardenas,Girls,Development,2026 XC,1 Mile,423.6
+A51,Talia Cardenas,Girls,Development,2026 XC,1.5 Mile,652.8
+A51,Talia Cardenas,Girls,Development,2026 XC,2 Mile,888.3
+A51,Talia Cardenas,Girls,Development,2026 XC,5K,1402.6
+A52,Mira Draper,Girls,Development,2025 XC,1 Mile,431.7
+A52,Mira Draper,Girls,Development,2025 XC,1.5 Mile,662.5
+A52,Mira Draper,Girls,Development,2025 XC,2 Mile,911.9
+A52,Mira Draper,Girls,Development,2025 XC,5K,1485.9
+A52,Mira Draper,Girls,Development,2026 Track,1 Mile,413.1
+A52,Mira Draper,Girls,Development,2026 Track,2 Mile,904.2
+A52,Mira Draper,Girls,Development,2026 XC,1 Mile,411.6
+A52,Mira Draper,Girls,Development,2026 XC,1.5 Mile,647.1
+A52,Mira Draper,Girls,Development,2026 XC,2 Mile,885.1
+A52,Mira Draper,Girls,Development,2026 XC,5K,1440.2
+A53,Quinn Ibarra,Girls,Development,2026 XC,1 Mile,402.9
+A53,Quinn Ibarra,Girls,Development,2026 XC,1.5 Mile,622.3
+A53,Quinn Ibarra,Girls,Development,2026 XC,2 Mile,848.4
+A53,Quinn Ibarra,Girls,Development,2026 XC,5K,1383.8
+A54,Sadie Doyle,Girls,Development,2025 XC,1 Mile,442.0
+A54,Sadie Doyle,Girls,Development,2025 XC,1.5 Mile,685.2
+A54,Sadie Doyle,Girls,Development,2025 XC,2 Mile,940.0
+A54,Sadie Doyle,Girls,Development,2025 XC,5K,1534.7
+A54,Sadie Doyle,Girls,Development,2026 Track,1 Mile,426.9
+A54,Sadie Doyle,Girls,Development,2026 Track,2 Mile,916.4
+A54,Sadie Doyle,Girls,Development,2026 XC,1 Mile,422.3
+A54,Sadie Doyle,Girls,Development,2026 XC,1.5 Mile,666.8
+A54,Sadie Doyle,Girls,Development,2026 XC,2 Mile,901.4
+A54,Sadie Doyle,Girls,Development,2026 XC,5K,1466.9
+A55,Paige Juarez,Girls,JV,2026 XC,1 Mile,347.3
+A55,Paige Juarez,Girls,JV,2026 XC,1.5 Mile,546.7
+A55,Paige Juarez,Girls,JV,2026 XC,2 Mile,741.9
+A55,Paige Juarez,Girls,JV,2026 XC,5K,1203.4
+A56,Anya Navarro,Girls,Development,2025 XC,1 Mile,440.6
+A56,Anya Navarro,Girls,Development,2025 XC,1.5 Mile,683.9
+A56,Anya Navarro,Girls,Development,2025 XC,2 Mile,921.3
+A56,Anya Navarro,Girls,Development,2025 XC,5K,1477.8
+A56,Anya Navarro,Girls,Development,2026 Track,1 Mile,431.3
+A56,Anya Navarro,Girls,Development,2026 Track,2 Mile,930.4
+A56,Anya Navarro,Girls,Development,2026 XC,1 Mile,435.9
+A56,Anya Navarro,Girls,Development,2026 XC,1.5 Mile,670.7
+A56,Anya Navarro,Girls,Development,2026 XC,2 Mile,921.5
+A56,Anya Navarro,Girls,Development,2026 XC,5K,1463.3
+A57,Celeste Carver,Girls,JV,2025 XC,1 Mile,376.0
+A57,Celeste Carver,Girls,JV,2025 XC,1.5 Mile,585.3
+A57,Celeste Carver,Girls,JV,2025 XC,2 Mile,794.9
+A57,Celeste Carver,Girls,JV,2025 XC,5K,1295.9
+A57,Celeste Carver,Girls,JV,2026 Track,1 Mile,371.5
+A57,Celeste Carver,Girls,JV,2026 Track,2 Mile,797.1
+A57,Celeste Carver,Girls,JV,2026 XC,1 Mile,366.6
+A57,Celeste Carver,Girls,JV,2026 XC,1.5 Mile,568.0
+A57,Celeste Carver,Girls,JV,2026 XC,2 Mile,785.1
+A57,Celeste Carver,Girls,JV,2026 XC,5K,1248.3
+A58,Brynn Nakamura,Girls,Development,2025 XC,1 Mile,456.9
+A58,Brynn Nakamura,Girls,Development,2025 XC,1.5 Mile,708.2
+A58,Brynn Nakamura,Girls,Development,2025 XC,2 Mile,955.9
+A58,Brynn Nakamura,Girls,Development,2025 XC,5K,1542.1
+A58,Brynn Nakamura,Girls,Development,2026 Track,1 Mile,450.9
+A58,Brynn Nakamura,Girls,Development,2026 Track,2 Mile,957.8
+A58,Brynn Nakamura,Girls,Development,2026 XC,1 Mile,450.6
+A58,Brynn Nakamura,Girls,Development,2026 XC,1.5 Mile,701.0
+A58,Brynn Nakamura,Girls,Development,2026 XC,2 Mile,943.4
+A58,Brynn Nakamura,Girls,Development,2026 XC,5K,1505.3
+A59,Lucia Sorensen,Girls,Varsity,2025 XC,1 Mile,333.2
+A59,Lucia Sorensen,Girls,Varsity,2025 XC,1.5 Mile,514.6
+A59,Lucia Sorensen,Girls,Varsity,2025 XC,2 Mile,706.5
+A59,Lucia Sorensen,Girls,Varsity,2025 XC,5K,1145.5
+A59,Lucia Sorensen,Girls,Varsity,2026 Track,1 Mile,318.4
+A59,Lucia Sorensen,Girls,Varsity,2026 Track,2 Mile,689.0
+A59,Lucia Sorensen,Girls,Varsity,2026 XC,1 Mile,316.1
+A59,Lucia Sorensen,Girls,Varsity,2026 XC,1.5 Mile,492.5
+A59,Lucia Sorensen,Girls,Varsity,2026 XC,2 Mile,682.0
+A59,Lucia Sorensen,Girls,Varsity,2026 XC,5K,1099.7
+A60,Willa Moreno,Girls,Development,2026 XC,1 Mile,400.1
+A60,Willa Moreno,Girls,Development,2026 XC,1.5 Mile,620.6
+A60,Willa Moreno,Girls,Development,2026 XC,2 Mile,852.5
+A60,Willa Moreno,Girls,Development,2026 XC,5K,1404.3
+A61,Daphne Maddox,Girls,Varsity,2025 XC,1 Mile,349.5
+A61,Daphne Maddox,Girls,Varsity,2025 XC,1.5 Mile,541.2
+A61,Daphne Maddox,Girls,Varsity,2025 XC,2 Mile,726.5
+A61,Daphne Maddox,Girls,Varsity,2025 XC,5K,1159.7
+A61,Daphne Maddox,Girls,Varsity,2026 Track,1 Mile,336.9
+A61,Daphne Maddox,Girls,Varsity,2026 Track,2 Mile,720.3
+A61,Daphne Maddox,Girls,Varsity,2026 XC,1 Mile,333.9
+A61,Daphne Maddox,Girls,Varsity,2026 XC,1.5 Mile,518.9
+A61,Daphne Maddox,Girls,Varsity,2026 XC,2 Mile,702.4
+A61,Daphne Maddox,Girls,Varsity,2026 XC,5K,1120.2
+A62,Rosa Bishop,Girls,Development,2026 XC,1 Mile,410.0
+A62,Rosa Bishop,Girls,Development,2026 XC,1.5 Mile,644.7
+A62,Rosa Bishop,Girls,Development,2026 XC,2 Mile,869.4
+A62,Rosa Bishop,Girls,Development,2026 XC,5K,1416.3

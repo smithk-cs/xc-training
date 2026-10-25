@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta name="theme-color" content="#A6192E">
+<title>{% block title %}{{ team_name }}{% endblock %}</title>
+<link rel="stylesheet" href="/static/app.css">
+{% block head %}{% endblock %}
+</head>
+<body class="{% block bodyclass %}{% endblock %}">
+{% if user %}
+<header class="top">
+  <a class="brand" href="/">{% if has_logo %}<img src="/branding/logo" alt="">{% endif %}<span>{{ team_name }}</span></a>
+  <nav aria-label="Main">
+    {% set p = request.url.path %}
+    <a href="/dashboard" {% if p == '/dashboard' %}aria-current="page"{% endif %}>Dashboard</a>
+    <a href="/athletes" {% if p.startswith('/athletes') %}aria-current="page"{% endif %}>Athletes</a>
+    <a href="/charts" {% if p == '/charts' %}aria-current="page"{% endif %}>Charts</a>
+    <a href="/results" {% if p == '/results' %}aria-current="page"{% endif %}>Results and goals</a>
+    <a href="/workouts" {% if p == '/workouts' %}aria-current="page"{% endif %}>Workouts</a>
+    <a href="/groups" {% if p == '/groups' %}aria-current="page"{% endif %}>Groups</a>
+    <a href="/injuries" {% if p == '/injuries' %}aria-current="page"{% endif %}>Injuries</a>
+    <a href="/ai" {% if p == '/ai' %}aria-current="page"{% endif %}>AI</a>
+    <a href="/sync" {% if p == '/sync' %}aria-current="page"{% endif %}>Sync log</a>
+    {% if user.role == 'admin' %}<a href="/staff" {% if p == '/staff' %}aria-current="page"{% endif %}>Staff</a>{% endif %}
+  </nav>
+  <span class="who">{{ user.username }} ({{ user.role }})</span>
+  <form method="post" action="/logout"><input type="hidden" name="csrf" value="{{ csrf }}"><button type="submit">Sign out</button></form>
+</header>
+{% endif %}
+<main class="{% block mainclass %}{% endblock %}">
+{% block flashes %}{% for level, text in messages %}<div class="flash {{ level }}" role="status">{{ text }}</div>{% endfor %}{% endblock %}
+{% block content %}{% endblock %}
+</main>
+</body>
+</html>

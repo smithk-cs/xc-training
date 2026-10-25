@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Athletes</h1>
+<div class="card scroll">
+<table class="list">
+  <thead><tr><th>Athlete</th><th>Grade</th><th>Group</th><th>Ability group</th><th class="num">VDOT</th><th>Garmin</th><th>Last sync</th>{% if user.role != 'trainer' %}<th>Personal link</th>{% endif %}</tr></thead>
+  <tbody>
+  {% for a in athletes %}
+  <tr>
+    <td><a href="/athletes/{{ a.id }}">{{ a.name }}</a></td><td>{{ a.grade }}</td><td>{{ a.group }}</td>
+    {% set ai = ab.get(a.id, {}) %}<td>{% if ai.group %}<span class="pill" style="background:{{ ai.color or '#FFFFFF' }}; color:#1B1B1F; border-color:#CFC7BC">{{ ai.group }}</span>{% endif %}{% if ai.override %} <span class="small muted">(pinned)</span>{% endif %}</td><td class="num">{{ ai.vdot or '' }}</td>
+    <td>{% if a.garmin and a.garmin.status == 'connected' %}<span class="pill good">Connected</span>{% elif a.garmin and a.garmin.status == 'error' %}<span class="pill bad">Needs reconnect</span>{% else %}<span class="pill">Not connected</span>{% endif %}</td>
+    <td class="small">{{ a.garmin.last_sync_at.strftime('%b %-d %-I:%M %p') if a.garmin and a.garmin.last_sync_at else '' }}</td>
+    {% if user.role != 'trainer' %}<td><code class="copy">{{ settings.base_url.rstrip('/') }}/a/{{ a.link_token }}</code></td>{% endif %}
+  </tr>
+  {% else %}<tr><td colspan="8" class="muted">No athletes yet. Add them below or import a roster file.</td></tr>{% endfor %}
+  </tbody>
+</table>
+{% if user.role != 'trainer' %}<p><a class="button" href="/athletes/links.csv">Download every athlete’s link (CSV for a mail merge)</a></p>{% endif %}
+<p class="small muted">Send each athlete their own link. It lets them connect Garmin, upload a .fit file and report pain. Anyone with the link can do those things, so treat it like a password.</p>
+</div>
+{% if user.role != 'trainer' %}
+<div class="grid">
+<div class="card">
+  <h2>Add an athlete</h2>
+  <form method="post" action="/athletes">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <div class="form-row">
+      <label>First name<input type="text" name="first_name" required></label>
+      <label>Last name<input type="text" name="last_name" required></label>
+    </div>
+    <div class="form-row">
+      <label>Team<select name="gender"><option>Boys</option><option>Girls</option></select></label>
+      <label>Grade<input type="number" name="grade" min="6" max="12" value="9" required></label>
+      <label>Group<select name="group">{% for g in GROUPS %}<option>{{ g }}</option>{% endfor %}</select></label>
+      <label>Max heart rate (optional)<input type="number" name="hr_max" min="150" max="230"></label>
+    </div>
+    <button type="submit">Add athlete</button>
+  </form>
+</div>
+<div class="card">
+  <h2>Import a roster</h2>
+  <p class="small muted">CSV with columns <code>name, gender, grade, group</code> and optionally <code>hr_max, hr_rest</code>. Gender is Boys or Girls; group is Varsity, JV or Development. Existing names are updated.</p>
+  <form method="post" action="/athletes/import" enctype="multipart/form-data">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <div class="form-row"><input type="file" name="file" accept=".csv,text/csv" required><button type="submit">Import</button></div>
+  </form>
+</div>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,14 @@
+injury_id,athlete_id,athlete,onset_date,injury,body_area,days_missed,status,return_date
+INJ01,A03,Lucas Estrada,2026-06-24,Achilles tendinopathy,Lower leg,28,Cleared,2026-07-22
+INJ02,A18,Jonah Abbott,2026-08-18,Hamstring strain,Thigh,14,Cleared,2026-09-01
+INJ03,A19,Silas Mercado,2026-09-17,Hamstring strain,Thigh,8,Cleared,2026-09-25
+INJ04,A19,Silas Mercado,2026-10-10,IT band syndrome,Knee/hip,19,Active,2026-10-29
+INJ05,A30,Simon Hollis,2026-07-22,Plantar fasciitis,Foot,21,Cleared,2026-08-12
+INJ06,A30,Simon Hollis,2026-09-12,Ankle sprain,Foot,9,Cleared,2026-09-21
+INJ07,A32,Cole Zeller,2026-08-17,Achilles tendinopathy,Lower leg,11,Cleared,2026-08-28
+INJ08,A33,Rafael Flores,2026-09-07,Patellofemoral pain,Knee/hip,18,Cleared,2026-09-25
+INJ09,A38,Sofia Brennan,2026-10-21,Tibial bone stress injury,Lower leg,44,Active,2026-12-04
+INJ10,A55,Paige Juarez,2026-08-19,Medial tibial stress (shin splints),Lower leg,18,Cleared,2026-09-06
+INJ11,A55,Paige Juarez,2026-09-18,IT band syndrome,Knee/hip,7,Cleared,2026-09-25
+INJ12,A59,Lucia Sorensen,2026-10-06,Hamstring strain,Thigh,9,Cleared,2026-10-15
+INJ13,A60,Willa Moreno,2026-09-18,Medial tibial stress (shin splints),Lower leg,9,Cleared,2026-09-27

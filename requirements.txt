@@ -1,0 +1,12 @@
+fastapi==0.161.1
+starlette==1.9.0
+uvicorn[standard]==0.54.0
+SQLAlchemy==2.1.6
+Jinja2==3.1.6
+python-multipart==0.0.32
+httpx==0.28.1
+itsdangerous==2.2.0
+cryptography==46.0.6
+anthropic==2.2.0
+garmin-fit-sdk==21.218.0
+# For Postgres instead of SQLite, also install: psycopg[binary]

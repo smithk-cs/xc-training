@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Run on {{ act.local_date.strftime('%b %-d') }} · {{ team_name }}{% endblock %}
+{% block bodyclass %}athlete-page{% endblock %}
+{% block flashes %}{% endblock %}
+{% block content %}
+{% with hero_title=act.local_date.strftime('%A, %b %-d'), hero_text=(act.planned.title if act.planned else None), back_url="/a/" ~ token ~ "/runs", back_label="My runs" %}{% include "_hero.html" %}{% endwith %}
+<div class="stack">
+  {% for level, text in messages %}<div class="flash {{ level }}" role="status">{{ text }}</div>{% endfor %}
+  {% set miles = act.distance_m / 1609.344 %}
+  <section class="panel" aria-label="Run summary">
+    <div class="facts">
+      <div><span class="k">Distance</span><span class="big">{{ '%.2f' % miles }} mi</span></div>
+      <div><span class="k">Time</span><span class="big">{{ fmt_time(act.duration_s)[:-2] }}</span></div>
+      <div><span class="k">Average pace</span><span class="big">{{ fmt_time(act.duration_s / miles)[:-2] if miles > 0.2 else '—' }}<small class="small muted"> /mi</small></span></div>
+      <div><span class="k">Average heart rate</span><span class="big">{{ act.avg_hr|round|int if act.avg_hr else '—' }}</span></div>
+    </div>
+    {% set reps = act.laps|selectattr('is_rep')|list %}
+    {% if reps %}
+    <div class="scroll"><table class="list">
+      <thead><tr><th>Rep</th><th class="num">Pace /mi</th><th class="num">Avg HR</th><th class="num">HR drop in 60 s</th></tr></thead>
+      <tbody>{% for l in reps %}<tr><td>{{ l.rep_num }}</td><td class="num">{{ fmt_time(l.timer_s / l.distance_m * 1609.344)[:-2] }}</td><td class="num">{{ l.avg_hr|round|int if l.avg_hr else '' }}</td><td class="num">{{ l.hr_drop_60s|int if l.hr_drop_60s is not none else '' }}</td></tr>{% endfor %}</tbody>
+    </table></div>
+    {% endif %}
+    {% if act.device %}<p class="muted small">Recorded on {{ act.device }}.</p>{% endif %}
+  </section>
+
+  <form method="post" action="/a/{{ token }}/runs/{{ act.id }}" class="panel" aria-labelledby="f-h">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <h2 id="f-h">How did it go?</h2>
+    <fieldset class="pick"><legend>Type of run</legend>
+      <div class="chips">{% for t in RUN_TYPES %}<label class="chip"><input type="radio" name="run_type" value="{{ t }}" {% if run_type_of(act) == t %}checked{% endif %}><span>{{ t }}</span></label>{% endfor %}</div>
+    </fieldset>
+    <label>Team workout
+      <select name="workout">
+        <option value="none" {% if not act.planned_workout_id %}selected{% endif %}>Not a team workout</option>
+        {% for w in choices %}<option value="{{ w.id }}" {% if act.planned_workout_id == w.id %}selected{% endif %}>{{ w.title }} ({{ w.date.strftime('%a, %b %-d') }})</option>{% endfor %}
+      </select>
+    </label>
+    <fieldset class="pick"><legend>Effort: how hard did the whole run feel?</legend>
+      <div class="lvls">{% for n in range(0, 11) %}<label class="lvl"><input type="radio" name="rpe" value="{{ n }}" required {% if act.rpe == n %}checked{% endif %} aria-label="Effort {{ n }}{{ ', ' ~ EFFORT_WORDS[n] if n in EFFORT_WORDS else '' }}"><span>{{ n }}{% if n in EFFORT_WORDS %}<small>{{ EFFORT_WORDS[n] }}</small>{% endif %}</span></label>{% endfor %}</div>
+    </fieldset>
+    <fieldset class="pick"><legend>How did your legs feel?</legend>
+      <div class="chips">{% for f in FEELS %}<label class="chip"><input type="radio" name="feel" value="{{ f }}" {% if act.feel == f %}checked{% endif %}><span>{{ f }}</span></label>{% endfor %}</div>
+    </fieldset>
+    <fieldset class="pick"><legend>Any pain during or after?</legend>
+      <div class="chips">
+        <label class="chip"><input type="radio" name="pain_area" value="None" {% if not pain %}checked{% endif %}><span>No pain</span></label>
+        {% for b in areas %}<label class="chip"><input type="radio" name="pain_area" value="{{ b }}" {% if pain and pain.body_area == b %}checked{% endif %}><span>{{ b }}</span></label>{% endfor %}
+      </div>
+    </fieldset>
+    <fieldset class="pick"><legend>If it hurt, how much?</legend>
+      <div class="lvls">{% for n in range(1, 11) %}<label class="lvl"><input type="radio" name="pain_level" value="{{ n }}" {% if pain and pain.severity == n %}checked{% endif %} aria-label="Pain {{ n }} out of 10"><span>{{ n }}</span></label>{% endfor %}</div>
+      <div class="scale-ends"><span>1 = a little</span><span>10 = worst</span></div>
+    </fieldset>
+    <label>Note for your coaches (optional)<input type="text" name="note" maxlength="300" value="{{ act.athlete_note or '' }}" placeholder="e.g. right calf tight on the hills"></label>
+    <p class="muted small" style="margin:0">Only your coaches and athletic trainer see this.</p>
+    <button type="submit" class="big-btn">Save</button>
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block head %}<script src="/static/d3.v7.9.0.min.js"></script><script src="/static/athlete-charts.js" defer></script>{% endblock %}
+{% block content %}
+<h1>{{ a.name }}</h1>
+<p class="muted">{{ a.gender }}, grade {{ a.grade }}, {{ a.group }}.{% if ability.group %} Ability group <b>{{ ability.group }}</b>{% if ability.vdot %} (VDOT {{ ability.vdot }}, from {{ ability.source }}){% endif %}{% if ability.override %}, pinned by a coach{% endif %}.{% if ability.target_1600 %} Targets: 800 {{ ability.target_800 }}, 1600 {{ ability.target_1600 }}.{% endif %}{% endif %}
+{% if a.garmin and a.garmin.status == 'connected' %} Garmin connected{% if a.garmin.consent_at %} (parent/guardian approval confirmed {{ a.garmin.consent_at.strftime('%b %-d, %Y') }}){% endif %}.{% else %} Garmin not connected.{% endif %}</p>
+{% with chart_src="/api/athletes/" ~ a.id ~ "/series.json", chart_title="Training" %}<div class="card" style="padding:0; border:0; background:none">{% include "_charts.html" %}</div>{% endwith %}
+<div class="grid">
+<div class="card">
+  <h2>Recent runs</h2>
+  <div class="scroll"><table class="list"><thead><tr><th>Date</th><th>Type</th><th class="num">Miles</th><th class="num">Time</th><th class="num">Avg HR</th><th>Workout</th><th class="num">Effort</th><th>Legs</th><th>Pain</th><th>Device</th></tr></thead><tbody>
+  {% for act in acts %}
+  <tr><td><a href="/athletes/{{ a.id }}/runs/{{ act.id }}">{{ act.local_date.strftime('%a %b %-d') }}</a></td><td>{{ run_type_of(act) }}</td><td class="num">{{ '%.1f' % (act.distance_m / 1609.344) }}</td>
+  <td class="num">{{ fmt_time(act.duration_s)[:-2] }}</td><td class="num">{{ act.avg_hr|round|int if act.avg_hr else '' }}</td>
+  <td>{% if act.planned %}{{ act.planned.title }}{% elif act.laps|selectattr('is_rep')|list %}{{ act.laps|selectattr('is_rep')|list|length }} reps (no plan that day){% endif %}</td>
+  <td class="num">{{ act.rpe if act.rpe is not none else '' }}</td><td>{{ act.feel }}</td>
+  <td>{% set rp = run_pain.get(act.id) %}{% if rp %}<span class="pill bad">{{ rp.severity }}/10 {{ rp.body_area }}</span>{% endif %}</td>
+  <td class="small">{{ act.device }}</td></tr>
+  {% if act.athlete_note %}<tr><td></td><td colspan="9" class="small muted">Athlete note: {{ act.athlete_note }}</td></tr>{% endif %}
+  {% else %}<tr><td colspan="10" class="muted">No runs yet.</td></tr>{% endfor %}
+  </tbody></table></div>
+  <p class="small muted">Data recorded on Garmin devices is labelled with the device model, as Garmin requires.</p>
+</div>
+<div class="card">
+  <h2>Benchmark results</h2>
+  <table class="list"><thead><tr><th>Date</th><th>Event</th><th class="num">Time</th><th>Season</th><th>Course</th></tr></thead><tbody>
+  {% for r in results %}<tr><td>{{ r.date.strftime('%b %-d, %Y') }}</td><td>{{ r.event }}</td><td class="num">{{ fmt_time(r.time_s) }}</td><td>{{ r.season }}</td><td>{{ r.course }}{% if r.note %} <span class="muted small">({{ r.note }})</span>{% endif %}</td></tr>
+  {% else %}<tr><td colspan="5" class="muted">No results yet.</td></tr>{% endfor %}
+  </tbody></table>
+  <h2 style="margin-top:1em">Goals</h2>
+  <table class="list"><tbody>{% for g in goals %}<tr><td>{{ g.season }}</td><td>{{ g.event }}</td><td class="num">{{ fmt_time(g.goal_s) }}</td></tr>{% else %}<tr><td class="muted">No goals yet.</td></tr>{% endfor %}</tbody></table>
+</div>
+<div class="card">
+  <h2>Injuries and pain reports</h2>
+  <table class="list"><tbody>
+  {% for i in injuries %}<tr><td>{{ i.onset_date.strftime('%b %-d') }}</td><td>{{ i.injury }} ({{ i.body_area }})</td><td>{{ 'returned ' + i.return_date.strftime('%b %-d') if i.return_date else 'no return date' }}</td></tr>
+  {% if show_notes and i.notes %}<tr><td></td><td colspan="2" class="small muted">{{ i.notes }}</td></tr>{% endif %}{% endfor %}
+  {% for p in pains %}<tr><td>{{ p.date.strftime('%b %-d') }}</td><td>Pain {{ p.severity }}/10: {{ p.body_area }}</td><td class="small">{{ p.note }}</td></tr>{% endfor %}
+  {% if not injuries and not pains %}<tr><td class="muted">Nothing logged.</td></tr>{% endif %}
+  </tbody></table>
+</div>
+{% if user.role != 'trainer' %}
+<div class="card">
+  <h2>Manage</h2>
+  <form method="post" action="/athletes/{{ a.id }}/edit">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <div class="form-row">
+      <label>Grade<input type="number" name="grade" min="6" max="12" value="{{ a.grade }}"></label>
+      <label>Group<select name="group">{% for g in GROUPS %}<option {% if g == a.group %}selected{% endif %}>{{ g }}</option>{% endfor %}</select></label>
+      <label>Max HR<input type="number" name="hr_max" min="150" max="230" value="{{ a.hr_max or '' }}"></label>
+      <label>Resting HR<input type="number" name="hr_rest" min="30" max="100" value="{{ a.hr_rest or '' }}"></label>
+      <button type="submit">Save</button>
+    </div>
+  </form>
+  <form method="post" action="/athletes/{{ a.id }}/ability">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <div class="form-row">
+      <label>Ability group<select name="ability_override">
+        <option value="" {% if not ability.override %}selected{% endif %}>Automatic{% if ability.auto_group %} ({{ ability.auto_group }}){% endif %}</option>
+        {% for n in group_names %}<option {% if ability.override == n %}selected{% endif %}>{{ n }}</option>{% endfor %}
+      </select></label>
+      <button type="submit" class="secondary">Set group</button>
+    </div>
+  </form>
+  <form method="post" action="/athletes/{{ a.id }}/upload" enctype="multipart/form-data">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <div class="form-row"><label>Add a run from a .fit file<input type="file" name="file" accept=".fit" required></label><button type="submit">Upload</button></div>
+  </form>
+  <p class="small">Personal link: <code class="copy">{{ settings.base_url.rstrip('/') }}/a/{{ a.link_token }}</code></p>
+  <form method="post" action="/athletes/{{ a.id }}/new-link" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="secondary" type="submit">Make a new link (the old one stops working)</button></form>
+  {% if user.role == 'admin' %}
+  <form method="post" action="/athletes/{{ a.id }}/delete" style="margin-top:1em">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <div class="form-row"><label>To delete this athlete and all their data, type their full name<input type="text" name="confirm_name"></label><button class="danger" type="submit">Delete permanently</button></div>
+  </form>
+  {% endif %}
+</div>
+{% endif %}
+</div>
+{% endblock %}

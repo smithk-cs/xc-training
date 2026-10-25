@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Sync log</h1>
+<div class="card scroll">
+  <h2>Garmin connections</h2>
+  <table class="list"><thead><tr><th>Athlete</th><th>Status</th><th>Shared with the team</th><th>Connected</th><th>Last sync</th></tr></thead><tbody>
+  {% for c in conns %}<tr><td>{{ c.athlete.name }}</td><td>{{ c.status }}</td><td class="small">{{ c.permissions or 'unknown' }}</td><td>{{ c.connected_at.strftime('%b %-d') }}</td><td>{{ c.last_sync_at.strftime('%b %-d %-I:%M %p') if c.last_sync_at else 'never' }}</td></tr>
+  {% else %}<tr><td colspan="5" class="muted">No athlete has connected Garmin yet.</td></tr>{% endfor %}
+  </tbody></table>
+</div>
+<div class="card scroll">
+  <h2>Recent events (times in UTC)</h2>
+  <table class="list"><tbody>
+  {% for l in logs %}<tr><td class="small">{{ l.created_at.strftime('%b %-d %H:%M') }}</td><td>{% if l.level == 'error' %}<span class="pill bad">error</span>{% elif l.level == 'warn' %}<span class="pill warn">check</span>{% else %}<span class="pill">{{ l.kind }}</span>{% endif %}</td><td class="small">{{ l.message }}</td></tr>
+  {% else %}<tr><td class="muted">Nothing yet.</td></tr>{% endfor %}
+  </tbody></table>
+</div>
+{% endblock %}

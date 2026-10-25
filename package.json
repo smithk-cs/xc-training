@@ -1,0 +1,10 @@
+{
+  "name": "xc-training",
+  "private": true,
+  "scripts": {
+    "supabase": "supabase"
+  },
+  "devDependencies": {
+    "supabase": "^2.122.0"
+  }
+}

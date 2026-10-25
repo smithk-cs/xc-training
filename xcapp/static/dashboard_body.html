@@ -1,0 +1,1072 @@
+<style>
+.xc { container-type: inline-size; font-family: var(--font-anthropic-sans); color: var(--color-fg); }
+.xc-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: var(--cds-gap-md); margin-bottom: var(--cds-gap-lg); }
+.xc-title { font-family: var(--font-anthropic-serif); font-weight: 400; font-size: calc(var(--cds-font-size-title) * 1.25); line-height: 1.1; margin: 0; }
+.xc-sub { margin: var(--cds-gap-xs) 0 0; font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+.xc-take { margin: var(--cds-gap-sm) 0 0; font-size: var(--cds-font-size-body); max-width: 62ch; }
+.xc-take-n { font-variant-numeric: tabular-nums; font-weight: var(--cds-font-weight-medium); }
+.xc-pick { display: flex; align-items: center; gap: var(--cds-gap-sm); font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+.xc-pick select, .xc-search { font: inherit; font-size: var(--cds-font-size-body); color: var(--color-fg); background: var(--color-panel); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: var(--cds-pad-xs) var(--cds-pad-sm); max-width: 100%; }
+.xc-tabs { display: flex; gap: var(--cds-gap-xs); border-bottom: 1px solid var(--color-border-line); margin-bottom: var(--cds-gap-lg); overflow-x: auto; }
+.xc-tab { font: inherit; font-size: var(--cds-font-size-body); background: none; border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px; color: var(--color-fg-muted); padding: var(--cds-pad-sm) var(--cds-pad-md); cursor: pointer; white-space: nowrap; }
+.xc-tab[aria-selected="true"] { color: var(--color-fg); border-bottom-color: var(--color-fg); }
+.xc button:focus-visible, .xc select:focus-visible, .xc input:focus-visible, .xc tr:focus-visible { outline: 2px solid var(--color-fg); outline-offset: 2px; }
+.xc-page[hidden] { display: none; }
+.xc-stack > * + * { margin-top: var(--cds-gap-md); }
+.xc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr)); gap: var(--cds-gap-md); }
+.xc-card { background: var(--color-panel); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: var(--cds-pad-lg); min-width: 0; }
+.xc-card-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--cds-gap-sm); }
+.xc-h2 { font-size: var(--cds-font-size-heading); font-weight: var(--cds-font-weight-medium); margin: 0; }
+.xc-note { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); margin: var(--cds-gap-xs) 0 var(--cds-gap-md); max-width: 78ch; line-height: 1.45; }
+.xc-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); gap: var(--cds-gap-md); }
+.xc-kpi { background: var(--color-panel); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: var(--cds-pad-md) var(--cds-pad-lg); }
+.xc-kpi-label { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+.xc-kpi-num { font-family: var(--font-anthropic-serif); font-weight: 400; font-size: calc(var(--cds-font-size-title) * 1.3); line-height: 1.1; margin: var(--cds-gap-xs) 0; font-variant-numeric: tabular-nums; }
+.xc-kpi-unit { font-size: var(--cds-font-size-body); color: var(--color-fg-muted); }
+.xc-kpi-note { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+.xc-ai { border-left: 3px solid var(--color-fg); }
+.xc-gen-line { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+.xc-insights { min-height: 6rem; }
+.xc-ins { display: grid; grid-template-columns: 7.5rem minmax(0, 1fr); gap: var(--cds-gap-md); padding: var(--cds-pad-md) 0; border-top: 1px solid var(--color-border-line); }
+.xc-ins:first-child { border-top: 0; padding-top: 0; }
+.xc-ins-meta { display: flex; flex-direction: column; gap: var(--cds-gap-xs); font-size: var(--cds-font-size-caption); }
+.xc-pri { display: inline-flex; align-items: center; gap: .4rem; font-weight: var(--cds-font-weight-medium); }
+.xc-pri::before { content: ""; width: .5rem; height: .5rem; border-radius: 50%; background: currentColor; flex: none; }
+.xc-pri-high { color: var(--color-bad); }
+.xc-pri-medium { color: var(--color-warn); }
+.xc-pri-low { color: var(--color-fg-muted); }
+.xc-cat { color: var(--color-fg-muted); }
+.xc-scope { font: inherit; font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); background: none; border: 0; padding: 0; text-align: left; }
+button.xc-scope { cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.xc-ins-h { font-size: var(--cds-font-size-body); font-weight: var(--cds-font-weight-medium); margin: var(--cds-gap-xs) 0; }
+.xc-ins-p { margin: 0; font-size: var(--cds-font-size-body); line-height: 1.5; max-width: 72ch; }
+.xc-ins-a { margin: var(--cds-gap-sm) 0 0; font-size: var(--cds-font-size-body); line-height: 1.5; max-width: 72ch; }
+.xc-ins-lab { font-weight: var(--cds-font-weight-medium); }
+.xc-tablebox { max-height: 28rem; overflow: auto; }
+.xc-table { width: 100%; border-collapse: collapse; font-size: var(--cds-font-size-caption); font-variant-numeric: tabular-nums; }
+.xc-table th { position: sticky; top: 0; z-index: 1; background: var(--color-panel); text-align: left; font-weight: var(--cds-font-weight-medium); color: var(--color-fg-muted); border-bottom: 1px solid var(--color-border-line); padding: 0; white-space: nowrap; }
+.xc-table th button { font: inherit; color: inherit; background: none; border: 0; padding: var(--cds-pad-xs) var(--cds-pad-sm); cursor: pointer; width: 100%; text-align: inherit; }
+.xc-table th[aria-sort="ascending"] button::after { content: " ▲"; }
+.xc-table th[aria-sort="descending"] button::after { content: " ▼"; }
+.xc-table td { padding: var(--cds-pad-xs) var(--cds-pad-sm); border-bottom: 1px solid var(--color-border-line); vertical-align: top; }
+.xc-table .num { text-align: right; }
+.xc-table tbody tr { cursor: pointer; }
+.xc-table tbody tr:hover td { background: color-mix(in srgb, var(--color-fg) 4%, transparent); }
+.xc-table tbody tr.is-sel td { background: color-mix(in srgb, var(--color-fg) 9%, transparent); }
+.xc-good { color: var(--color-ok); }
+.xc-bad { color: var(--color-bad); }
+.xc-warn { color: var(--color-warn); }
+.xc-tools { display: flex; flex-wrap: wrap; align-items: center; gap: var(--cds-gap-sm); margin-bottom: var(--cds-gap-md); }
+.xc-seg { display: inline-flex; flex-wrap: wrap; gap: var(--cds-gap-xs); }
+.xc-seg button { font: inherit; font-size: var(--cds-font-size-caption); color: var(--color-fg); background: none; border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: var(--cds-pad-xs) var(--cds-pad-sm); cursor: pointer; }
+.xc-seg button[aria-pressed="true"] { background: var(--color-fg); color: var(--color-bg); border-color: var(--color-fg); }
+.xc-chart { position: relative; }
+.xc-chart svg { display: block; overflow: visible; }
+.xc-chart text { font-family: var(--font-anthropic-sans); }
+.xc-tick { fill: var(--color-fg-muted); font-size: 11px; }
+.xc-val { fill: var(--color-fg); font-size: 11px; font-variant-numeric: tabular-nums; }
+.xc-ptitle { fill: var(--color-fg-muted); font-size: 11px; }
+.xc-bench { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr)); gap: var(--cds-gap-md); min-height: 11rem; }
+.xc-bp { border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: var(--cds-pad-sm) var(--cds-pad-md); min-width: 0; }
+.xc-bp-head { display: flex; justify-content: space-between; align-items: baseline; gap: var(--cds-gap-sm); font-size: var(--cds-font-size-caption); }
+.xc-bp-ev { font-weight: var(--cds-font-weight-medium); color: var(--color-fg); }
+.xc-bp-goal { color: var(--color-fg-muted); font-variant-numeric: tabular-nums; }
+.xc-legend { display: flex; flex-wrap: wrap; gap: var(--cds-gap-md); font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); margin-bottom: var(--cds-gap-sm); }
+.xc-legend span { display: inline-flex; align-items: center; gap: .4rem; }
+.xc-sw { width: 1rem; height: 0; border-top: 2px solid; display: inline-block; }
+.xc-sw-dash { border-top-style: dashed; }
+.xc-reps-plot { min-height: 430px; }
+.xc-load { min-height: 250px; }
+.xc-team { min-height: 260px; }
+.xc-bands { min-height: 10rem; display: flex; flex-direction: column; gap: var(--cds-gap-md); }
+.xc-band-top { display: flex; justify-content: space-between; gap: var(--cds-gap-sm); font-size: var(--cds-font-size-caption); margin-bottom: var(--cds-gap-xs); }
+.xc-band-name { color: var(--color-fg); font-weight: var(--cds-font-weight-medium); }
+.xc-band-val { color: var(--color-fg-muted); font-variant-numeric: tabular-nums; text-align: right; }
+.xc-band-track { height: 14px; border-radius: 7px; background: var(--cds-chart-grid); overflow: hidden; }
+.xc-band-bar { height: 100%; border-radius: 7px; }
+.xc-tip { position: absolute; z-index: 3; pointer-events: none; background: var(--cds-surface-popover); border: 1px solid var(--cds-border); border-radius: var(--cds-radius); box-shadow: var(--cds-shadow-popover); padding: var(--cds-pad-xs) var(--cds-pad-sm); font-size: var(--cds-font-size-caption); line-height: 1.4; max-width: 18rem; }
+.xc-tip-h { color: var(--cds-text-secondary); }
+.xc-empty-msg { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); padding: var(--cds-pad-md) 0; }
+.xc-fail { display: flex; align-items: center; justify-content: center; gap: var(--cds-gap-xs); min-height: inherit; height: 100%; color: var(--color-fg-muted); font-size: var(--cds-font-size-caption); }
+.xc-fail::before { content: ""; width: .375rem; height: .375rem; border-radius: 50%; background: var(--color-bad); }
+.xc [data-dash-source-state=empty] { color: transparent; }
+.xc [data-dash-source-state=refreshing] { opacity: .5; transition: opacity var(--cds-dur-slow); }
+.xc-def { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); margin: var(--cds-gap-lg) 0 0; max-width: 78ch; line-height: 1.45; }
+@container (max-width: 640px) {
+  .xc-hide-narrow { display: none; }
+  .xc-ins { grid-template-columns: minmax(0, 1fr); gap: var(--cds-gap-xs); }
+  .xc-ins-meta { flex-direction: row; flex-wrap: wrap; gap: var(--cds-gap-sm); }
+}
+</style>
+
+<div class="xc">
+  <header class="xc-head">
+    <div>
+      <h1 class="xc-title" id="top">XC training intelligence</h1>
+      <p class="xc-sub"><span class="xc-sub-lead">Prototype with sample data for</span> <span data-source="kpis" data-field="roster" data-row="0">—</span> <span class="xc-sub-noun">invented athletes</span>, week of <span data-source="kpis" data-field="week_start" data-row="0">—</span>.</p>
+      <p class="xc-take"><span class="xc-take-n dash-skeleton" data-source="kpis" data-field="watch_count" data-row="0">—</span><span class="xc-take-rest"> athletes need attention this week.</span></p>
+    </div>
+    <label class="xc-pick">Athlete
+      <select class="xc-athlete" aria-label="Athlete" data-source="roster"></select>
+    </label>
+  </header>
+
+  <nav class="xc-tabs" role="tablist" aria-label="Sections">
+    <button class="xc-tab" role="tab" type="button" data-tab="briefing" id="tab-briefing">Team briefing</button>
+    <button class="xc-tab" role="tab" type="button" data-tab="performance" id="tab-performance">Performance</button>
+    <button class="xc-tab" role="tab" type="button" data-tab="heart-rate" id="tab-heart-rate">Heart rate by rep</button>
+    <button class="xc-tab" role="tab" type="button" data-tab="injuries" id="tab-injuries">Injuries and load</button>
+  </nav>
+
+  <section class="xc-page xc-stack" id="briefing" role="tabpanel" aria-labelledby="tab-briefing">
+    <div class="xc-kpis" id="kpi-row">
+      <div class="xc-kpi" id="kpi-injured">
+        <div class="xc-kpi-label">Injured now</div>
+        <div class="xc-kpi-num"><span class="dash-skeleton" data-source="kpis" data-field="injured_now" data-row="0">—</span></div>
+        <div class="xc-kpi-note">Active injuries in the log as of today</div>
+      </div>
+      <div class="xc-kpi" id="kpi-over">
+        <div class="xc-kpi-label">Above 1.3 load ratio this week</div>
+        <div class="xc-kpi-num"><span class="dash-skeleton" data-source="kpis" data-field="over_now" data-row="0">—</span></div>
+        <div class="xc-kpi-note"><span data-source="kpis" data-field="over_prev" data-row="0">—</span> the week before</div>
+      </div>
+      <div class="xc-kpi" id="kpi-gain">
+        <div class="xc-kpi-label">Median 5K gain, returners</div>
+        <div class="xc-kpi-num"><span class="dash-skeleton" data-source="kpis" data-field="median_gain" data-row="0">—</span> <span class="xc-kpi-unit">sec</span></div>
+        <div class="xc-kpi-note">This XC season vs last, <span data-source="kpis" data-field="returners" data-row="0">—</span> athletes</div>
+      </div>
+      <div class="xc-kpi" id="kpi-goals">
+        <div class="xc-kpi-label">5K goals reached</div>
+        <div class="xc-kpi-num"><span class="dash-skeleton" data-source="kpis" data-field="goals_met" data-row="0">—</span> <span class="xc-kpi-unit">of <span data-source="kpis" data-field="goal_total" data-row="0">—</span></span></div>
+        <div class="xc-kpi-note">This XC season’s best at or under the coach goal</div>
+      </div>
+    </div>
+
+    <div class="xc-card xc-ai" id="ai-briefing">
+      <div class="xc-card-head">
+        <h2 class="xc-h2">AI briefing</h2>
+        <span class="xc-gen-line">Generated <span class="xc-gen" data-source="ai_insights" data-field="generated_at" data-row="0">—</span></span>
+      </div>
+      <p class="xc-note xc-ai-note">Written by Claude from this week’s synced workouts, benchmark results and injury log. This is sample output; in the live system it would refresh after each nightly sync. Click a name to load that athlete across every tab.</p>
+      <div class="xc-insights dash-skeleton"></div>
+    </div>
+
+    <div class="xc-card" id="watch-list">
+      <h2 class="xc-h2">Watch list</h2>
+      <p class="xc-note">Anyone above a 1.3 load ratio this week, with an active injury, with heart rate dropping less than 25 bpm in the first minute of rest in the latest workout, or reporting pain of 4 out of 10 or more this week. Click a row to select the athlete.</p>
+      <div class="xc-tablebox">
+        <table class="xc-table xc-watch" data-source="watchlist" data-row-key="athlete_id">
+          <thead><tr>
+            <th data-field="athlete" data-sort="athlete"><button type="button">Athlete</button></th>
+            <th data-field="group" data-sort="group" class="xc-hide-narrow"><button type="button">Group</button></th>
+            <th data-field="miles" data-sort="miles" class="num"><button type="button">Miles this week</button></th>
+            <th data-field="acwr" data-sort="acwr" class="num"><button type="button">Load ratio</button></th>
+            <th data-field="recovery" data-sort="recovery" class="num xc-hide-narrow"><button type="button">Rest HR drop</button></th>
+            <th data-field="reasons" data-sort="reasons"><button type="button">Why flagged</button></th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="xc-page xc-stack" id="performance" role="tabpanel" aria-labelledby="tab-performance" hidden>
+    <div class="xc-card" id="athlete-benchmarks">
+      <h2 class="xc-h2"><span class="xc-aname" data-source="roster" data-field="athlete">—</span>: season bests by benchmark</h2>
+      <p class="xc-note">Best time each season for the four benchmark events. Higher on the chart is faster. The dashed line is the coach goal.</p>
+      <div class="xc-chart xc-bench dash-skeleton" data-source="benchmarks goals"></div>
+    </div>
+
+    <div class="xc-card" id="team-progress">
+      <h2 class="xc-h2">Team progress: <span class="xc-ev-label">5K</span></h2>
+      <p class="xc-note">Season bests side by side. Change compares this XC season with last (negative is faster). To goal is how far the current best is from the coach goal. Click a row to select the athlete.</p>
+      <div class="xc-tools">
+        <div class="xc-seg xc-evseg" role="group" aria-label="Benchmark event">
+          <button type="button" data-event="1 Mile">1 mile</button>
+          <button type="button" data-event="1.5 Mile">1.5 mile</button>
+          <button type="button" data-event="2 Mile">2 mile</button>
+          <button type="button" data-event="5K">5K</button>
+        </div>
+        <input class="xc-search" type="search" placeholder="Find an athlete" aria-label="Find an athlete">
+      </div>
+      <div class="xc-tablebox">
+        <table class="xc-table xc-progress" data-source="progress" data-row-key="athlete_id,event">
+          <thead><tr>
+            <th data-field="athlete" data-sort="athlete"><button type="button">Athlete</button></th>
+            <th data-field="group" data-sort="group" class="xc-hide-narrow"><button type="button">Group</button></th>
+            <th data-field="last_xc_t" data-sort="last_xc" class="num xc-hide-narrow"><button type="button" class="xc-s-last">Last XC</button></th>
+            <th data-field="track_t" data-sort="track" class="num xc-hide-narrow"><button type="button" class="xc-s-track">Track</button></th>
+            <th data-field="current_t" data-sort="current" class="num"><button type="button" class="xc-s-cur">This XC</button></th>
+            <th data-field="change_t" data-sort="change" class="num"><button type="button">Change</button></th>
+            <th data-field="goal_t" data-sort="goal" class="num xc-hide-narrow"><button type="button">Goal</button></th>
+            <th data-field="to_goal_t" data-sort="to_goal" class="num"><button type="button">To goal</button></th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="xc-page xc-stack" id="heart-rate" role="tabpanel" aria-labelledby="tab-heart-rate" hidden>
+    <div class="xc-tools">
+      <div class="xc-seg xc-wseg" role="group" aria-label="Workout" data-source="segments"></div>
+    </div>
+    <div class="xc-card" id="rep-chart">
+      <h2 class="xc-h2"><span class="xc-aname" data-source="roster" data-field="athlete">—</span>: pace and heart rate, rep by rep</h2>
+      <p class="xc-note">Each rep’s pace against target, average heart rate, and how far heart rate fell in the first 60 seconds of rest. A smaller drop means slower recovery; the dashed line in the bottom panel is the 25 bpm flag. The grey line is the same athlete’s previous workout at this rep distance, when there is one.</p>
+      <div class="xc-legend xc-reps-legend"></div>
+      <div class="xc-chart xc-reps-plot dash-skeleton" data-source="segments"></div>
+    </div>
+    <div class="xc-card" id="workout-table">
+      <h2 class="xc-h2">Whole team, this workout</h2>
+      <p class="xc-note">Sorted so the slowest heart-rate recovery is on top. Off target is average pace minus target pace, per mile (plus is slower). HR rise is last rep minus first rep.</p>
+      <div class="xc-tablebox">
+        <table class="xc-table xc-wsum" data-source="workout_summary" data-row-key="athlete_id,workout_id">
+          <thead><tr>
+            <th data-field="athlete" data-sort="athlete"><button type="button">Athlete</button></th>
+            <th data-field="avg_pace_t" data-sort="avg_pace" class="num"><button type="button">Avg pace /mi</button></th>
+            <th data-field="off_target_t" data-sort="off_target" class="num xc-hide-narrow"><button type="button">Off target</button></th>
+            <th data-field="avg_hr" data-sort="avg_hr" class="num"><button type="button">Avg HR</button></th>
+            <th data-field="hr_rise" data-sort="hr_rise" class="num xc-hide-narrow"><button type="button">HR rise</button></th>
+            <th data-field="recovery" data-sort="recovery" class="num"><button type="button">Rest HR drop</button></th>
+            <th data-field="flag" data-sort="flag"><button type="button">Flag</button></th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="xc-page xc-stack" id="injuries" role="tabpanel" aria-labelledby="tab-injuries" hidden>
+    <div class="xc-card" id="athlete-load">
+      <h2 class="xc-h2"><span class="xc-aname" data-source="roster" data-field="athlete">—</span>: weekly miles and injuries</h2>
+      <p class="xc-note">Red bars are weeks above a 1.3 load ratio, labelled with the ratio when there is room. Grey bars are weeks spent injured, and shaded spans run from injury to return.</p>
+      <div class="xc-chart xc-load dash-skeleton" data-source="weekly_load injuries"></div>
+    </div>
+    <div class="xc-grid">
+      <div class="xc-card" id="risk-bands">
+        <h2 class="xc-h2">Injury rate by load ratio</h2>
+        <p class="xc-note">Share of training weeks followed by a new injury within the next two weeks, grouped by that week’s load ratio. Weeks spent injured are left out.</p>
+        <div class="xc-bands dash-skeleton" data-source="risk_bands"></div>
+      </div>
+      <div class="xc-card" id="team-load">
+        <h2 class="xc-h2">Team mileage and new injuries</h2>
+        <p class="xc-note">Average miles per athlete each week (top), with a red dot for each new injury, and how many athletes were above a 1.3 load ratio (bottom).</p>
+        <div class="xc-chart xc-team dash-skeleton" data-source="team_weekly injuries"></div>
+      </div>
+    </div>
+    <div class="xc-card" id="injury-log">
+      <h2 class="xc-h2">Injury log</h2>
+      <p class="xc-note">Peak load ratio is the highest weekly ratio in the two training weeks before the injury began. Click a row to see that athlete’s weekly miles above.</p>
+      <div class="xc-tablebox">
+        <table class="xc-table xc-injlog" data-source="injury_log" data-row-key="injury_id">
+          <thead><tr>
+            <th data-field="athlete" data-sort="athlete"><button type="button">Athlete</button></th>
+            <th data-field="onset_t" data-sort="onset_date"><button type="button">Began</button></th>
+            <th data-field="injury" data-sort="injury"><button type="button">Injury</button></th>
+            <th data-field="body_area" data-sort="body_area" class="xc-hide-narrow"><button type="button">Area</button></th>
+            <th data-field="days_missed" data-sort="days_missed" class="num"><button type="button">Days out</button></th>
+            <th data-field="status" data-sort="status"><button type="button">Status</button></th>
+            <th data-field="peak_before" data-sort="peak_before" class="num"><button type="button">Peak load ratio</button></th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+    <p class="xc-def">Load ratio is an athlete’s miles this week divided by their own average over the previous four weeks. A ratio above 1.3 means mileage jumped more than 30%. It is a screening signal, not a diagnosis.</p>
+  </section>
+</div>
+
+<script>
+dash.calc('seasons', {
+  inputs: ['benchmarks', 'goals'],
+  title: 'Seasons compared',
+  description: 'The latest cross country season in the results, the one before it, and the track season between them.',
+  fn: (benchmarks, goals) => {
+    const xc = [...new Set(benchmarks.map((b) => b.season).concat(goals.map((g) => g.season || '')))].filter((x) => / XC$/.test(x));
+    if (!xc.length) return [];
+    xc.sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+    const current = xc[xc.length - 1];
+    const yr = parseInt(current, 10);
+    return [{ current, last: (yr - 1) + ' XC', track: yr + ' Track' }];
+  },
+});
+
+dash.calc('progress', {
+  inputs: ['benchmarks', 'goals', 'roster', 'seasons'],
+  title: 'Season bests vs goals',
+  description: 'Best time per athlete, event and season, compared with 2025 XC and the coach goal.',
+  fn: (benchmarks, goals, roster, seasons) => {
+    const ss = seasons[0];
+    if (!ss) return [];
+    const fmt = (s) => { if (s == null) return ''; const t = Math.round(s * 10) / 10; const m = Math.floor(t / 60); return m + ':' + (t - m * 60).toFixed(1).padStart(4, '0'); };
+    const sgn = (s) => (s == null ? '' : (s > 0 ? '+' : s < 0 ? '−' : '±') + Math.abs(s).toFixed(1) + ' s');
+    const best = {};
+    for (const b of benchmarks) {
+      const k = b.athlete_id + '|' + b.event + '|' + b.season;
+      const t = Number(b.time_sec);
+      if (!(k in best) || t < best[k]) best[k] = t;
+    }
+    const goal = {};
+    for (const g of goals) if (!g.season || g.season === ss.current) goal[g.athlete_id + '|' + g.event] = Number(g.goal_sec);
+    return roster.flatMap((r) => ['1 Mile', '1.5 Mile', '2 Mile', '5K'].map((e) => {
+      const k = r.athlete_id + '|' + e + '|';
+      const last = best[k + ss.last] ?? null;
+      const track = best[k + ss.track] ?? null;
+      const cur = best[k + ss.current] ?? null;
+      const g = goal[r.athlete_id + '|' + e] ?? null;
+      const change = last != null && cur != null ? Math.round((cur - last) * 10) / 10 : null;
+      const toGoal = g != null && cur != null ? Math.round((cur - g) * 10) / 10 : null;
+      return {
+        athlete_id: r.athlete_id, event: e, athlete: r.athlete, group: r.group,
+        last_xc: last, track, current: cur, change, goal: g, to_goal: toGoal,
+        last_xc_t: fmt(last), track_t: fmt(track), current_t: fmt(cur), change_t: sgn(change),
+        goal_t: fmt(g), to_goal_t: toGoal == null ? '' : toGoal <= 0 ? 'Reached' : sgn(toGoal),
+      };
+    }));
+  },
+});
+
+dash.calc('workout_summary', {
+  inputs: ['segments'],
+  title: 'Workout summary by athlete',
+  description: 'Average pace, heart rate and 60-second heart-rate drop per athlete per workout.',
+  fn: (segments) => {
+    const fmt = (s) => { const t = Math.round(s * 10) / 10; const m = Math.floor(t / 60); return m + ':' + (t - m * 60).toFixed(1).padStart(4, '0'); };
+    const mean = (xs) => xs.reduce((a, b) => a + b, 0) / xs.length;
+    const by = new Map();
+    for (const s of segments) {
+      const k = s.athlete_id + '|' + s.workout_id;
+      if (!by.has(k)) by.set(k, []);
+      by.get(k).push(s);
+    }
+    return [...by.values()].map((reps) => {
+      reps.sort((a, b) => Number(a.rep) - Number(b.rep));
+      const s0 = reps[0];
+      const pace = mean(reps.map((r) => Number(r.pace_sec_mi)));
+      const target = s0.target_pace_sec_mi === '' || s0.target_pace_sec_mi == null ? null : Number(s0.target_pace_sec_mi);
+      const hrs = reps.filter((r) => r.avg_hr !== '' && r.avg_hr != null).map((r) => Number(r.avg_hr));
+      const drops = reps.filter((r) => r.hr_drop_60s !== '' && r.hr_drop_60s != null).map((r) => Number(r.hr_drop_60s));
+      const rec = drops.length ? Math.round(mean(drops) * 10) / 10 : null;
+      const off = target == null ? null : Math.round((pace - target) * 10) / 10;
+      return {
+        athlete_id: s0.athlete_id, workout_id: s0.workout_id, athlete: s0.athlete, workout: s0.workout, date: s0.date,
+        reps: reps.length, avg_pace: Math.round(pace * 10) / 10, avg_pace_t: fmt(pace), target_t: target == null ? '' : fmt(target),
+        off_target: off, off_target_t: off == null ? '' : (off > 0 ? '+' : off < 0 ? '−' : '±') + Math.abs(off).toFixed(1) + ' s',
+        avg_hr: hrs.length ? Math.round(mean(hrs)) : null, hr_rise: hrs.length > 1 ? hrs[hrs.length - 1] - hrs[0] : null, recovery: rec,
+        flag: rec != null && rec < 25 ? 'Slow recovery' : '',
+      };
+    });
+  },
+});
+
+dash.calc('watchlist', {
+  inputs: ['weekly_load', 'injuries', 'workout_summary', 'roster', 'pain_reports'],
+  title: 'Athletes to check on',
+  description: 'Load ratio above 1.3 this week, an active injury, under 25 bpm heart-rate drop in the latest workout, or pain of 4/10 or more this week.',
+  fn: (weekly_load, injuries, workout_summary, roster, pain_reports) => {
+    const now = weekly_load.reduce((m, r) => (r.week_start > m ? r.week_start : m), '');
+    const last = workout_summary.reduce((m, r) => (r.date > m ? r.date : m), '');
+    return roster.map((a) => {
+      const wk = weekly_load.find((r) => r.athlete_id === a.athlete_id && r.week_start === now);
+      const inj = injuries.find((i) => i.athlete_id === a.athlete_id && i.status === 'Active');
+      const ws = workout_summary.find((w) => w.athlete_id === a.athlete_id && w.date === last);
+      const acwr = wk && wk.acwr !== '' && wk.acwr != null ? Number(wk.acwr) : null;
+      const sore = pain_reports.filter((p) => p.athlete_id === a.athlete_id && p.date >= now && Number(p.severity) >= 4);
+      const why = [];
+      if (inj) why.push('Injured: ' + inj.injury);
+      if (acwr != null && acwr > 1.3) why.push('Load ratio ' + acwr.toFixed(2));
+      if (ws && ws.flag) why.push('Slow recovery in latest workout');
+      if (sore.length) {
+        const worst = sore.reduce((m, p) => (Number(p.severity) > Number(m.severity) ? p : m));
+        why.push('Pain ' + Number(worst.severity) + '/10: ' + worst.body_area);
+      }
+      return {
+        athlete_id: a.athlete_id, athlete: a.athlete, group: a.group,
+        miles: wk ? Number(wk.miles) : null, acwr,
+        recovery: ws ? ws.recovery : null, flags: why.length, reasons: why.join('; '),
+      };
+    }).filter((r) => r.flags > 0).sort((a, b) => b.flags - a.flags || a.athlete.localeCompare(b.athlete));
+  },
+});
+
+dash.calc('kpis', {
+  inputs: ['injuries', 'weekly_load', 'progress', 'watchlist', 'roster'],
+  title: 'Team headline numbers',
+  description: 'This week’s counts and season gains, from the injury log, weekly mileage and season bests.',
+  fn: (injuries, weekly_load, progress, watchlist, roster) => {
+    const weeks = [...new Set(weekly_load.map((r) => r.week_start))].sort();
+    const now = weeks[weeks.length - 1];
+    const prev = weeks[weeks.length - 2];
+    const over = (w) => weekly_load.filter((r) => r.week_start === w && Number(r.acwr) > 1.3).length;
+    const gains = progress.filter((p) => p.event === '5K' && p.last_xc != null && p.current != null).map((p) => p.last_xc - p.current).sort((a, b) => a - b);
+    const n = gains.length;
+    const med = n ? (n % 2 ? gains[(n - 1) / 2] : (gains[n / 2 - 1] + gains[n / 2]) / 2) : null;
+    const fives = progress.filter((p) => p.event === '5K' && p.to_goal != null);
+    return [{
+      week_start: now, roster: roster.length,
+      injured_now: injuries.filter((i) => i.status === 'Active').length,
+      over_now: over(now), over_prev: over(prev),
+      median_gain: med == null ? null : Math.round(med * 10) / 10, returners: n,
+      goals_met: fives.filter((p) => p.to_goal <= 0).length, goal_total: fives.length,
+      watch_count: watchlist.length,
+    }];
+  },
+});
+
+dash.calc('risk_bands', {
+  inputs: ['weekly_load', 'injuries'],
+  title: 'Injury rate by load ratio',
+  description: 'Training weeks followed by a new injury within two weeks, grouped by that week’s load ratio.',
+  fn: (weekly_load, injuries) => {
+    const day = 864e5;
+    const band = (x) => (x < 0.8 ? 'Under 0.8' : x <= 1.3 ? '0.8 to 1.3' : 'Over 1.3');
+    const onsets = injuries.map((i) => ({ id: i.athlete_id, t: Date.parse(i.onset_date) }));
+    const hit = (r) => { const t = Date.parse(r.week_start); return onsets.some((o) => o.id === r.athlete_id && o.t >= t + 7 * day && o.t < t + 21 * day); };
+    const train = weekly_load.filter((r) => Number(r.injured) !== 1 && r.acwr !== '' && r.acwr != null);
+    return ['Under 0.8', '0.8 to 1.3', 'Over 1.3'].map((b) => {
+      const weeks = train.filter((r) => band(Number(r.acwr)) === b);
+      const k = weeks.filter(hit).length;
+      return { band: b, weeks: weeks.length, injuries: k, rate: weeks.length ? k / weeks.length : 0 };
+    });
+  },
+});
+
+dash.calc('team_weekly', {
+  inputs: ['weekly_load'],
+  title: 'Team weekly mileage',
+  description: 'Average miles per athlete each week, and how many athletes were above a 1.3 load ratio.',
+  fn: (weekly_load) => {
+    const by = new Map();
+    for (const r of weekly_load) {
+      if (!by.has(r.week_start)) by.set(r.week_start, []);
+      by.get(r.week_start).push(r);
+    }
+    return [...by.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(([week_start, rows]) => ({
+      week_start,
+      avg_miles: Math.round((rows.reduce((s, r) => s + Number(r.miles), 0) / rows.length) * 10) / 10,
+      over_13: rows.filter((r) => Number(r.acwr) > 1.3).length,
+      injured: rows.filter((r) => Number(r.injured) === 1).length,
+    }));
+  },
+});
+
+dash.calc('injury_log', {
+  inputs: ['injuries', 'weekly_load'],
+  title: 'Injuries with load before onset',
+  description: 'Each injury with the highest load ratio in the two training weeks before it began.',
+  fn: (injuries, weekly_load) => {
+    const day = 864e5;
+    return injuries.map((i) => {
+      const t = Date.parse(i.onset_date);
+      const before = weekly_load
+        .filter((r) => r.athlete_id === i.athlete_id && Number(r.injured) !== 1 && r.acwr !== '' && r.acwr != null && t >= Date.parse(r.week_start) + 7 * day && t < Date.parse(r.week_start) + 21 * day)
+        .map((r) => Number(r.acwr));
+      const peak = before.length ? Math.max(...before) : null;
+      return {
+        injury_id: i.injury_id, athlete_id: i.athlete_id, athlete: i.athlete,
+        onset_date: i.onset_date,
+        onset_t: new Date(i.onset_date + 'T00:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }),
+        injury: i.injury, body_area: i.body_area, days_missed: Number(i.days_missed), status: i.status,
+        return_date: i.return_date, peak_before: peak, after_spike: peak != null && peak > 1.3 ? 'Yes' : 'No',
+      };
+    }).sort((a, b) => (a.onset_date < b.onset_date ? 1 : -1));
+  },
+});
+</script>
+
+<script>
+(() => {
+  const root = document.querySelector('.xc');
+  const $ = (s, el = root) => el.querySelector(s);
+  const $$ = (s, el = root) => [...el.querySelectorAll(s)];
+  const el = (tag, cls) => { const e = document.createElement(tag); if (cls) e.className = cls; return e; };
+  const EVENTS = ['1 Mile', '1.5 Mile', '2 Mile', '5K'];
+  const APP = !!window.XC_APP;
+  const seasonList = () => { const r = rowsOf('seasons')[0]; return r ? [r.last, r.track, r.current] : []; };
+  const seasonLabel = (x) => '’' + String(x).slice(2, 4) + ' ' + (/Track$/.test(x) ? 'track' : 'XC');
+  const SLOW_RECOVERY = 25;
+  const RATIO_LINE = 1.3;
+  const DAY = 864e5;
+  const fmtTime = (s) => { if (s == null || isNaN(s)) return ''; const t = Math.round(s * 10) / 10; const m = Math.floor(t / 60); return m + ':' + (t - m * 60).toFixed(1).padStart(4, '0'); };
+  const fmtPace = (s) => { const t = Math.round(s); const m = Math.floor(t / 60); return m + ':' + String(t - m * 60).padStart(2, '0'); };
+  const fmtDay = d3.utcFormat('%b %-d');
+  const fmtGen = d3.timeFormat('%b %-d, %-I:%M %p');
+  const parseDay = (s) => new Date(s + 'T00:00:00Z');
+  const status = (id) => { const d = dash.data(id); return d ? d.status : 'loading'; };
+  const ok = (...ids) => ids.every((id) => status(id) === 'ok');
+  const failed = (...ids) => ids.some((id) => ['error', 'connect', 'declined', 'missing'].includes(status(id)));
+  const rowsOf = (id) => (status(id) === 'ok' && Array.isArray(dash.data(id).data) ? dash.data(id).data : []);
+  const params = () => {
+    const p = dash.params() || {};
+    const watch = rowsOf('watchlist'), roster = rowsOf('roster');
+    const latest = rowsOf('segments').reduce((m, r) => (!m || r.date > m.date ? r : m), null);
+    return {
+      athlete: p.athlete || (watch[0] && watch[0].athlete_id) || (roster[0] && roster[0].athlete_id) || '',
+      event: p.event || '5K',
+      workout: p.workout || (latest ? latest.workout_id : ''),
+    };
+  };
+  if (APP) {
+    root.querySelector('.xc-sub-lead').textContent = 'Team of';
+    root.querySelector('.xc-sub-noun').textContent = 'athletes';
+    root.querySelector('.xc-ai-note').textContent = 'Written by Claude from the team’s synced workouts, benchmark results, injury log and pain reports, with athletes sent as codes rather than names. It refreshes every night, and coaches can rerun it from the AI page. Click a name to load that athlete across every tab.';
+  }
+
+  const failBox = (box) => { const f = el('div', 'xc-fail'); f.textContent = 'Failed to load'; box.replaceChildren(f); box.classList.remove('dash-skeleton'); };
+  const emptyMsg = (box, text) => { const m = el('div', 'xc-empty-msg'); m.textContent = text; box.replaceChildren(m); box.classList.remove('dash-skeleton'); };
+
+  // tooltip
+  const tipFor = (box) => {
+    let tip = box.querySelector(':scope > .xc-tip');
+    if (!tip) { tip = el('div', 'xc-tip'); tip.hidden = true; box.append(tip); }
+    return tip;
+  };
+  const showTip = (box, x, y, lines) => {
+    const tip = tipFor(box);
+    tip.replaceChildren(...lines.map((l, i) => { const d = el('div', i === 0 ? 'xc-tip-h' : ''); d.textContent = l; return d; }));
+    tip.hidden = false;
+    const w = tip.offsetWidth, h = tip.offsetHeight, W = box.clientWidth;
+    let left = x + 14;
+    if (left + w > W) left = Math.max(0, x - w - 14);
+    tip.style.left = left + 'px';
+    tip.style.top = Math.max(0, y - h / 2) + 'px';
+  };
+  const hideTip = (box) => { const t = box.querySelector(':scope > .xc-tip'); if (t) t.hidden = true; };
+  const textW = (svg, str) => { const t = svg.append('text').attr('class', 'xc-tick').text(str); const w = t.node().getComputedTextLength(); t.remove(); return w; };
+
+  // tabs and links
+  const PAGES = ['briefing', 'performance', 'heart-rate', 'injuries'];
+  let current = PAGES.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'briefing';
+  const showPage = (id, link) => {
+    current = id;
+    $$('.xc-tab').forEach((t) => t.setAttribute('aria-selected', String(t.dataset.tab === id)));
+    $$('.xc-page').forEach((p) => { p.hidden = p.id !== id; });
+    if (link) dash.setLink(id);
+    render();
+  };
+  $$('.xc-tab').forEach((t) => t.addEventListener('click', () => showPage(t.dataset.tab, true)));
+
+  // athlete picker
+  const sel = $('.xc-athlete');
+  sel.addEventListener('change', () => dash.setParams({ athlete: sel.value }));
+  const athleteName = (id) => { const a = rowsOf('roster').find((r) => r.athlete_id === id); return a ? a.athlete : ''; };
+  function drawPicker() {
+    const rs = rowsOf('roster').slice().sort((a, b) => a.athlete.localeCompare(b.athlete));
+    if (rs.length && sel.options.length !== rs.length) {
+      sel.replaceChildren(...rs.map((a) => new Option(a.athlete + ' (' + a.group + ', grade ' + a.grade + ')', a.athlete_id)));
+    }
+    const id = params().athlete;
+    if (rs.length) sel.value = id;
+    $$('.xc-aname').forEach((n) => {
+      n.setAttribute('data-where', 'athlete_id=' + encodeURIComponent(id));
+      if (rs.length) n.textContent = athleteName(id);
+      else if (failed('roster')) n.textContent = '—';
+    });
+  }
+
+  // tables
+  const sortState = new Map();
+  $$('.xc-table').forEach((table) => {
+    $$('th[data-sort]', table).forEach((th) => {
+      th.querySelector('button').addEventListener('click', () => {
+        const s = sortState.get(table);
+        const dir = s && s.key === th.dataset.sort && s.dir === 'asc' ? 'desc' : 'asc';
+        sortState.set(table, { key: th.dataset.sort, dir });
+        render();
+      });
+    });
+    table.addEventListener('click', (e) => {
+      const tr = e.target.closest('tbody tr');
+      if (tr && tr.dataset.aid) dash.setParams({ athlete: tr.dataset.aid });
+    });
+  });
+  sortState.set($('.xc-progress'), { key: 'current', dir: 'asc' });
+  sortState.set($('.xc-wsum'), { key: 'recovery', dir: 'asc' });
+
+  function sortRows(table, rs) {
+    const s = sortState.get(table);
+    $$('th', table).forEach((th) => th.removeAttribute('aria-sort'));
+    if (!s) return rs;
+    const th = $$('th', table).find((t) => t.dataset.sort === s.key);
+    if (th) th.setAttribute('aria-sort', s.dir === 'asc' ? 'ascending' : 'descending');
+    return rs.slice().sort((a, b) => {
+      const x = a[s.key], y = b[s.key];
+      const xe = x == null || x === '', ye = y == null || y === '';
+      if (xe && ye) return 0;
+      if (xe) return 1;
+      if (ye) return -1;
+      const c = typeof x === 'number' && typeof y === 'number' ? x - y : String(x).localeCompare(String(y));
+      return s.dir === 'asc' ? c : -c;
+    });
+  }
+
+  function fillTable(table, rs, keyOf, fmt = {}, cls = {}) {
+    const heads = $$('thead th', table);
+    const id = params().athlete;
+    table.tBodies[0].replaceChildren(...rs.map((r) => {
+      const tr = el('tr');
+      tr.dataset.key = keyOf(r);
+      tr.dataset.aid = r.athlete_id;
+      if (r.athlete_id === id) tr.classList.add('is-sel');
+      heads.forEach((th) => {
+        const f = th.dataset.field;
+        const v = r[f];
+        const td = el('td');
+        td.textContent = v == null ? '' : fmt[f] ? fmt[f](v, r) : String(v);
+        if (th.classList.contains('num')) td.classList.add('num');
+        if (th.classList.contains('xc-hide-narrow')) td.classList.add('xc-hide-narrow');
+        if (cls[f]) { const c = cls[f](v, r); if (c) td.classList.add(c); }
+        tr.append(td);
+      });
+      return tr;
+    }));
+  }
+  const clearTable = (table) => table.tBodies[0].replaceChildren();
+
+  // header numbers
+  function drawKpis() {
+    const r = rowsOf('kpis')[0];
+    $$('[data-source="kpis"]').forEach((n) => {
+      if (!r) { if (failed('kpis')) { n.textContent = '—'; n.classList.remove('dash-skeleton'); } return; }
+      const f = n.dataset.field;
+      const v = r[f];
+      n.textContent = v == null ? '—' : f === 'week_start' ? fmtDay(parseDay(v)) : f === 'median_gain' ? Number(v).toFixed(1) : String(v);
+      n.classList.remove('dash-skeleton');
+    });
+    if (r) {
+      $('.xc-take-rest').textContent = r.watch_count === 1
+        ? ' athlete needs attention this week. The AI briefing explains why.'
+        : ' athletes need attention this week. The AI briefing explains why.';
+      const over = $('#kpi-over .xc-kpi-num');
+      over.classList.toggle('xc-bad', r.over_now > r.over_prev);
+      over.classList.toggle('xc-good', r.over_now < r.over_prev);
+    }
+  }
+
+  // briefing
+  function drawBriefing() {
+    const box = $('.xc-insights');
+    if (ok('ai_insights')) {
+      const rs = rowsOf('ai_insights');
+      const mk = (node, field, r) => {
+        node.setAttribute('data-source', 'ai_insights');
+        node.setAttribute('data-field', field);
+        node.setAttribute('data-where', 'insight_id=' + encodeURIComponent(r.insight_id));
+        node.textContent = r[field];
+        return node;
+      };
+      box.replaceChildren(...rs.map((r) => {
+        const art = el('article', 'xc-ins');
+        const meta = el('div', 'xc-ins-meta');
+        meta.append(mk(el('span', 'xc-pri xc-pri-' + String(r.priority).toLowerCase()), 'priority', r), mk(el('span', 'xc-cat'), 'category', r));
+        const body = el('div');
+        const scope = mk(el(r.athlete_id ? 'button' : 'span', 'xc-scope'), 'scope', r);
+        if (r.athlete_id) {
+          scope.type = 'button';
+          scope.setAttribute('aria-label', 'Select ' + r.scope);
+          scope.addEventListener('click', () => dash.setParams({ athlete: r.athlete_id }));
+        }
+        const act = el('p', 'xc-ins-a');
+        const lab = el('span', 'xc-ins-lab');
+        lab.textContent = 'Next step: ';
+        act.append(lab, mk(el('span'), 'action', r));
+        body.append(scope, mk(el('h3', 'xc-ins-h'), 'headline', r), mk(el('p', 'xc-ins-p'), 'insight', r), act);
+        art.append(meta, body);
+        return art;
+      }));
+      box.classList.remove('dash-skeleton');
+      const g = $('.xc-gen');
+      if (rs[0]) { const d = new Date(rs[0].generated_at); g.textContent = isNaN(d) ? rs[0].generated_at : fmtGen(d); }
+    } else if (failed('ai_insights')) {
+      failBox(box);
+      $('.xc-gen').textContent = '—';
+    }
+
+    const t = $('.xc-watch');
+    if (ok('watchlist')) {
+      fillTable(t, sortRows(t, rowsOf('watchlist')), (r) => r.athlete_id,
+        { acwr: (v) => Number(v).toFixed(2), miles: (v) => Number(v).toFixed(1) },
+        { acwr: (v) => (v > RATIO_LINE ? 'xc-bad' : ''), recovery: (v) => (v != null && v < SLOW_RECOVERY ? 'xc-bad' : '') });
+    } else if (failed('watchlist')) clearTable(t);
+  }
+
+  // performance
+  $$('.xc-evseg button').forEach((b) => b.addEventListener('click', () => dash.setParams({ event: b.dataset.event })));
+  $('.xc-search').addEventListener('input', () => render());
+
+  function drawBenchPanel(box, pts, goal, SEASONS) {
+    const W = Math.max(180, box.clientWidth);
+    const H = 150;
+    const m = { t: 22, r: 8, b: 26, l: 8 };
+    const svg = d3.select(box).append('svg').attr('width', '100%').attr('viewBox', `0 0 ${W} ${H}`);
+    const x = d3.scalePoint(SEASONS, [m.l, W - m.r]).padding(0.5);
+    svg.append('g').selectAll('text').data(SEASONS).join('text')
+      .attr('class', 'xc-tick').attr('x', (s) => x(s)).attr('y', H - 8).attr('text-anchor', 'middle').text(seasonLabel);
+    if (!pts.length) {
+      svg.append('text').attr('class', 'xc-tick').attr('x', W / 2).attr('y', H / 2).attr('text-anchor', 'middle').text('No times yet');
+      return;
+    }
+    const vals = pts.map((p) => p.t).concat(goal != null ? [goal] : []);
+    const lo = d3.min(vals), hi = d3.max(vals);
+    const pad = Math.max(2, (hi - lo) * 0.18);
+    const y = d3.scaleLinear([hi + pad, lo - pad], [H - m.b, m.t]);
+    if (goal != null) {
+      svg.append('line').attr('x1', m.l).attr('x2', W - m.r).attr('y1', y(goal)).attr('y2', y(goal))
+        .attr('stroke', 'var(--cds-chart-reference)').attr('stroke-width', 1).attr('stroke-dasharray', '4 3');
+    }
+    svg.append('path').datum(pts)
+      .attr('d', d3.line().x((p) => x(p.season)).y((p) => y(p.t)))
+      .attr('fill', 'none').attr('stroke', dash.colors[0]).attr('stroke-width', 2)
+      .attr('stroke-linecap', 'round').attr('stroke-linejoin', 'round');
+    svg.append('g').selectAll('circle').data(pts).join('circle')
+      .attr('cx', (p) => x(p.season)).attr('cy', (p) => y(p.t)).attr('r', 4).attr('fill', dash.colors[0]);
+    svg.append('g').selectAll('text').data(pts).join('text')
+      .attr('class', 'xc-val').attr('x', (p) => x(p.season)).attr('y', (p) => y(p.t) - 9)
+      .attr('text-anchor', 'middle').text((p) => fmtTime(p.t));
+  }
+
+  function drawBench() {
+    const box = $('.xc-bench');
+    if (!ok('benchmarks', 'goals', 'seasons')) { if (failed('benchmarks', 'goals')) failBox(box); return; }
+    box.classList.remove('dash-skeleton');
+    const SEASONS = seasonList();
+    const cur = SEASONS[2];
+    const id = params().athlete;
+    const mine = rowsOf('benchmarks').filter((r) => r.athlete_id === id);
+    const goals = rowsOf('goals').filter((r) => r.athlete_id === id && (!r.season || r.season === cur));
+    const panels = EVENTS.map((ev) => {
+      const panel = el('div', 'xc-bp');
+      const head = el('div', 'xc-bp-head');
+      const name = el('span', 'xc-bp-ev');
+      name.textContent = ev;
+      const g = goals.find((r) => r.event === ev);
+      const gl = el('span', 'xc-bp-goal');
+      gl.textContent = g ? 'Goal ' + fmtTime(Number(g.goal_sec)) : '';
+      head.append(name, gl);
+      const chart = el('div');
+      panel.append(head, chart);
+      const pts = SEASONS.map((s) => {
+        const ts = mine.filter((r) => r.event === ev && r.season === s).map((r) => Number(r.time_sec));
+        return ts.length ? { season: s, t: Math.min(...ts) } : null;
+      }).filter(Boolean);
+      return { panel, chart, pts, goal: g ? Number(g.goal_sec) : null };
+    });
+    box.replaceChildren(...panels.map((p) => p.panel));
+    panels.forEach((p) => drawBenchPanel(p.chart, p.pts, p.goal, SEASONS));
+  }
+
+  function drawPerformance() {
+    const ev = params().event;
+    $$('.xc-evseg button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.event === ev)));
+    $('.xc-ev-label').textContent = ev === '5K' ? '5K' : ev.toLowerCase();
+    const ss = seasonList();
+    if (ss.length) {
+      $('.xc-s-last').textContent = ss[0].replace(/ XC$/, ' XC');
+      $('.xc-s-track').textContent = ss[1].replace(/ Track$/, ' track');
+      $('.xc-s-cur').textContent = ss[2];
+    }
+    drawBench();
+    const t = $('.xc-progress');
+    if (!ok('progress')) { if (failed('progress')) clearTable(t); return; }
+    const q = $('.xc-search').value.trim().toLowerCase();
+    const rs = rowsOf('progress').filter((r) => r.event === ev && (!q || r.athlete.toLowerCase().includes(q)));
+    fillTable(t, sortRows(t, rs), (r) => encodeURIComponent(r.athlete_id) + ',' + encodeURIComponent(r.event), {},
+      { change_t: (v, r) => (r.change == null ? '' : r.change < 0 ? 'xc-good' : r.change > 0 ? 'xc-bad' : ''),
+        to_goal_t: (v, r) => (r.to_goal != null && r.to_goal <= 0 ? 'xc-good' : '') });
+  }
+
+  // heart rate
+  const nul = (v) => (v === '' || v == null ? null : Number(v));
+  const num = (r) => ({
+    rep: Number(r.rep), pace: Number(r.pace_sec_mi), target: nul(r.target_pace_sec_mi),
+    hr: nul(r.avg_hr), max: nul(r.max_hr), drop: nul(r.hr_drop_60s),
+  });
+
+  function drawReps(all, wid) {
+    const box = $('.xc-reps-plot');
+    const legend = $('.xc-reps-legend');
+    const id = params().athlete;
+    const meta = all.find((r) => r.workout_id === wid);
+    box.classList.remove('dash-skeleton');
+    if (!meta) { legend.replaceChildren(); emptyMsg(box, 'Pick a workout above.'); return; }
+    const cur = all.filter((r) => r.athlete_id === id && r.workout_id === wid).map(num).sort((a, b) => a.rep - b.rep);
+    if (!cur.length) { legend.replaceChildren(); emptyMsg(box, athleteName(id) + ' has no data for this workout, usually because of an injury or absence.'); return; }
+    const earlier = all.filter((r) => r.athlete_id === id && Number(r.rep_m) === Number(meta.rep_m) && r.date < meta.date);
+    const prevW = earlier.reduce((m, r) => (!m || r.date > m.date ? r : m), null);
+    const cmp = prevW ? all.filter((r) => r.athlete_id === id && r.workout_id === prevW.workout_id).map(num).sort((a, b) => a.rep - b.rep) : [];
+
+    const item = (color, text, dashed) => { const s = el('span'); const sw = el('i', 'xc-sw' + (dashed ? ' xc-sw-dash' : '')); sw.style.borderColor = color; const t = el('span'); t.textContent = text; s.append(sw, t); return s; };
+    const items = [item(dash.colors[0], fmtDay(parseDay(meta.date)) + ': ' + meta.workout)];
+    if (cmp.length) items.push(item('var(--cds-chart-muted)', fmtDay(parseDay(prevW.date)) + ': ' + prevW.workout));
+    items.push(item('var(--cds-chart-reference)', 'Target pace', true));
+    legend.replaceChildren(...items);
+
+    box.replaceChildren();
+    const W = Math.max(300, box.clientWidth);
+    const H = 430;
+    const svg = d3.select(box).append('svg').attr('width', '100%').attr('viewBox', `0 0 ${W} ${H}`);
+    const P1 = [24, 140], P2 = [180, 296], P3 = [336, 400];
+    const target = cur[0].target;
+    const paces = cur.map((d) => d.pace).concat(cmp.map((d) => d.pace), target == null ? [] : [target]);
+    const pPad = Math.max(2, (d3.max(paces) - d3.min(paces)) * 0.15);
+    const yP = d3.scaleLinear([d3.max(paces) + pPad, d3.min(paces) - pPad], [P1[1], P1[0]]);
+    const hrs = cur.map((d) => d.hr).concat(cmp.map((d) => d.hr)).filter((v) => v != null);
+    const yH = d3.scaleLinear(hrs.length ? [d3.min(hrs) - 3, d3.max(hrs) + 3] : [120, 200], [P2[1], P2[0]]);
+    const drops = cur.concat(cmp).map((d) => d.drop).filter((d) => d != null);
+    const yR = d3.scaleLinear([0, Math.max(SLOW_RECOVERY, d3.max(drops) || 0) * 1.12], [P3[1], P3[0]]);
+    const tP = yP.ticks(4), tH = yH.ticks(4), tR = yR.ticks(3);
+    const ml = Math.ceil(Math.max(...tP.map((v) => textW(svg, fmtPace(v))), ...tH.map((v) => textW(svg, String(v))), ...tR.map((v) => textW(svg, String(v))))) + 10;
+    const n = Math.max(cur.length, cmp.length);
+    const reps = d3.range(1, n + 1);
+    const x = d3.scaleBand(reps, [ml, W - 8]).padding(0.3);
+    const cx = (r) => x(r) + x.bandwidth() / 2;
+
+    const grid = (ticks, y, f) => {
+      const g = svg.append('g');
+      g.selectAll('line').data(ticks).join('line').attr('x1', ml).attr('x2', W - 8).attr('y1', y).attr('y2', y).attr('stroke', 'var(--cds-chart-grid)').attr('stroke-width', 1);
+      g.selectAll('text').data(ticks).join('text').attr('class', 'xc-tick').attr('x', ml - 8).attr('y', y).attr('dy', '0.32em').attr('text-anchor', 'end').text(f);
+    };
+    grid(tP, yP, fmtPace);
+    grid(tH, yH, String);
+    grid(tR, yR, String);
+    svg.append('text').attr('class', 'xc-ptitle').attr('x', ml).attr('y', P1[0] - 10).text('Pace per mile, faster is higher');
+    svg.append('text').attr('class', 'xc-ptitle').attr('x', ml).attr('y', P2[0] - 10).text('Average heart rate, bpm');
+    svg.append('text').attr('class', 'xc-ptitle').attr('x', ml).attr('y', P3[0] - 10).text('Heart-rate drop in first 60 s of rest, bpm');
+
+    if (target != null) {
+      svg.append('line').attr('x1', ml).attr('x2', W - 8).attr('y1', yP(target)).attr('y2', yP(target))
+        .attr('stroke', 'var(--cds-chart-reference)').attr('stroke-width', 1.5).attr('stroke-dasharray', '5 4');
+    }
+    svg.append('line').attr('x1', ml).attr('x2', W - 8).attr('y1', yR(SLOW_RECOVERY)).attr('y2', yR(SLOW_RECOVERY))
+      .attr('stroke', 'var(--cds-chart-status-critical)').attr('stroke-width', 1).attr('stroke-dasharray', '4 3');
+
+    const series = (data, color, key, y, r) => {
+      const have = data.filter((d) => d[key] != null);
+      svg.append('path').datum(have).attr('d', d3.line().x((d) => cx(d.rep)).y((d) => y(d[key])))
+        .attr('fill', 'none').attr('stroke', color).attr('stroke-width', 2).attr('stroke-linecap', 'round').attr('stroke-linejoin', 'round');
+      svg.append('g').selectAll('circle').data(have).join('circle').attr('cx', (d) => cx(d.rep)).attr('cy', (d) => y(d[key])).attr('r', r).attr('fill', color);
+    };
+    if (cmp.length) { series(cmp, 'var(--cds-chart-muted)', 'pace', yP, 3); series(cmp, 'var(--cds-chart-muted)', 'hr', yH, 3); }
+    series(cur, dash.colors[0], 'pace', yP, 3.5);
+    series(cur, dash.colors[0], 'hr', yH, 3.5);
+
+    const bw = x.bandwidth() / (cmp.length ? 2 : 1);
+    const bars = (data, color, off) => {
+      svg.append('g').selectAll('rect').data(data.filter((d) => d.drop != null)).join('rect')
+        .attr('x', (d) => x(d.rep) + off).attr('width', Math.max(1, bw - 2))
+        .attr('y', (d) => yR(d.drop)).attr('height', (d) => Math.max(0, yR(0) - yR(d.drop)))
+        .attr('rx', 3).attr('fill', (d) => (color === dash.colors[0] && d.drop < SLOW_RECOVERY ? 'var(--cds-chart-status-critical)' : color));
+    };
+    bars(cur, dash.colors[0], 0);
+    if (cmp.length) bars(cmp, 'var(--cds-chart-muted)', bw);
+
+    svg.append('g').selectAll('text').data(reps).join('text').attr('class', 'xc-tick')
+      .attr('x', cx).attr('y', H - 12).attr('text-anchor', 'middle').text((r) => (x.step() > 44 ? 'Rep ' + r : String(r)));
+
+    const cmpLabel = prevW ? fmtDay(parseDay(prevW.date)) : '';
+    const curLabel = fmtDay(parseDay(meta.date));
+    svg.append('g').selectAll('rect').data(reps).join('rect')
+      .attr('x', (r) => x(r) - (x.step() - x.bandwidth()) / 2).attr('width', x.step()).attr('y', 0).attr('height', H)
+      .attr('fill', 'transparent')
+      .on('pointermove', (event, r) => {
+        const a = cur.find((d) => d.rep === r), b = cmp.find((d) => d.rep === r);
+        const line = (lab, d) => lab + ': ' + fmtPace(d.pace) + ' /mi' + (d.hr != null ? ', ' + d.hr + ' avg / ' + (d.max ?? '—') + ' max bpm' : '') + (d.drop != null ? ', drop ' + d.drop : '');
+        const lines = ['Rep ' + r + (target != null ? ', target ' + fmtPace(target) + ' /mi' : '')];
+        if (a) lines.push(line(curLabel, a));
+        if (b) lines.push(line(cmpLabel, b));
+        const [px, py] = d3.pointer(event, box);
+        showTip(box, px, py, lines);
+      })
+      .on('pointerleave', () => hideTip(box));
+  }
+
+  function drawHeart() {
+    const seg = $('.xc-wseg');
+    const box = $('.xc-reps-plot');
+    if (!ok('segments')) { if (failed('segments')) { failBox(box); seg.replaceChildren(); } }
+    else {
+      const all = rowsOf('segments');
+      const ws = [...new Map(all.map((r) => [r.workout_id, r])).values()].sort((a, b) => (a.date < b.date ? 1 : -1));
+      const wid = params().workout;
+      if (seg.childElementCount !== ws.length) {
+        seg.replaceChildren(...ws.map((w) => {
+          const b = el('button');
+          b.type = 'button';
+          b.dataset.w = w.workout_id;
+          b.textContent = fmtDay(parseDay(w.date)) + ': ' + w.workout;
+          b.addEventListener('click', () => dash.setParams({ workout: w.workout_id }));
+          return b;
+        }));
+      }
+      $$('button', seg).forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.w === wid)));
+      drawReps(all, wid);
+    }
+    const t = $('.xc-wsum');
+    if (!ok('workout_summary')) { if (failed('workout_summary')) clearTable(t); return; }
+    const wid = params().workout;
+    fillTable(t, sortRows(t, rowsOf('workout_summary').filter((r) => r.workout_id === wid)),
+      (r) => encodeURIComponent(r.athlete_id) + ',' + encodeURIComponent(r.workout_id), {},
+      { recovery: (v) => (v != null && v < SLOW_RECOVERY ? 'xc-bad' : ''), flag: (v) => (v ? 'xc-bad' : '') });
+  }
+
+  // injuries
+  function drawLoad() {
+    const box = $('.xc-load');
+    if (!ok('weekly_load', 'injuries')) { if (failed('weekly_load', 'injuries')) failBox(box); return; }
+    box.classList.remove('dash-skeleton');
+    const id = params().athlete;
+    const rs = rowsOf('weekly_load').filter((r) => r.athlete_id === id)
+      .map((r) => ({ week: r.week_start, d: parseDay(r.week_start), miles: Number(r.miles), ratio: r.acwr === '' || r.acwr == null ? null : Number(r.acwr), injured: Number(r.injured) === 1 }))
+      .sort((a, b) => a.d - b.d);
+    const injs = rowsOf('injuries').filter((r) => r.athlete_id === id);
+    box.replaceChildren();
+    if (!rs.length) { emptyMsg(box, 'No weekly mileage for this athlete yet.'); return; }
+    const W = Math.max(300, box.clientWidth), H = 250;
+    const svg = d3.select(box).append('svg').attr('width', '100%').attr('viewBox', `0 0 ${W} ${H}`);
+    const y = d3.scaleLinear([0, Math.max(1, d3.max(rs, (r) => r.miles)) * 1.12], [H - 26, 46]);
+    const ticks = y.ticks(4);
+    const ml = Math.ceil(Math.max(...ticks.map((v) => textW(svg, String(v))))) + 10;
+    const first = rs[0].d, end = new Date(+rs[rs.length - 1].d + 7 * DAY);
+    const x = d3.scaleUtc([first, end], [ml, W - 16]);
+    svg.append('g').selectAll('line').data(ticks).join('line').attr('x1', ml).attr('x2', W - 16).attr('y1', y).attr('y2', y).attr('stroke', 'var(--cds-chart-grid)');
+    svg.append('g').selectAll('text').data(ticks).join('text').attr('class', 'xc-tick').attr('x', ml - 8).attr('y', y).attr('dy', '0.32em').attr('text-anchor', 'end').text(String);
+
+    const spans = injs.map((j, i) => ({ j, i, a: parseDay(j.onset_date), b: parseDay(j.return_date) }));
+    svg.append('g').selectAll('rect').data(spans).join('rect')
+      .attr('x', (s) => x(s.a < first ? first : s.a))
+      .attr('width', (s) => Math.max(2, x(s.b > end ? end : s.b) - x(s.a < first ? first : s.a)))
+      .attr('y', 40).attr('height', H - 26 - 40)
+      .attr('fill', 'var(--cds-chart-status-critical)').attr('fill-opacity', 0.1);
+    spans.forEach((s) => {
+      const label = s.j.injury.replace(/ \(.*\)$/, '');
+      const t = svg.append('text').attr('class', 'xc-ptitle').attr('y', 12 + (s.i % 2) * 14).text(label);
+      const w = t.node().getComputedTextLength();
+      t.attr('x', Math.max(ml, Math.min(x(s.a), W - 16 - w)));
+    });
+
+    const bw = (r) => Math.max(1, x(new Date(+r.d + 7 * DAY)) - x(r.d) - 3);
+    svg.append('g').selectAll('rect').data(rs).join('rect')
+      .attr('x', (r) => x(r.d) + 1.5).attr('width', bw)
+      .attr('y', (r) => y(r.miles)).attr('height', (r) => Math.max(0, y(0) - y(r.miles))).attr('rx', 3)
+      .attr('fill', (r) => (r.injured ? 'var(--cds-chart-muted)' : r.ratio != null && r.ratio > RATIO_LINE ? 'var(--cds-chart-status-critical)' : dash.colors[0]));
+    if (bw(rs[0]) >= 26) {
+      svg.append('g').selectAll('text').data(rs.filter((r) => !r.injured && r.ratio != null && r.ratio > RATIO_LINE)).join('text')
+        .attr('class', 'xc-val').attr('x', (r) => x(r.d) + 1.5 + bw(r) / 2).attr('y', (r) => y(r.miles) - 5)
+        .attr('text-anchor', 'middle').text((r) => r.ratio.toFixed(2));
+    }
+    svg.append('g').selectAll('text').data(rs.filter((r, i) => i % 4 === 0)).join('text')
+      .attr('class', 'xc-tick').attr('x', (r) => x(r.d) + 1.5 + bw(r) / 2).attr('y', H - 8).attr('text-anchor', 'middle').text((r) => fmtDay(r.d));
+    svg.append('g').selectAll('rect').data(rs).join('rect')
+      .attr('x', (r) => x(r.d)).attr('width', (r) => x(new Date(+r.d + 7 * DAY)) - x(r.d)).attr('y', 0).attr('height', H).attr('fill', 'transparent')
+      .on('pointermove', (event, r) => {
+        const lines = ['Week of ' + fmtDay(r.d), r.miles.toFixed(1) + ' miles', 'Load ratio ' + (r.ratio == null ? 'not enough history yet' : r.ratio.toFixed(2))];
+        if (r.injured) lines.push('Injured this week');
+        const [px, py] = d3.pointer(event, box);
+        showTip(box, px, py, lines);
+      })
+      .on('pointerleave', () => hideTip(box));
+  }
+
+  function drawBands() {
+    const box = $('.xc-bands');
+    if (!ok('risk_bands')) { if (failed('risk_bands')) failBox(box); return; }
+    box.classList.remove('dash-skeleton');
+    const rs = rowsOf('risk_bands');
+    const max = d3.max(rs, (r) => r.rate) || 1;
+    box.replaceChildren(...rs.map((r) => {
+      const row = el('div');
+      const top = el('div', 'xc-band-top');
+      const name = el('span', 'xc-band-name');
+      name.textContent = 'Load ratio ' + r.band.toLowerCase();
+      const val = el('span', 'xc-band-val');
+      val.textContent = d3.format('.1%')(r.rate) + ' (' + r.injuries + ' of ' + d3.format(',')(r.weeks) + ' weeks)';
+      top.append(name, val);
+      const track = el('div', 'xc-band-track');
+      const bar = el('div', 'xc-band-bar');
+      bar.style.width = (100 * r.rate / max) + '%';
+      bar.style.background = r.band === 'Over 1.3' ? 'var(--cds-chart-status-critical)' : dash.colors[0];
+      track.append(bar);
+      row.append(top, track);
+      return row;
+    }));
+  }
+
+  function drawTeam() {
+    const box = $('.xc-team');
+    if (!ok('team_weekly', 'injuries')) { if (failed('team_weekly', 'injuries')) failBox(box); return; }
+    box.classList.remove('dash-skeleton');
+    const rs = rowsOf('team_weekly').map((r) => ({ ...r, d: parseDay(r.week_start) }));
+    const injs = rowsOf('injuries').map((j) => ({ j, d: parseDay(j.onset_date) }));
+    box.replaceChildren();
+    if (!rs.length) return;
+    const W = Math.max(280, box.clientWidth), H = 260;
+    const T = [20, 150], B = [184, 232];
+    const svg = d3.select(box).append('svg').attr('width', '100%').attr('viewBox', `0 0 ${W} ${H}`);
+    const yM = d3.scaleLinear([0, Math.max(1, d3.max(rs, (r) => r.avg_miles)) * 1.1], [T[1], T[0]]);
+    const yO = d3.scaleLinear([0, Math.max(1, d3.max(rs, (r) => r.over_13))], [B[1], B[0]]);
+    const tM = yM.ticks(4), tO = yO.ticks(2).filter(Number.isInteger);
+    const ml = Math.ceil(Math.max(...tM.map((v) => textW(svg, String(v))), ...tO.map((v) => textW(svg, String(v))))) + 10;
+    const first = rs[0].d, end = new Date(+rs[rs.length - 1].d + 7 * DAY);
+    const x = d3.scaleUtc([first, end], [ml, W - 16]);
+    const mid = (d) => x(new Date(+d + 3.5 * DAY));
+    const grid = (ticks, y) => {
+      svg.append('g').selectAll('line').data(ticks).join('line').attr('x1', ml).attr('x2', W - 16).attr('y1', y).attr('y2', y).attr('stroke', 'var(--cds-chart-grid)');
+      svg.append('g').selectAll('text').data(ticks).join('text').attr('class', 'xc-tick').attr('x', ml - 8).attr('y', y).attr('dy', '0.32em').attr('text-anchor', 'end').text(String);
+    };
+    grid(tM, yM);
+    grid(tO, yO);
+    svg.append('text').attr('class', 'xc-ptitle').attr('x', ml).attr('y', T[0] - 8).text('Average miles per athlete');
+    svg.append('text').attr('class', 'xc-ptitle').attr('x', ml).attr('y', B[0] - 8).text('Athletes above 1.3');
+    svg.append('path').datum(rs).attr('d', d3.line().x((r) => mid(r.d)).y((r) => yM(r.avg_miles)))
+      .attr('fill', 'none').attr('stroke', dash.colors[0]).attr('stroke-width', 2).attr('stroke-linecap', 'round').attr('stroke-linejoin', 'round');
+    const stack = new Map();
+    injs.filter((i) => i.d >= first && i.d < end).sort((a, b) => a.d - b.d).forEach((i) => {
+      const wk = Math.floor((i.d - first) / (7 * DAY));
+      const k = stack.get(wk) || 0;
+      stack.set(wk, k + 1);
+      svg.append('circle').attr('cx', x(i.d)).attr('cy', T[1] - 5 - k * 9).attr('r', 3.5).attr('fill', 'var(--cds-chart-status-critical)');
+    });
+    svg.append('g').selectAll('rect').data(rs).join('rect')
+      .attr('x', (r) => x(r.d) + 1.5).attr('width', (r) => Math.max(1, x(new Date(+r.d + 7 * DAY)) - x(r.d) - 3))
+      .attr('y', (r) => yO(r.over_13)).attr('height', (r) => Math.max(0, yO(0) - yO(r.over_13))).attr('rx', 3)
+      .attr('fill', 'var(--cds-chart-status-critical)');
+    svg.append('g').selectAll('text').data(rs.filter((r, i) => i % 5 === 0)).join('text')
+      .attr('class', 'xc-tick').attr('x', (r) => mid(r.d)).attr('y', H - 8).attr('text-anchor', 'middle').text((r) => fmtDay(r.d));
+    svg.append('g').selectAll('rect').data(rs).join('rect')
+      .attr('x', (r) => x(r.d)).attr('width', (r) => x(new Date(+r.d + 7 * DAY)) - x(r.d)).attr('y', 0).attr('height', H).attr('fill', 'transparent')
+      .on('pointermove', (event, r) => {
+        const news = injs.filter((i) => i.d >= r.d && i.d < new Date(+r.d + 7 * DAY)).map((i) => i.j.athlete);
+        const lines = ['Week of ' + fmtDay(r.d), 'Team average ' + Number(r.avg_miles).toFixed(1) + ' miles', r.over_13 + ' above 1.3 load ratio'];
+        if (news.length) lines.push('New injuries: ' + news.join(', '));
+        const [px, py] = d3.pointer(event, box);
+        showTip(box, px, py, lines);
+      })
+      .on('pointerleave', () => hideTip(box));
+  }
+
+  function drawInjuries() {
+    drawLoad();
+    drawBands();
+    drawTeam();
+    const t = $('.xc-injlog');
+    if (!ok('injury_log')) { if (failed('injury_log')) clearTable(t); return; }
+    fillTable(t, sortRows(t, rowsOf('injury_log')), (r) => r.injury_id,
+      { peak_before: (v) => Number(v).toFixed(2) },
+      { peak_before: (v) => (v != null && v > RATIO_LINE ? 'xc-bad' : ''), status: (v) => (v === 'Active' ? 'xc-bad' : '') });
+  }
+
+  function render() {
+    drawPicker();
+    drawKpis();
+    if (current === 'briefing') drawBriefing();
+    else if (current === 'performance') drawPerformance();
+    else if (current === 'heart-rate') drawHeart();
+    else drawInjuries();
+  }
+
+  $$('.xc-tab').forEach((t) => t.setAttribute('aria-selected', String(t.dataset.tab === current)));
+  $$('.xc-page').forEach((p) => { p.hidden = p.id !== current; });
+  dash.onData(render);
+})();
+</script>

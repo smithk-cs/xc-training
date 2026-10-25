@@ -1,0 +1,28 @@
+# Runs the app, the nightly job and an HTTPS proxy (Caddy gets a free certificate automatically).
+# 1. Point a DNS name (for example xc.yourschool.org) at this server.
+# 2. Copy .env.example to .env and fill it in.
+# 3. docker compose up -d
+services:
+  web:
+    build: .
+    env_file: .env
+    volumes: [xcdata:/data]
+    restart: unless-stopped
+  scheduler:
+    build: .
+    env_file: .env
+    command: ["python", "-m", "xcapp.cli", "scheduler"]
+    volumes: [xcdata:/data]
+    restart: unless-stopped
+    depends_on: [web]
+  caddy:
+    image: caddy:2
+    ports: ["80:80", "443:443"]
+    environment: [DOMAIN=${DOMAIN}]
+    command: ["caddy", "reverse-proxy", "--from", "${DOMAIN}", "--to", "web:8000"]
+    volumes: [caddydata:/data]
+    restart: unless-stopped
+    depends_on: [web]
+volumes:
+  xcdata:
+  caddydata:

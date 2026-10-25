@@ -1,0 +1,39 @@
+# Secrets: real settings never go to GitHub. Only the blank template is committed.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Supabase CLI local state (holds the linked project ref and connection details)
+supabase/.temp/
+supabase/.branches/
+supabase/.env
+supabase/.env.*
+
+# Local data: athlete records and the SQLite database
+/data/
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Node
+node_modules/
+
+# Editors and OS
+.DS_Store
+.vscode/
+.idea/
+
+# Supabase JWT signing keys
+supabase/signing_keys.json

@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block title %}{{ a.first_name }} · {{ team_name }}{% endblock %}
+{% block bodyclass %}athlete-page{% endblock %}
+{% block head %}<script src="/static/d3.v7.9.0.min.js"></script><script src="/static/athlete-charts.js" defer></script>{% endblock %}
+{% block flashes %}{% endblock %}
+{% block content %}
+{% with hero_title="Hi " ~ a.first_name, hero_text="This is your personal page for the team’s training system. Keep this link to yourself.", back_url=None %}{% include "_hero.html" %}{% endwith %}
+<div class="stack">
+  {% for level, text in messages %}<div class="flash {{ level }}" role="status">{{ text }}</div>{% endfor %}
+  {% if ability and ability.group %}
+  <section class="panel" aria-label="Training group" style="gap:10px">
+    <div class="panel-head"><span>Training group: <b>{{ ability.group }}</b></span><span class="pill" style="background:{{ ability.color or '#FFFFFF' }}; color:#1B1B1F; border-color:#CFC7BC">{% if ability.vdot %}VDOT {{ ability.vdot }}{% else %}{{ ability.group }}{% endif %}</span></div>
+    {% if ability.target_1600 %}<div class="facts"><div><span class="k">800 target</span><span class="big">{{ ability.target_800 }}</span></div><div><span class="k">1600 target</span><span class="big">{{ ability.target_1600 }}</span></div></div>{% endif %}
+  </section>
+  {% endif %}
+  {% if need %}<p class="notice"><span>{{ need }} recent run{{ '' if need == 1 else 's' }} need{{ 's' if need == 1 else '' }} your effort rating.</span><a href="/a/{{ token }}/runs">Add effort ›</a></p>{% endif %}
+
+  <section class="panel" aria-labelledby="g-h">
+    <div class="panel-head">
+      <h2 id="g-h"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="3"></rect><path d="M9 6l1-3h4l1 3M9 18l1 3h4l1-3M12 9.5V12l1.5 1.5"></path></svg>Garmin</h2>
+      {% if a.garmin and a.garmin.status == 'connected' %}<span class="pill good">✓ Connected</span>{% elif a.garmin and a.garmin.status == 'error' %}<span class="pill bad">Needs reconnecting</span>{% else %}<span class="pill">Not connected</span>{% endif %}
+    </div>
+    {% if a.garmin and a.garmin.status == 'connected' %}
+      <p>New runs reach your coaches a few minutes after your watch syncs with the Garmin Connect app.</p>
+      <dl class="facts">
+        <div><dt>Last run received</dt><dd>{{ a.garmin.last_sync_at.strftime('%a, %b %-d') if a.garmin.last_sync_at else 'None yet' }}</dd></div>
+        <div><dt>Watch</dt><dd>{{ acts[0].device if acts and acts[0].device else 'Garmin' }}</dd></div>
+      </dl>
+      <details>
+        <summary class="muted small" style="cursor:pointer; min-height:44px; display:flex; align-items:center">Disconnect Garmin</summary>
+        <form method="post" action="/a/{{ token }}/disconnect" class="panel" style="margin-top:8px; padding:14px">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <p>Stop sending new runs to your coaches? Runs you already shared stay with the team.</p>
+          <button type="submit" class="danger" style="min-height:48px">Yes, disconnect</button>
+        </form>
+      </details>
+    {% elif settings.garmin_configured %}
+      <p>Connect once and your runs, laps and heart rate reach your coaches automatically after your watch syncs.</p>
+      <div class="facts">
+        <div><span class="k">Shared</span><span class="v">Distance, pace, laps, heart rate</span></div>
+        <div><span class="k">Never stored</span><span class="v">GPS routes or where you run</span></div>
+      </div>
+      <form method="post" action="/a/{{ token }}/connect" style="display:flex; flex-direction:column; gap:14px">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <label class="consent"><input id="consent" type="checkbox" name="consent" value="yes"><span>My parent or guardian has said it’s OK to share my running data with my coaches.</span></label>
+        <button id="connect-btn" type="submit" class="big-btn">Connect Garmin</button>
+      </form>
+      <p class="muted small">You’ll sign in on Garmin’s page, then come right back here. You can disconnect any time.</p>
+      <script>
+        (function () { var c = document.getElementById('consent'), b = document.getElementById('connect-btn');
+          if (!c || !b) return; var sync = function () { b.disabled = !c.checked; }; c.addEventListener('change', sync); sync(); })();
+      </script>
+    {% else %}
+      <p class="muted">Automatic Garmin sync isn’t switched on yet. You can upload a .fit file below.</p>
+    {% endif %}
+  </section>
+
+  {% with chart_src="/a/" ~ token ~ "/series.json", chart_title="My training" %}{% include "_charts.html" %}{% endwith %}
+
+  <section class="panel" aria-labelledby="r-h">
+    <div class="panel-head"><h2 id="r-h">Recent runs</h2><a href="/a/{{ token }}/runs">All runs ›</a></div>
+    <ul class="runs">
+      {% for act in acts[:6] %}
+      <li><a class="row" href="/a/{{ token }}/runs/{{ act.id }}">
+        <span class="l"><span class="d">{{ act.local_date.strftime('%a, %b %-d') }}</span>
+          {% if act.planned %}<span class="tag">{{ act.planned.title }}</span>{% endif %}</span>
+        <span class="r"><span class="mi">{{ '%.1f' % (act.distance_m / 1609.344) }} <small>mi</small></span>
+          {% if act.rpe is not none %}<span class="small muted">Effort {{ act.rpe }}</span>{% else %}<span class="small" style="color:var(--brand-red); font-weight:600">Add effort</span>{% endif %}</span>
+      </a></li>
+      {% else %}<li class="row muted">No runs yet. Your first one shows up a few minutes after your watch syncs.</li>{% endfor %}
+    </ul>
+  </section>
+
+  {% if tiles %}
+  <section class="panel" aria-labelledby="b-h">
+    <div class="panel-head"><h2 id="b-h">Season bests</h2><span class="muted small">{{ seasons.current }}</span></div>
+    <div class="facts">
+      {% for t in tiles %}
+      <div><span class="k">{{ t.event }}</span><span class="big">{{ fmt_time(t.current) }}</span>
+        <span class="small muted">{% if t.goal %}Goal {{ fmt_time(t.goal) }}{% elif t.last_xc %}Last XC {{ fmt_time(t.last_xc) }}{% endif %}</span></div>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  <section class="panel" aria-labelledby="p-h">
+    <h2 id="p-h">Something hurt today?</h2>
+    <form method="post" action="/a/{{ token }}/pain" style="display:flex; flex-direction:column; gap:14px">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <fieldset class="pick"><legend>Where</legend>
+        <div class="chips">{% for b in areas %}<label class="chip"><input type="radio" name="body_area" value="{{ b }}" required><span>{{ b }}</span></label>{% endfor %}</div>
+      </fieldset>
+      <fieldset class="pick"><legend>How much</legend>
+        <div class="lvls">{% for n in range(0, 11) %}<label class="lvl"><input type="radio" name="severity" value="{{ n }}" required aria-label="Pain {{ n }} out of 10"><span>{{ n }}</span></label>{% endfor %}</div>
+        <div class="scale-ends"><span>0 = none</span><span>10 = worst</span></div>
+      </fieldset>
+      <label>Anything else? (optional)<input type="text" name="note" maxlength="300" placeholder="e.g. sore on the left side"></label>
+      <button type="submit" class="big-btn">Send to my coach</button>
+    </form>
+    <p class="muted small">If something hurts a lot, tell your coach or athletic trainer in person too.</p>
+  </section>
+
+  <section class="panel" aria-labelledby="u-h">
+    <h2 id="u-h">Add a run by hand</h2>
+    <p class="muted">For a run that didn’t sync, or a watch that isn’t Garmin. In Garmin Connect on a computer, open the run, choose Export Original, and upload the .fit file.</p>
+    <form method="post" action="/a/{{ token }}/upload" enctype="multipart/form-data" style="display:flex; flex-direction:column; gap:10px">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <input type="file" name="file" accept=".fit" required aria-label="Run file (.fit)">
+      <button type="submit" class="ghost-btn">Upload run</button>
+    </form>
+  </section>
+  <p class="foot">Questions? Ask your coach. Lost this link? Your coach can send a new one. Go Big Red.</p>
+</div>
+{% endblock %}

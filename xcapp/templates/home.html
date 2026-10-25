@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>This week</h1>
+{% if not settings.garmin_configured or not settings.ai_configured %}
+<div class="card">
+  <h2>Setup still to do</h2>
+  <ul>
+    {% if not settings.garmin_configured %}<li>Garmin is not connected to this app yet. Add <code>GARMIN_CLIENT_ID</code> and <code>GARMIN_CLIENT_SECRET</code> once Garmin approves your developer account. Until then, athletes can upload .fit files from their link page.</li>{% endif %}
+    {% if not settings.ai_configured %}<li>The AI briefing is off. Add <code>ANTHROPIC_API_KEY</code> to turn it on.</li>{% endif %}
+  </ul>
+</div>
+{% endif %}
+{% if webhook %}
+<div class="card"><h2>Garmin notification address</h2><p class="small muted">Paste this into the Garmin Developer Portal as the endpoint for activity and activity-file notifications, and for deregistration and user-permission notifications. Keep it private.</p><code class="copy">{{ webhook }}</code></div>
+{% endif %}
+<div class="stats">
+  <div class="stat"><b>{{ stats.athletes }}</b><span class="muted small">athletes on the roster</span></div>
+  <div class="stat"><b>{{ stats.connected }}</b><span class="muted small">connected to Garmin</span></div>
+  <div class="stat"><b>{{ stats.activities_7d }}</b><span class="muted small">runs synced in the last 7 days</span></div>
+  <div class="stat"><b>{{ snap.kpis.injured_now }}</b><span class="muted small">injured now</span></div>
+</div>
+<div class="grid">
+  <div class="card">
+    <h2>Watch list</h2>
+    {% if snap.watchlist %}
+    <table class="list"><thead><tr><th>Athlete</th><th>Why</th></tr></thead><tbody>
+    {% for w in snap.watchlist %}<tr><td>{{ w.athlete }}</td><td>{{ w.reasons }}</td></tr>{% endfor %}
+    </tbody></table>
+    {% else %}<p class="muted">Nobody is flagged this week.</p>{% endif %}
+    <p><a href="/dashboard">Open the dashboard</a></p>
+  </div>
+  <div class="card">
+    <h2>AI briefing</h2>
+    {% if last_ai %}
+      <p class="muted small">Last run {{ last_ai.created_at.strftime('%b %-d, %-I:%M %p') }} UTC: {{ 'ready' if last_ai.status == 'ok' else 'failed' }}.</p>
+      {% if last_ai.status == 'failed' %}<p class="small">{{ last_ai.error }}</p>{% endif %}
+    {% else %}<p class="muted">No briefing yet.</p>{% endif %}
+    <p><a href="/ai">Read it or ask a question</a></p>
+  </div>
+</div>
+{% endblock %}

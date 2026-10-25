@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Injuries</h1>
+<div class="card">
+  <h2>Log an injury</h2>
+  <form method="post" action="/injuries">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <div class="form-row">
+      <label>Athlete<select name="athlete_id" required>{% for a in athletes %}<option value="{{ a.id }}">{{ a.name }}</option>{% endfor %}</select></label>
+      <label>Date it started<input type="date" name="onset_date" value="{{ today.isoformat() }}" required></label>
+      <label>Injury<select name="injury">{% for t in types %}<option>{{ t }}</option>{% endfor %}</select></label>
+      <label>If other<input type="text" name="injury_other"></label>
+      <label>Body area<select name="body_area">{% for b in areas %}<option>{{ b }}</option>{% endfor %}</select></label>
+      <label>Expected return (optional)<input type="date" name="return_date"></label>
+    </div>
+    {% if show_notes %}<label>Notes (only athletic trainers and admins see these; never sent to the AI)<textarea name="notes" maxlength="2000"></textarea></label>{% endif %}
+    <p><button type="submit">Log injury</button></p>
+  </form>
+</div>
+<div class="card scroll">
+  <h2>Injury log</h2>
+  <table class="list"><thead><tr><th>Athlete</th><th>Began</th><th>Injury</th><th>Area</th><th>Return</th><th>Status</th><th>Update</th></tr></thead><tbody>
+  {% for i in rows %}
+  {% set active = i.return_date is none or i.return_date > today %}
+  <tr>
+    <td>{{ i.athlete.name }}</td><td>{{ i.onset_date.strftime('%b %-d, %Y') }}</td><td>{{ i.injury }}</td><td>{{ i.body_area }}</td>
+    <td>{{ i.return_date.strftime('%b %-d') if i.return_date else '' }}</td>
+    <td>{% if active %}<span class="pill bad">Active</span>{% else %}<span class="pill good">Cleared</span>{% endif %}</td>
+    <td>
+      <form method="post" action="/injuries/{{ i.id }}/update" class="form-row">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <label>Return date<input type="date" name="return_date" value="{{ i.return_date.isoformat() if i.return_date else '' }}"></label>
+        {% if show_notes %}<label>Notes<input type="text" name="notes" value="{{ i.notes }}" maxlength="2000"></label>{% endif %}
+        <button class="secondary" type="submit">Save</button>
+      </form>
+      {% if user.role in ('admin', 'trainer') %}<form method="post" action="/injuries/{{ i.id }}/delete" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="link" type="submit">Delete</button></form>{% endif %}
+    </td>
+  </tr>
+  {% else %}<tr><td colspan="7" class="muted">No injuries logged.</td></tr>{% endfor %}
+  </tbody></table>
+</div>
+<div class="card scroll">
+  <h2>Pain reports from athletes, last 4 weeks</h2>
+  <table class="list"><thead><tr><th>Date</th><th>Athlete</th><th>Where</th><th class="num">Pain (0-10)</th><th>Note</th></tr></thead><tbody>
+  {% for p in pains %}<tr><td>{{ p.date.strftime('%b %-d') }}</td><td>{{ p.athlete.name }}</td><td>{{ p.body_area }}</td><td class="num">{% if p.severity >= 4 %}<span class="pill bad">{{ p.severity }}</span>{% else %}{{ p.severity }}{% endif %}</td><td class="small">{{ p.note }}</td></tr>
+  {% else %}<tr><td colspan="5" class="muted">No pain reports.</td></tr>{% endfor %}
+  </tbody></table>
+</div>
+{% endblock %}

@@ -1,0 +1,26 @@
+<section class="panel" data-athlete-charts data-src="{{ chart_src }}" aria-labelledby="ac-h">
+  <h2 id="ac-h">{{ chart_title }}</h2>
+  <div class="ac-controls">
+    <label>Chart
+      <select class="ac-type">
+        <option value="miles">Miles</option>
+        <option value="load">Load ratio</option>
+        <option value="effort">Effort</option>
+        <option value="hr">Heart rate</option>
+        <option value="pace">Pace</option>
+        <option value="results">Benchmark times</option>
+      </select>
+    </label>
+    <label>Time range
+      <select class="ac-range">
+        <option value="week">Past week</option>
+        <option value="month" selected>Past month</option>
+        <option value="season">This season</option>
+        <option value="years">All years</option>
+      </select>
+    </label>
+  </div>
+  <div class="ac-legend"></div>
+  <div class="ac-chart" role="img" aria-label="Training chart"></div>
+  <p class="ac-summary" aria-live="polite"></p>
+</section>

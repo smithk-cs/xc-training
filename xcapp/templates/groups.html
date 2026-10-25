@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Groups · {{ team_name }}{% endblock %}
+{% block content %}
+<h1>Training groups</h1>
+<p class="muted" style="max-width:78ch">Each athlete goes in the highest group their best VDOT reaches. VDOT is worked out from every 1 mile, 1.5 mile, 2 mile and 5K result in the look-back window, then read against the team’s 1600 targets below: a result counts as VDOT 60 if its 1600-equivalent time reaches the VDOT 60 target. Garmin’s own watch VO2max isn’t shared through Garmin’s developer API, so results are used instead. Cross country courses vary, so coaches can pin any athlete to a group on their athlete page.</p>
+<form method="post" action="/groups">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <div class="card scroll">
+  <table class="list">
+    <thead><tr><th>Order</th><th>Group</th><th>Color</th><th class="num">Boys: VDOT from</th><th class="num">Girls: VDOT from</th><th>1600 targets</th><th class="num">Boys now</th><th class="num">Girls now</th>{% if user.role != 'trainer' %}<th>Remove</th>{% endif %}</tr></thead>
+    <tbody>
+    {% for g in groups %}
+    <tr>
+      <td><input type="number" name="position_{{ g.id }}" value="{{ g.position }}" min="0" max="50" style="width:4.5rem" aria-label="Order of {{ g.name }}"></td>
+      <td><span class="pill" style="background:{{ g.color or '#FFFFFF' }}; color:#1B1B1F; border-color:#CFC7BC; margin-right:6px">{{ g.name }}</span><input type="text" name="name_{{ g.id }}" value="{{ g.name }}" maxlength="40" required aria-label="Name" style="width:9rem"></td>
+      <td><input type="text" name="color_{{ g.id }}" value="{{ g.color }}" maxlength="7" pattern="#[0-9A-Fa-f]{6}" placeholder="#B6D7A8" style="width:6.5rem" aria-label="{{ g.name }} color"></td>
+      <td class="num"><input type="number" name="boys_{{ g.id }}" value="{{ g.min_vdot_boys|int }}" step="1" min="0" max="90" style="width:5rem" aria-label="{{ g.name }} boys cutoff"></td>
+      <td class="num"><input type="number" name="girls_{{ g.id }}" value="{{ g.min_vdot_girls|int }}" step="1" min="0" max="90" style="width:5rem" aria-label="{{ g.name }} girls cutoff"></td>
+      <td class="small">{% set r = ranges.get(g.id) %}{% if r %}{{ r[0] }}{% if r[1] != r[0] %} to {{ r[1] }}{% endif %} <span class="muted">(800 {{ r[2] }}{% if r[3] != r[2] %} to {{ r[3] }}{% endif %})</span>{% endif %}</td>
+      <td class="num">{{ counts[(g.name, 'Boys')] }}</td><td class="num">{{ counts[(g.name, 'Girls')] }}</td>
+      {% if user.role != 'trainer' %}<td><label class="check"><input type="checkbox" name="delete_{{ g.id }}"> Remove</label></td>{% endif %}
+    </tr>
+    {% endfor %}
+    {% if user.role != 'trainer' %}
+    <tr>
+      <td></td><td><input type="text" name="new_name" maxlength="40" placeholder="Add a group" aria-label="New group name" style="width:9rem"></td><td></td>
+      <td class="num"><input type="number" name="new_boys" step="1" min="0" max="90" style="width:5rem" aria-label="New group boys cutoff"></td>
+      <td class="num"><input type="number" name="new_girls" step="1" min="0" max="90" style="width:5rem" aria-label="New group girls cutoff"></td><td></td><td></td><td></td><td></td>
+    </tr>
+    {% endif %}
+    </tbody>
+  </table>
+  <p class="small muted">{{ unrated }} athlete{{ '' if unrated == 1 else 's' }} without a result in the look-back window, so not in a group yet. A cutoff of 0 is the starting group. The 1600 target column shows the boys’ ranges.</p>
+  <div class="form-row">
+    <label>Look back (days)<input type="number" name="lookback" value="{{ lookback }}" min="30" max="1500"></label>
+    <label class="check"><input type="checkbox" name="show_athletes" {% if show_athletes %}checked{% endif %}> Show athletes their own group, VDOT and targets</label>
+  </div>
+  </div>
+  <div class="card">
+    <h2>Target 800 and 1600 times by VDOT</h2>
+    <p class="small muted">One line per VDOT: <code>VDOT,800,1600</code>. Athletes see the targets for their VDOT, and the 1600 column sets the VDOT scale. Add rows below 48 the same way.</p>
+    <textarea name="targets" rows="12" style="font-family:ui-monospace,Menlo,monospace; max-width:22rem" {% if user.role == 'trainer' %}readonly{% endif %}>{{ table }}</textarea>
+  </div>
+  {% if user.role != 'trainer' %}<button type="submit">Save groups and targets</button>{% endif %}
+</form>
+<p class="muted small" style="margin-top:12px">Planned workouts can target these groups: tick them on the Workouts page.</p>
+{% endblock %}
