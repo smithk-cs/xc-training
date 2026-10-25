@@ -5,6 +5,7 @@ import datetime as dt
 import hmac
 import json
 import re
+import threading
 import time
 from collections import defaultdict, deque
 from pathlib import Path
@@ -167,7 +168,7 @@ def create_app() -> FastAPI:
     async def http_error(request: Request, exc: HTTPException):
         if exc.status_code in (301, 302, 303, 307):
             return RedirectResponse(exc.headers["Location"], status_code=exc.status_code)
-        if request.url.path.startswith(("/api/", "/garmin/webhook")):
+        if request.url.path.startswith(("/api/", "/garmin/webhook", "/cron/")):
             return JSONResponse({"error": exc.detail}, status_code=exc.status_code)
         return templates.TemplateResponse(request, "message.html", {
             "user": None, "csrf": "", "messages": [], "settings": s,
@@ -1110,6 +1111,24 @@ def create_app() -> FastAPI:
             raise HTTPException(400, "Body must be a JSON object.")
         background.add_task(_process, payload)
         return Response(status_code=200)
+
+    nightly_lock = threading.Lock()
+
+    @app.post("/cron/nightly")
+    def cron_nightly(request: Request, force: bool = False):
+        """Called by the hosting platform's timer. Runs only during NIGHTLY_HOUR (team time) unless force=true."""
+        from .cli import is_nightly_hour, nightly
+        auth = request.headers.get("authorization", "")
+        if not s.cron_secret or not hmac.compare_digest(auth.encode(), f"Bearer {s.cron_secret}".encode()):
+            raise HTTPException(404, "Not found.")
+        if not force and not is_nightly_hour():
+            return {"skipped": f"not {s.nightly_hour}:00 in {s.team_timezone}"}
+        if not nightly_lock.acquire(blocking=False):
+            raise HTTPException(409, "The nightly job is already running.")
+        try:
+            return {"ran": nightly()}
+        finally:
+            nightly_lock.release()
 
     @app.get("/healthz")
     def healthz(db: Session = Depends(get_db, scope="function")):

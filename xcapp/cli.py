@@ -26,6 +26,7 @@ def cmd_gen_keys(_):
     print(f"SECRET_KEY={secrets.token_urlsafe(48)}")
     print(f"TOKEN_KEY={generate_token_key()}")
     print(f"GARMIN_WEBHOOK_SECRET={secrets.token_urlsafe(24)}")
+    print(f"CRON_SECRET={secrets.token_urlsafe(32)}")
 
 
 def cmd_init_db(_):
@@ -78,6 +79,13 @@ def _import(fn_name, path):
             print("  " + e)
         sys.exit(1)
     print(f"Imported {n} rows.")
+
+
+def is_nightly_hour(now: dt.datetime | None = None) -> bool:
+    """True during NIGHTLY_HOUR in the team's time zone (timers on UTC call at both daylight-saving offsets)."""
+    from .config import settings
+    now = now or dt.datetime.now(dt.timezone.utc)
+    return now.astimezone(settings().tz).hour == settings().nightly_hour
 
 
 def nightly() -> dict:
@@ -136,7 +144,7 @@ def cmd_check(_):
 def main(argv=None):
     p = argparse.ArgumentParser(prog="python -m xcapp.cli", description="XC Training command-line tools")
     sub = p.add_subparsers(dest="cmd", required=True)
-    sub.add_parser("gen-keys", help="print new SECRET_KEY, TOKEN_KEY and GARMIN_WEBHOOK_SECRET values").set_defaults(fn=cmd_gen_keys)
+    sub.add_parser("gen-keys", help="print new SECRET_KEY, TOKEN_KEY, GARMIN_WEBHOOK_SECRET and CRON_SECRET values").set_defaults(fn=cmd_gen_keys)
     sub.add_parser("init-db", help="create the database tables").set_defaults(fn=cmd_init_db)
     sub.add_parser("check", help="check the settings").set_defaults(fn=cmd_check)
     c = sub.add_parser("create-user", help="create a staff account")

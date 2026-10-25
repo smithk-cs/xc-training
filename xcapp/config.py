@@ -34,6 +34,7 @@ class Settings:
     anthropic_model: str
     anthropic_base_url: str
     nightly_hour: int
+    cron_secret: str  # shared with the hosting platform's timer that calls POST /cron/nightly
     team_name: str
     team_logo_file: str  # path to the approved logo (png, jpg, svg or webp)
     as_of_date: str  # optional fixed "today" (YYYY-MM-DD) for demos and testing
@@ -76,6 +77,7 @@ class Settings:
             anthropic_model=os.getenv("ANTHROPIC_MODEL", "claude-sonnet-5-5"),
             anthropic_base_url=os.getenv("ANTHROPIC_BASE_URL", ""),
             nightly_hour=int(os.getenv("NIGHTLY_HOUR", "4")),
+            cron_secret=os.getenv("CRON_SECRET", ""),
             team_name=os.getenv("TEAM_NAME", "XC Training"),
             team_logo_file=os.getenv("TEAM_LOGO_FILE", ""),
             as_of_date=os.getenv("AS_OF_DATE", ""),
@@ -98,6 +100,8 @@ class Settings:
                 _dt.date.fromisoformat(self.as_of_date)
             except ValueError:
                 out.append("AS_OF_DATE must look like 2026-10-25.")
+        if self.cron_secret and len(self.cron_secret) < 32:
+            out.append("CRON_SECRET must be at least 32 characters (run: python -m xcapp.cli gen-keys).")
         if self.garmin_client_id and not self.garmin_webhook_secret:
             out.append("GARMIN_WEBHOOK_SECRET is required once Garmin is configured.")
         return out

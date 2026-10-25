@@ -30,7 +30,7 @@ For getting athletes connected and using the charts, read **TEAM_SETUP.md**.
 ```bash
 python3 -m venv .venv && . .venv/bin/activate
 pip install -r requirements.txt
-python -m xcapp.cli gen-keys            # copy the three lines into your shell or a .env file
+python -m xcapp.cli gen-keys            # copy the lines into your shell or a .env file
 export SECRET_KEY=... TOKEN_KEY=... GARMIN_WEBHOOK_SECRET=...
 export SECURE_COOKIES=false AS_OF_DATE=2026-10-25 BASE_URL=http://localhost:8000
 python -m xcapp.cli create-user coach --role admin
