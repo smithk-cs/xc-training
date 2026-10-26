@@ -34,6 +34,8 @@
     "TEAM_TIMEZONE": "America/Los_Angeles",
     "TEAM_NAME": "Jesuit Cross Country",
     "NIGHTLY_HOUR": "4",
+    // Days of past runs requested from Garmin when an athlete connects (also stated in the privacy policy).
+    "GARMIN_BACKFILL_DAYS": "90",
     "ANTHROPIC_MODEL": "claude-sonnet-5-5",
     // AI spending cap in US dollars per month (also set a spend limit in the Claude Console), and thinking level.
     "AI_MONTHLY_BUDGET_USD": "25",

@@ -404,6 +404,22 @@ def create_app() -> FastAPI:
             flash(request, str(exc), "error")
         return back(f"/athletes/{a.id}")
 
+    @app.post("/athletes/{athlete_id}/garmin-backfill")
+    async def athlete_garmin_backfill(request: Request, athlete_id: int, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
+        f = await form_checked(request)
+        a = get_athlete(db, athlete_id)
+        if not (a.garmin and a.garmin.status == "connected"):
+            flash(request, f"{a.name} isn't connected to Garmin.", "error")
+            return back(f"/athletes/{a.id}")
+        try:
+            days = int(f.get("days") or s.garmin_backfill_days or 90)
+            with G.make_client() as http:
+                msg = G.request_backfill(db, a.garmin, http, days)
+            flash(request, msg, "error" if msg.startswith("Garmin did not") else "ok")
+        except (ValueError, G.GarminError) as exc:
+            flash(request, f"Could not ask Garmin for past runs: {exc}", "error")
+        return back(f"/athletes/{a.id}")
+
     @app.post("/athletes/{athlete_id}/new-link")
     async def athlete_new_link(request: Request, athlete_id: int, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
         await form_checked(request)

@@ -23,6 +23,7 @@ class MockGarmin:
     def __init__(self):
         self.requests = []
         self.n = 0
+        self.backfill_status = 202
 
     def __call__(self, req: httpx.Request):
         self.requests.append(req)
@@ -42,6 +43,8 @@ class MockGarmin:
                 return httpx.Response(200, content=FIT)
             if u.path == "/wellness-api/rest/user/registration" and req.method == "DELETE":
                 return httpx.Response(204)
+            if u.path.startswith("/wellness-api/rest/backfill/"):
+                return httpx.Response(self.backfill_status)
         return httpx.Response(404)
 
     def form(self, i):

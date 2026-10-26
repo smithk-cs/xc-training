@@ -35,6 +35,7 @@ class Settings:
     garmin_api_base: str
     garmin_file_hosts: tuple[str, ...]
     garmin_webhook_secret: str
+    garmin_backfill_days: int  # past days of runs requested from Garmin when an athlete connects (0 = none)
     # Claude API
     anthropic_api_key: str
     anthropic_model: str
@@ -88,6 +89,7 @@ class Settings:
                 h.strip().lower() for h in _env("GARMIN_FILE_HOSTS", "apis.garmin.com").split(",") if h.strip()
             ),
             garmin_webhook_secret=_env("GARMIN_WEBHOOK_SECRET", ""),
+            garmin_backfill_days=int(_env("GARMIN_BACKFILL_DAYS", "90")),
             anthropic_api_key=_env("ANTHROPIC_API_KEY", ""),
             anthropic_model=_env("ANTHROPIC_MODEL", "claude-sonnet-5-5"),
             anthropic_base_url=_env("ANTHROPIC_BASE_URL", ""),

@@ -42,7 +42,7 @@
       </div>
       <form method="post" action="/a/{{ token }}/connect" style="display:flex; flex-direction:column; gap:14px">
         <input type="hidden" name="csrf" value="{{ csrf }}">
-        <label class="consent"><input id="consent" type="checkbox" name="consent" value="yes"><span>My parent or guardian has said it’s OK to share my running data with my coaches, as described in the <a href="/privacy">privacy policy</a>.</span></label>
+        <label class="consent"><input id="consent" type="checkbox" name="consent" value="yes"><span>My parent or guardian has said it’s OK to share my running data with my coaches{% if settings.garmin_backfill_days %}, including my runs from the past {{ settings.garmin_backfill_days }} days{% endif %}, as described in the <a href="/privacy">privacy policy</a>.</span></label>
         <button id="connect-btn" type="submit" class="big-btn">Connect Garmin</button>
       </form>
       <p class="muted small">You’ll sign in on Garmin’s page, then come right back here. You can disconnect any time.</p>

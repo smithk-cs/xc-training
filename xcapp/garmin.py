@@ -149,7 +149,60 @@ def complete_authorization(db: Session, code: str, state: str, http: httpx.Clien
     log(db, "garmin", f"{athlete.name} connected Garmin (permissions: {conn.permissions or 'unknown'}).")
     if perms and "ACTIVITY_EXPORT" not in perms:
         log(db, "garmin", f"{athlete.name} did not share activities with the team app.", "warn")
+    elif settings().garmin_backfill_days > 0:
+        try:  # past runs make load ratios useful from day one; connecting must not fail if this does
+            request_backfill(db, conn, http, settings().garmin_backfill_days)
+        except Exception as exc:
+            log(db, "garmin", f"Could not ask Garmin for {athlete.name}'s past runs: {exc}", "warn")
     return athlete
+
+
+# ---------- backfill (past runs) ----------
+
+# Garmin's Summary Backfill: ask for a past date range; Garmin answers 202 and later delivers the activities to the
+# same notification endpoints as new runs (Activities, and Activity Details for laps and heart rate). Requests asking
+# for a range already requested come back 409. Check these names and the range limit against your Garmin docs.
+BACKFILL_PATH = "/wellness-api/rest/backfill/{kind}"
+BACKFILL_KINDS = ("activities", "activityDetails")
+BACKFILL_START, BACKFILL_END = "summaryStartTimeInSeconds", "summaryEndTimeInSeconds"
+BACKFILL_MAX_DAYS = 90  # longest range in one request
+
+
+def request_backfill(db: Session, conn: GarminConnection, http: httpx.Client, days: int) -> str:
+    """Ask Garmin to resend the past `days` of activities. Returns a short summary for the coach; also logged."""
+    days = max(1, min(int(days), 365))
+    token = access_token(db, conn, http)
+    end = dt.datetime.now(dt.timezone.utc)
+    start = end - dt.timedelta(days=days)
+    accepted = already = 0
+    failures = []
+    for kind in BACKFILL_KINDS:
+        chunk_end = end
+        while chunk_end > start:
+            chunk_start = max(start, chunk_end - dt.timedelta(days=BACKFILL_MAX_DAYS))
+            params = {BACKFILL_START: int(chunk_start.timestamp()), BACKFILL_END: int(chunk_end.timestamp())}
+            try:
+                r = http.get(settings().garmin_api_base.rstrip("/") + BACKFILL_PATH.format(kind=kind), params=params,
+                             headers={"Authorization": f"Bearer {token}"})
+                code = r.status_code
+            except httpx.HTTPError as exc:
+                code = f"no answer ({exc.__class__.__name__})"
+            if code in (200, 202):
+                accepted += 1
+            elif code == 409:
+                already += 1
+            else:
+                failures.append(f"{kind} {chunk_start:%b %-d}-{chunk_end:%b %-d}: {code}")
+            chunk_end = chunk_start
+    name = conn.athlete.name
+    if failures:
+        msg = f"Garmin did not accept every request for {name}'s past {days} days of runs ({'; '.join(failures)})."
+        log(db, "garmin", msg, "warn")
+    else:
+        msg = (f"Asked Garmin for {name}'s runs from the past {days} days"
+               + (" (some were already requested)" if already else "") + ". They arrive over the next few minutes to hours.")
+        log(db, "garmin", msg)
+    return msg
 
 
 def access_token(db: Session, conn: GarminConnection, http: httpx.Client) -> str:

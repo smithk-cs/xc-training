@@ -12,7 +12,7 @@
 4. **Redirect address.** If the portal asks for one, use `https://your-address/garmin/callback`.
 5. **Notifications.** Sign in as admin: the home page shows your private notification address
    (`https://your-address/garmin/webhook/...`). In the portal's endpoint settings, point these at it: activity
-   summaries, activity files (FIT), deregistrations, and user permission changes. If the portal offers a choice of
+   summaries, activity details, activity files (FIT), deregistrations, and user permission changes. If the portal offers a choice of
    push or ping, either works.
 6. **Check the notification format.** Garmin's Activity API documentation (in the portal now that you're approved)
    shows the exact notification fields. The app reads them in one place, `handle_notification` in `xcapp/garmin.py`;
@@ -184,5 +184,5 @@ the same course, and run the 1, 1.5 and 2 mile benchmarks as time trials on the 
 | A run is missing | Check the Garmin Connect app synced. Then look at **Sync log**. If it's still missing, export the `.fit` from Garmin Connect (Export Original) and upload it on their link page. |
 | Reps not detected | Use a structured workout on the watch, or press lap at the start and end of every rep and rest. |
 | Workout not matched | Make sure a workout is planned for that date and the athlete's group is included. |
-| Load ratio blank | Normal for an athlete's first four weeks of data. |
+| Load ratio blank | Normal for an athlete's first four weeks of data. Garmin athletes get their past 90 days loaded when they connect; to load them again, open the athlete and click **Load past runs**. |
 | AI briefing failed | The reason is shown on the **AI** page. Most often the API key or model name in `.env`. |

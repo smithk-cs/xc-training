@@ -11,7 +11,7 @@
 </div>
 {% endif %}
 {% if webhook %}
-<div class="card"><h2>Garmin notification address</h2><p class="small muted">Paste this into the Garmin Developer Portal as the endpoint for activity and activity-file notifications, and for deregistration and user-permission notifications. Keep it private.</p><code class="copy">{{ webhook }}</code></div>
+<div class="card"><h2>Garmin notification address</h2><p class="small muted">Paste this into the Garmin Developer Portal (Endpoint Configuration) as the endpoint for Activities, Activity Details and Activity Files, and for Deregistrations and User Permissions Change. Keep it private.</p><code class="copy">{{ webhook }}</code></div>
 {% endif %}
 {% if deletions %}
 <div class="card" style="border-color:var(--color-bad)">
