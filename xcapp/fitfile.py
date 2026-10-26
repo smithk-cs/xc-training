@@ -5,12 +5,16 @@ Only timing, distance and heart rate are read. Position fields are never touched
 from __future__ import annotations
 
 import datetime as dt
+import io
 import re
+import zipfile
 from dataclasses import dataclass, field
 
 from garmin_fit_sdk import Decoder, Stream
 
 MAX_FIT_BYTES = 25 * 1024 * 1024
+MAX_UPLOAD_BYTES = 200 * 1024 * 1024  # one uploaded file, e.g. a Garmin "Export Your Data" zip
+MAX_FITS_PER_UPLOAD = 3000
 RUNNING_SPORTS = {"running", "track_running", "trail_running", "treadmill_running", "indoor_running", "virtual_running"}
 
 
@@ -165,3 +169,33 @@ def parse_fit(data: bytes) -> ParsedActivity:
         avg_hr=float(avg_hr) if avg_hr else None, max_hr=float(max_hr) if max_hr else None,
         device=device, laps=laps, hr_samples=hr_samples,
     )
+
+
+def fit_files(name: str, data: bytes, _depth: int = 0) -> list[tuple[str, bytes]]:
+    """The .fit files in one upload: the file itself, or every .fit inside a .zip (zips inside zips too, as in
+    Garmin's data export). Everything else in a zip is ignored. Raises FitError for a damaged or oversized zip."""
+    if not data.startswith(b"PK\x03\x04"):
+        return [(name, data)]
+    if _depth > 3:
+        return []
+    try:
+        zf = zipfile.ZipFile(io.BytesIO(data))
+    except zipfile.BadZipFile as exc:
+        raise FitError(f"{name} is not a readable .zip file.") from exc
+    out: list[tuple[str, bytes]] = []
+    for info in zf.infolist():
+        low = info.filename.lower()
+        if info.is_dir() or not low.endswith((".fit", ".zip")):
+            continue
+        limit = MAX_FIT_BYTES if low.endswith(".fit") else MAX_UPLOAD_BYTES
+        if info.file_size > limit:  # sizes are checked before anything is unpacked
+            continue
+        with zf.open(info) as f:
+            inner = f.read(limit + 1)
+        if len(inner) > limit:
+            continue
+        out.extend([(info.filename, inner)] if low.endswith(".fit") else fit_files(info.filename, inner, _depth + 1))
+        if len(out) > MAX_FITS_PER_UPLOAD:
+            raise FitError(f"That upload holds more than {MAX_FITS_PER_UPLOAD} activity files. Upload it in smaller parts.")
+    return out
+

@@ -101,12 +101,12 @@
   </section>
 
   <section class="panel" aria-labelledby="u-h">
-    <h2 id="u-h">Add a run by hand</h2>
-    <p class="muted">For a run that didn’t sync, or a watch that isn’t Garmin. In Garmin Connect on a computer, open the run, choose Export Original, and upload the .fit file.</p>
+    <h2 id="u-h">Add runs by hand</h2>
+    <p class="muted">For runs that didn’t sync, or a watch that isn’t Garmin. In Garmin Connect on a computer, open a run and choose Export Original. You can pick several .fit files at once, or a .zip of them, including Garmin’s full “Export Your Data” file: only runs are added, and runs already here aren’t doubled.</p>
     <form method="post" action="/a/{{ token }}/upload" enctype="multipart/form-data" style="display:flex; flex-direction:column; gap:10px">
       <input type="hidden" name="csrf" value="{{ csrf }}">
-      <input type="file" name="file" accept=".fit" required aria-label="Run file (.fit)">
-      <button type="submit" class="ghost-btn">Upload run</button>
+      <input type="file" name="file" accept=".fit,.zip" multiple required aria-label="Run files (.fit, or a .zip of them)">
+      <button type="submit" class="ghost-btn">Upload runs</button>
     </form>
   </section>
   <section class="panel" id="privacy" aria-labelledby="pv-h">

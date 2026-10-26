@@ -27,7 +27,7 @@ from . import datasets as DS
 from . import garmin as G
 from .config import settings
 from .db import SessionLocal, create_all
-from .fitfile import MAX_FIT_BYTES, FitError, parse_fit
+from .fitfile import MAX_FITS_PER_UPLOAD, MAX_UPLOAD_BYTES, FitError, fit_files, parse_fit
 from .imports import GROUPS, ImportErrors, import_goals, import_results, import_roster, parse_date, set_goal
 from .ingest import ingest, log, rematch_day
 from .models import (Activity, AiRun, AppSetting, Athlete, DeletionRequest, GarminConnection, Injury, MissedDay,
@@ -439,7 +439,7 @@ def create_app() -> FastAPI:
     async def athlete_upload_staff(request: Request, athlete_id: int, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
         f = await form_checked(request)
         a = get_athlete(db, athlete_id)
-        flash(request, *await _upload(db, a, f.get("file")))
+        flash(request, *await _upload(db, a, f.getlist("file")))
         return back(f"/athletes/{a.id}")
 
     @app.post("/athletes/{athlete_id}/delete")
@@ -460,10 +460,50 @@ def create_app() -> FastAPI:
         flash(request, f"Deleted {name} and all of their data.")
         return back("/athletes")
 
-    async def _upload(db: Session, a: Athlete, up) -> tuple[str, str]:
-        if not up or not getattr(up, "filename", ""):
-            return "Choose a .fit file first.", "error"
-        raw = await up.read(MAX_FIT_BYTES + 1)
+    async def _upload(db: Session, a: Athlete, uploads) -> tuple[str, str]:
+        """Add runs from one or more .fit files, or .zip files of them (such as Garmin's data export)."""
+        uploads = [u for u in uploads if getattr(u, "filename", "")]
+        if not uploads:
+            return "Choose a .fit or .zip file first.", "error"
+        files: list[tuple[str, bytes]] = []
+        try:
+            for up in uploads:
+                raw = await up.read(MAX_UPLOAD_BYTES + 1)
+                if len(raw) > MAX_UPLOAD_BYTES:
+                    return f"{up.filename} is over {MAX_UPLOAD_BYTES // (1024 * 1024)} MB. Upload it in smaller parts.", "error"
+                files.extend(fit_files(up.filename, raw))
+                if len(files) > MAX_FITS_PER_UPLOAD:
+                    raise FitError(f"That upload holds more than {MAX_FITS_PER_UPLOAD} activity files. Upload it in smaller parts.")
+        except FitError as exc:
+            return str(exc), "error"
+        if not files:
+            return "No .fit activity files were found in that upload.", "error"
+        if len(files) == 1 and not files[0][0].lower().endswith(".zip"):
+            return _upload_one(db, a, files[0][1])
+        counts, dates = {"created": 0, "upgraded": 0, "duplicate": 0, "not_run": 0, "unreadable": 0}, []
+        for _name, data in files:
+            try:
+                parsed = parse_fit(data)
+            except FitError:
+                counts["unreadable"] += 1
+                continue
+            if not parsed.is_running:
+                counts["not_run"] += 1
+                continue
+            act, outcome = ingest(db, a, parsed, "upload")
+            counts[outcome] += 1
+            if outcome != "duplicate":
+                dates.append(act.local_date)
+        added = counts["created"] + counts["upgraded"]
+        parts = [f"Added {added} run{'' if added == 1 else 's'}"
+                 + (f" ({min(dates):%b %-d} to {max(dates):%b %-d})" if len(set(dates)) > 1 else "")]
+        for key, text in (("duplicate", "already here"), ("not_run", "skipped because they weren't runs"),
+                          ("unreadable", "could not be read")):
+            if counts[key]:
+                parts.append(f"{counts[key]} {text}")
+        return ", ".join(parts) + ".", "ok" if added or counts["duplicate"] else "error"
+
+    def _upload_one(db: Session, a: Athlete, raw: bytes) -> tuple[str, str]:
         try:
             parsed = parse_fit(raw)
         except FitError as exc:
@@ -777,7 +817,7 @@ def create_app() -> FastAPI:
     async def athlete_upload(request: Request, token: str, db: Session = Depends(get_db, scope="function")):
         f = await form_checked(request)
         a = athlete_by_token(db, token)
-        flash(request, *await _upload(db, a, f.get("file")))
+        flash(request, *await _upload(db, a, f.getlist("file")))
         return back(f"/a/{token}")
 
     @app.post("/a/{token}/pain")
