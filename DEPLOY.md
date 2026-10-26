@@ -23,9 +23,10 @@ Cost: Cloudflare's Workers Paid plan ($5/month, includes some container time). S
 ## 2. Supabase database address
 
 1. Sign in at supabase.com/dashboard and open your project.
-2. Click **Connect** (top of the project page). Choose the **Session pooler** connection string (not "Transaction
-   pooler", and not "Direct connection", which needs IPv6). It looks like:
-   `postgresql://postgres.abcdefghijkl:[YOUR-PASSWORD]@aws-0-us-west-1.pooler.supabase.com:5432/postgres`
+2. Click **Connect** (top of the project page), then the **Direct — Connection string** box (not "Framework"). Choose
+   the **Session pooler** connection string (not "Transaction pooler", which ends in `:6543`, and not "Direct
+   connection", which needs IPv6). It contains `pooler.supabase.com` and ends in `:5432/postgres`, like:
+   `postgresql://postgres.abcdefghijkl:[YOUR-PASSWORD]@aws-1-us-west-2.pooler.supabase.com:5432/postgres`
 3. Change it in three places to make `DATABASE_URL`:
    * the start `postgresql://` becomes `postgresql+psycopg://`
    * `[YOUR-PASSWORD]` becomes your database password (forgot it? **Project Settings** → **Database** → **Reset
@@ -33,7 +34,7 @@ Cost: Cloudflare's Workers Paid plan ($5/month, includes some container time). S
      numbers; those symbols break the address.
    * add `?sslmode=require` at the end.
 
-   Result: `postgresql+psycopg://postgres.abcdefghijkl:yourpassword@aws-0-us-west-1.pooler.supabase.com:5432/postgres?sslmode=require`
+   Result: `postgresql+psycopg://postgres.abcdefghijkl:yourpassword@aws-1-us-west-2.pooler.supabase.com:5432/postgres?sslmode=require`
 
 The app creates its own tables the first time it starts.
 
