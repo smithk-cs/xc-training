@@ -130,6 +130,9 @@ def cmd_check(_):
     print(f"Garmin: {'configured' if s.garmin_configured else 'not configured (athletes can still upload .fit files)'}")
     print(f"AI briefing: {'configured, model ' + s.anthropic_model if s.ai_configured else 'not configured'}")
     print(f"Public address: {s.base_url}  (Garmin redirect: {s.garmin_redirect_uri})")
+    missing = [n for n, v in (("ORG_NAME", s.org_name), ("PRIVACY_CONTACT", s.privacy_contact), ("HOSTING_PROVIDER", s.hosting_provider),
+                              ("PRIVACY_EFFECTIVE_DATE", s.privacy_effective)) if not v]
+    print("Privacy policy: " + ("complete" if not missing else "fill in " + ", ".join(missing) + " (shown as placeholders on /privacy)"))
     sys.exit(1 if problems else 0)
 
 

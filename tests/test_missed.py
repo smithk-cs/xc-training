@@ -22,7 +22,7 @@ def web(monkeypatch):
     db = SessionLocal()
     for name, role in (("coach1", "coach"), ("trainer1", "trainer")):
         db.add(StaffUser(username=name, role=role, password_hash=hash_password("correct-horse-1")))
-    ava = Athlete(first_name="Ava", last_name="Doyle", gender="Girls", grade=11, group="Varsity", link_token="tok-ava")
+    ava = Athlete(first_name="Ava", last_name="Doyle", gender="Girls", grade=11, group="Varsity", link_token="tok-ava", ai_consent_at=dt.datetime(2026, 10, 1))
     mat = Athlete(first_name="Mateo", last_name="Garza", gender="Boys", grade=10, group="JV", link_token="tok-mateo")
     db.add_all([ava, mat])
     db.flush()

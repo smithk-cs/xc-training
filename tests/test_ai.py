@@ -27,7 +27,7 @@ def team(session):
     people = [("Lucia", "Sorensen", "Girls", "Varsity"), ("Adrian", "Iverson", "Boys", "Varsity"), ("Ruby", "Haddad", "Girls", "JV")]
     out = []
     for i, (f, l, g, grp) in enumerate(people):
-        a = Athlete(first_name=f, last_name=l, gender=g, grade=11, group=grp, link_token=f"t{i}")
+        a = Athlete(first_name=f, last_name=l, gender=g, grade=11, group=grp, link_token=f"t{i}", ai_consent_at=dt.datetime(2026, 10, 1))
         session.add(a)
         session.flush()
         session.add(Result(athlete_id=a.id, event="5K", time_s=1100 + 30 * i, date=dt.date(2026, 10, 17), season="2026 XC"))

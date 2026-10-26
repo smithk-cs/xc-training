@@ -27,8 +27,8 @@ from .db import SessionLocal, create_all
 from .fitfile import MAX_FIT_BYTES, FitError, parse_fit
 from .imports import GROUPS, ImportErrors, import_goals, import_results, import_roster, parse_date, set_goal
 from .ingest import ingest, log, rematch_day
-from .models import (Activity, AiRun, Athlete, GarminConnection, Injury, MissedDay, PainReport, PlannedWorkout, Result,
-                     StaffUser, SyncLog, TrainingGroup, utcnow)
+from .models import (Activity, AiRun, Athlete, DeletionRequest, GarminConnection, Injury, MissedDay, PainReport,
+                     PlannedWorkout, Result, StaffUser, SyncLog, TrainingGroup, utcnow)
 from .security import csrf_ok, csrf_token, hash_password, new_link_token, verify_password
 
 HERE = Path(__file__).parent
@@ -216,7 +216,8 @@ def create_app() -> FastAPI:
         }
         last_ai = db.scalar(select(AiRun).where(AiRun.kind == "briefing").order_by(AiRun.id.desc()))
         webhook = f"{s.base_url.rstrip('/')}/garmin/webhook/{s.garmin_webhook_secret}" if user.role == "admin" and s.garmin_webhook_secret else ""
-        return render(request, "home.html", user, snap=snap, stats=stats, last_ai=last_ai, webhook=webhook)
+        deletions = db.scalars(select(DeletionRequest).where(DeletionRequest.status == "open").order_by(DeletionRequest.created_at)).all()
+        return render(request, "home.html", user, snap=snap, stats=stats, last_ai=last_ai, webhook=webhook, deletions=deletions)
 
     # ---------- dashboard ----------
 
@@ -366,6 +367,8 @@ def create_app() -> FastAPI:
             with G.make_client() as http:
                 G.disconnect(db, a.garmin, http)
         name = a.name
+        for req in db.scalars(select(DeletionRequest).where(DeletionRequest.athlete_id == a.id)).all():
+            req.status, req.completed_at, req.completed_by, req.athlete_name = "done", utcnow(), user.username, name
         db.delete(a)
         log(db, "admin", f"{user.username} deleted all data for {name}.")
         flash(request, f"Deleted {name} and all of their data.")
@@ -647,6 +650,7 @@ def create_app() -> FastAPI:
         a = athlete_by_token(db, token)
         acts = db.scalars(select(Activity).where(Activity.athlete_id == a.id).order_by(Activity.start_utc.desc()).limit(10)).all()
         today = A.team_today()
+        open_delete = db.scalar(select(DeletionRequest).where(DeletionRequest.athlete_id == a.id, DeletionRequest.status == "open"))
         need = db.scalar(select(func.count(Activity.id)).where(
             Activity.athlete_id == a.id, Activity.rpe.is_(None), Activity.local_date > today - dt.timedelta(days=14)))
         roster = [r for r in A.roster_rows(db) if r["athlete_id"] == a.code]
@@ -655,7 +659,7 @@ def create_app() -> FastAPI:
         prog, seasons = A.progress(bench, [g for g in team_goals if g["athlete_id"] == a.code], roster)
         tiles = [p for p in prog if p["current"] is not None]
         ability = A.abilities(db, today).get(a.id, {}) if A.get_setting(db, "show_group_to_athletes", "1") == "1" else {}
-        return render(request, "athlete.html", None, a=a, acts=acts, tiles=tiles, seasons=seasons, need=need, ability=ability,
+        return render(request, "athlete.html", None, a=a, acts=acts, tiles=tiles, seasons=seasons, need=need, ability=ability, open_delete=open_delete,
                       areas=BODY_AREAS, token=token, today=today.isoformat())
 
     @app.post("/a/{token}/connect")
@@ -1055,6 +1059,96 @@ def create_app() -> FastAPI:
         m.injury_id = inj.id
         flash(request, f"Added {kind} for {m.athlete.name} to the injury log.")
         return back("/injuries")
+
+    # ---------- privacy: policy page, AI consent, export, deletion ----------
+
+    @app.get("/privacy", response_class=HTMLResponse)
+    def privacy(request: Request):
+        return render(request, "privacy.html", None)
+
+    @app.post("/a/{token}/ai-consent")
+    async def athlete_ai_consent(request: Request, token: str, db: Session = Depends(get_db, scope="function")):
+        f = await form_checked(request)
+        a = athlete_by_token(db, token)
+        if f.get("action") == "withdraw":
+            a.ai_consent_at, a.ai_consent_note = None, ""
+            log(db, "privacy", f"{a.name} withdrew consent to AI analysis.")
+            flash(request, "Done. Your data will not be sent for AI analysis from now on.")
+        else:
+            if not (f.get("agree") and f.get("parent")):
+                flash(request, "To turn on AI analysis, tick both boxes: that you agree, and that a parent or guardian agrees.", "error")
+                return back(f"/a/{token}#privacy")
+            a.ai_consent_at = utcnow()
+            a.ai_consent_note = "Athlete agreed and confirmed parent/guardian agreement on the team link page."
+            log(db, "privacy", f"{a.name} agreed to AI analysis.")
+            flash(request, "Thanks. Your training data will be included in the coaches’ AI briefing. You can turn this off any time.")
+        return back(f"/a/{token}#privacy")
+
+    @app.get("/a/{token}/my-data.json")
+    def athlete_export(token: str, db: Session = Depends(get_db, scope="function")):
+        a = athlete_by_token(db, token)
+        acts = db.scalars(select(Activity).where(Activity.athlete_id == a.id).options(selectinload(Activity.laps), selectinload(Activity.planned))
+                          .order_by(Activity.start_utc)).all()
+        ab = A.abilities(db, A.team_today()).get(a.id, {})
+        data = {
+            "exported_at": utcnow().isoformat() + "Z", "team": s.team_name,
+            "athlete": {"name": a.name, "gender": a.gender, "grade": a.grade, "group": a.group, "hr_max": a.hr_max, "hr_rest": a.hr_rest,
+                        "training_group": ab.get("group"), "vdot": ab.get("vdot"),
+                        "ai_consent": a.ai_consent_at.isoformat() + "Z" if a.ai_consent_at else None},
+            "garmin": None if a.garmin is None else {"status": a.garmin.status, "garmin_user_id": a.garmin.garmin_user_id,
+                                                     "permissions": a.garmin.permissions, "connected_at": a.garmin.connected_at.isoformat() + "Z",
+                                                     "consent_note": a.garmin.consent_note},
+            "runs": [{"date": x.local_date.isoformat(), "start_utc": x.start_utc.isoformat() + "Z", "source": x.source, "sport": x.sport,
+                      "distance_m": x.distance_m, "duration_s": x.duration_s, "avg_hr": x.avg_hr, "max_hr": x.max_hr, "device": x.device,
+                      "run_type": A.run_type_of(x), "team_workout": x.planned.title if x.planned else None,
+                      "effort": x.rpe, "legs": x.feel or None, "note": x.athlete_note or None,
+                      "laps": [{"lap": l.idx + 1, "distance_m": l.distance_m, "time_s": l.timer_s, "avg_hr": l.avg_hr, "max_hr": l.max_hr,
+                                "rep": l.rep_num, "hr_drop_60s": l.hr_drop_60s} for l in x.laps]} for x in acts],
+            "results": [{"date": r.date.isoformat(), "event": r.event, "time_s": r.time_s, "season": r.season, "course": r.course, "kind": r.kind}
+                        for r in sorted(a.results, key=lambda r: r.date)],
+            "goals": [{"season": g.season, "event": g.event, "goal_s": g.goal_s} for g in a.goals],
+            "injuries": [{"onset": i.onset_date.isoformat(), "injury": i.injury, "body_area": i.body_area,
+                          "return": i.return_date.isoformat() if i.return_date else None} for i in a.injuries],
+            "pain_reports": [{"date": p.date.isoformat(), "body_area": p.body_area, "severity": p.severity, "note": p.note or None} for p in a.pain_reports],
+            "days_missed": [{"date": m.date.isoformat(), "reason": m.reason, "body_area": m.body_area or None, "side": m.side or None,
+                             "pain": m.pain, "started": m.started or None, "seen_by": m.seen_by or None, "more_days": m.more_days or None,
+                             "description": m.description or None}
+                            for m in db.scalars(select(MissedDay).where(MissedDay.athlete_id == a.id).order_by(MissedDay.date)).all()],
+            "not_included": "Athletic trainer notes on injuries are kept separately; ask the athletic trainer or coaches for a copy.",
+        }
+        fname = f"my-training-data-{A.team_today().isoformat()}.json"
+        return Response(json.dumps(data, indent=2), media_type="application/json",
+                        headers={"Content-Disposition": f'attachment; filename="{fname}"'})
+
+    @app.post("/a/{token}/delete-garmin-data")
+    async def athlete_delete_garmin(request: Request, token: str, db: Session = Depends(get_db, scope="function")):
+        f = await form_checked(request)
+        a = athlete_by_token(db, token)
+        if str(f.get("confirm", "")).strip().upper() != "DELETE":
+            flash(request, "Type DELETE to confirm.", "error")
+            return back(f"/a/{token}#privacy")
+        if a.garmin and a.garmin.status != "revoked":
+            with G.make_client() as http:
+                G.disconnect(db, a.garmin, http)
+        if a.garmin:
+            db.delete(a.garmin)
+        n = 0
+        for act in db.scalars(select(Activity).where(Activity.athlete_id == a.id, Activity.source.like("garmin%"))).all():
+            db.delete(act)
+            n += 1
+        log(db, "privacy", f"{a.name} deleted their Garmin data ({n} runs) and disconnected Garmin.")
+        flash(request, f"Deleted {n} run{'' if n == 1 else 's'} that came from Garmin and disconnected your Garmin account.")
+        return back(f"/a/{token}#privacy")
+
+    @app.post("/a/{token}/delete-request")
+    async def athlete_delete_request(request: Request, token: str, db: Session = Depends(get_db, scope="function")):
+        await form_checked(request)
+        a = athlete_by_token(db, token)
+        if not db.scalar(select(DeletionRequest).where(DeletionRequest.athlete_id == a.id, DeletionRequest.status == "open")):
+            db.add(DeletionRequest(athlete_id=a.id, athlete_name=a.name))
+            log(db, "privacy", f"{a.name} asked for all of their data to be deleted.")
+        flash(request, "Your request is in. Your coaches will delete all of your data within 30 days and let you know.")
+        return back(f"/a/{token}#privacy")
 
     # ---------- Garmin ----------
 

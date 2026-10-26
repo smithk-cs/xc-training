@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% set org = settings.org_name or "[Organization name]" %}
+{% set contact = settings.privacy_contact or "[privacy contact email]" %}
+{% set host = settings.hosting_provider or "[hosting provider]" %}
+{% block title %}Privacy policy · {{ team_name }}{% endblock %}
+{% block content %}
+<article class="card" style="max-width:820px; margin:0 auto; line-height:1.6">
+<h1>Privacy policy</h1>
+<p class="muted">{{ team_name }} training app, run by {{ org }}. Effective {{ settings.privacy_effective or "[effective date]" }}.</p>
+
+<p>This app lets our cross country athletes share their running data with their coaches so we can plan training and reduce injuries. This policy explains what we collect, including data from Garmin, how we use it, who else handles it, and how athletes and parents can see, fix, download or delete it. Questions or requests: <b>{{ contact }}</b>.</p>
+
+<h2>Who uses the app</h2>
+<p>Athletes on the team, who are high school students and usually under 18; their coaches; and the athletic trainer. Athletes use a private personal link; staff sign in with their own accounts. A parent or guardian must approve before an athlete connects Garmin and, separately, before any AI analysis. The app is not meant for children under 13.</p>
+
+<h2>What we collect</h2>
+<p><b>From Garmin, only after the athlete connects their Garmin account:</b> activity summaries (date and time, type of activity, duration, distance, average and maximum heart rate, and the device model) and activity files (laps, timing, distance and heart rate during the activity). We also keep the athlete’s Garmin user ID, the permissions they granted, and the access tokens Garmin issues, which are encrypted.</p>
+<p><b>What we never collect or keep from Garmin:</b> we never read or store GPS positions or routes. We do not keep the original activity files: heart rate during the activity is used once, to work out each rep and how fast heart rate recovers, and only those per-lap results are kept.</p>
+<p><b>From athletes:</b> how hard each run felt (0 to 10), how their legs felt, pain reports (where and how much), days they didn’t run and why, including injury details they choose to describe, and short notes to coaches. Athletes without Garmin can upload activity files themselves; those are handled the same way.</p>
+<p><b>From coaches and the athletic trainer:</b> the roster (name, grade, boys or girls team, group, and optional maximum and resting heart rate), race and time-trial results, goals, planned workouts, training groups, and injuries. Athletic trainer notes on injuries are visible only to the athletic trainer and administrators.</p>
+<p><b>Worked out by the app:</b> weekly mileage, load ratio (this week’s miles against the previous four weeks), reps, pace against target and heart-rate recovery, VDOT (an estimate of fitness from race results), training group and targets, a watch list for coaches, charts, and, only for athletes who agree, the AI briefing described below.</p>
+
+<h2>How we use Garmin data</h2>
+<p>Only to coach the team:</p>
+<ul>
+  <li>to show each athlete their own runs, charts, targets and training group, and to show coaches the same for the athletes they coach;</li>
+  <li>to total weekly mileage and spot sudden jumps in training load, which are linked to injury risk;</li>
+  <li>to find the reps in a workout, compare pace with the target, and measure heart-rate recovery between reps;</li>
+  <li>to match runs to the day’s planned workout and put athletes on the coaches’ watch list when something needs a check-in;</li>
+  <li>for athletes who explicitly agree, to include their training numbers in the AI briefing (see the AI transparency statement).</li>
+</ul>
+<p>We do not use Garmin data, or anything derived from it, for advertising, marketing, recruiting, or any purpose outside coaching this team. Garmin data and anything derived from it is never used to train, evaluate or improve any AI model.</p>
+
+<h2>Who else receives or processes Garmin data</h2>
+<table class="list">
+  <thead><tr><th>Who</th><th>What they receive</th><th>Why</th></tr></thead>
+  <tbody>
+    <tr><td><b>{{ host }}</b> (hosting provider)</td><td>Everything the app stores, including Garmin data, kept on the server and in its backups</td><td>Runs the app and its database for us. It does not use the data for anything else.</td></tr>
+    <tr><td><b>Anthropic PBC</b> (Claude, AI processing)</td><td>Only for athletes who agreed to AI analysis: training numbers under a code instead of a name, as listed in the AI transparency statement</td><td>Writes the nightly coaching briefing and answers coaches’ questions. Under Anthropic’s commercial terms it may not train models on this data. See the AI transparency statement.</td></tr>
+    <tr><td><b>Garmin</b></td><td>Requests to send data, and notice when an athlete disconnects</td><td>Garmin is the source of the data. The athlete’s Garmin account is governed by Garmin’s own privacy policy.</td></tr>
+    <tr><td><b>Let’s Encrypt</b> (security certificate)</td><td>Only the app’s web address; no personal data</td><td>Provides the certificate that encrypts every connection to the app.</td></tr>
+  </tbody>
+</table>
+<p>The app’s software libraries and fonts run on our own server and send nothing to their makers. We have no other integration partners and use no analytics, advertising, social media, data broker or recruiting services. The app does not connect to Strava.</p>
+
+<h2>We do not sell or share Garmin data</h2>
+<p>We do not sell Garmin data or any personal data, and we do not share it with any third party for that party’s own use. The services listed above handle data only on our behalf, for the purposes described. We would disclose information only if required by law, or to protect someone’s health or safety, and we would tell the athlete and their parent or guardian unless the law prevents it.</p>
+
+<h2 id="ai">AI transparency statement</h2>
+<p><b>What the AI does.</b> Each night, and when a coach asks a question, the app sends training numbers to Claude, an AI model made by Anthropic, through Anthropic’s API. Claude writes a short briefing for coaches: athletes whose training jumped, who are recovering slowly between reps, who reported pain or missed runs, and who is improving. Coaches read it as a second set of eyes. It makes no decisions: coaches and the athletic trainer decide all training, team and medical matters, and the AI is never used to diagnose injuries.</p>
+<p><b>Only with explicit consent.</b> AI analysis is off for every athlete until they turn it on. To turn it on, the athlete opens their personal page and ticks two boxes: that they agree, and that a parent or guardian agrees. We record the date. Athletes who have not agreed are left out completely: none of their data is sent, and the team-wide numbers sent to the AI are worked out only from athletes who agreed. If a coach’s question names an athlete who hasn’t agreed, the name is removed before the question is sent.</p>
+<p><b>What is sent, for athletes who agree:</b> a code (such as R07) instead of a name; their group and grade; weekly miles, load ratio and injured weeks for the last six weeks; effort ratings and how their legs felt; recent workouts (pace, target, heart rate and recovery); pain reports (where and how much); days missed and the reason, with the structured injury answers (where, which side, pain level, when it started, who has seen it, and whether they expect to miss more days); the type of any logged injury and how long ago it started; and benchmark times and goals.</p>
+<p><b>What is never sent:</b> names, gender, maximum or resting heart rate, anything an athlete or staff member writes (notes and injury descriptions), athletic trainer notes, Garmin user IDs or tokens, and location data, which the app never collects.</p>
+<p><b>No AI training.</b> Garmin data and anything derived from it is never used to train, evaluate or improve AI models, by us or by Anthropic. Anthropic’s commercial terms, which cover our use of its API, prohibit it from training models on the content we send.</p>
+<p><b>How long the AI provider keeps it.</b> Under Anthropic’s standard commercial retention policy, what we send and the replies are deleted within 30 days, unless a longer period is required by law or to enforce Anthropic’s usage policy. In the app, each new briefing replaces the previous one.</p>
+<p><b>Withdrawing consent.</b> Tap <b>Turn off AI analysis</b> on the personal page at any time, or ask a coach or email {{ contact }}. It takes effect immediately: the athlete’s data is left out of every AI request from then on. The previous briefing is replaced by the next nightly one; to have earlier AI answers about an athlete removed sooner, contact us.</p>
+
+<h2>Seeing, fixing, downloading and deleting your data</h2>
+<ul>
+  <li><b>See it:</b> the personal page shows the athlete’s runs, charts, results, targets and training group.</li>
+  <li><b>Download it:</b> <b>Download my data</b> on the personal page gives a file of everything the app holds about the athlete. Athletic trainer notes are kept separately and are available on request.</li>
+  <li><b>Fix it:</b> athletes can change their effort, pain, missed-day reports and each run’s type and workout from <b>My runs</b>. For anything else, such as a result or roster detail, ask a coach or email {{ contact }}.</li>
+  <li><b>Delete Garmin data:</b> <b>Delete my Garmin data</b> on the personal page disconnects Garmin and deletes every run that came from Garmin, immediately.</li>
+  <li><b>Delete everything:</b> <b>Ask to delete everything</b> on the personal page, or an email to {{ contact }}. We delete all of the athlete’s data within 30 days and confirm.</li>
+  <li><b>Withdraw consent:</b> <b>Disconnect Garmin</b> on the personal page, or removing the app in Garmin Connect, stops new data at once and deletes the stored access tokens. <b>Turn off AI analysis</b> withdraws AI consent. Data already shared stays with the team unless you also ask us to delete it.</li>
+</ul>
+<p>Parents and guardians can make any of these requests for their athlete by contacting us. Families may also have rights over student records under federal and state law; ask the school for details.</p>
+
+<h2>How long we keep data</h2>
+<p>We keep an athlete’s data while they are on the team, and delete it within {{ settings.retention_days }} days after they leave the program, sooner if asked. Garmin access tokens are deleted as soon as an athlete disconnects. Backup copies are kept for no more than 30 days.</p>
+
+<h2>How we protect it</h2>
+<p>Every connection is encrypted (HTTPS). Garmin access tokens are encrypted, staff passwords are stored only in hashed form, and each staff role sees only what it needs. Athlete links are private and can be replaced at any time. Our Garmin API credentials are issued only to {{ org }} and are never shared with, transferred to or used by anyone else; any request for them is reported to Garmin at connect-support@developer.garmin.com.</p>
+
+<h2>Changes</h2>
+<p>If we change this policy we will update the date above and tell athletes and parents before any change in how Garmin data is used or who receives it takes effect. A new use of AI, or a new company receiving data, would need fresh consent.</p>
+
+<h2>Contact</h2>
+<p>{{ org }}, {{ team_name }}: <b>{{ contact }}</b>.</p>
+</article>
+{% endblock %}

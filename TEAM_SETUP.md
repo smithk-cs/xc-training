@@ -4,19 +4,22 @@
 
 1. **Host the app first.** Garmin sends athletes back to the app and delivers runs to it, so it needs its public
    https address (for example `https://xc.jesuithighschool.org`) before anything else. See README, "Run it for real".
-2. **Credentials.** From your app in the Garmin Developer Portal, copy the client ID and client secret into `.env` as
+2. **Privacy policy.** Fill in `ORG_NAME`, `PRIVACY_CONTACT`, `HOSTING_PROVIDER` and `PRIVACY_EFFECTIVE_DATE` in
+   `.env`, and give Garmin the link `https://your-address/privacy`. Never share the Garmin credentials with anyone;
+   report any request for them to connect-support@developer.garmin.com.
+3. **Credentials.** From your app in the Garmin Developer Portal, copy the client ID and client secret into `.env` as
    `GARMIN_CLIENT_ID` and `GARMIN_CLIENT_SECRET`, and restart.
-3. **Redirect address.** If the portal asks for one, use `https://your-address/garmin/callback`.
-4. **Notifications.** Sign in as admin: the home page shows your private notification address
+4. **Redirect address.** If the portal asks for one, use `https://your-address/garmin/callback`.
+5. **Notifications.** Sign in as admin: the home page shows your private notification address
    (`https://your-address/garmin/webhook/...`). In the portal's endpoint settings, point these at it: activity
    summaries, activity files (FIT), deregistrations, and user permission changes. If the portal offers a choice of
    push or ping, either works.
-5. **Check the notification format.** Garmin's Activity API documentation (in the portal now that you're approved)
+6. **Check the notification format.** Garmin's Activity API documentation (in the portal now that you're approved)
    shows the exact notification fields. The app reads them in one place, `handle_notification` in `xcapp/garmin.py`;
    compare the field names before the team connects.
-6. **Test with your own watch.** Add yourself as an athlete, open your link, connect Garmin, go for a short run with a
+7. **Test with your own watch.** Add yourself as an athlete, open your link, connect Garmin, go for a short run with a
    few laps, sync, and check **Sync log** and your athlete page. Then try **Disconnect** and reconnect.
-7. **Pilot, then the team.** Connect your assistants and three to five athletes for a week or two, then follow the
+8. **Pilot, then the team.** Connect your assistants and three to five athletes for a week or two, then follow the
    steps below for everyone.
 
 Plan on about two weeks for approvals, then one 15-minute "connect night" at practice.
@@ -106,6 +109,9 @@ restart. It appears on every coach page and every athlete page.
 3. Their **My training** chart lets them switch between miles, load ratio, effort, heart rate, pace and benchmark
    times, over the past week, past month, this season or all years.
 
+5. **AI analysis is off until an athlete turns it on** in "Your data and privacy" on their page, ticking that they
+   and a parent or guardian agree. The same section lets them download their data, delete their Garmin data, or ask
+   for everything to be deleted.
 4. On a practice day with no run, **My runs** shows "Tell coaches why". The athlete picks the reason; for an
    injury they say where, which side, how much it hurts, when it started, describe it in their own words, and say
    who has looked at it and whether they expect to miss more days. It reaches your watch list right away and the

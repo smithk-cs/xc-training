@@ -39,6 +39,8 @@ class Athlete(Base):
     hr_rest: Mapped[int | None] = mapped_column(Integer, nullable=True)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     ability_override: Mapped[str] = mapped_column(String(40), default="")  # coach-pinned ability group, "" = automatic
+    ai_consent_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)  # explicit opt-in to AI analysis
+    ai_consent_note: Mapped[str] = mapped_column(String(200), default="")
     link_token: Mapped[str] = mapped_column(String(64), unique=True)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
 
@@ -220,6 +222,18 @@ class MissedDay(Base):
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
     updated_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
     athlete: Mapped[Athlete] = relationship()
+
+
+class DeletionRequest(Base):
+    """An athlete's request to delete everything. Admins see it on the home page and complete it by deleting the athlete."""
+    __tablename__ = "deletion_requests"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    athlete_id: Mapped[int | None] = mapped_column(ForeignKey("athletes.id", ondelete="SET NULL"), nullable=True)
+    athlete_name: Mapped[str] = mapped_column(String(170), default="")
+    status: Mapped[str] = mapped_column(String(10), default="open")  # open | done
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
+    completed_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)
+    completed_by: Mapped[str] = mapped_column(String(80), default="")
 
 
 class Insight(Base):

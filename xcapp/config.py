@@ -35,6 +35,11 @@ class Settings:
     anthropic_base_url: str
     nightly_hour: int
     team_name: str
+    org_name: str              # who runs the app, named in the privacy policy
+    privacy_contact: str       # email for privacy requests
+    hosting_provider: str      # who hosts the server and database
+    privacy_effective: str     # date the privacy policy takes effect
+    retention_days: int        # days after an athlete leaves before their data is deleted
     team_logo_file: str  # path to the approved logo (png, jpg, svg or webp)
     as_of_date: str  # optional fixed "today" (YYYY-MM-DD) for demos and testing
 
@@ -77,6 +82,11 @@ class Settings:
             anthropic_base_url=os.getenv("ANTHROPIC_BASE_URL", ""),
             nightly_hour=int(os.getenv("NIGHTLY_HOUR", "4")),
             team_name=os.getenv("TEAM_NAME", "XC Training"),
+            org_name=os.getenv("ORG_NAME", ""),
+            privacy_contact=os.getenv("PRIVACY_CONTACT", ""),
+            hosting_provider=os.getenv("HOSTING_PROVIDER", ""),
+            privacy_effective=os.getenv("PRIVACY_EFFECTIVE_DATE", ""),
+            retention_days=int(os.getenv("DATA_RETENTION_DAYS", "90")),
             team_logo_file=os.getenv("TEAM_LOGO_FILE", ""),
             as_of_date=os.getenv("AS_OF_DATE", ""),
         )
