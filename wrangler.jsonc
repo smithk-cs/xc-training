@@ -38,12 +38,12 @@
     // AI spending cap in US dollars per month (also set a spend limit in the Claude Console), and thinking level.
     "AI_MONTHLY_BUDGET_USD": "25",
     "AI_EFFORT": "medium",
-    // Shown in the public privacy policy at /privacy. Fill in PRIVACY_CONTACT and PRIVACY_EFFECTIVE_DATE.
+    // Shown in the public privacy policy at /privacy.
     "ORG_NAME": "Jesuit High School",
-    "PRIVACY_CONTACT": "",
+    "PRIVACY_CONTACT": "keegan.smith@jesuithighschool.org",
     "HOSTING_PROVIDER": "Cloudflare, Inc. (runs the app) and Supabase, Inc. (stores the database)",
     "CERTIFICATE_PROVIDER": "Cloudflare",
-    "PRIVACY_EFFECTIVE_DATE": "",
+    "PRIVACY_EFFECTIVE_DATE": "November 1, 2026",
     "DATA_RETENTION_DAYS": "90"
   }
 }
