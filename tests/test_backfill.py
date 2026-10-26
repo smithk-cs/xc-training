@@ -114,3 +114,22 @@ def test_athletes_and_parents_are_told(session, monkeypatch):
     assert "including my runs from the past 90 days" in c.get("/a/tok-ava").text
     policy = c.get("/privacy").text
     assert "their activities from the previous 90 days" in policy and "the app discards them as the data arrives" in policy
+
+
+def test_garmins_reason_is_kept_in_the_sync_log(session, athlete):
+    """A bare 412 told us nothing; Garmin's reply text says which precondition is missing."""
+    class Explaining(MockGarmin):
+        def __call__(self, req):
+            self.requests.append(req)
+            if req.url.path == "/wellness-api/rest/user/permissions":
+                return httpx.Response(404, text="<html>\n  Not   Found\n</html>")
+            if "/backfill/" in req.url.path:
+                return httpx.Response(412, json={"errorMessage": "User has not granted HISTORICAL_DATA_EXPORT"})
+            self.requests.pop()
+            return super().__call__(req)
+
+    connect(session, athlete, httpx.Client(transport=httpx.MockTransport(Explaining())))
+    log = " | ".join(messages(session))
+    assert "Could not read Lucia Sorensen's Garmin permissions: Garmin request /wellness-api/rest/user/permissions failed (404). Garmin said: <html> Not Found </html>" in log
+    assert 'activities' in log and '412. Garmin said: {"errorMessage":"User has not granted HISTORICAL_DATA_EXPORT"}' in log
+    assert athlete.garmin.status == "connected"

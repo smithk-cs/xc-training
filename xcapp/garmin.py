@@ -91,10 +91,16 @@ def _store_tokens(conn: GarminConnection, body: dict) -> None:
         conn.refresh_expires_at = now + dt.timedelta(seconds=int(body["refresh_token_expires_in"]))
 
 
+def _reply(r: httpx.Response) -> str:
+    """The start of Garmin's reply, for the Sync log: a refusal usually says why in its body."""
+    text = " ".join((r.text or "").split())[:200]
+    return f" Garmin said: {text}" if text else ""
+
+
 def _api_get(http: httpx.Client, token: str, path: str):
     r = http.get(settings().garmin_api_base.rstrip("/") + path, headers={"Authorization": f"Bearer {token}"})
     if r.status_code != 200:
-        raise GarminError(f"Garmin request {path} failed ({r.status_code}).")
+        raise GarminError(f"Garmin request {path} failed ({r.status_code}).{_reply(r)}")
     return r.json()
 
 
@@ -128,8 +134,9 @@ def complete_authorization(db: Session, code: str, state: str, http: httpx.Clien
         raise GarminError("Garmin did not return a user id.")
     try:
         perms = _permissions_list(_api_get(http, token, "/wellness-api/rest/user/permissions"))
-    except GarminError:
+    except GarminError as exc:
         perms = []
+        log(db, "garmin", f"Could not read {athlete.name}'s Garmin permissions: {exc}", "warn")
     other = db.scalar(select(GarminConnection).where(GarminConnection.garmin_user_id == user_id))
     if other is not None and other.athlete_id != athlete.id:
         raise GarminError("That Garmin account is already linked to another athlete on this team.")
@@ -185,14 +192,15 @@ def request_backfill(db: Session, conn: GarminConnection, http: httpx.Client, da
                 r = http.get(settings().garmin_api_base.rstrip("/") + BACKFILL_PATH.format(kind=kind), params=params,
                              headers={"Authorization": f"Bearer {token}"})
                 code = r.status_code
+                said = _reply(r) if code not in (200, 202, 409) else ""
             except httpx.HTTPError as exc:
-                code = f"no answer ({exc.__class__.__name__})"
+                code, said = f"no answer ({exc.__class__.__name__})", ""
             if code in (200, 202):
                 accepted += 1
             elif code == 409:
                 already += 1
             else:
-                failures.append(f"{kind} {chunk_start:%b %-d}-{chunk_end:%b %-d}: {code}")
+                failures.append(f"{kind} {chunk_start:%b %-d}-{chunk_end:%b %-d}: {code}.{said}".rstrip("."))
             chunk_end = chunk_start
     name = conn.athlete.name
     if failures:
