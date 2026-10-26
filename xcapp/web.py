@@ -28,10 +28,10 @@ from . import garmin as G
 from .config import settings
 from .db import SessionLocal, create_all
 from .fitfile import MAX_FITS_PER_UPLOAD, MAX_UPLOAD_BYTES, FitError, fit_files, parse_fit
-from .imports import GROUPS, ImportErrors, import_goals, import_results, import_roster, parse_date, set_goal
+from .imports import GROUPS, ImportErrors, import_goals, import_races, import_results, import_roster, parse_date, set_goal
 from .ingest import ingest, log, rematch_day
 from .models import (Activity, AiRun, AppSetting, Athlete, DeletionRequest, GarminConnection, Injury, MissedDay,
-                     OAuthState, PainReport, PlannedWorkout, Result, StaffUser, SyncLog, TrainingGroup, utcnow)
+                     OAuthState, PainReport, PlannedWorkout, RaceResult, Result, StaffUser, SyncLog, TrainingGroup, utcnow)
 from .security import csrf_ok, csrf_token, hash_password, new_link_token, verify_password
 
 HERE = Path(__file__).parent
@@ -95,6 +95,22 @@ class _LoginLimiter:
         self.fails.pop(key, None)
 
 
+def ink(color: str | None) -> str:
+    """Dark or white text, whichever reads better on this background color (WCAG contrast)."""
+    m = re.fullmatch(r"#?([0-9a-fA-F]{6})", (color or "").strip())
+    if not m:
+        return "#1B1B1F"
+
+    def lum(hex6):
+        def ch(c):
+            c = int(c, 16) / 255
+            return c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4
+        r, g, b = (ch(hex6[i:i + 2]) for i in (0, 2, 4))
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b
+    bg = lum(m.group(1))
+    return "#1B1B1F" if (bg + 0.05) / (lum("1B1B1F") + 0.05) >= (1.05) / (bg + 0.05) else "#FFFFFF"
+
+
 def clean_username(raw) -> str:
     name = str(raw or "").strip().lower()
     if not name or not name.replace(".", "").replace("_", "").replace("-", "").isalnum():
@@ -126,7 +142,7 @@ def create_app() -> FastAPI:
                                  has_logo=has_logo, FEELS=FEELS, EFFORT_WORDS=EFFORT_WORDS, RUN_TYPES=A.RUN_TYPES,
                                  MISSED_REASONS=A.MISSED_REASONS, SIDES=A.SIDES, STARTED=A.STARTED, SEEN_BY=A.SEEN_BY,
                                  MORE_DAYS=A.MORE_DAYS, missed_label=A.missed_label,
-                                 run_type_of=A.run_type_of)
+                                 run_type_of=A.run_type_of, ink=ink)
     limiter = _LoginLimiter()
     garmin_origin = "{0.scheme}://{0.netloc}".format(urlparse(s.garmin_authorize_url))
     dashboard_body = (HERE / "static" / "dashboard_body.html").read_text(encoding="utf-8")
@@ -384,7 +400,8 @@ def create_app() -> FastAPI:
         ability = A.abilities(db, A.team_today()).get(a.id, {})
         missed = db.scalars(select(MissedDay).where(MissedDay.athlete_id == a.id).order_by(MissedDay.date.desc()).limit(20)).all()
         group_names = [g.name for g in db.scalars(select(TrainingGroup).order_by(TrainingGroup.position)).all()]
-        return render(request, "athlete_detail.html", user, a=a, acts=acts, results=results, run_pain=run_pain,
+        races = db.scalars(select(RaceResult).where(RaceResult.athlete_id == a.id).order_by(RaceResult.date.desc()).limit(30)).all()
+        return render(request, "athlete_detail.html", user, a=a, acts=acts, results=results, run_pain=run_pain, races=races,
                       ability=ability, group_names=group_names, missed=missed,
                       injuries=sorted(a.injuries, key=lambda i: i.onset_date, reverse=True),
                       pains=sorted(a.pain_reports, key=lambda p: p.date, reverse=True)[:10],
@@ -520,6 +537,56 @@ def create_app() -> FastAPI:
         return msg + ".", "ok"
 
     # ---------- results and goals ----------
+
+    # ---------- races (full meet results at their real distances) ----------
+
+    @app.get("/races", response_class=HTMLResponse)
+    def races_page(request: Request, user=Depends(any_staff, scope="function"), db: Session = Depends(get_db, scope="function")):
+        rows = db.scalars(select(RaceResult).options(selectinload(RaceResult.athlete))
+                          .order_by(RaceResult.date.desc(), RaceResult.meet, RaceResult.race, RaceResult.place, RaceResult.time_s)).all()
+        meets: dict[tuple, dict[tuple, list]] = {}
+        for r in rows:
+            meets.setdefault((r.date, r.meet, r.course), {}).setdefault((r.race, r.distance_label, r.distance_m), []).append(r)
+        return render(request, "races.html", user, meets=meets)
+
+    @app.post("/races/import")
+    async def races_import(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
+        f = await form_checked(request)
+        up = f.get("file")
+        if not up or not getattr(up, "filename", ""):
+            flash(request, "Choose a CSV file first.", "error")
+            return back("/races")
+        raw = await up.read(5 * 1024 * 1024 + 1)
+        if len(raw) > 5 * 1024 * 1024:
+            flash(request, "That file is larger than 5 MB.", "error")
+            return back("/races")
+        try:
+            n, added = import_races(db, raw.decode("utf-8-sig", errors="replace"), add_athletes=bool(f.get("add_athletes")))
+            flash(request, f"Imported {n} race result{'' if n == 1 else 's'}"
+                  + (f" and added {added} athlete{'' if added == 1 else 's'} to the roster" if added else "") + ".")
+            if added:
+                log(db, "admin", f"{user.username} added {added} athlete{'' if added == 1 else 's'} from a race results import.")
+        except ImportErrors as exc:
+            flash(request, "Nothing was imported. Fix these rows and try again: " + "; ".join(exc.errors[:8]), "error")
+        return back("/races")
+
+    @app.post("/races/delete")
+    async def races_delete(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
+        f = await form_checked(request)
+        try:
+            d = dt.date.fromisoformat(str(f.get("date", "")))
+        except ValueError:
+            raise HTTPException(400, "Bad date.")
+        meet = str(f.get("meet", ""))
+        rows = db.scalars(select(RaceResult).where(RaceResult.date == d, RaceResult.meet == meet)).all()
+        for r in rows:
+            if r.result_id:
+                res = db.get(Result, r.result_id)
+                if res is not None:
+                    db.delete(res)
+            db.delete(r)
+        flash(request, f"Deleted {meet} ({len(rows)} results).")
+        return back("/races")
 
     @app.get("/results", response_class=HTMLResponse)
     def results_page(request: Request, user=Depends(any_staff, scope="function"), db: Session = Depends(get_db, scope="function")):
@@ -785,8 +852,9 @@ def create_app() -> FastAPI:
         tiles = [p for p in prog if p["current"] is not None]
         show_group = A.get_setting(db, "show_group_to_athletes", "1") == "1"
         ability = A.abilities(db, today).get(a.id, {}) if show_group else {}
+        races = db.scalars(select(RaceResult).where(RaceResult.athlete_id == a.id).order_by(RaceResult.date.desc()).limit(20)).all()
         return render(request, "athlete.html", None, a=a, acts=acts, tiles=tiles, seasons=seasons, need=need, ability=ability,
-                      show_group=show_group, open_delete=open_delete,
+                      show_group=show_group, open_delete=open_delete, races=races,
                       areas=BODY_AREAS, token=token, today=today.isoformat())
 
     @app.post("/a/{token}/connect")

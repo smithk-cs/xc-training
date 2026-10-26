@@ -42,10 +42,13 @@ def engine():
     return _engine
 
 
-# Jesuit's training groups (VDOT JHS sheet): name, boys' and girls' minimum VDOT, sheet color.
-DEFAULT_GROUPS = [("Platinum", 73, 73, "#EFEFEF"), ("Gold", 68, 68, "#FFE599"), ("Silver", 62, 62, "#D9D9D9"),
-                  ("Bronze", 58, 58, "#F9CB9C"), ("Emerald", 54, 54, "#B6D7A8"), ("Aquamarine", 49, 49, "#CFE2F3"),
-                  ("Ivory", 0, 0, "#FFFFFF")]
+# Jesuit's training groups (VDOT JHS sheet): name, boys' and girls' minimum VDOT, and a color that looks like the name.
+DEFAULT_GROUPS = [("Platinum", 73, 73, "#E5E4E2"), ("Gold", 68, 68, "#D4AF37"), ("Silver", 62, 62, "#C0C0C0"),
+                  ("Bronze", 58, 58, "#CD7F32"), ("Emerald", 54, 54, "#50C878"), ("Aquamarine", 49, 49, "#7FDBCA"),
+                  ("Ivory", 0, 0, "#FFFFF0")]
+# The sheet's original pale colors; groups still on them are moved to the colors above (a coach's own choice is kept).
+SHEET_COLORS = {"Platinum": "#EFEFEF", "Gold": "#FFE599", "Silver": "#D9D9D9", "Bronze": "#F9CB9C", "Emerald": "#B6D7A8",
+                "Aquamarine": "#CFE2F3", "Ivory": "#FFFFFF"}
 # The team's target 800 and 1600 times by VDOT (VDOT JHS sheet).
 DEFAULT_TARGETS = {74: ("1:50", "4:06"), 73: ("1:51", "4:09"), 72: ("1:52", "4:12"), 71: ("1:53", "4:15"), 70: ("1:54", "4:19"),
                    69: ("1:56", "4:23"), 68: ("1:58", "4:26"), 67: ("2:00", "4:30"), 66: ("2:01", "4:33"), 65: ("2:03", "4:37"),
@@ -81,6 +84,9 @@ def create_all():
             for pos, (name, boys, girls, color) in enumerate(DEFAULT_GROUPS):
                 conn.execute(text("INSERT INTO training_groups (name, position, min_vdot_boys, min_vdot_girls, color) VALUES (:n, :p, :b, :g, :c)"),
                              {"n": name, "p": pos, "b": boys, "g": girls, "c": color})
+        for name, _b, _g, color in DEFAULT_GROUPS:
+            conn.execute(text("UPDATE training_groups SET color = :new WHERE name = :name AND UPPER(color) = :old"),
+                         {"new": color, "name": name, "old": SHEET_COLORS[name]})
         if not conn.execute(text("SELECT COUNT(*) FROM app_settings WHERE key = 'vdot_targets'")).scalar():
             import json
             conn.execute(text("INSERT INTO app_settings (key, value) VALUES ('vdot_targets', :v)"),

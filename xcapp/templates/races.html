@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Races</h1>
+<p class="muted">Every meet your athletes ran, at each race’s real distance. Races at 1 mile, 1.5 miles, 2 miles or 5K also count toward VDOT and running groups.</p>
+{% if user.role != 'trainer' %}
+<div class="card">
+  <h2>Import race results</h2>
+  <p class="small muted">A CSV file with a header row: <code>meet, date, race, distance, athlete, time</code>, and optionally <code>course, place, grade, gender, group</code>. One row per athlete per race. Distances like <code>5,000 Meters</code>, <code>4K</code> or <code>3 Miles</code>. Importing the same file twice doesn’t double anything.</p>
+  <pre class="small" style="overflow-x:auto">meet,date,course,race,distance,place,athlete,time,grade,gender
+Flat SAC Invitational,2026-10-24,Gibson Ranch Regional Park,Boys Varsity Large School,"5,000 Meters",6,Ava Doyle,15:29.9,12,Boys</pre>
+  <form method="post" action="/races/import" enctype="multipart/form-data">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <div class="form-row">
+      <input type="file" name="file" accept=".csv,text/csv" required>
+      <label class="small"><input type="checkbox" name="add_athletes" value="yes"> Add athletes who aren’t on the roster yet (grade from the file; boys/girls and Varsity/JV from the file or the race name)</label>
+      <button type="submit">Import</button>
+    </div>
+  </form>
+</div>
+{% endif %}
+{% for (date, meet, course), races in meets.items() %}
+<div class="card">
+  <div class="form-row" style="justify-content:space-between">
+    <h2 style="margin:0">{{ meet }}</h2>
+    <span class="muted">{{ date.strftime('%a, %b %-d, %Y') }}{% if course %} · {{ course }}{% endif %}</span>
+  </div>
+  {% for (race, label, meters), rows in races.items() %}
+  <h3>{{ race or 'Race' }} · {{ label }}</h3>
+  <div class="scroll"><table class="list">
+    <thead><tr><th class="num">Place</th><th>Athlete</th><th class="num">Grade</th><th class="num">Time</th><th class="num">Pace / mile</th></tr></thead>
+    <tbody>
+    {% for r in rows %}
+      <tr><td class="num">{{ r.place or '' }}</td><td><a href="/athletes/{{ r.athlete_id }}">{{ r.athlete.name }}</a></td><td class="num">{{ r.athlete.grade }}</td>
+        <td class="num">{{ fmt_time(r.time_s) }}</td><td class="num">{{ fmt_time(r.time_s / (meters / 1609.344)) }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  {% endfor %}
+  {% if user.role != 'trainer' %}
+  <details><summary class="small muted" style="cursor:pointer">Delete this meet</summary>
+    <form method="post" action="/races/delete" class="form-row"><input type="hidden" name="csrf" value="{{ csrf }}">
+      <input type="hidden" name="date" value="{{ date.isoformat() }}"><input type="hidden" name="meet" value="{{ meet }}">
+      <span class="small">Deletes every result from {{ meet }} on {{ date.strftime('%b %-d') }}, and the benchmark times they created.</span>
+      <button class="danger" type="submit">Delete</button></form>
+  </details>
+  {% endif %}
+</div>
+{% else %}
+<div class="card"><p class="muted">No races yet. Import a meet’s results above.</p></div>
+{% endfor %}
+{% endblock %}

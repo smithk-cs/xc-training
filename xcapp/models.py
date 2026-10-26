@@ -183,6 +183,24 @@ class Result(Base):
     note: Mapped[str] = mapped_column(String(200), default="")
 
 
+class RaceResult(Base):
+    """One athlete's result in one race of a meet, at the race's real distance (5,000 m, 4K, 3 miles, ...).
+    Races at a benchmark distance also get a linked Result, which feeds VDOT and running groups."""
+    __tablename__ = "race_results"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    athlete_id: Mapped[int] = mapped_column(ForeignKey("athletes.id", ondelete="CASCADE"), index=True)
+    meet: Mapped[str] = mapped_column(String(160))
+    date: Mapped[dt.date] = mapped_column(Date, index=True)
+    course: Mapped[str] = mapped_column(String(160), default="")
+    race: Mapped[str] = mapped_column(String(120), default="")  # division, e.g. "Boys Varsity Large School"
+    distance_m: Mapped[float] = mapped_column(Float)
+    distance_label: Mapped[str] = mapped_column(String(40), default="")  # as written in the results, e.g. "5,000 Meters"
+    time_s: Mapped[float] = mapped_column(Float)
+    place: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    result_id: Mapped[int | None] = mapped_column(ForeignKey("results.id", ondelete="SET NULL"), nullable=True)
+    athlete: Mapped[Athlete] = relationship()
+
+
 class Goal(Base):
     __tablename__ = "goals"
     __table_args__ = (UniqueConstraint("athlete_id", "event", "season"),)

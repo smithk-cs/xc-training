@@ -41,7 +41,7 @@ def test_groups_from_highest_vdot(session):
     none = add(session, "None", "Boys", [])
     ab = A.abilities(session, dt.date(2026, 10, 25))
     assert (ab[boy.id]["group"], ab[boy.id]["vdot"]) == ("Emerald", 57) and ab[boy.id]["source"].startswith("5K 17:40.0")
-    assert (ab[boy.id]["target_800"], ab[boy.id]["target_1600"], ab[boy.id]["color"]) == ("2:19", "5:11", "#B6D7A8")
+    assert (ab[boy.id]["target_800"], ab[boy.id]["target_1600"], ab[boy.id]["color"]) == ("2:19", "5:11", "#50C878")
     assert (ab[girl.id]["group"], ab[girl.id]["vdot"]) == ("Aquamarine", 50) and ab[slow.id]["group"] == "Ivory"
     assert ab[slow.id]["target_1600"] == ""                                       # below the table's lowest row
     assert ab[old.id]["group"] == "" and ab[none.id]["vdot"] is None
@@ -121,7 +121,7 @@ def test_athlete_sets_type_and_workout(web):
     assert re.search(r'value="Workout" checked', page)                         # suggested from the matched workout
     me = c.get("/a/tok-ava").text
     assert "Running group: <b>Aquamarine</b>" in me and "VDOT 51" in me      # 19:30 girls' 5K
-    assert '<a class="group-btn" href="#group">Aquamarine · VDOT 51</a>' in me  # beside the name
+    assert '<a class="group-btn" href="#group" style="background:#7FDBCA; color:#1B1B1F">Aquamarine · VDOT 51</a>' in me
     assert ">2:31<" in me and ">5:44<" in me                                   # the team sheet's targets for VDOT 51
     r = c.post(f"/a/tok-ava/runs/{act_id}", data={"csrf": csrf, "rpe": "7", "pain_area": "None", "run_type": "Race", "workout": "none"})
     assert r.status_code == 303

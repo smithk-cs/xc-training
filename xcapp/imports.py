@@ -1,4 +1,4 @@
-"""CSV imports for the roster, benchmark results (e.g. exported from XC Stats or Athletic.net) and goals.
+"""CSV imports for the roster, benchmark results (e.g. exported from XC Stats or Athletic.net), race results and goals.
 
 Every row is checked; bad rows are reported by line number and nothing from a file is saved unless
 the whole file is valid, so a coach never ends up with half an import.
@@ -14,7 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .analysis import EVENTS, normalize_event, parse_time, season_for
-from .models import Athlete, Goal, Result
+from .models import Athlete, Goal, RaceResult, Result
 from .security import new_link_token
 
 GROUPS = ("Varsity", "JV", "Development")
@@ -141,6 +141,107 @@ def import_results(db: Session, text: str) -> int:
             db.add(res)
     db.flush()
     return len(todo)
+
+
+# Benchmark events by distance in meters: a race within 0.5% of one also counts toward VDOT and running groups.
+BENCHMARK_METERS = {"1 Mile": 1609.344, "1.5 Mile": 2414.016, "2 Mile": 3218.688, "5K": 5000.0}
+_UNITS = {"m": 1.0, "meter": 1.0, "meters": 1.0, "metre": 1.0, "metres": 1.0, "k": 1000.0, "km": 1000.0,
+          "mi": 1609.344, "mile": 1609.344, "miles": 1609.344}
+
+
+def parse_distance(text: str) -> float:
+    """'5,000 Meters' -> 5000 ; '4K' -> 4000 ; '3 Miles' -> 4828.0 ; '2 mi' -> 3218.7"""
+    s = re.sub(r"[,\s]", "", str(text).lower())
+    m = re.fullmatch(r"(\d+(?:\.\d+)?)([a-z]*)", s)
+    if not m or (m.group(2) and m.group(2) not in _UNITS):
+        raise ValueError(f"Distance '{text}' should look like 5,000 Meters, 4K or 3 Miles")
+    value = float(m.group(1)) * _UNITS.get(m.group(2) or "m", 1.0)
+    if not 400 <= value <= 50000:
+        raise ValueError(f"Distance '{text}' is not a race distance")
+    return round(value, 1)
+
+
+def benchmark_event(meters: float) -> str | None:
+    return next((ev for ev, d in BENCHMARK_METERS.items() if abs(meters - d) <= d * 0.005), None)
+
+
+def _from_race(race: str, choices: dict[str, str]) -> str | None:
+    words = re.findall(r"[a-z]+", race.lower())
+    return next((v for k, v in choices.items() if k in words), None)
+
+
+def import_races(db: Session, text: str, add_athletes: bool = False) -> tuple[int, int]:
+    """Columns: meet, date, race (or division), distance, athlete (or name), time; optional course, place, and, for
+    athletes not on the roster when add_athletes is on, grade (or yr), gender and group (read from the race if missing).
+    Returns (results imported, athletes added)."""
+    errors, todo, new = [], [], {}
+    idx = _name_index(db)
+    for line, r in _rows(text):
+        try:
+            meet = (r.get("meet") or "").strip()
+            race = (r.get("race") or r.get("division") or "").strip()
+            name = (r.get("athlete") or r.get("name") or "").strip()
+            if not meet or not name:
+                raise ValueError("meet and athlete are required")
+            d = parse_date(r.get("date", ""))
+            label = (r.get("distance") or "").strip()
+            meters = parse_distance(label)
+            t = parse_time(r.get("time", ""))
+            place = _int_or_none(r.get("place", ""), 1, 5000, "place")
+            key = re.sub(r"\s+", " ", name.lower())
+            try:
+                a = _find(idx, name)
+            except ValueError:
+                if not add_athletes or key in new:
+                    if key not in new:
+                        raise
+                    a = new[key]
+                else:
+                    parts = name.split(",", 1)
+                    first, last = ((parts[1].strip(), parts[0].strip()) if len(parts) == 2 else (name.split(None, 1) + [""])[:2])
+                    gender = GENDERS.get((r.get("gender") or "").lower()) or _from_race(race, {
+                        "boys": "Boys", "boy": "Boys", "men": "Boys", "mens": "Boys", "girls": "Girls", "girl": "Girls",
+                        "women": "Girls", "womens": "Girls"})
+                    if not gender:
+                        raise ValueError(f"add a gender (Boys or Girls) for new athlete '{name}'")
+                    grade = _int_or_none(r.get("grade") or r.get("yr") or "", 6, 12, "grade")
+                    if grade is None:
+                        raise ValueError(f"add a grade for new athlete '{name}'")
+                    group = next((g for g in GROUPS if g.lower() == (r.get("group") or "").lower()), None) or _from_race(
+                        race, {"varsity": "Varsity", "jv": "JV", "frosh": "Development", "freshman": "Development",
+                               "sophomore": "Development", "novice": "Development"}) or "Development"
+                    a = Athlete(first_name=first, last_name=last, gender=gender, grade=grade, group=group,
+                                link_token=new_link_token())
+                    new[key] = a
+            todo.append((a, meet, d, (r.get("course") or "").strip()[:160], race[:120], meters, label[:40] or f"{meters:g} m", t, place))
+        except ValueError as exc:
+            errors.append(f"Line {line}: {exc}")
+    if errors:
+        raise ImportErrors(errors)
+    for a in new.values():
+        db.add(a)
+    db.flush()
+    n = 0
+    for a, meet, d, course, race, meters, label, t, place in todo:
+        if db.scalar(select(RaceResult.id).where(RaceResult.athlete_id == a.id, RaceResult.date == d, RaceResult.meet == meet,
+                                                 RaceResult.race == race, RaceResult.time_s == t)):
+            continue
+        rr = RaceResult(athlete_id=a.id, meet=meet[:160], date=d, course=course, race=race, distance_m=meters,
+                        distance_label=label, time_s=t, place=place)
+        event = benchmark_event(meters)
+        if event:
+            res = db.scalar(select(Result).where(Result.athlete_id == a.id, Result.event == event, Result.date == d,
+                                                 Result.time_s == round(t, 2)))
+            if res is None:
+                res = Result(athlete_id=a.id, event=event, time_s=round(t, 2), date=d, season=season_for(d),
+                             course=(course or meet)[:120], kind="race", note=f"{meet} ({race})"[:200] if race else meet[:200])
+                db.add(res)
+                db.flush()
+            rr.result_id = res.id
+        db.add(rr)
+        n += 1
+    db.flush()
+    return n, len(new)
 
 
 def import_goals(db: Session, text: str, default_season: str) -> int:

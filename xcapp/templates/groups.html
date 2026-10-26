@@ -12,7 +12,7 @@
     {% for g in groups %}
     <tr>
       <td><input type="number" name="position_{{ g.id }}" value="{{ g.position }}" min="0" max="50" style="width:4.5rem" aria-label="Order of {{ g.name }}"></td>
-      <td><span class="pill" style="background:{{ g.color or '#FFFFFF' }}; color:#1B1B1F; border-color:#CFC7BC; margin-right:6px">{{ g.name }}</span><input type="text" name="name_{{ g.id }}" value="{{ g.name }}" maxlength="40" required aria-label="Name" style="width:9rem"></td>
+      <td><span class="pill" style="background:{{ g.color or '#FFFFF0' }}; color:{{ ink(g.color or '#FFFFF0') }}; border-color:rgba(0,0,0,.18); margin-right:6px">{{ g.name }}</span><input type="text" name="name_{{ g.id }}" value="{{ g.name }}" maxlength="40" required aria-label="Name" style="width:9rem"></td>
       <td><input type="text" name="color_{{ g.id }}" value="{{ g.color }}" maxlength="7" pattern="#[0-9A-Fa-f]{6}" placeholder="#B6D7A8" style="width:6.5rem" aria-label="{{ g.name }} color"></td>
       <td class="num"><input type="number" name="boys_{{ g.id }}" value="{{ g.min_vdot_boys|int }}" step="1" min="0" max="90" style="width:5rem" aria-label="{{ g.name }} boys cutoff"></td>
       <td class="num"><input type="number" name="girls_{{ g.id }}" value="{{ g.min_vdot_girls|int }}" step="1" min="0" max="90" style="width:5rem" aria-label="{{ g.name }} girls cutoff"></td>

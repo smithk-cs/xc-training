@@ -31,7 +31,7 @@ def test_group_button_and_explanation(app):
     db.commit()
     db.close()
     page = c.get("/a/tok-ava").text
-    assert '<a class="group-btn" href="#group">Gold</a>' in page and "Your coach placed you in this group." in page
+    assert '<a class="group-btn" href="#group" style="background:#D4AF37; color:#1B1B1F">Gold</a>' in page and "Your coach placed you in this group." in page
 
     db = SessionLocal()
     A.set_setting(db, "show_group_to_athletes", "0")
@@ -54,3 +54,22 @@ def test_garmin_section_moves_down_once_connected(app):
     page = c.get("/a/tok-ava").text
     assert page.count('id="g-h"') == 1 and "✓ Connected" in page
     assert page.index("My training") < page.index('id="u-h"') < page.index('id="g-h"') < page.index('id="pv-h"')
+
+
+def test_group_colors_look_like_their_names(app):
+    from xcapp.db import create_all
+    db = SessionLocal()
+    groups = {g.name: g for g in db.query(TrainingGroup)}
+    groups["Emerald"].color, groups["Ivory"].color, groups["Gold"].color = "#B6D7A8", "#ffffff", "#123456"  # old sheet, old sheet, coach's own
+    db.commit()
+    db.close()
+    create_all()
+    db = SessionLocal()
+    colors = {g.name: g.color for g in db.query(TrainingGroup)}
+    assert (colors["Emerald"], colors["Ivory"], colors["Gold"]) == ("#50C878", "#FFFFF0", "#123456")
+    a = db.query(Athlete).one()
+    a.ability_override = "Emerald"
+    db.commit()
+    db.close()
+    page = TestClient(app).get("/a/tok-ava").text
+    assert '<a class="group-btn" href="#group" style="background:#50C878; color:#1B1B1F">Emerald</a>' in page

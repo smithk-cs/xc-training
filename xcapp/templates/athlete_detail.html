@@ -29,6 +29,14 @@
   </tbody></table></div>
   <p class="small muted">Data recorded on Garmin devices is labelled with the device model, as Garmin requires.</p>
 </div>
+{% if races %}
+<div class="card">
+  <h2>Races</h2>
+  <div class="scroll"><table class="list"><thead><tr><th>Date</th><th>Meet</th><th>Race</th><th>Distance</th><th class="num">Place</th><th class="num">Time</th></tr></thead><tbody>
+  {% for r in races %}<tr><td>{{ r.date.strftime('%b %-d, %Y') }}</td><td><a href="/races">{{ r.meet }}</a></td><td>{{ r.race }}</td><td>{{ r.distance_label }}</td><td class="num">{{ r.place or '' }}</td><td class="num">{{ fmt_time(r.time_s) }}</td></tr>{% endfor %}
+  </tbody></table></div>
+</div>
+{% endif %}
 <div class="card">
   <h2>Benchmark results</h2>
   <table class="list"><thead><tr><th>Date</th><th>Event</th><th class="num">Time</th><th>Season</th><th>Course</th></tr></thead><tbody>

@@ -51,7 +51,7 @@
   {% for level, text in messages %}<div class="flash {{ level }}" role="status">{{ text }}</div>{% endfor %}
   {% if ability and ability.group %}
   <section class="panel" id="group" aria-label="Running group" style="gap:10px">
-    <div class="panel-head"><span>Running group: <b>{{ ability.group }}</b></span><span class="pill" style="background:{{ ability.color or '#FFFFFF' }}; color:#1B1B1F; border-color:#CFC7BC">{% if ability.vdot %}VDOT {{ ability.vdot }}{% else %}{{ ability.group }}{% endif %}</span></div>
+    <div class="panel-head"><span>Running group: <b>{{ ability.group }}</b></span><span class="pill" style="background:{{ ability.color or '#FFFFF0' }}; color:{{ ink(ability.color or '#FFFFF0') }}; border-color:rgba(0,0,0,.18)">{% if ability.vdot %}VDOT {{ ability.vdot }}{% else %}{{ ability.group }}{% endif %}</span></div>
     {% if ability.target_1600 %}<div class="facts"><div><span class="k">800 target</span><span class="big">{{ ability.target_800 }}</span></div><div><span class="k">1600 target</span><span class="big">{{ ability.target_1600 }}</span></div></div>{% endif %}
     <p class="muted small">{% if ability.override %}Your coach placed you in this group.{% else %}From your best 1 mile, 1.5 mile, 2 mile or 5K result{% if ability.source %} ({{ ability.source }}){% endif %}. It updates when your coach records a faster time.{% endif %}</p>
   </section>
@@ -91,6 +91,20 @@
         <span class="small muted">{% if t.goal %}Goal {{ fmt_time(t.goal) }}{% elif t.last_xc %}Last XC {{ fmt_time(t.last_xc) }}{% endif %}</span></div>
       {% endfor %}
     </div>
+  </section>
+  {% endif %}
+
+  {% if races %}
+  <section class="panel" aria-labelledby="mr-h">
+    <h2 id="mr-h">My races</h2>
+    <ul class="runs">
+      {% for r in races %}
+      <li><div class="row">
+        <span class="l"><span class="d">{{ r.meet }}</span><span class="small muted">{{ r.date.strftime('%b %-d, %Y') }} · {% if r.race %}{{ r.race }} · {% endif %}{{ r.distance_label }}</span></span>
+        <span class="r"><span class="mi">{{ fmt_time(r.time_s) }}</span>{% if r.place %}<span class="small muted">Place {{ r.place }}</span>{% endif %}</span>
+      </div></li>
+      {% endfor %}
+    </ul>
   </section>
   {% endif %}
 
