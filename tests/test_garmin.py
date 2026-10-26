@@ -2,6 +2,7 @@
 import base64
 import datetime as dt
 import hashlib
+import html
 import json
 import re
 from urllib.parse import parse_qs, urlparse
@@ -175,8 +176,13 @@ def test_webhook_and_callback_routes(monkeypatch, mock):
     r = c.post("/a/tok-ava/connect", data={"csrf": csrf})
     assert r.status_code == 303 and r.headers["location"] == "/a/tok-ava"          # consent box not ticked
     r = c.post("/a/tok-ava/connect", data={"csrf": csrf, "consent": "yes"})
-    assert r.status_code == 303 and r.headers["location"].startswith("https://connect.garmin.com/oauth2Confirm?")
-    state = parse_qs(urlparse(r.headers["location"]).query)["state"][0]
+    # A hand-off page, not a redirect from the form: browsers apply form-action to every hop of a form's redirects,
+    # and Garmin's sign-in can pass through other addresses.
+    assert r.status_code == 200 and "Taking you to Garmin" in r.text
+    to_garmin = html.unescape(re.search(r'id="go" class="button big-btn" href="([^"]+)"', r.text).group(1))
+    assert to_garmin.startswith("https://connect.garmin.com/oauth2Confirm?")
+    assert f"window.location.replace({json.dumps(to_garmin)})" in r.text.replace("\\u0026", "&")
+    state = parse_qs(urlparse(to_garmin).query)["state"][0]
     r = c.get(f"/garmin/callback?code=abc&state={state}")
     assert r.status_code == 303 and r.headers["location"] == "/a/tok-ava"
     page = c.get("/a/tok-ava").text

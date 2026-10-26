@@ -1,6 +1,7 @@
 """End-to-end run: real server + demo team + Garmin connection + webhook + AI + headless page checks."""
 import csv
 import datetime as dt
+import html
 import json
 import os
 import re
@@ -65,7 +66,8 @@ try:
     page = a.get(link).text
     csrf = re.search(r'name="csrf" value="([^"]+)"', page).group(1)
     r = a.post(link + "/connect", data={"csrf": csrf, "consent": "yes"})
-    to_garmin = r.headers.get("location", "")
+    m = re.search(r'id="go" class="button big-btn" href="([^"]+)"', r.text)  # the "Taking you to Garmin" hand-off page
+    to_garmin = html.unescape(m.group(1)) if m else ""
     r = a.get(to_garmin)  # "Garmin" sends the athlete back with a code
     back = r.headers.get("location", "")
     r = a.get(back)

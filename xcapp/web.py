@@ -737,7 +737,7 @@ def create_app() -> FastAPI:
             flash(request, str(exc), "error")
             return back(f"/a/{token}")
         request.session["athlete_token"] = token
-        return back(url)
+        return render(request, "garmin_go.html", None, url=url)
 
     @app.post("/a/{token}/disconnect")
     async def athlete_disconnect(request: Request, token: str, db: Session = Depends(get_db, scope="function")):

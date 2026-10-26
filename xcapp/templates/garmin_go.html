@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Connecting to Garmin · {{ team_name }}{% endblock %}
+{% block content %}
+<div class="card" style="max-width:480px; margin:8vh auto; text-align:center">
+  <h1>Taking you to Garmin…</h1>
+  <p>Sign in to Garmin and allow access to your activities. You’ll come right back here.</p>
+  <p><a id="go" class="button big-btn" href="{{ url }}">Continue to Garmin</a></p>
+</div>
+{# A plain navigation, not the form submission itself: a form may only send people to listed sites, and Garmin's
+   sign-in can pass through several addresses (or Apple and Google sign-in) on the way. #}
+<script>window.location.replace({{ url|tojson }});</script>
+{% endblock %}
