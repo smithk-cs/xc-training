@@ -74,7 +74,7 @@ def _token_request(http: httpx.Client, data: dict) -> dict:
     payload = {"client_id": s.garmin_client_id, "client_secret": s.garmin_client_secret, **data}
     r = http.post(s.garmin_token_url, data=payload, headers={"Content-Type": "application/x-www-form-urlencoded"})
     if r.status_code != 200:
-        raise GarminError(f"Garmin token request failed ({r.status_code}).")
+        raise GarminError(f"Garmin token request failed ({r.status_code}).{_reply(r)}")
     body = r.json()
     if not body.get("access_token"):
         raise GarminError("Garmin did not return an access token.")

@@ -217,3 +217,49 @@ def test_pasted_line_breaks_are_trimmed_from_settings(session, monkeypatch):
     session.flush()
     url = G.start_authorization(session, a, "test")
     assert parse_qs(urlparse(url).query)["client_id"] == ["69c0e91d-test"] and "%0A" not in url
+
+
+def test_returning_from_garmin_in_another_browser(session, monkeypatch, mock):
+    """Garmin Connect on a phone can send the athlete back to a different browser, without the app's session."""
+    from fastapi.testclient import TestClient
+    from sqlalchemy import select
+    from xcapp.models import Athlete
+    from xcapp.web import create_app
+    monkeypatch.setattr(G, "make_client", lambda: httpx.Client(transport=httpx.MockTransport(mock)))
+    a = Athlete(first_name="Ava", last_name="Doyle", gender="Girls", grade=10, group="JV", link_token="tok-ava")
+    session.add(a)
+    session.commit()
+    app = create_app()
+
+    def start():
+        url = G.start_authorization(session, a, "consent ok")
+        session.commit()
+        return parse_qs(urlparse(url).query)["state"][0]
+
+    fresh = TestClient(app, follow_redirects=False)                       # no cookies from the athlete page
+    r = fresh.get(f"/garmin/callback?code=abc&state={start()}")
+    assert r.status_code == 303 and r.headers["location"] == "/a/tok-ava"
+    assert "Garmin is connected" in fresh.get("/a/tok-ava").text
+
+    # Garmin refuses the code: the athlete sees why, the Sync log keeps it, and a reload never resends the code.
+    def refuse(req):
+        if req.url.host == "diauth.garmin.com":
+            mock.requests.append(req)
+            return httpx.Response(400, json={"error": "invalid_grant", "error_description": "Code already used"})
+        return mock(req)
+    monkeypatch.setattr(G, "make_client", lambda: httpx.Client(transport=httpx.MockTransport(refuse)))
+    state = start()
+    before = len(mock.requests)
+    other = TestClient(app, follow_redirects=False)
+    r = other.get(f"/garmin/callback?code=used&state={state}")
+    assert r.status_code == 303 and r.headers["location"] == "/a/tok-ava"
+    page = other.get("/a/tok-ava").text
+    assert "Garmin did not connect: Garmin token request failed (400). Garmin said:" in page and "invalid_grant" in page
+    r = other.get(f"/garmin/callback?code=used&state={state}")         # the page loads again
+    assert r.status_code == 400 and "This Garmin link has expired" in r.text
+    assert len(mock.requests) == before + 1                                 # Garmin was asked once, not twice
+    logs = [x.message for x in session.scalars(select(SyncLog).where(SyncLog.level == "error"))]
+    assert any(m.startswith("Garmin connection failed for Ava Doyle: Garmin token request failed (400). Garmin said:") for m in logs)
+
+    r = TestClient(app).get("/garmin/callback?code=abc&state=unknown")
+    assert r.status_code == 400 and "Garmin did not connect" in r.text and "tap Connect Garmin again" in r.text

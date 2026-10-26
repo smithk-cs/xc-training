@@ -16,6 +16,7 @@ from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+import httpx
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 from starlette.middleware.sessions import SessionMiddleware
@@ -29,8 +30,8 @@ from .db import SessionLocal, create_all
 from .fitfile import MAX_FIT_BYTES, FitError, parse_fit
 from .imports import GROUPS, ImportErrors, import_goals, import_results, import_roster, parse_date, set_goal
 from .ingest import ingest, log, rematch_day
-from .models import (Activity, AiRun, AppSetting, Athlete, DeletionRequest, GarminConnection, Injury, MissedDay, PainReport,
-                     PlannedWorkout, Result, StaffUser, SyncLog, TrainingGroup, utcnow)
+from .models import (Activity, AiRun, AppSetting, Athlete, DeletionRequest, GarminConnection, Injury, MissedDay,
+                     OAuthState, PainReport, PlannedWorkout, Result, StaffUser, SyncLog, TrainingGroup, utcnow)
 from .security import csrf_ok, csrf_token, hash_password, new_link_token, verify_password
 
 HERE = Path(__file__).parent
@@ -1272,21 +1273,28 @@ def create_app() -> FastAPI:
 
     @app.get("/garmin/callback", response_class=HTMLResponse)
     def garmin_callback(request: Request, db: Session = Depends(get_db, scope="function"), code: str = "", state: str = "", error: str = ""):
-        token = request.session.get("athlete_token")
-        if error or not code:
-            msg = "Garmin connection was cancelled." if error else "Garmin did not send a code back."
+        # The athlete comes from the sign-in record, not the browser session: Garmin's app can send people back to a
+        # different browser than the one they started in.
+        pending = db.get(OAuthState, state) if state else None
+        athlete = db.get(Athlete, pending.athlete_id) if pending else None
+        token = athlete.link_token if athlete else request.session.get("athlete_token")
+
+        def failed(msg: str):
             if token:
                 flash(request, msg, "error")
                 return back(f"/a/{token}")
-            raise HTTPException(400, msg)
+            return render(request, "message.html", None, status_code=400, title="Garmin did not connect",
+                          text=msg + " Open your athlete link and tap Connect Garmin again.")
+
+        if error or not code:
+            return failed("Garmin connection was cancelled." if error else "Garmin did not send a code back.")
         try:
             with G.make_client() as http:
                 a = G.complete_authorization(db, code, state, http)
-        except G.GarminError as exc:
-            if token:
-                flash(request, str(exc), "error")
-                return back(f"/a/{token}")
-            raise HTTPException(400, str(exc))
+        except (G.GarminError, httpx.HTTPError) as exc:
+            # Saved, not rolled back: the sign-in record stays used, so a reloaded page can't resend the one-time code.
+            log(db, "garmin", f"Garmin connection failed{' for ' + athlete.name if athlete else ''}: {exc}", "error")
+            return failed(f"Garmin did not connect: {exc}" if isinstance(exc, G.GarminError) else "Could not reach Garmin. Please try again.")
         flash(request, "Garmin is connected. New runs will appear after your watch syncs.")
         return back(f"/a/{a.link_token}")
 
