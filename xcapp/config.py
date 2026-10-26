@@ -6,8 +6,14 @@ from dataclasses import dataclass
 from zoneinfo import ZoneInfo
 
 
+def _env(name: str, default: str = "") -> str:
+    """A setting with surrounding spaces and line breaks removed: pasted secrets often pick one up, and Garmin or
+    Anthropic then reject the value without saying why."""
+    return os.getenv(name, default).strip()
+
+
 def _bool(name: str, default: bool) -> bool:
-    v = os.getenv(name)
+    v = _env(name)
     if v is None or v == "":
         return default
     return v.strip().lower() in {"1", "true", "yes", "on"}
@@ -67,38 +73,38 @@ class Settings:
     @classmethod
     def from_env(cls) -> "Settings":
         return cls(
-            database_url=os.getenv("DATABASE_URL", "sqlite:///./data/xc.db"),
-            secret_key=os.getenv("SECRET_KEY", ""),
-            token_key=os.getenv("TOKEN_KEY", ""),
-            base_url=os.getenv("BASE_URL", "http://localhost:8000"),
-            team_timezone=os.getenv("TEAM_TIMEZONE", "America/Los_Angeles"),
+            database_url=_env("DATABASE_URL", "sqlite:///./data/xc.db"),
+            secret_key=_env("SECRET_KEY", ""),
+            token_key=_env("TOKEN_KEY", ""),
+            base_url=_env("BASE_URL", "http://localhost:8000"),
+            team_timezone=_env("TEAM_TIMEZONE", "America/Los_Angeles"),
             secure_cookies=_bool("SECURE_COOKIES", True),
-            garmin_client_id=os.getenv("GARMIN_CLIENT_ID", ""),
-            garmin_client_secret=os.getenv("GARMIN_CLIENT_SECRET", ""),
-            garmin_authorize_url=os.getenv("GARMIN_AUTHORIZE_URL", "https://connect.garmin.com/oauth2Confirm"),
-            garmin_token_url=os.getenv("GARMIN_TOKEN_URL", "https://diauth.garmin.com/di-oauth2-service/oauth/token"),
-            garmin_api_base=os.getenv("GARMIN_API_BASE", "https://apis.garmin.com"),
+            garmin_client_id=_env("GARMIN_CLIENT_ID", ""),
+            garmin_client_secret=_env("GARMIN_CLIENT_SECRET", ""),
+            garmin_authorize_url=_env("GARMIN_AUTHORIZE_URL", "https://connect.garmin.com/oauth2Confirm"),
+            garmin_token_url=_env("GARMIN_TOKEN_URL", "https://diauth.garmin.com/di-oauth2-service/oauth/token"),
+            garmin_api_base=_env("GARMIN_API_BASE", "https://apis.garmin.com"),
             garmin_file_hosts=tuple(
-                h.strip().lower() for h in os.getenv("GARMIN_FILE_HOSTS", "apis.garmin.com").split(",") if h.strip()
+                h.strip().lower() for h in _env("GARMIN_FILE_HOSTS", "apis.garmin.com").split(",") if h.strip()
             ),
-            garmin_webhook_secret=os.getenv("GARMIN_WEBHOOK_SECRET", ""),
-            anthropic_api_key=os.getenv("ANTHROPIC_API_KEY", ""),
-            anthropic_model=os.getenv("ANTHROPIC_MODEL", "claude-sonnet-5-5"),
-            anthropic_base_url=os.getenv("ANTHROPIC_BASE_URL", ""),
-            nightly_hour=int(os.getenv("NIGHTLY_HOUR", "4")),
-            ai_monthly_budget=float(os.getenv("AI_MONTHLY_BUDGET_USD", "25")),
-            ai_effort=os.getenv("AI_EFFORT", "medium"),
-            cron_secret=os.getenv("CRON_SECRET", ""),
-            setup_code=os.getenv("SETUP_CODE", ""),
-            team_name=os.getenv("TEAM_NAME", "XC Training"),
-            org_name=os.getenv("ORG_NAME", ""),
-            privacy_contact=os.getenv("PRIVACY_CONTACT", ""),
-            hosting_provider=os.getenv("HOSTING_PROVIDER", ""),
-            certificate_provider=os.getenv("CERTIFICATE_PROVIDER", "Let’s Encrypt"),
-            privacy_effective=os.getenv("PRIVACY_EFFECTIVE_DATE", ""),
-            retention_days=int(os.getenv("DATA_RETENTION_DAYS", "90")),
-            team_logo_file=os.getenv("TEAM_LOGO_FILE", ""),
-            as_of_date=os.getenv("AS_OF_DATE", ""),
+            garmin_webhook_secret=_env("GARMIN_WEBHOOK_SECRET", ""),
+            anthropic_api_key=_env("ANTHROPIC_API_KEY", ""),
+            anthropic_model=_env("ANTHROPIC_MODEL", "claude-sonnet-5-5"),
+            anthropic_base_url=_env("ANTHROPIC_BASE_URL", ""),
+            nightly_hour=int(_env("NIGHTLY_HOUR", "4")),
+            ai_monthly_budget=float(_env("AI_MONTHLY_BUDGET_USD", "25")),
+            ai_effort=_env("AI_EFFORT", "medium"),
+            cron_secret=_env("CRON_SECRET", ""),
+            setup_code=_env("SETUP_CODE", ""),
+            team_name=_env("TEAM_NAME", "XC Training"),
+            org_name=_env("ORG_NAME", ""),
+            privacy_contact=_env("PRIVACY_CONTACT", ""),
+            hosting_provider=_env("HOSTING_PROVIDER", ""),
+            certificate_provider=_env("CERTIFICATE_PROVIDER", "Let’s Encrypt"),
+            privacy_effective=_env("PRIVACY_EFFECTIVE_DATE", ""),
+            retention_days=int(_env("DATA_RETENTION_DAYS", "90")),
+            team_logo_file=_env("TEAM_LOGO_FILE", ""),
+            as_of_date=_env("AS_OF_DATE", ""),
         )
 
     def problems(self) -> list[str]:

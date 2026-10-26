@@ -198,3 +198,19 @@ def test_webhook_and_callback_routes(monkeypatch, mock):
     assert db2.query(Activity).count() == 1
     db2.close()
     db.close()
+
+
+def test_pasted_line_breaks_are_trimmed_from_settings(session, monkeypatch):
+    """A secret pasted with a line break (seen live: client_id=%0A69c0...) made Garmin refuse the connection."""
+    from xcapp import config
+    from xcapp.models import Athlete
+    monkeypatch.setenv("GARMIN_CLIENT_ID", "\n69c0e91d-test \r\n")
+    monkeypatch.setenv("GARMIN_CLIENT_SECRET", " csecret-456\n")
+    monkeypatch.setenv("SECURE_COOKIES", " false\n")
+    s = config.reload_settings()
+    assert (s.garmin_client_id, s.garmin_client_secret, s.secure_cookies) == ("69c0e91d-test", "csecret-456", False)
+    a = Athlete(first_name="Ava", last_name="Doyle", gender="Girls", grade=10, group="JV", link_token="tok-trim")
+    session.add(a)
+    session.flush()
+    url = G.start_authorization(session, a, "test")
+    assert parse_qs(urlparse(url).query)["client_id"] == ["69c0e91d-test"] and "%0A" not in url
