@@ -63,7 +63,7 @@
 <div class="card scroll">
   <h2>Pain reports from athletes, last 4 weeks</h2>
   <table class="list"><thead><tr><th>Date</th><th>Athlete</th><th>Where</th><th class="num">Pain (0-10)</th><th>Note</th></tr></thead><tbody>
-  {% for p in pains %}<tr><td>{{ p.date.strftime('%b %-d') }}</td><td>{{ p.athlete.name }}</td><td>{{ p.body_area }}</td><td class="num">{% if p.severity >= 4 %}<span class="pill bad">{{ p.severity }}</span>{% else %}{{ p.severity }}{% endif %}</td><td class="small">{{ p.note }}</td></tr>
+  {% for p in pains %}<tr><td>{{ p.date.strftime('%b %-d') }}</td><td>{{ p.athlete.name }}</td><td>{{ p.body_area }}</td><td class="num">{% if p.severity >= 4 %}<span class="pill bad">{{ p.severity }}</span>{% else %}{{ p.severity }}{% endif %}</td><td class="small">{% if p.saw_trainer %}<span class="pill good">Saw trainer</span> {% endif %}{{ p.note }}</td></tr>
   {% else %}<tr><td colspan="5" class="muted">No pain reports.</td></tr>{% endfor %}
   </tbody></table>
 </div>

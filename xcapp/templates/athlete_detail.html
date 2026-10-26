@@ -22,7 +22,7 @@
   <td class="num">{{ fmt_time(act.duration_s)[:-2] }}</td><td class="num">{{ act.avg_hr|round|int if act.avg_hr else '' }}</td>
   <td>{% if act.planned %}{{ act.planned.title }}{% elif act.laps|selectattr('is_rep')|list %}{{ act.laps|selectattr('is_rep')|list|length }} reps (no plan that day){% endif %}</td>
   <td class="num">{{ act.rpe if act.rpe is not none else '' }}</td><td>{{ act.feel }}</td>
-  <td>{% set rp = run_pain.get(act.id) %}{% if rp %}<span class="pill bad">{{ rp.severity }}/10 {{ rp.body_area }}</span>{% endif %}</td>
+  <td>{% set rp = run_pain.get(act.id) %}{% if rp %}<span class="pill bad">{{ rp.severity }}/10 {{ rp.body_area }}</span>{% if rp.saw_trainer %} <span class="pill good">Saw trainer</span>{% endif %}{% endif %}</td>
   <td class="small">{{ act.device }}</td></tr>
   {% if act.athlete_note %}<tr><td></td><td colspan="9" class="small muted">Athlete note: {{ act.athlete_note }}</td></tr>{% endif %}
   {% else %}<tr><td colspan="10" class="muted">No runs yet.</td></tr>{% endfor %}
@@ -51,7 +51,7 @@
   <table class="list"><tbody>
   {% for i in injuries %}<tr><td>{{ i.onset_date.strftime('%b %-d') }}</td><td>{{ i.injury }} ({{ i.body_area }})</td><td>{{ 'returned ' + i.return_date.strftime('%b %-d') if i.return_date else 'no return date' }}</td></tr>
   {% if show_notes and i.notes %}<tr><td></td><td colspan="2" class="small muted">{{ i.notes }}</td></tr>{% endif %}{% endfor %}
-  {% for p in pains %}<tr><td>{{ p.date.strftime('%b %-d') }}</td><td>Pain {{ p.severity }}/10: {{ p.body_area }}</td><td class="small">{{ p.note }}</td></tr>{% endfor %}
+  {% for p in pains %}<tr><td>{{ p.date.strftime('%b %-d') }}</td><td>Pain {{ p.severity }}/10: {{ p.body_area }}</td><td class="small">{% if p.saw_trainer %}<span class="pill good">Saw trainer</span> {% endif %}{{ p.note }}</td></tr>{% endfor %}
   {% for m in missed %}<tr><td>{{ m.date.strftime('%b %-d') }}</td><td>Missed run ({{ m.reason|lower }}){% if m.reason == 'Injury' %}: {{ m.body_area|lower }}, {{ m.side|lower }}{% endif %}{% if m.pain %}, pain {{ m.pain }}/10{% endif %}</td><td class="small">{{ m.description }}</td></tr>{% endfor %}
   {% if not injuries and not pains and not missed %}<tr><td class="muted">Nothing logged.</td></tr>{% endif %}
   </tbody></table>

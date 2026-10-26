@@ -52,6 +52,7 @@
       <div class="lvls">{% for n in range(1, 11) %}<label class="lvl"><input type="radio" name="pain_level" value="{{ n }}" {% if pain and pain.severity == n %}checked{% endif %} aria-label="Pain {{ n }} out of 10"><span>{{ n }}</span></label>{% endfor %}</div>
       <div class="scale-ends"><span>1 = a little</span><span>10 = worst</span></div>
     </fieldset>
+    <label class="consent"><input type="checkbox" name="saw_trainer" value="yes"{% if pain and pain.saw_trainer %} checked{% endif %}><span>I’ve seen the athletic trainer about this.</span></label>
     <label>Note for your coaches (optional)<input type="text" name="note" maxlength="300" value="{{ act.athlete_note or '' }}" placeholder="e.g. right calf tight on the hills"></label>
     <p class="muted small" style="margin:0">Only your coaches and athletic trainer see this.</p>
     <button type="submit" class="big-btn">Save</button>

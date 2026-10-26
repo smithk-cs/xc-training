@@ -233,6 +233,7 @@ class PainReport(Base):
     body_area: Mapped[str] = mapped_column(String(60))
     severity: Mapped[int] = mapped_column(Integer)  # 0-10
     note: Mapped[str] = mapped_column(String(300), default="")
+    saw_trainer: Mapped[bool] = mapped_column(Boolean, default=False)  # the athlete says they've seen the athletic trainer
     activity_id: Mapped[int | None] = mapped_column(ForeignKey("activities.id", ondelete="SET NULL"), nullable=True)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
     athlete: Mapped[Athlete] = relationship(back_populates="pain_reports")

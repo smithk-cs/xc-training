@@ -900,7 +900,7 @@ def create_app() -> FastAPI:
             if not 0 <= sev <= 10 or area not in BODY_AREAS:
                 raise ValueError("Pick where it hurts and how much (0 to 10).")
             db.add(PainReport(athlete_id=a.id, date=A.team_today(), body_area=area, severity=sev,
-                              note=str(f.get("note", ""))[:300]))
+                              note=str(f.get("note", ""))[:300], saw_trainer=bool(f.get("saw_trainer"))))
             flash(request, "Thanks. Your coach will see this today." + (" Please also tell your coach or athletic trainer in person." if sev >= A.PAIN_FLAG else ""))
         except ValueError as exc:
             flash(request, str(exc), "error")
@@ -1188,6 +1188,7 @@ def create_app() -> FastAPI:
         else:
             p = existing or PainReport(athlete_id=a.id, activity_id=act.id)
             p.date, p.body_area, p.severity, p.note = act.local_date, area, level, note
+            p.saw_trainer = bool(f.get("saw_trainer"))
             db.add(p)
         msg = "Saved. Thanks for adding your effort."
         if level is not None and level >= A.PAIN_FLAG:
@@ -1344,7 +1345,8 @@ def create_app() -> FastAPI:
             "goals": [{"season": g.season, "event": g.event, "goal_s": g.goal_s} for g in a.goals],
             "injuries": [{"onset": i.onset_date.isoformat(), "injury": i.injury, "body_area": i.body_area,
                           "return": i.return_date.isoformat() if i.return_date else None} for i in a.injuries],
-            "pain_reports": [{"date": p.date.isoformat(), "body_area": p.body_area, "severity": p.severity, "note": p.note or None} for p in a.pain_reports],
+            "pain_reports": [{"date": p.date.isoformat(), "body_area": p.body_area, "severity": p.severity, "note": p.note or None,
+                              "saw_athletic_trainer": p.saw_trainer} for p in a.pain_reports],
             "days_missed": [{"date": m.date.isoformat(), "reason": m.reason, "body_area": m.body_area or None, "side": m.side or None,
                              "pain": m.pain, "started": m.started or None, "seen_by": m.seen_by or None, "more_days": m.more_days or None,
                              "description": m.description or None}
