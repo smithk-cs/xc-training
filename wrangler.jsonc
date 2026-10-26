@@ -29,8 +29,8 @@
   },
   // Settings that are not secret. Secrets (DATABASE_URL, SECRET_KEY, ...) are listed in cloudflare/worker.js.
   "vars": {
-    // The app's public https address, used in athlete links and for Garmin. Set after the first deploy.
-    "BASE_URL": "",
+    // The app's public https address, used in athlete links and for Garmin (no trailing slash).
+    "BASE_URL": "https://xc-training.jesuit-xc.workers.dev",
     "TEAM_TIMEZONE": "America/Los_Angeles",
     "TEAM_NAME": "Jesuit Cross Country",
     "NIGHTLY_HOUR": "4",
