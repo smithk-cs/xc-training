@@ -34,7 +34,8 @@ def env(tmp_path, monkeypatch):
     monkeypatch.setenv("TEAM_TIMEZONE", "America/Los_Angeles")
     for k in ("ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL", "AS_OF_DATE", "GARMIN_FILE_HOSTS"):
         monkeypatch.delenv(k, raising=False)
-    from xcapp import config, db
+    from xcapp import config, db, web
+    monkeypatch.setattr(web, "BACKFILL_IN_BACKGROUND", False)  # tests drive the Garmin past-run queue themselves
     config.reload_settings()
     db.init_engine(os.environ["DATABASE_URL"])
     db.create_all()

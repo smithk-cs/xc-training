@@ -15,6 +15,7 @@ import base64
 import datetime as dt
 import hashlib
 import secrets
+import time
 from urllib.parse import urlencode, urlparse
 
 import httpx
@@ -24,7 +25,7 @@ from sqlalchemy.orm import Session
 from .config import settings
 from .fitfile import MAX_FIT_BYTES, ParsedActivity, ParsedLap, parse_fit
 from .ingest import ingest, log
-from .models import Athlete, GarminConnection, OAuthState
+from .models import Athlete, GarminBackfill, GarminConnection, OAuthState
 from .security import decrypt, encrypt
 
 STATE_MAX_AGE = dt.timedelta(minutes=15)
@@ -156,61 +157,102 @@ def complete_authorization(db: Session, code: str, state: str, http: httpx.Clien
     log(db, "garmin", f"{athlete.name} connected Garmin (permissions: {conn.permissions or 'unknown'}).")
     if perms and "ACTIVITY_EXPORT" not in perms:
         log(db, "garmin", f"{athlete.name} did not share activities with the team app.", "warn")
-    elif settings().garmin_backfill_days > 0:
-        try:  # past runs make load ratios useful from day one; connecting must not fail if this does
-            request_backfill(db, conn, http, settings().garmin_backfill_days)
-        except Exception as exc:
-            log(db, "garmin", f"Could not ask Garmin for {athlete.name}'s past runs: {exc}", "warn")
+    elif settings().garmin_backfill_days > 0:  # past runs make load ratios useful from day one
+        queue_backfill(db, conn, settings().garmin_backfill_days, delay=BACKFILL_AFTER_CONNECT)
     return athlete
 
 
 # ---------- backfill (past runs) ----------
 
 # Garmin's Summary Backfill: ask for a past date range; Garmin answers 202 and later delivers the activities to the
-# same notification endpoints as new runs (Activities, and Activity Details for laps and heart rate). Requests asking
-# for a range already requested come back 409. Check these names and the range limit against your Garmin docs.
+# same notification endpoints as new runs (Activities, and Activity Details for laps and heart rate). A range already
+# requested comes back 409. Seen live: right after connecting, Garmin answers 403 "User not registered with consumer"
+# for a short while, and backfill is limited per minute (429 "Limit 100 per 1 minute"). So requests wait in a queue
+# (GarminBackfill), start a couple of minutes after connecting, go out at most once a minute, and are retried.
 BACKFILL_PATH = "/wellness-api/rest/backfill/{kind}"
 BACKFILL_KINDS = ("activities", "activityDetails")
 BACKFILL_START, BACKFILL_END = "summaryStartTimeInSeconds", "summaryEndTimeInSeconds"
-BACKFILL_MAX_DAYS = 90  # longest range in one request
+BACKFILL_MAX_DAYS = 90                              # longest range in one request
+BACKFILL_AFTER_CONNECT = dt.timedelta(minutes=2)    # let Garmin finish registering the athlete
+BACKFILL_SPACING_S = 65                             # seconds between requests to Garmin
+BACKFILL_RETRY = dt.timedelta(minutes=5)
+BACKFILL_MAX_ATTEMPTS = 6
 
 
-def request_backfill(db: Session, conn: GarminConnection, http: httpx.Client, days: int) -> str:
-    """Ask Garmin to resend the past `days` of activities. Returns a short summary for the coach; also logged."""
+def queue_backfill(db: Session, conn: GarminConnection, days: int, delay: dt.timedelta = dt.timedelta(0)) -> str:
+    """Queue requests for the past `days` of runs, in ranges Garmin accepts. Returns a message for the coach."""
     days = max(1, min(int(days), 365))
-    token = access_token(db, conn, http)
-    end = dt.datetime.now(dt.timezone.utc)
+    end = _now()
     start = end - dt.timedelta(days=days)
-    accepted = already = 0
-    failures = []
-    for kind in BACKFILL_KINDS:
+    for kind in BACKFILL_KINDS:  # activities first: mileage matters most for load ratios
         chunk_end = end
         while chunk_end > start:
             chunk_start = max(start, chunk_end - dt.timedelta(days=BACKFILL_MAX_DAYS))
-            params = {BACKFILL_START: int(chunk_start.timestamp()), BACKFILL_END: int(chunk_end.timestamp())}
-            try:
-                r = http.get(settings().garmin_api_base.rstrip("/") + BACKFILL_PATH.format(kind=kind), params=params,
-                             headers={"Authorization": f"Bearer {token}"})
-                code = r.status_code
-                said = _reply(r) if code not in (200, 202, 409) else ""
-            except httpx.HTTPError as exc:
-                code, said = f"no answer ({exc.__class__.__name__})", ""
-            if code in (200, 202):
-                accepted += 1
-            elif code == 409:
-                already += 1
-            else:
-                failures.append(f"{kind} {chunk_start:%b %-d}-{chunk_end:%b %-d}: {code}.{said}".rstrip("."))
+            db.add(GarminBackfill(connection_id=conn.id, kind=kind, start_at=chunk_start, end_at=chunk_end,
+                                  not_before=end + delay))
             chunk_end = chunk_start
-    name = conn.athlete.name
-    if failures:
-        msg = f"Garmin did not accept every request for {name}'s past {days} days of runs ({'; '.join(failures)})."
-        log(db, "garmin", msg, "warn")
-    else:
-        msg = (f"Asked Garmin for {name}'s runs from the past {days} days"
-               + (" (some were already requested)" if already else "") + ". They arrive over the next few minutes to hours.")
-        log(db, "garmin", msg)
+    msg = (f"Queued a request to Garmin for {conn.athlete.name}'s runs from the past {days} days. "
+           "They arrive over the next few minutes to hours.")
+    log(db, "garmin", msg)
     return msg
+
+
+def _send_backfill(db: Session, job: GarminBackfill, http: httpx.Client) -> None:
+    """Send one queued request to Garmin and record what happened."""
+    conn = job.connection
+    span = f"{job.kind} {job.start_at:%b %-d}-{job.end_at:%b %-d}"
+    if conn is None or conn.status != "connected":
+        job.status, job.last_result = "failed", "not connected to Garmin"
+        return
+    name = conn.athlete.name
+    job.attempts += 1
+    try:
+        token = access_token(db, conn, http)
+        if not conn.permissions:  # read right after connecting, Garmin may not have known the athlete yet
+            try:
+                conn.permissions = ",".join(_permissions_list(_api_get(http, token, "/wellness-api/rest/user/permissions")))
+                log(db, "garmin", f"{name}'s Garmin permissions: {conn.permissions or 'none'}.")
+            except GarminError:
+                pass
+        r = http.get(settings().garmin_api_base.rstrip("/") + BACKFILL_PATH.format(kind=job.kind),
+                     params={BACKFILL_START: int(job.start_at.replace(tzinfo=dt.timezone.utc).timestamp()),
+                             BACKFILL_END: int(job.end_at.replace(tzinfo=dt.timezone.utc).timestamp())},
+                     headers={"Authorization": f"Bearer {token}"})
+        code, said = r.status_code, _reply(r)
+    except (GarminError, httpx.HTTPError) as exc:
+        code, said = "no answer", f" {exc}"
+    if code in (200, 202, 409):
+        job.status, job.last_result = "sent", str(code)
+        log(db, "garmin", f"Garmin accepted the request for {name}'s {span}" + (" (already requested)." if code == 409 else "."))
+    elif job.attempts < BACKFILL_MAX_ATTEMPTS:
+        job.last_result = f"{code}.{said}".rstrip(".")
+        job.not_before = _now() + BACKFILL_RETRY
+        log(db, "garmin", f"Garmin was not ready for {name}'s {span} ({job.last_result}); trying again in a few minutes.", "warn")
+    else:
+        job.status, job.last_result = "failed", f"{code}.{said}".rstrip(".")
+        log(db, "garmin", f"Gave up asking Garmin for {name}'s {span} after {job.attempts} tries ({job.last_result}).", "error")
+
+
+def process_backfills(db: Session, http: httpx.Client, sleep=time.sleep, budget_s: float = 840) -> int:
+    """Send queued requests that are due, at most one per BACKFILL_SPACING_S, waiting for ones due within the budget.
+    Commits after each request. Returns how many requests went to Garmin."""
+    deadline = _now() + dt.timedelta(seconds=budget_s)
+    sent = 0
+    while True:
+        job = db.scalar(select(GarminBackfill).where(GarminBackfill.status == "waiting")
+                        .order_by(GarminBackfill.not_before, GarminBackfill.id).limit(1))
+        if job is None or job.not_before > deadline:
+            return sent
+        wait = (job.not_before - _now()).total_seconds()
+        if sent:
+            wait = max(wait, BACKFILL_SPACING_S)
+        if wait > 0:
+            if _now() + dt.timedelta(seconds=wait) > deadline:
+                return sent
+            sleep(wait)
+        _send_backfill(db, job, http)
+        db.commit()
+        sent += 1
 
 
 def access_token(db: Session, conn: GarminConnection, http: httpx.Client) -> str:

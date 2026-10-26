@@ -35,6 +35,7 @@ from .models import (Activity, AiRun, AppSetting, Athlete, DeletionRequest, Garm
 from .security import csrf_ok, csrf_token, hash_password, new_link_token, verify_password
 
 HERE = Path(__file__).parent
+BACKFILL_IN_BACKGROUND = True  # tests switch this off and run G.process_backfills themselves
 INJURY_TYPES = ["Medial tibial stress (shin splints)", "Tibial bone stress injury", "Other bone stress injury",
                 "Achilles tendinopathy", "Plantar fasciitis", "IT band syndrome", "Patellofemoral pain",
                 "Hamstring strain", "Calf strain", "Hip flexor strain", "Ankle sprain", "Illness", "Other"]
@@ -406,7 +407,8 @@ def create_app() -> FastAPI:
         return back(f"/athletes/{a.id}")
 
     @app.post("/athletes/{athlete_id}/garmin-backfill")
-    async def athlete_garmin_backfill(request: Request, athlete_id: int, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
+    async def athlete_garmin_backfill(request: Request, athlete_id: int, background: BackgroundTasks,
+                                      user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
         f = await form_checked(request)
         a = get_athlete(db, athlete_id)
         if not (a.garmin and a.garmin.status == "connected"):
@@ -414,11 +416,11 @@ def create_app() -> FastAPI:
             return back(f"/athletes/{a.id}")
         try:
             days = int(f.get("days") or s.garmin_backfill_days or 90)
-            with G.make_client() as http:
-                msg = G.request_backfill(db, a.garmin, http, days)
-            flash(request, msg, "error" if msg.startswith("Garmin did not") else "ok")
-        except (ValueError, G.GarminError) as exc:
-            flash(request, f"Could not ask Garmin for past runs: {exc}", "error")
+        except ValueError:
+            flash(request, "Enter a number of days.", "error")
+            return back(f"/athletes/{a.id}")
+        flash(request, G.queue_backfill(db, a.garmin, days) + " Progress shows in the Sync log.")
+        background.add_task(kick_backfills)
         return back(f"/athletes/{a.id}")
 
     @app.post("/athletes/{athlete_id}/new-link")
@@ -1272,7 +1274,8 @@ def create_app() -> FastAPI:
     # ---------- Garmin ----------
 
     @app.get("/garmin/callback", response_class=HTMLResponse)
-    def garmin_callback(request: Request, db: Session = Depends(get_db, scope="function"), code: str = "", state: str = "", error: str = ""):
+    def garmin_callback(request: Request, background: BackgroundTasks, db: Session = Depends(get_db, scope="function"),
+                        code: str = "", state: str = "", error: str = ""):
         # The athlete comes from the sign-in record, not the browser session: Garmin's app can send people back to a
         # different browser than the one they started in.
         pending = db.get(OAuthState, state) if state else None
@@ -1295,6 +1298,7 @@ def create_app() -> FastAPI:
             # Saved, not rolled back: the sign-in record stays used, so a reloaded page can't resend the one-time code.
             log(db, "garmin", f"Garmin connection failed{' for ' + athlete.name if athlete else ''}: {exc}", "error")
             return failed(f"Garmin did not connect: {exc}" if isinstance(exc, G.GarminError) else "Could not reach Garmin. Please try again.")
+        background.add_task(kick_backfills)
         flash(request, "Garmin is connected. New runs will appear after your watch syncs.")
         return back(f"/a/{a.link_token}")
 
@@ -1329,12 +1333,34 @@ def create_app() -> FastAPI:
         if not isinstance(payload, dict):
             raise HTTPException(400, "Body must be a JSON object.")
         background.add_task(_process, payload)
+        background.add_task(kick_backfills)
         return Response(status_code=200)
 
     nightly_lock = threading.Lock()
+    backfill_lock = threading.Lock()
+
+    def kick_backfills():
+        """Send queued Garmin past-run requests on a background thread (paced and retried; see G.process_backfills).
+        Run after the response, so the queued rows are saved first."""
+        if not (BACKFILL_IN_BACKGROUND and s.garmin_configured) or not backfill_lock.acquire(blocking=False):
+            return
+
+        def run():
+            db = SessionLocal()
+            try:
+                with G.make_client() as http:
+                    G.process_backfills(db, http)
+            except Exception as exc:
+                db.rollback()
+                log(db, "garmin", f"Sending past-run requests to Garmin stopped: {exc}", "error")
+                db.commit()
+            finally:
+                db.close()
+                backfill_lock.release()
+        threading.Thread(target=run, daemon=True).start()
 
     @app.post("/cron/nightly")
-    def cron_nightly(request: Request, force: bool = False):
+    def cron_nightly(request: Request, background: BackgroundTasks, force: bool = False):
         """Called by the hosting platform's timer. Runs only during NIGHTLY_HOUR (team time) unless force=true."""
         from .cli import is_nightly_hour, nightly
         auth = request.headers.get("authorization", "")
@@ -1345,6 +1371,7 @@ def create_app() -> FastAPI:
         if not nightly_lock.acquire(blocking=False):
             raise HTTPException(409, "The nightly job is already running.")
         try:
+            background.add_task(kick_backfills)  # also catches up on past-run requests still waiting
             return {"ran": nightly()}
         finally:
             nightly_lock.release()

@@ -79,6 +79,23 @@ class GarminConnection(Base):
     athlete: Mapped[Athlete] = relationship(back_populates="garmin")
 
 
+class GarminBackfill(Base):
+    """One waiting request to Garmin for past runs (Summary Backfill). Sent at most once a minute, retried if Garmin
+    is not ready yet; Garmin then delivers the runs through the notification endpoints."""
+    __tablename__ = "garmin_backfills"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    connection_id: Mapped[int] = mapped_column(ForeignKey("garmin_connections.id", ondelete="CASCADE"), index=True)
+    kind: Mapped[str] = mapped_column(String(30))  # activities | activityDetails
+    start_at: Mapped[dt.datetime] = mapped_column(DateTime)
+    end_at: Mapped[dt.datetime] = mapped_column(DateTime)
+    not_before: Mapped[dt.datetime] = mapped_column(DateTime, index=True)
+    status: Mapped[str] = mapped_column(String(10), default="waiting")  # waiting | sent | failed
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    last_result: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
+    connection: Mapped[GarminConnection] = relationship()
+
+
 class OAuthState(Base):
     __tablename__ = "oauth_states"
     state: Mapped[str] = mapped_column(String(100), primary_key=True)
