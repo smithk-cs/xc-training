@@ -783,8 +783,10 @@ def create_app() -> FastAPI:
         team_goals = A.goal_rows(db)
         prog, seasons = A.progress(bench, [g for g in team_goals if g["athlete_id"] == a.code], roster)
         tiles = [p for p in prog if p["current"] is not None]
-        ability = A.abilities(db, today).get(a.id, {}) if A.get_setting(db, "show_group_to_athletes", "1") == "1" else {}
-        return render(request, "athlete.html", None, a=a, acts=acts, tiles=tiles, seasons=seasons, need=need, ability=ability, open_delete=open_delete,
+        show_group = A.get_setting(db, "show_group_to_athletes", "1") == "1"
+        ability = A.abilities(db, today).get(a.id, {}) if show_group else {}
+        return render(request, "athlete.html", None, a=a, acts=acts, tiles=tiles, seasons=seasons, need=need, ability=ability,
+                      show_group=show_group, open_delete=open_delete,
                       areas=BODY_AREAS, token=token, today=today.isoformat())
 
     @app.post("/a/{token}/connect")

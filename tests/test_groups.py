@@ -120,7 +120,8 @@ def test_athlete_sets_type_and_workout(web):
     assert "Type of run" in page and "Hill repeats (Wed, Oct 21)" in page and "Old workout" not in page
     assert re.search(r'value="Workout" checked', page)                         # suggested from the matched workout
     me = c.get("/a/tok-ava").text
-    assert "Training group: <b>Aquamarine</b>" in me and "VDOT 51" in me     # 19:30 girls' 5K
+    assert "Running group: <b>Aquamarine</b>" in me and "VDOT 51" in me      # 19:30 girls' 5K
+    assert '<a class="group-btn" href="#group">Aquamarine · VDOT 51</a>' in me  # beside the name
     assert ">2:31<" in me and ">5:44<" in me                                   # the team sheet's targets for VDOT 51
     r = c.post(f"/a/tok-ava/runs/{act_id}", data={"csrf": csrf, "rpe": "7", "pain_area": "None", "run_type": "Race", "workout": "none"})
     assert r.status_code == 303

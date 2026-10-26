@@ -115,6 +115,9 @@ span.dash-skeleton { color: transparent; }
 .hero .team img { height: 48px; width: auto; }
 .hero .team span { font-family: var(--font-display); font-weight: 700; font-size: 16px; letter-spacing: .12em; text-transform: uppercase; color: var(--brand-gold-light); }
 .hero h1 { margin: 0; color: #FFFFFF; font-size: 44px; line-height: 1; }
+.hero .hero-title { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.hero .group-btn { display: inline-flex; align-items: center; min-height: 36px; padding: 4px 14px; border-radius: 999px; background: var(--brand-gold); color: #1B1B1F; font-weight: 700; font-size: 15px; text-decoration: none; white-space: nowrap; }
+.hero .group-btn:hover, .hero .group-btn:focus-visible { background: var(--brand-gold-light); }
 .hero p { margin: 0; color: var(--on-red-soft); font-size: 15px; line-height: 1.45; }
 .hero a.back { color: var(--on-red-soft); font-weight: 500; text-decoration: none; }
 .stack { padding: 16px; display: flex; flex-direction: column; gap: 16px; }
