@@ -419,7 +419,11 @@ def create_app() -> FastAPI:
         except ValueError:
             flash(request, "Enter a number of days.", "error")
             return back(f"/athletes/{a.id}")
-        flash(request, G.queue_backfill(db, a.garmin, days) + " Progress shows in the Sync log.")
+        msg = G.queue_backfill(db, a.garmin, days)
+        if G.history_blocked(a.garmin):
+            flash(request, msg, "error")
+            return back(f"/athletes/{a.id}")
+        flash(request, msg + " Progress shows in the Sync log.")
         background.add_task(kick_backfills)
         return back(f"/athletes/{a.id}")
 

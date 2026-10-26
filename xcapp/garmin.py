@@ -177,10 +177,24 @@ BACKFILL_AFTER_CONNECT = dt.timedelta(minutes=2)    # let Garmin finish register
 BACKFILL_SPACING_S = 65                             # seconds between requests to Garmin
 BACKFILL_RETRY = dt.timedelta(minutes=5)
 BACKFILL_MAX_ATTEMPTS = 6
+# Past data needs this permission (seen live: 412 "Access denied ... required HISTORICAL_DATA_EXPORT"). It is turned on
+# for the app in the Garmin Developer Portal; each athlete then grants it when they connect.
+HISTORY_PERMISSION = "HISTORICAL_DATA_EXPORT"
+NO_HISTORY = ("Garmin has not given the team app access to past data ({p}). Turn on historical data for the app in the "
+              "Garmin Developer Portal (API Configuration); then {name} disconnects and reconnects Garmin.")
+
+
+def history_blocked(conn: GarminConnection) -> bool:
+    """True when Garmin has said which permissions the athlete granted, and past data is not among them."""
+    return bool(conn.permissions) and HISTORY_PERMISSION not in conn.permissions.split(",")
 
 
 def queue_backfill(db: Session, conn: GarminConnection, days: int, delay: dt.timedelta = dt.timedelta(0)) -> str:
     """Queue requests for the past `days` of runs, in ranges Garmin accepts. Returns a message for the coach."""
+    if history_blocked(conn):
+        msg = NO_HISTORY.format(p=HISTORY_PERMISSION, name=conn.athlete.name)
+        log(db, "garmin", msg, "warn")
+        return msg
     days = max(1, min(int(days), 365))
     end = _now()
     start = end - dt.timedelta(days=days)
@@ -224,6 +238,12 @@ def _send_backfill(db: Session, job: GarminBackfill, http: httpx.Client) -> None
     if code in (200, 202, 409):
         job.status, job.last_result = "sent", str(code)
         log(db, "garmin", f"Garmin accepted the request for {name}'s {span}" + (" (already requested)." if code == 409 else "."))
+    elif code == 412 and HISTORY_PERMISSION in said:  # a missing permission won't fix itself; don't use up the quota
+        job.status, job.last_result = "failed", f"{code}.{said}".rstrip(".")
+        log(db, "garmin", NO_HISTORY.format(p=HISTORY_PERMISSION, name=name), "error")
+        for other in db.scalars(select(GarminBackfill).where(GarminBackfill.connection_id == conn.id,
+                                                              GarminBackfill.status == "waiting")):
+            other.status, other.last_result = "failed", f"skipped: Garmin needs {HISTORY_PERMISSION}"
     elif job.attempts < BACKFILL_MAX_ATTEMPTS:
         job.last_result = f"{code}.{said}".rstrip(".")
         job.not_before = _now() + BACKFILL_RETRY

@@ -38,7 +38,7 @@ class MockGarmin:
             if u.path == "/wellness-api/rest/user/id":
                 return httpx.Response(200, json={"userId": "garmin-user-1"})
             if u.path == "/wellness-api/rest/user/permissions":
-                return httpx.Response(200, json=["ACTIVITY_EXPORT", "WORKOUT_IMPORT"])
+                return httpx.Response(200, json=["ACTIVITY_EXPORT", "WORKOUT_IMPORT", "HISTORICAL_DATA_EXPORT"])
             if u.path == "/files/activity/1":
                 return httpx.Response(200, content=FIT)
             if u.path == "/wellness-api/rest/user/registration" and req.method == "DELETE":
@@ -84,7 +84,7 @@ def test_authorization_flow(session, athlete, http, mock):
     assert base64.urlsafe_b64encode(hashlib.sha256(form["code_verifier"].encode()).digest()).rstrip(b"=").decode() == q["code_challenge"]
     assert mock.requests[1].url.path == "/wellness-api/rest/user/id" and mock.requests[1].headers["authorization"] == "Bearer AT1"
     conn = a.garmin
-    assert conn.garmin_user_id == "garmin-user-1" and conn.permissions == "ACTIVITY_EXPORT,WORKOUT_IMPORT"
+    assert conn.garmin_user_id == "garmin-user-1" and conn.permissions == "ACTIVITY_EXPORT,WORKOUT_IMPORT,HISTORICAL_DATA_EXPORT"
     assert conn.access_token_enc != "AT1" and decrypt(conn.access_token_enc) == "AT1"   # encrypted at rest
     assert session.get(OAuthState, q["state"]) is None                                   # one-time use
     with pytest.raises(G.GarminError):

@@ -80,7 +80,7 @@ def test_connecting_queues_the_past_90_days_and_sends_them_paced(session, athlet
     assert [j.status for j in jobs(session)] == ["sent", "sent"]
     log = " | ".join(messages(session))
     assert "Garmin accepted the request for Lucia Sorensen's activities Jul 28-Oct 26." in log
-    assert "Lucia Sorensen's Garmin permissions: ACTIVITY_EXPORT,WORKOUT_IMPORT." not in log  # already known at connect
+    assert "Lucia Sorensen's Garmin permissions: ACTIVITY_EXPORT,WORKOUT_IMPORT,HISTORICAL_DATA_EXPORT." not in log  # already known at connect
 
 
 def test_not_registered_and_too_many_requests_are_retried(session, athlete, clock):
@@ -141,8 +141,8 @@ def test_permissions_are_read_again_and_disconnected_athletes_are_skipped(sessio
     log = " | ".join(messages(session))
     assert "Garmin said: {\"errorType\":\"partner_registration_not_found\"}" in log and athlete.garmin.permissions == ""
     G.process_backfills(session, http, sleep=clock.sleep)
-    assert athlete.garmin.permissions == "ACTIVITY_EXPORT,WORKOUT_IMPORT"
-    assert "Lucia Sorensen's Garmin permissions: ACTIVITY_EXPORT,WORKOUT_IMPORT." in " ".join(messages(session))
+    assert athlete.garmin.permissions == "ACTIVITY_EXPORT,WORKOUT_IMPORT,HISTORICAL_DATA_EXPORT"
+    assert "Lucia Sorensen's Garmin permissions: ACTIVITY_EXPORT,WORKOUT_IMPORT,HISTORICAL_DATA_EXPORT." in " ".join(messages(session))
 
     G.queue_backfill(session, athlete.garmin, 10)
     athlete.garmin.status = "revoked"
@@ -204,3 +204,31 @@ def test_athletes_and_parents_are_told(session, monkeypatch):
     assert "including my runs from the past 90 days" in c.get("/a/tok-ava").text
     policy = c.get("/privacy").text
     assert "their activities from the previous 90 days" in policy and "the app discards them as the data arrives" in policy
+
+
+def test_missing_historical_permission_stops_at_once(session, athlete, clock, monkeypatch):
+    """Seen live: 412 'Access denied for <app> required HISTORICAL_DATA_EXPORT'. Retrying can't help."""
+    refusal = (412, {"errorMessage": "[ea5e] Access denied for 69c0e91d required HISTORICAL_DATA_EXPORT"})
+    class NotYetKnown(Backfilling):  # as live: Garmin can't report permissions right after connecting
+        def __call__(self, req):
+            if req.url.path == "/wellness-api/rest/user/permissions":
+                return httpx.Response(403, json={"errorType": "partner_registration_not_found"})
+            return super().__call__(req)
+
+    mock = NotYetKnown([refusal])
+    http = httpx.Client(transport=httpx.MockTransport(mock))
+    connect(session, athlete, http)                                       # permissions unknown: queued
+    assert G.process_backfills(session, http, sleep=clock.sleep) == 1     # one refusal, then nothing more is sent
+    assert [(j.kind, j.status) for j in jobs(session)] == [("activities", "failed"), ("activityDetails", "failed")]
+    assert jobs(session)[1].last_result == "skipped: Garmin needs HISTORICAL_DATA_EXPORT"
+    errors = [x.message for x in session.scalars(select(SyncLog).where(SyncLog.level == "error"))]
+    assert errors == ["Garmin has not given the team app access to past data (HISTORICAL_DATA_EXPORT). Turn on historical "
+                      "data for the app in the Garmin Developer Portal (API Configuration); then Lucia Sorensen disconnects "
+                      "and reconnects Garmin."]
+
+    # Once Garmin reports permissions without it, nothing is queued at all.
+    athlete.garmin.permissions = "ACTIVITY_EXPORT,HEALTH_EXPORT"
+    msg = G.queue_backfill(session, athlete.garmin, 90)
+    assert msg.startswith("Garmin has not given the team app access to past data") and len(jobs(session)) == 2
+    athlete.garmin.permissions = "ACTIVITY_EXPORT,HISTORICAL_DATA_EXPORT"
+    assert G.queue_backfill(session, athlete.garmin, 90).startswith("Queued") and len(jobs(session)) == 4
