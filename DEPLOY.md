@@ -102,7 +102,11 @@ Garmin the link. Edit `wrangler.jsonc` on GitHub (open the file, click the penci
 
 * **Garmin:** add `GARMIN_CLIENT_ID` and `GARMIN_CLIENT_SECRET` as GitHub secrets, run the workflow again, then follow
   `plans/plan-garmin-go-live.md`. The webhook address is on the admin home page.
-* **AI briefing:** add `ANTHROPIC_API_KEY` and run the workflow again. The nightly job runs at 4 a.m. Pacific
+* **AI briefing:** get a key at platform.claude.com (**API Keys** → **Create Key**), add it as the `ANTHROPIC_API_KEY`
+  secret, and run the workflow again. Also set a monthly spend limit in the Claude Console. The app keeps its own
+  budget too: `AI_MONTHLY_BUDGET_USD` in `wrangler.jsonc` (25 dollars to start); the AI page shows this month's spending,
+  and requests stop for the month once the next one could go over. `AI_EFFORT` (medium) sets how much Claude thinks
+  before answering; higher costs more. A nightly briefing for about 60 athletes costs roughly $0.12–0.17. The nightly job runs at 4 a.m. Pacific
   (`NIGHTLY_HOUR` and `TEAM_TIMEZONE` in `wrangler.jsonc`; change the two `crons` there if you change them).
 * **Your own address** (for example `xc.yourschool.org`): Cloudflare → the `xc-training` Worker → **Settings** →
   **Domains & Routes**, then update `BASE_URL`.

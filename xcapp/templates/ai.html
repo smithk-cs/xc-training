@@ -3,6 +3,7 @@
 <h1>AI briefing</h1>
 <p class="muted">Claude reads the team’s training data each night and writes this briefing. Athletes are sent as codes, never names, and injury notes are never sent. Treat it as a second set of eyes: medical decisions stay with your athletic trainer or a physician.</p>
 {% if not settings.ai_configured %}<div class="flash error">AI is off until ANTHROPIC_API_KEY is set on the server.</div>{% endif %}
+<p class="small muted">AI spending this month: ${{ '%.2f' % spent }} of ${{ '%.2f' % settings.ai_monthly_budget }}. New requests stop once the budget would be exceeded and start again on the 1st.</p>
 {% if last and last.status == 'failed' %}<div class="flash error">The last attempt ({{ last.created_at.strftime('%b %-d %-I:%M %p') }} UTC) failed: {{ last.error }}</div>{% endif %}
 <div class="card">
   <div class="form-row" style="justify-content:space-between">

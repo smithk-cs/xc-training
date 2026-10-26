@@ -10,6 +10,7 @@ import json
 import re
 import statistics
 
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from . import analysis as A
@@ -62,12 +63,56 @@ class AiError(Exception):
     pass
 
 
+# ---------- monthly budget ----------
+
+# US dollars per million tokens (input, output), from Anthropic's price list. Thinking counts as output.
+PRICES = {
+    "claude-haiku-5-5": (0.10, 0.50),
+    "claude-sonnet-5-5": (2.00, 10.00),
+    "claude-sonnet-5": (2.00, 10.00),
+    "claude-opus-5-5": (4.00, 20.00),
+    "claude-opus-5": (5.00, 25.00),
+    "claude-fable-5-1": (10.00, 50.00),
+}
+UNKNOWN_PRICE = (10.00, 50.00)  # a model not listed above is budgeted at the highest price, to stay safe
+BRIEFING_MAX_TOKENS, QUESTION_MAX_TOKENS = 16000, 8000
+
+
+def price_of(model: str) -> tuple[float, float]:
+    return PRICES.get(model, UNKNOWN_PRICE)
+
+
+def cost_usd(model: str, input_tokens: int, output_tokens: int) -> float:
+    p_in, p_out = price_of(model)
+    return (input_tokens * p_in + output_tokens * p_out) / 1_000_000
+
+
+def month_spend(db: Session) -> float:
+    """Dollars spent on AI so far this calendar month (team time), from the tokens each request used."""
+    tz = settings().tz
+    start_local = dt.datetime.now(tz).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    start_utc = start_local.astimezone(dt.timezone.utc).replace(tzinfo=None)
+    rows = db.execute(select(AiRun.model, func.sum(AiRun.input_tokens), func.sum(AiRun.output_tokens))
+                      .where(AiRun.created_at >= start_utc).group_by(AiRun.model)).all()
+    return sum(cost_usd(m, i or 0, o or 0) for m, i, o in rows)
+
+
+def check_budget(db: Session, prompt_chars: int, max_tokens: int):
+    """Refuse a request whose worst case would take this month's spending over AI_MONTHLY_BUDGET_USD."""
+    s = settings()
+    worst = cost_usd(s.anthropic_model, prompt_chars // 3 + 1, max_tokens)  # ~3 characters per token, rounded up
+    spent = month_spend(db)
+    if spent + worst > s.ai_monthly_budget:
+        raise AiError(f"This month's AI budget (${s.ai_monthly_budget:.2f}) is nearly used up: ${spent:.2f} spent so far. "
+                      "It starts again on the 1st, or an admin can raise AI_MONTHLY_BUDGET_USD.")
+
+
 def make_client():
     s = settings()
     if not s.ai_configured:
         raise AiError("AI is not set up yet. Add ANTHROPIC_API_KEY.")
     import anthropic
-    kwargs = {"api_key": s.anthropic_api_key, "max_retries": 2, "timeout": 120.0}
+    kwargs = {"api_key": s.anthropic_api_key, "max_retries": 2, "timeout": 300.0}
     if s.anthropic_base_url:
         kwargs["base_url"] = s.anthropic_base_url
     return anthropic.Anthropic(**kwargs)
@@ -188,20 +233,25 @@ def build_payload(snap: dict) -> tuple[dict, dict[str, dict]]:
 
 # ---------- calling Claude ----------
 
-def _call(client, system: str, user: str, max_tokens: int):
+def _call(db: Session, client, run: AiRun, system: str, user: str, max_tokens: int) -> str:
+    """One request to Claude. Tokens are added to the run, and saved, before any error is raised: they are billed either way."""
+    check_budget(db, len(system) + len(user), max_tokens)
     resp = client.messages.create(
         model=settings().anthropic_model, max_tokens=max_tokens, system=system,
         messages=[{"role": "user", "content": user}],
+        output_config={"effort": settings().ai_effort},  # how much Claude thinks first; thinking is billed as output
     )
     text = "".join(getattr(b, "text", "") for b in resp.content if getattr(b, "type", "") == "text")
     stop = getattr(resp, "stop_reason", None)
     usage = getattr(resp, "usage", None)
-    tokens = (getattr(usage, "input_tokens", 0) or 0, getattr(usage, "output_tokens", 0) or 0)
+    run.input_tokens = (run.input_tokens or 0) + (getattr(usage, "input_tokens", 0) or 0)
+    run.output_tokens = (run.output_tokens or 0) + (getattr(usage, "output_tokens", 0) or 0)
+    db.flush()
     if stop == "refusal":
         raise AiError("Claude declined to answer this request.")
     if stop == "max_tokens":
         raise AiError("The answer was cut off before it finished.")
-    return text, tokens
+    return text
 
 
 def _names(text: str, code_map: dict) -> str:
@@ -267,9 +317,7 @@ def generate_briefing(db: Session, client=None, as_of: dt.date | None = None) ->
         last_err = None
         for attempt in range(2):
             prompt = user if last_err is None else user + f"\n\nYour previous reply was rejected: {last_err} Reply with valid JSON only."
-            text, (tin, tout) = _call(client, SYSTEM_BRIEFING, prompt, 4000)
-            run.input_tokens += tin
-            run.output_tokens += tout
+            text = _call(db, client, run, SYSTEM_BRIEFING, prompt, BRIEFING_MAX_TOKENS)
             try:
                 insights = parse_insights(text, code_map)
                 break
@@ -319,9 +367,8 @@ def ask(db: Session, question: str, client=None, as_of: dt.date | None = None) -
         for first, cs in firsts.items():
             if len(cs) == 1:  # a first name that only one athlete has
                 q = re.sub(r"\b" + re.escape(first) + r"\b", cs[0], q, flags=re.IGNORECASE)
-        text, (tin, tout) = _call(client, SYSTEM_QUESTION,
-                                  "DATA:\n" + json.dumps(payload, separators=(",", ":")) + "\n\nQUESTION: " + q, 1200)
-        run.input_tokens, run.output_tokens = tin, tout
+        text = _call(db, client, run, SYSTEM_QUESTION,
+                                  "DATA:\n" + json.dumps(payload, separators=(",", ":")) + "\n\nQUESTION: " + q, QUESTION_MAX_TOKENS)
         run.answer = _names(text.strip(), code_map)
         run.status = "ok"
     except Exception as exc:

@@ -34,6 +34,8 @@ class Settings:
     anthropic_model: str
     anthropic_base_url: str
     nightly_hour: int
+    ai_monthly_budget: float  # US dollars; AI requests stop for the month once this would be exceeded
+    ai_effort: str            # how much Claude thinks before answering: low | medium | high
     cron_secret: str  # shared with the hosting platform's timer that calls POST /cron/nightly
     setup_code: str  # lets the first admin be created on the sign-in page when no staff accounts exist
     team_name: str
@@ -84,6 +86,8 @@ class Settings:
             anthropic_model=os.getenv("ANTHROPIC_MODEL", "claude-sonnet-5-5"),
             anthropic_base_url=os.getenv("ANTHROPIC_BASE_URL", ""),
             nightly_hour=int(os.getenv("NIGHTLY_HOUR", "4")),
+            ai_monthly_budget=float(os.getenv("AI_MONTHLY_BUDGET_USD", "25")),
+            ai_effort=os.getenv("AI_EFFORT", "medium"),
             cron_secret=os.getenv("CRON_SECRET", ""),
             setup_code=os.getenv("SETUP_CODE", ""),
             team_name=os.getenv("TEAM_NAME", "XC Training"),
@@ -114,6 +118,10 @@ class Settings:
                 _dt.date.fromisoformat(self.as_of_date)
             except ValueError:
                 out.append("AS_OF_DATE must look like 2026-10-25.")
+        if self.ai_effort not in ("low", "medium", "high"):
+            out.append("AI_EFFORT must be low, medium or high.")
+        if self.ai_monthly_budget < 0:
+            out.append("AI_MONTHLY_BUDGET_USD can't be negative.")
         if self.cron_secret and len(self.cron_secret) < 32:
             out.append("CRON_SECRET must be at least 32 characters (run: python -m xcapp.cli gen-keys).")
         if self.setup_code and len(self.setup_code) < 20:

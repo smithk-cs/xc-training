@@ -633,7 +633,7 @@ def create_app() -> FastAPI:
         brief = db.scalar(select(AiRun).where(AiRun.kind == "briefing", AiRun.status == "ok").order_by(AiRun.id.desc()))
         last = db.scalar(select(AiRun).where(AiRun.kind == "briefing").order_by(AiRun.id.desc()))
         qa = db.scalars(select(AiRun).where(AiRun.kind == "question").order_by(AiRun.id.desc()).limit(10)).all()
-        return render(request, "ai.html", user, brief=brief, last=last, qa=qa)
+        return render(request, "ai.html", user, brief=brief, last=last, qa=qa, spent=AI.month_spend(db))
 
     @app.post("/ai/run")
     async def ai_run(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):

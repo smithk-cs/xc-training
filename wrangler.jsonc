@@ -35,6 +35,9 @@
     "TEAM_NAME": "Jesuit Cross Country",
     "NIGHTLY_HOUR": "4",
     "ANTHROPIC_MODEL": "claude-sonnet-5-5",
+    // AI spending cap in US dollars per month (also set a spend limit in the Claude Console), and thinking level.
+    "AI_MONTHLY_BUDGET_USD": "25",
+    "AI_EFFORT": "medium",
     // Shown in the public privacy policy at /privacy. Fill in PRIVACY_CONTACT and PRIVACY_EFFECTIVE_DATE.
     "ORG_NAME": "Jesuit High School",
     "PRIVACY_CONTACT": "",
