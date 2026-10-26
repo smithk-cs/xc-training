@@ -22,7 +22,8 @@ For getting athletes connected and using the charts, read **TEAM_SETUP.md**.
 | Look | Jesuit red and gold, team name from `TEAM_NAME`, logo uploaded on the Staff page (or `TEAM_LOGO_FILE`), fonts stored in the app (SIL Open Font License), phone-first athlete pages, light and dark mode. |
 | Injuries and load | Injury log (trainer-only notes), athlete pain reports, weekly load ratio (this week / previous 4-week average), injury rate by load ratio, and the peak load before each injury. |
 | Watch list | Anyone above a 1.3 load ratio, injured, recovering slowly between reps, or reporting pain of 4/10 or more this week. |
-| AI briefing | Each night Claude reads the team's numbers (athletes sent as codes, never names; injury notes never sent) and writes 4 to 8 prioritized findings. Coaches can also ask questions. Replies are checked before they are shown. |
+| AI briefing | Each night Claude reads the numbers of athletes who opted in, with a parent's agreement, on their own page (sent as codes, never names; nothing anyone writes is sent; team totals computed from opted-in athletes only; never used to train AI) and writes 4 to 8 prioritized findings. Coaches can also ask questions. Replies are checked before they are shown. |
+| Privacy | Public policy page at `/privacy` (Garmin requires its link), filled from `ORG_NAME`, `PRIVACY_CONTACT`, `HOSTING_PROVIDER`, `PRIVACY_EFFECTIVE_DATE`, `DATA_RETENTION_DAYS`. Athletes turn AI analysis on or off, download all their data, delete their Garmin data on the spot, and ask for full deletion (admins see the request on the home page). |
 | Staff roles | Admin, coach, athletic trainer. Sign-in rate limiting, CSRF protection, encrypted Garmin tokens, strict security headers. |
 
 ## Try it with the sample team (about 5 minutes)
@@ -57,12 +58,14 @@ Open http://localhost:8000 and sign in.
    night at `NIGHTLY_HOUR`.
 6. **Check.** `docker compose exec web python -m xcapp.cli check`.
 
+Garmin credentials: `GARMIN_CLIENT_ID` and `GARMIN_CLIENT_SECRET` are issued only to your organization. Never share them or let anyone else use them; report any request for them to Garmin at connect-support@developer.garmin.com.
+
 Backups: the database is one file in the `xcdata` volume (`/data/xc.db`); copy it nightly. For Postgres, set
 `DATABASE_URL` and add `psycopg[binary]` to requirements.
 
 ## How it was validated
 
-* `pytest` (47 tests). Real Garmin `.FIT` files are generated and decoded with Garmin's official FIT SDK; Garmin
+* `pytest` (63 tests). Real Garmin `.FIT` files are generated and decoded with Garmin's official FIT SDK; Garmin
   OAuth, token refresh and every notification type are exercised against a mock Garmin; the AI layer is checked for
   de-identification, reply validation, retries and failures; the web app for sign-in, CSRF, roles, private injury
   notes, athlete link pages, uploads and imports.

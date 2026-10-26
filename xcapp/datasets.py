@@ -81,6 +81,8 @@ def snapshot(db: Session, as_of: dt.date | None = None) -> dict[str, list[dict]]
     data["risk_bands"] = A.risk_bands(data["weekly_load"], data["injuries"])
     data["injury_peaks"] = A.injury_peaks(data["injuries"], data["weekly_load"])
     data["recent_runs"] = recent_runs(db, as_of)
+    from .models import Athlete as _Ath
+    data["ai_consented"] = {a.code for a in db.scalars(select(_Ath).where(_Ath.active.is_(True), _Ath.ai_consent_at.is_not(None))).all()}
     data["missed_days"] = missed_days(db, as_of)
     data["as_of"] = as_of
     return data

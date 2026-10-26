@@ -146,7 +146,8 @@ def load_demo(db: Session) -> dict:
     for r in roster:
         first, last = r["athlete"].split(" ", 1)
         a = Athlete(first_name=first, last_name=last, gender=r["gender"], grade=int(r["grade"]), group=r["group"],
-                    hr_max=int(r["hr_max"]), hr_rest=int(r["hr_rest"]), link_token=new_link_token())
+                    hr_max=int(r["hr_max"]), hr_rest=int(r["hr_rest"]), link_token=new_link_token(),
+                    ai_consent_at=dt.datetime(2026, 9, 1), ai_consent_note="Sample athlete (invented).")
         db.add(a)
         db.flush()
         if a.code != r["athlete_id"]:

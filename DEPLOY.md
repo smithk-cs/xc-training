@@ -79,6 +79,25 @@ Open the app's address. The first visit after a quiet spell takes a few seconds 
 sign-in page shows **Create the first admin**: enter your `SETUP_CODE`, choose a username and a password of 10 or more
 characters. The form disappears once an account exists. Then follow `TEAM_SETUP.md` from section 3.
 
+## Privacy policy
+
+The app has a public privacy policy at `https://<your-address>/privacy` (for this team,
+https://xc-training.jesuit-xc.workers.dev/privacy). Garmin asks for this link when you set up your app, and athletes see it
+on their page. Its details come from `vars` in `wrangler.jsonc`:
+
+| Setting | What to put |
+|---|---|
+| `ORG_NAME` | Who runs the app (set to Jesuit High School) |
+| `PRIVACY_CONTACT` | The email address for privacy questions and deletion requests. It is shown publicly. |
+| `PRIVACY_EFFECTIVE_DATE` | The date the policy takes effect, for example `November 15, 2026`, once the AD has approved it |
+| `HOSTING_PROVIDER` | Already set: Cloudflare (runs the app) and Supabase (stores the database) |
+| `CERTIFICATE_PROVIDER` | Already set: Cloudflare |
+| `DATA_RETENTION_DAYS` | Days after an athlete leaves before their data is deleted (90) |
+
+Empty settings show as placeholders such as `[privacy contact email]`, so fill in the contact and date before giving
+Garmin the link. Edit `wrangler.jsonc` on GitHub (open the file, click the pencil, change the value between the quotes,
+**Commit changes**); the change deploys by itself. These are not secrets.
+
 ## Later
 
 * **Garmin:** add `GARMIN_CLIENT_ID` and `GARMIN_CLIENT_SECRET` as GitHub secrets, run the workflow again, then follow

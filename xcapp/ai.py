@@ -81,11 +81,24 @@ def _days_ago(as_of: dt.date, iso: str) -> int:
 
 def build_payload(snap: dict) -> tuple[dict, dict[str, dict]]:
     as_of: dt.date = snap["as_of"]
-    roster = snap["roster"]
+    # Only athletes who explicitly agreed to AI analysis are sent, and team-wide numbers are recomputed from them alone.
+    ok = snap.get("ai_consented", set())
+    keep = lambda rows: [r for r in rows if r["athlete_id"] in ok]
+    roster = keep(snap["roster"])
+    if not roster:
+        raise AiError("No athletes have agreed to AI analysis yet, so there is nothing to send.")
+    weekly_all, injuries_all = keep(snap["weekly_load"]), keep(snap["injuries"])
+    segments_all, summaries_all = keep(snap["segments"]), keep(snap["summaries"])
+    progress_all, watch_all = keep(snap["progress"]), keep(snap["watchlist"])
+    pain_all = keep(snap["pain_reports"])
+    recent_all, missed_all = keep(snap.get("recent_runs", [])), keep(snap.get("missed_days", []))
+    peaks_all = A.injury_peaks(injuries_all, weekly_all)
+    kpis_all = A.kpis(injuries_all, weekly_all, progress_all, watch_all, roster)
+    bands_all = A.risk_bands(weekly_all, injuries_all)
     codes = {r["athlete_id"]: f"R{i:02d}" for i, r in enumerate(roster, start=1)}
     code_map = {codes[r["athlete_id"]]: {"athlete_id": r["athlete_id"], "name": r["athlete"]} for r in roster}
 
-    weekly = snap["weekly_load"]
+    weekly = weekly_all
     weeks = sorted({w["week_start"] for w in weekly})
     team_weeks = []
     for w in weeks[-10:]:
@@ -95,30 +108,30 @@ def build_payload(snap: dict) -> tuple[dict, dict[str, dict]]:
             "athletes_over_1_3": sum(1 for r in rows if (A.num(r["acwr"]) or 0) > A.LOAD_RATIO_FLAG),
             "athletes_injured": sum(1 for r in rows if int(r["injured"]) == 1),
         })
-    peaks = snap["injury_peaks"]
+    peaks = peaks_all
     injuries = [{
         "athlete": codes[i["athlete_id"]], "injury": i["injury"], "body_area": i["body_area"],
         "onset_days_ago": _days_ago(as_of, i["onset_date"]), "status": i["status"], "days_missed": i["days_missed"],
         "peak_load_ratio_in_2_weeks_before": None if peaks.get(i["injury_id"]) is None else round(peaks[i["injury_id"]], 2),
-    } for i in snap["injuries"] if _days_ago(as_of, i["onset_date"]) <= 150 and i["athlete_id"] in codes]
+    } for i in injuries_all if _days_ago(as_of, i["onset_date"]) <= 150 and i["athlete_id"] in codes]
 
-    summaries = snap["summaries"]
+    summaries = summaries_all
     latest_date = max((s["date"] for s in summaries), default=None)
     latest_recs = [s["recovery"] for s in summaries if s["date"] == latest_date and s["recovery"] is not None]
     seg_by_workout = {}
-    for s in snap["segments"]:
+    for s in segments_all:
         seg_by_workout.setdefault(s["workout_id"], s)
 
     prog = {}
-    for p in snap["progress"]:
+    for p in progress_all:
         prog.setdefault(p["athlete_id"], {})[p["event"]] = {
             k: (None if p[k] is None else round(p[k], 1)) for k in ("last_xc", "track", "current", "goal")}
-    watch = {w["athlete_id"]: w["reasons"] for w in snap["watchlist"]}
+    watch = {w["athlete_id"]: w["reasons"] for w in watch_all}
     effort = {}
-    for r in snap.get("recent_runs", []):
+    for r in recent_all:
         effort.setdefault(r["athlete_id"], []).append(
             {"days_ago": _days_ago(as_of, r["date"]), "miles": r["miles"], "rpe": r["rpe"], "legs": r["feel"] or None, "workout": r["workout"]})
-    pain = snap["pain_reports"]
+    pain = pain_all
 
     athletes = []
     for r in roster:
@@ -134,7 +147,7 @@ def build_payload(snap: dict) -> tuple[dict, dict[str, dict]]:
                 "avg_pace": s["avg_pace"], "target_pace": s["target"], "avg_hr": s["avg_hr"],
                 "hr_rise_first_to_last_rep": s["hr_rise"], "recovery_bpm": s["recovery"],
             })
-        active = next((i for i in snap["injuries"] if i["athlete_id"] == aid and i["status"] == "Active"), None)
+        active = next((i for i in injuries_all if i["athlete_id"] == aid and i["status"] == "Active"), None)
         athletes.append({
             "code": codes[aid], "group": r["group"], "grade": r["grade"],
             "weekly_miles_last_6": [w["miles"] for w in rows[-6:]],
@@ -143,7 +156,7 @@ def build_payload(snap: dict) -> tuple[dict, dict[str, dict]]:
             "effort_load_last_6": [w.get("srpe", 0) for w in rows[-6:]],
             "runs_last_7_days": effort.get(aid, []),
             "days_missed_last_14": [{k: v for k, v in m.items() if k not in ("athlete_id", "date")} | {"days_ago": _days_ago(as_of, m["date"])}
-                                    for m in snap.get("missed_days", []) if m["athlete_id"] == aid],
+                                    for m in missed_all if m["athlete_id"] == aid],
             "active_injury": None if not active else {"injury": active["injury"], "onset_days_ago": _days_ago(as_of, active["onset_date"])},
             "pain_reports": [{"days_ago": _days_ago(as_of, p["date"]), "body_area": p["body_area"], "severity": p["severity"]}
                              for p in pain if p["athlete_id"] == aid],
@@ -156,8 +169,8 @@ def build_payload(snap: dict) -> tuple[dict, dict[str, dict]]:
         "as_of": as_of.isoformat(),
         "seasons": snap["seasons"],
         "team": {
-            "athletes": len(roster), "kpis": snap["kpis"],
-            "injury_rate_by_load_ratio": snap["risk_bands"],
+            "athletes": len(roster), "kpis": kpis_all,
+            "injury_rate_by_load_ratio": bands_all,
             "weeks": team_weeks,
             "injuries_last_150_days": injuries,
             "latest_workout": None if latest_date is None else {
@@ -289,8 +302,15 @@ def ask(db: Session, question: str, client=None, as_of: dt.date | None = None) -
             raise AiError("Type a question first.")
         client = client or make_client()
         payload, code_map = build_payload(snapshot(db, as_of))
-        # Names typed by the coach are swapped for codes before sending.
+        # Names typed by the coach are swapped for codes before sending; names of athletes without AI consent are removed.
         q = question
+        snap_all = snapshot(db, as_of)
+        others = [r["athlete"] for r in snap_all["roster"] if r["athlete_id"] not in snap_all.get("ai_consented", set())]
+        for name in sorted(others, key=len, reverse=True):
+            q = re.sub(r"\b" + re.escape(name) + r"\b", "an athlete who has not agreed to AI analysis", q, flags=re.IGNORECASE)
+            first = name.split()[0]
+            if sum(1 for r in snap_all["roster"] if r["athlete"].split()[0].lower() == first.lower()) == 1:
+                q = re.sub(r"\b" + re.escape(first) + r"\b", "an athlete who has not agreed to AI analysis", q, flags=re.IGNORECASE)
         for code, info in sorted(code_map.items(), key=lambda kv: -len(kv[1]["name"])):
             q = re.sub(r"\b" + re.escape(info["name"]) + r"\b", code, q, flags=re.IGNORECASE)
         firsts: dict[str, list[str]] = {}

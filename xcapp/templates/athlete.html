@@ -42,7 +42,7 @@
       </div>
       <form method="post" action="/a/{{ token }}/connect" style="display:flex; flex-direction:column; gap:14px">
         <input type="hidden" name="csrf" value="{{ csrf }}">
-        <label class="consent"><input id="consent" type="checkbox" name="consent" value="yes"><span>My parent or guardian has said it’s OK to share my running data with my coaches.</span></label>
+        <label class="consent"><input id="consent" type="checkbox" name="consent" value="yes"><span>My parent or guardian has said it’s OK to share my running data with my coaches, as described in the <a href="/privacy">privacy policy</a>.</span></label>
         <button id="connect-btn" type="submit" class="big-btn">Connect Garmin</button>
       </form>
       <p class="muted small">You’ll sign in on Garmin’s page, then come right back here. You can disconnect any time.</p>
@@ -108,6 +108,40 @@
       <input type="file" name="file" accept=".fit" required aria-label="Run file (.fit)">
       <button type="submit" class="ghost-btn">Upload run</button>
     </form>
+  </section>
+  <section class="panel" id="privacy" aria-labelledby="pv-h">
+    <h2 id="pv-h">Your data and privacy</h2>
+    <h3 style="margin:0; font-size:17px">AI analysis</h3>
+    {% if a.ai_consent_at %}
+      <p><span class="pill good">✓ On</span> since {{ a.ai_consent_at.strftime('%b %-d, %Y') }}. Each night your training numbers (not your name, and nothing you write) go to Claude, an AI from Anthropic, to help your coaches spot patterns. Coaches make every decision.</p>
+      <form method="post" action="/a/{{ token }}/ai-consent"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="withdraw"><button type="submit" class="ghost-btn">Turn off AI analysis</button></form>
+    {% else %}
+      <p><span class="pill">Off</span> Your coaches can include your training numbers in a nightly AI briefing written by Claude, an AI from Anthropic. It gets your runs, effort, pain and results under a code, never your name or anything you write, and it is never used to train AI. Coaches make every decision. It stays off unless you turn it on, and you can turn it off any time.</p>
+      <form method="post" action="/a/{{ token }}/ai-consent" style="display:flex; flex-direction:column; gap:10px">
+        <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="give">
+        <label class="consent"><input type="checkbox" name="agree" value="yes"><span>I agree to AI analysis of my training data, as described in the <a href="/privacy#ai">AI transparency statement</a>.</span></label>
+        <label class="consent"><input type="checkbox" name="parent" value="yes"><span>My parent or guardian agrees too.</span></label>
+        <button type="submit" class="ghost-btn">Turn on AI analysis</button>
+      </form>
+    {% endif %}
+    <h3 style="margin:8px 0 0; font-size:17px">See, fix or delete your data</h3>
+    <a class="ghost-btn button" href="/a/{{ token }}/my-data.json" style="background:var(--color-panel); color:var(--brand-red)">Download my data</a>
+    <p class="muted small">Everything the app holds about you, as a file. To fix effort, pain or a missed day, open it in My runs. For anything else, ask your coach.</p>
+    <details>
+      <summary class="small" style="cursor:pointer; min-height:44px; display:flex; align-items:center">Delete my Garmin data</summary>
+      <form method="post" action="/a/{{ token }}/delete-garmin-data" class="panel" style="margin-top:8px; padding:14px">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <p>This disconnects Garmin and deletes every run that came from Garmin. It can’t be undone.</p>
+        <label>Type DELETE to confirm<input type="text" name="confirm" autocomplete="off"></label>
+        <button type="submit" class="danger" style="min-height:48px">Delete my Garmin data</button>
+      </form>
+    </details>
+    {% if open_delete %}
+      <p class="small"><span class="pill warn">Requested</span> You asked on {{ open_delete.created_at.strftime('%b %-d') }} for all of your data to be deleted. Your coaches will do it within 30 days.</p>
+    {% else %}
+      <form method="post" action="/a/{{ token }}/delete-request"><input type="hidden" name="csrf" value="{{ csrf }}"><button type="submit" class="link" style="min-height:44px">Ask to delete everything the app has about me</button></form>
+    {% endif %}
+    <p class="muted small"><a href="/privacy">Privacy policy</a></p>
   </section>
   <p class="foot">Questions? Ask your coach. Lost this link? Your coach can send a new one. Go Big Red.</p>
 </div>

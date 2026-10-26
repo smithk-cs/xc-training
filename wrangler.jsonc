@@ -34,6 +34,13 @@
     "TEAM_TIMEZONE": "America/Los_Angeles",
     "TEAM_NAME": "Jesuit Cross Country",
     "NIGHTLY_HOUR": "4",
-    "ANTHROPIC_MODEL": "claude-sonnet-5-5"
+    "ANTHROPIC_MODEL": "claude-sonnet-5-5",
+    // Shown in the public privacy policy at /privacy. Fill in PRIVACY_CONTACT and PRIVACY_EFFECTIVE_DATE.
+    "ORG_NAME": "Jesuit High School",
+    "PRIVACY_CONTACT": "",
+    "HOSTING_PROVIDER": "Cloudflare, Inc. (runs the app) and Supabase, Inc. (stores the database)",
+    "CERTIFICATE_PROVIDER": "Cloudflare",
+    "PRIVACY_EFFECTIVE_DATE": "",
+    "DATA_RETENTION_DAYS": "90"
   }
 }

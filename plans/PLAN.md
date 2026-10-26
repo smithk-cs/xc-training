@@ -21,6 +21,7 @@ briefing, so the staff can adjust training before athletes get hurt.
 | School approvals | **Not started.** Athletic director / district data approval; communications office permission for name and logo. |
 | Claude API account | **Not started.** Decide who owns it and pays. |
 | Logo | Placeholder. Waiting on the approved file. |
+| Privacy policy | Drafted, in the app at `/privacy` and as a document for review. Contact email, hosting provider, effective date and retention to fill in. AI analysis now opt-in per athlete. |
 | Training groups | Boys' groups and VDOT targets set from the VDOT JHS sheet. Girls' cutoffs still to confirm. |
 
 ## Phases
@@ -32,6 +33,7 @@ briefing, so the staff can adjust training before athletes get hurt.
 - [ ] Ask school IT for a small server and an address such as `xc.jesuithighschool.org`
 - [ ] Decide who owns the Claude API account and billing (booster club is common)
 - [ ] Confirm girls' training-group cutoffs; send the easy-pace column and VDOT rows below 48
+- [ ] Fill in the privacy policy details; have the AD and district review it; give Garmin the `/privacy` link
 
 ### Phase 2: go live with staff (after hosting is up, about 1-2 weeks)
 - [ ] Deploy to Cloudflare + Supabase (`DEPLOY.md`); create the first admin with `SETUP_CODE`

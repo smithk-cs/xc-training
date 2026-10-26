@@ -3,17 +3,17 @@
 <h1>Athletes</h1>
 <div class="card scroll">
 <table class="list">
-  <thead><tr><th>Athlete</th><th>Grade</th><th>Group</th><th>Ability group</th><th class="num">VDOT</th><th>Garmin</th><th>Last sync</th>{% if user.role != 'trainer' %}<th>Personal link</th>{% endif %}</tr></thead>
+  <thead><tr><th>Athlete</th><th>Grade</th><th>Group</th><th>Ability group</th><th class="num">VDOT</th><th>AI consent</th><th>Garmin</th><th>Last sync</th>{% if user.role != 'trainer' %}<th>Personal link</th>{% endif %}</tr></thead>
   <tbody>
   {% for a in athletes %}
   <tr>
     <td><a href="/athletes/{{ a.id }}">{{ a.name }}</a></td><td>{{ a.grade }}</td><td>{{ a.group }}</td>
-    {% set ai = ab.get(a.id, {}) %}<td>{% if ai.group %}<span class="pill" style="background:{{ ai.color or '#FFFFFF' }}; color:#1B1B1F; border-color:#CFC7BC">{{ ai.group }}</span>{% endif %}{% if ai.override %} <span class="small muted">(pinned)</span>{% endif %}</td><td class="num">{{ ai.vdot or '' }}</td>
+    {% set ai = ab.get(a.id, {}) %}<td>{% if ai.group %}<span class="pill" style="background:{{ ai.color or '#FFFFFF' }}; color:#1B1B1F; border-color:#CFC7BC">{{ ai.group }}</span>{% endif %}{% if ai.override %} <span class="small muted">(pinned)</span>{% endif %}</td><td class="num">{{ ai.vdot or '' }}</td><td>{% if a.ai_consent_at %}<span class="pill good">Yes</span>{% else %}<span class="pill">No</span>{% endif %}</td>
     <td>{% if a.garmin and a.garmin.status == 'connected' %}<span class="pill good">Connected</span>{% elif a.garmin and a.garmin.status == 'error' %}<span class="pill bad">Needs reconnect</span>{% else %}<span class="pill">Not connected</span>{% endif %}</td>
     <td class="small">{{ a.garmin.last_sync_at.strftime('%b %-d %-I:%M %p') if a.garmin and a.garmin.last_sync_at else '' }}</td>
     {% if user.role != 'trainer' %}<td><code class="copy">{{ settings.base_url.rstrip('/') }}/a/{{ a.link_token }}</code></td>{% endif %}
   </tr>
-  {% else %}<tr><td colspan="8" class="muted">No athletes yet. Add them below or import a roster file.</td></tr>{% endfor %}
+  {% else %}<tr><td colspan="9" class="muted">No athletes yet. Add them below or import a roster file.</td></tr>{% endfor %}
   </tbody>
 </table>
 {% if user.role != 'trainer' %}<p><a class="button" href="/athletes/links.csv">Download every athlete’s link (CSV for a mail merge)</a></p>{% endif %}

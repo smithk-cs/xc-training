@@ -58,7 +58,7 @@ DEFAULT_TARGETS = {74: ("1:50", "4:06"), 73: ("1:51", "4:09"), 72: ("1:52", "4:1
 ADDED_COLUMNS = {
     "activities": [("rpe", "INTEGER"), ("feel", "VARCHAR(20) DEFAULT ''"), ("athlete_note", "VARCHAR(300) DEFAULT ''"),
                    ("feedback_at", "TIMESTAMP"), ("run_type", "VARCHAR(20) DEFAULT ''"), ("workout_locked", "BOOLEAN DEFAULT FALSE")],
-    "athletes": [("ability_override", "VARCHAR(40) DEFAULT ''")],
+    "athletes": [("ability_override", "VARCHAR(40) DEFAULT ''"), ("ai_consent_at", "TIMESTAMP"), ("ai_consent_note", "VARCHAR(200) DEFAULT ''")],
     "training_groups": [("color", "VARCHAR(7) DEFAULT ''")],
     "pain_reports": [("activity_id", "INTEGER")],
 }

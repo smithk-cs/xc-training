@@ -23,7 +23,8 @@ def setup(tmp_path, monkeypatch):
     from xcapp.web import create_app
     db = SessionLocal()
     for i, (f, l) in enumerate((("Ava", "Doyle"), ("Mateo", "Garza"))):
-        db.add(Athlete(first_name=f, last_name=l, gender="Girls" if i == 0 else "Boys", grade=11, group="Varsity", link_token=f"tok-{f.lower()}"))
+        db.add(Athlete(first_name=f, last_name=l, gender="Girls" if i == 0 else "Boys", grade=11, group="Varsity", link_token=f"tok-{f.lower()}",
+                       ai_consent_at=dt.datetime(2026, 10, 1)))
     db.commit()
     db.close()
     c = TestClient(create_app(), follow_redirects=False)

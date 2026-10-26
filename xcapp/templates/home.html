@@ -13,6 +13,13 @@
 {% if webhook %}
 <div class="card"><h2>Garmin notification address</h2><p class="small muted">Paste this into the Garmin Developer Portal as the endpoint for activity and activity-file notifications, and for deregistration and user-permission notifications. Keep it private.</p><code class="copy">{{ webhook }}</code></div>
 {% endif %}
+{% if deletions %}
+<div class="card" style="border-color:var(--color-bad)">
+  <h2>Deletion requests</h2>
+  <p class="small muted">Delete within 30 days: open the athlete, then “Delete permanently” (admins). That also completes the request.</p>
+  <ul>{% for d in deletions %}<li>{% if d.athlete_id %}<a href="/athletes/{{ d.athlete_id }}">{{ d.athlete_name }}</a>{% else %}{{ d.athlete_name }}{% endif %}, asked {{ d.created_at.strftime('%b %-d') }}</li>{% endfor %}</ul>
+</div>
+{% endif %}
 <div class="stats">
   <div class="stat"><b>{{ stats.athletes }}</b><span class="muted small">athletes on the roster</span></div>
   <div class="stat"><b>{{ stats.connected }}</b><span class="muted small">connected to Garmin</span></div>

@@ -37,6 +37,12 @@ class Settings:
     cron_secret: str  # shared with the hosting platform's timer that calls POST /cron/nightly
     setup_code: str  # lets the first admin be created on the sign-in page when no staff accounts exist
     team_name: str
+    org_name: str              # who runs the app, named in the privacy policy
+    privacy_contact: str       # email for privacy requests
+    hosting_provider: str      # who hosts the server and database
+    certificate_provider: str  # who issues the https certificate (left out of the policy if it is the host)
+    privacy_effective: str     # date the privacy policy takes effect
+    retention_days: int        # days after an athlete leaves before their data is deleted
     team_logo_file: str  # path to the approved logo (png, jpg, svg or webp)
     as_of_date: str  # optional fixed "today" (YYYY-MM-DD) for demos and testing
 
@@ -81,6 +87,12 @@ class Settings:
             cron_secret=os.getenv("CRON_SECRET", ""),
             setup_code=os.getenv("SETUP_CODE", ""),
             team_name=os.getenv("TEAM_NAME", "XC Training"),
+            org_name=os.getenv("ORG_NAME", ""),
+            privacy_contact=os.getenv("PRIVACY_CONTACT", ""),
+            hosting_provider=os.getenv("HOSTING_PROVIDER", ""),
+            certificate_provider=os.getenv("CERTIFICATE_PROVIDER", "Let’s Encrypt"),
+            privacy_effective=os.getenv("PRIVACY_EFFECTIVE_DATE", ""),
+            retention_days=int(os.getenv("DATA_RETENTION_DAYS", "90")),
             team_logo_file=os.getenv("TEAM_LOGO_FILE", ""),
             as_of_date=os.getenv("AS_OF_DATE", ""),
         )
