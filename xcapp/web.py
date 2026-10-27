@@ -27,13 +27,15 @@ from . import datasets as DS
 from . import garmin as G
 from . import merge as MG
 from . import photos as P
+from . import registration as REG
 from .config import settings
 from .db import SessionLocal, create_all
 from .fitfile import MAX_FITS_PER_UPLOAD, MAX_UPLOAD_BYTES, FitError, fit_files, parse_fit
 from .imports import GROUPS, ImportErrors, clean_email, import_vdots, import_goals, import_races, import_results, import_roster, parse_date, set_goal
 from .ingest import ingest, log, rematch_day
 from .models import (Activity, AiRun, AppSetting, Athlete, DeletionRequest, GarminConnection, Injury, MissedDay,
-                     OAuthState, PainReport, PlannedWorkout, RaceResult, RestingHeartRate, Result, StaffUser, AthletePhoto, SyncLog, TrainingGroup, utcnow)
+                     OAuthState, PainReport, PlannedWorkout, RaceResult, RestingHeartRate, Result, StaffUser, AthletePhoto,
+                     MeetEntry, MeetDivision, DivisionAthlete, SyncLog, TrainingGroup, utcnow)
 from .security import csrf_ok, csrf_token, hash_password, new_link_token, verify_password
 
 HERE = Path(__file__).parent
@@ -1290,6 +1292,157 @@ def create_app() -> FastAPI:
             flash(request, "Not matched to an athlete (name the file after the athlete, such as Sam Lowry.jpg): " + ", ".join(missed[:40])
                   + (f" and {len(missed) - 40} more" if len(missed) > 40 else ""), "error")
         return back("/athletes")
+
+    # ---------- meet entries (registration) ----------
+
+    def get_meet(db: Session, mid: int) -> MeetEntry:
+        m = db.get(MeetEntry, mid)
+        if m is None:
+            raise HTTPException(404, "Meet not found.")
+        return m
+
+    def logo_bytes(db: Session) -> tuple[bytes, str] | None:
+        kind, data = db.get(AppSetting, LOGO_TYPE_KEY), db.get(AppSetting, LOGO_DATA_KEY)
+        if kind and data:
+            return base64.b64decode(data.value), kind.value
+        if file_logo:
+            return logo_path.read_bytes(), LOGO_TYPES[logo_path.suffix.lower()]
+        return None
+
+    def meet_form(f, m: MeetEntry) -> None:
+        name = str(f.get("name", "")).strip()[:120]
+        if not name:
+            raise ValueError("Give the meet a name.")
+        m.name, m.date = name, parse_date(str(f.get("date", "")))
+        m.location = str(f.get("location", "")).strip()[:160]
+        m.director_name = str(f.get("director_name", "")).strip()[:120]
+        m.director_email = clean_email(f.get("director_email", ""))
+        m.notes = str(f.get("notes", "")).strip()[:2000]
+
+    @app.get("/registrations", response_class=HTMLResponse)
+    def registrations(request: Request, user=Depends(any_staff, scope="function"), db: Session = Depends(get_db, scope="function")):
+        today = A.team_today()
+        meets = db.scalars(select(MeetEntry).options(selectinload(MeetEntry.divisions).selectinload(MeetDivision.entries))
+                           .order_by(MeetEntry.date)).all()
+        return render(request, "registrations.html", user, upcoming=[m for m in meets if m.date >= today],
+                      past=[m for m in meets if m.date < today][::-1], today=today.isoformat())
+
+    @app.post("/registrations")
+    async def registration_new(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
+        f = await form_checked(request)
+        m = MeetEntry()
+        try:
+            meet_form(f, m)
+        except ValueError as exc:
+            flash(request, str(exc) + ("" if str(exc).endswith(".") else "."), "error")
+            return back("/registrations")
+        db.add(m)
+        db.flush()
+        for i, (name, dist) in enumerate((("Boys Varsity", "5K"), ("Boys JV", "5K")) if f.get("starter") else ()):
+            m.divisions.append(MeetDivision(name=name, distance=dist, position=i))
+        flash(request, f"Added {m.name}. Now add its races and pick who runs.")
+        return back(f"/registrations/{m.id}")
+
+    @app.get("/registrations/{mid}", response_class=HTMLResponse)
+    def registration_page(request: Request, mid: int, user=Depends(any_staff, scope="function"), db: Session = Depends(get_db, scope="function")):
+        m = get_meet(db, mid)
+        divisions = REG.report(db, m)
+        ab = A.abilities(db, A.team_today())
+        ranks = {g.name: g.position for g in db.scalars(select(TrainingGroup)).all()}
+        people = db.scalars(select(Athlete).where(A.on_team())).all()
+        people.sort(key=lambda a: (ranks.get(ab.get(a.id, {}).get("group"), 99), -(ab.get(a.id, {}).get("vdot") or 0), a.last_name))
+        where = {e.athlete_id: d.name for d in m.divisions for e in d.entries}
+        seeds = {(d.id, a.id): REG.season_best(db, a.id, d.distance, m.date) for d in m.divisions for a in people}
+        team_text = REG.as_text(m, divisions, s.team_name, user.username, user.email)
+        from urllib.parse import quote
+        subject = quote(f"{s.team_name}: {REG.title(m)}")
+        entered = [r["athlete"] for d in divisions for r in d["rows"]]
+        athlete_emails = sorted({a.email for a in entered if a.email})
+        staff_emails = sorted({u.email for u in db.scalars(select(StaffUser)).all() if u.email})
+        mail = {
+            "director": f"mailto:{quote(m.director_email)}?subject={subject}&body={quote(team_text)}" if m.director_email else "",
+            "athletes": f"mailto:?bcc={quote(','.join(athlete_emails))}&subject={subject}&body={quote(team_text)}" if athlete_emails else "",
+            "staff": f"mailto:?bcc={quote(','.join(staff_emails))}&subject={subject}&body={quote(team_text)}" if staff_emails else "",
+        }
+        return render(request, "registration.html", user, m=m, divisions=divisions, people=people, ab=ab, where=where, seeds=seeds,
+                      mail=mail, missing_email=[a.name for a in entered if not a.email], text=team_text)
+
+    @app.post("/registrations/{mid}")
+    async def registration_edit(request: Request, mid: int, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
+        f = await form_checked(request)
+        m = get_meet(db, mid)
+        try:
+            meet_form(f, m)
+            flash(request, "Saved the meet details.")
+        except ValueError as exc:
+            db.rollback()
+            flash(request, str(exc) + ("" if str(exc).endswith(".") else "."), "error")
+        return back(f"/registrations/{mid}")
+
+    @app.post("/registrations/{mid}/delete")
+    async def registration_delete(request: Request, mid: int, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
+        await form_checked(request)
+        m = get_meet(db, mid)
+        flash(request, f"Deleted the entries for {m.name}.")
+        db.delete(m)
+        return back("/registrations")
+
+    @app.post("/registrations/{mid}/divisions")
+    async def division_add(request: Request, mid: int, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
+        f = await form_checked(request)
+        m = get_meet(db, mid)
+        name = str(f.get("name", "")).strip()[:120]
+        if not name:
+            flash(request, "Name the race, such as Boys Varsity.", "error")
+        else:
+            m.divisions.append(MeetDivision(name=name, distance=str(f.get("distance", "")).strip()[:40], position=len(m.divisions)))
+            flash(request, f"Added {name}.")
+        return back(f"/registrations/{mid}")
+
+    @app.post("/registrations/{mid}/divisions/{did}")
+    async def division_save(request: Request, mid: int, did: int, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
+        f = await form_checked(request)
+        m = get_meet(db, mid)
+        d = next((x for x in m.divisions if x.id == did), None)
+        if d is None:
+            raise HTTPException(404, "Race not found.")
+        if f.get("delete"):
+            m.divisions.remove(d)
+            flash(request, f"Removed {d.name}.")
+            return back(f"/registrations/{mid}")
+        d.name = str(f.get("name", d.name)).strip()[:120] or d.name
+        d.distance = str(f.get("distance", d.distance)).strip()[:40]
+        chosen = []
+        for raw in f.getlist("athlete"):
+            try:
+                chosen.append(int(raw))
+            except ValueError:
+                pass
+        valid = {a.id for a in db.scalars(select(Athlete).where(Athlete.id.in_(chosen))).all()}
+        chosen = [a for a in dict.fromkeys(chosen) if a in valid]
+        # An athlete runs one race per meet: picking them here takes them out of the meet's other races.
+        moved = []
+        for other in m.divisions:
+            if other.id != d.id:
+                for e in list(other.entries):
+                    if e.athlete_id in chosen:
+                        other.entries.remove(e)
+                        moved.append(e.athlete.name)
+        keep = {e.athlete_id: e for e in d.entries}
+        d.entries = [keep.get(aid) or DivisionAthlete(athlete_id=aid) for aid in chosen]
+        for i, e in enumerate(d.entries):
+            e.position = i
+        flash(request, f"Saved {d.name}: {len(chosen)} athlete{'' if len(chosen) == 1 else 's'}."
+              + (f" Moved from another race: {', '.join(moved)}." if moved else ""))
+        return back(f"/registrations/{mid}#div-{d.id}")
+
+    @app.get("/registrations/{mid}/entries.pdf")
+    def registration_pdf(mid: int, download: int = 0, user=Depends(any_staff, scope="function"), db: Session = Depends(get_db, scope="function")):
+        m = get_meet(db, mid)
+        data = REG.as_pdf(m, REG.report(db, m), s.team_name, user.username, user.email, logo_bytes(db))
+        fname = re.sub(r"[^A-Za-z0-9]+", "-", f"{m.name} entries {m.date:%Y-%m-%d}").strip("-") + ".pdf"
+        return Response(data, media_type="application/pdf",
+                        headers={"Content-Disposition": f'{"attachment" if download else "inline"}; filename="{fname}"'})
 
     @app.get("/vdot", response_class=HTMLResponse)
     def vdot_page(request: Request, edit: int = 0, user=Depends(any_staff, scope="function"), db: Session = Depends(get_db, scope="function")):

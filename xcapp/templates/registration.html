@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}{{ m.name }} entries · {{ team_name }}{% endblock %}
+{% block content %}
+<p><a href="/registrations">‹ Meet entries</a></p>
+<div class="form-row" style="justify-content:space-between; align-items:flex-end">
+  <div><h1 style="margin:0">{{ m.name }}</h1>
+    <p class="muted" style="margin:4px 0 0">{{ m.date.strftime('%A, %B %-d, %Y') }}{% if m.location %} · {{ m.location }}{% endif %}</p></div>
+  <span class="form-row"><a class="button secondary" href="/registrations/{{ m.id }}/entries.pdf" target="_blank" rel="noopener">Open PDF</a>
+    <a class="button" href="/registrations/{{ m.id }}/entries.pdf?download=1">Download PDF</a></span>
+</div>
+
+<div class="card">
+  <h2>Send the entries</h2>
+  <div class="form-row">
+    {% if mail.director %}<a class="button" href="{{ mail.director }}">Email the race director</a>{% else %}<span class="small muted">Add the race director’s email below to email them.</span>{% endif %}
+    {% if mail.athletes %}<a class="button secondary" href="{{ mail.athletes }}">Email the athletes entered</a>{% endif %}
+    {% if mail.staff %}<a class="button secondary" href="{{ mail.staff }}">Email the coaching staff</a>{% endif %}
+  </div>
+  <p class="small muted">Each button opens a new email in your own email app with the entries filled in (athletes and staff are blind-copied). To send the PDF too, download it and attach it.{% if missing_email %} No email address yet for: {{ missing_email|join(', ') }} (add it on their athlete page).{% endif %}</p>
+  <details><summary class="small" style="cursor:pointer">Show the email text</summary><pre class="small" style="white-space:pre-wrap">{{ text }}</pre></details>
+</div>
+
+{% for d in divisions %}{% set div = d.division %}
+<div class="card" id="div-{{ div.id }}">
+  <div class="form-row" style="justify-content:space-between">
+    <h2 style="margin:0">{{ div.name }}{% if div.distance %} · {{ div.distance }}{% endif %}</h2>
+    <span class="muted">{{ d.rows|length }} entered</span>
+  </div>
+  {% if d.rows %}<ol class="entries">{% for r in d.rows %}<li>{{ r.athlete.name }} <span class="small muted">grade {{ r.grade }}{% if r.seed %} · season best {{ fmt_time(r.seed) }}{% endif %}</span></li>{% endfor %}</ol>{% endif %}
+  {% if user.role != 'trainer' %}
+  <details{% if not d.rows %} open{% endif %}><summary style="cursor:pointer; font-weight:600; color:var(--brand-red)">Choose athletes</summary>
+    <form method="post" action="/registrations/{{ m.id }}/divisions/{{ div.id }}" class="pick-athletes">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <div class="form-row">
+        <label>Race<input type="text" name="name" value="{{ div.name }}" maxlength="120"></label>
+        <label>Distance<input type="text" name="distance" value="{{ div.distance }}" maxlength="40" placeholder="5K" style="width:7em"></label>
+      </div>
+      <table class="list compact"><thead><tr><th></th><th>Athlete</th><th>Grade</th><th>Group</th><th class="num">VDOT</th><th class="num">Season best</th><th></th></tr></thead><tbody>
+      {% for a in people %}{% set ai = ab.get(a.id, {}) %}{% set here = where.get(a.id) == div.name %}
+        <tr><td><input type="checkbox" name="athlete" value="{{ a.id }}" id="d{{ div.id }}a{{ a.id }}"{% if here %} checked{% endif %}></td>
+          <td><label for="d{{ div.id }}a{{ a.id }}">{{ a.name }}</label></td><td>{{ a.grade }}</td>
+          <td>{% if ai.group %}<span class="pill" style="background:{{ ai.color or '#FFFFF0' }}; color:{{ ink(ai.color or '#FFFFF0') }}">{{ ai.group }}</span>{% endif %}</td>
+          <td class="num">{{ ai.vdot or '' }}</td><td class="num">{{ fmt_time(seeds[(div.id, a.id)]) if seeds[(div.id, a.id)] else '' }}</td>
+          <td class="small muted">{% if where.get(a.id) and not here %}in {{ where.get(a.id) }}{% endif %}</td></tr>
+      {% endfor %}
+      </tbody></table>
+      <div class="form-row" style="margin-top:8px"><button type="submit">Save {{ div.name }}</button>
+        <span class="small muted">Picking an athlete already in another race at this meet moves them here.</span>
+        <button type="submit" name="delete" value="1" class="link" formnovalidate onclick="return confirm('Remove this race and its entries?')">Remove this race</button></div>
+    </form>
+  </details>
+  {% endif %}
+</div>
+{% endfor %}
+
+{% if user.role != 'trainer' %}
+<div class="card">
+  <h2>Add a race</h2>
+  <form method="post" action="/registrations/{{ m.id }}/divisions" class="form-row">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label>Race (division)<input type="text" name="name" maxlength="120" required placeholder="Boys Frosh/Soph"></label>
+    <label>Distance<input type="text" name="distance" maxlength="40" placeholder="3 Miles" style="width:8em"></label>
+    <button type="submit">Add race</button>
+  </form>
+</div>
+<details class="card"><summary style="cursor:pointer; font-weight:600">Meet details</summary>
+  <form method="post" action="/registrations/{{ m.id }}" style="margin-top:10px">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <div class="form-row">
+      <label style="flex:1">Meet<input type="text" name="name" maxlength="120" value="{{ m.name }}" required></label>
+      <label>Date<input type="date" name="date" value="{{ m.date.isoformat() }}" required></label>
+      <label style="flex:1">Location<input type="text" name="location" maxlength="160" value="{{ m.location }}"></label>
+    </div>
+    <div class="form-row">
+      <label>Race director<input type="text" name="director_name" maxlength="120" value="{{ m.director_name }}"></label>
+      <label>Race director’s email<input type="email" name="director_email" maxlength="254" value="{{ m.director_email }}"></label>
+    </div>
+    <label>Notes for the race director (shown in the email and PDF)<textarea name="notes" rows="3" style="width:100%" maxlength="2000">{{ m.notes }}</textarea></label>
+    <div class="form-row"><button type="submit">Save details</button></div>
+  </form>
+  <form method="post" action="/registrations/{{ m.id }}/delete" class="inline" onsubmit="return confirm('Delete this meet and all its entries?')">
+    <input type="hidden" name="csrf" value="{{ csrf }}"><button class="link" type="submit">Delete this meet</button></form>
+</details>
+{% endif %}
+{% endblock %}

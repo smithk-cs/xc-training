@@ -59,6 +59,7 @@ class Athlete(Base):
     injuries: Mapped[list["Injury"]] = relationship(back_populates="athlete", cascade="all, delete-orphan")
     pain_reports: Mapped[list["PainReport"]] = relationship(back_populates="athlete", cascade="all, delete-orphan")
     resting_hrs: Mapped[list["RestingHeartRate"]] = relationship(cascade="all, delete-orphan")
+    entries: Mapped[list["DivisionAthlete"]] = relationship(cascade="all, delete-orphan", overlaps="athlete")
     photo: Mapped["AthletePhoto | None"] = relationship(cascade="all, delete-orphan", uselist=False, lazy="select")
 
     @property
@@ -258,6 +259,45 @@ class AthletePhoto(Base):
     media_type: Mapped[str] = mapped_column(String(30), default="image/jpeg")
     data: Mapped[bytes] = mapped_column(LargeBinary)
     updated_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+
+
+class MeetEntry(Base):
+    """A meet the team is entering, with the race director to send entries to."""
+    __tablename__ = "meet_entries"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(120))
+    date: Mapped[dt.date] = mapped_column(Date, index=True)
+    location: Mapped[str] = mapped_column(String(160), default="")
+    director_name: Mapped[str] = mapped_column(String(120), default="")
+    director_email: Mapped[str] = mapped_column(String(254), default="")
+    notes: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
+    divisions: Mapped[list["MeetDivision"]] = relationship(back_populates="meet", cascade="all, delete-orphan",
+                                                           order_by="MeetDivision.position")
+
+
+class MeetDivision(Base):
+    """One race at a meet (such as Boys Varsity 5K) and the athletes entered in it."""
+    __tablename__ = "meet_divisions"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    meet_id: Mapped[int] = mapped_column(ForeignKey("meet_entries.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(120))
+    distance: Mapped[str] = mapped_column(String(40), default="")
+    position: Mapped[int] = mapped_column(Integer, default=0)
+    meet: Mapped[MeetEntry] = relationship(back_populates="divisions")
+    entries: Mapped[list["DivisionAthlete"]] = relationship(back_populates="division", cascade="all, delete-orphan",
+                                                            order_by="DivisionAthlete.position")
+
+
+class DivisionAthlete(Base):
+    __tablename__ = "division_athletes"
+    __table_args__ = (UniqueConstraint("division_id", "athlete_id"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    division_id: Mapped[int] = mapped_column(ForeignKey("meet_divisions.id", ondelete="CASCADE"), index=True)
+    athlete_id: Mapped[int] = mapped_column(ForeignKey("athletes.id", ondelete="CASCADE"), index=True)
+    position: Mapped[int] = mapped_column(Integer, default=0)
+    division: Mapped[MeetDivision] = relationship(back_populates="entries")
+    athlete: Mapped[Athlete] = relationship()
 
 
 class RestingHeartRate(Base):

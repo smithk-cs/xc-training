@@ -263,3 +263,4 @@ table.compact code.copy { font-size: 12px; padding: 1px 6px; }
 details.plink > summary { cursor: pointer; color: var(--brand-red); font-weight: 600; font-size: 13px; }
 details.plink[open] { min-width: 260px; }
 details.plink[open] > summary { margin-bottom: 4px; }
+ol.entries { columns: 2 260px; margin: 8px 0 12px; padding-left: 1.6em; } ol.entries li { break-inside: avoid; padding: 2px 0; }
