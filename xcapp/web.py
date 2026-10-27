@@ -1286,10 +1286,8 @@ def create_app() -> FastAPI:
         f = await form_checked(request)
         bad = []
         for a in db.scalars(select(Athlete).where(Athlete.active.is_(True))).all():
-            if f"plan_{a.id}" not in f:
+            if f"vdot_{a.id}" not in f:
                 continue
-            a.vdot_mark = str(f.get(f"mark_{a.id}", "")).strip()[:10]
-            a.weekly_plan = str(f.get(f"plan_{a.id}", "")).strip()[:20]
             raw = str(f.get(f"vdot_{a.id}", "")).strip()
             try:
                 v = int(raw) if raw else None

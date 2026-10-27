@@ -78,16 +78,16 @@ def test_vdot_page_and_editing(app):
     assert page.index("Platinum") < page.index("Gold") < page.index("Silver")
     assert "No VDOT yet" in page and "Pat Reed" in page
     edit = c.get("/vdot?edit=1").text
-    assert f'name="plan_{sam}"' in edit and f'placeholder="' in edit
+    assert f'name="vdot_{sam}"' in edit and f'name="plan_{sam}"' not in edit and "Weekly plan" not in edit
     assert '<button type="submit" form="vdot-form">Save and finish</button>' in edit and ">Done<" not in edit
     csrf = re.search(r'name="csrf" value="([^"]+)"', edit).group(1)
     data = {"csrf": csrf}
     for aid in (sam, theo, pat):
-        data.update({f"plan_{aid}": "", f"mark_{aid}": "", f"vdot_{aid}": ""})
-    data.update({f"plan_{sam}": "7x8", f"mark_{sam}": "*", f"plan_{pat}": "inj", f"vdot_{pat}": "55"})
+        data.update({f"vdot_{aid}": ""})
+    data.update({f"vdot_{pat}": "55"})
     assert c.post("/vdot", data=data).headers["location"] == "/vdot"
     page = c.get("/vdot").text
-    assert "<td>7x8=56</td>" in page and '<td class="mark">*</td>' in page and "<td>inj</td>" in page
+    assert "Weekly plan" not in page and 'class="mark"' not in page
     assert "Set by coach" not in page and "No VDOT yet" not in page                   # Pat now has a VDOT of 55
     assert "Oak Hills, 4,000 Meters 12:47.9 on Oct 17, 2026" in page                    # most recent race listed
     data[f"vdot_{theo}"] = "200"
@@ -104,6 +104,6 @@ def test_vdot_page_and_editing(app):
     assert all(f">{x}<small" in me for x in sam_paces) and " s per 400</span>" in me
 
     t = login(web, "trainer1")
-    assert "Edit marks" not in t.get("/vdot").text and 'name="plan_' not in t.get("/vdot?edit=1").text
+    assert "Edit VDOT" not in t.get("/vdot").text and 'name="vdot_' not in t.get("/vdot?edit=1").text
     tcsrf = re.search(r'name="csrf" value="([^"]+)"', t.get("/vdot").text).group(1)
     assert t.post("/vdot", data={"csrf": tcsrf}).status_code == 403
