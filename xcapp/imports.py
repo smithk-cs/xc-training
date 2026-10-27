@@ -75,41 +75,65 @@ def _int_or_none(v: str, lo: int, hi: int, label: str):
     return n
 
 
+CLASS_YEARS = {"fr": 9, "freshman": 9, "so": 10, "soph": 10, "sophomore": 10, "jr": 11, "junior": 11, "sr": 12, "senior": 12}
+
+
+def _split_name(name: str) -> tuple[str, str]:
+    """'Last, First' or 'First Last'."""
+    if "," in name:
+        last, first = (x.strip() for x in name.split(",", 1))
+        return first, last
+    return tuple((name.split(None, 1) + [""])[:2])
+
+
+def _grade(text: str) -> int | None:
+    year = CLASS_YEARS.get(text.strip().lower().rstrip("."))
+    return year if year is not None else _int_or_none(text, 6, 12, "grade")
+
+
 def import_roster(db: Session, text: str) -> int:
-    """Columns: name (or first_name + last_name), gender, grade, group, hr_max, hr_rest. Updates matching names."""
+    """Columns: name ('First Last' or 'Last, First'; or first_name + last_name), gender, grade (9-12 or Fr/So/Jr/Sr;
+    also read from gr or yr), group, hr_max, hr_rest. Adds new athletes; for ones already on the roster, changes only the
+    columns the file fills in, so a names-and-grades list leaves groups and heart rates alone. Blank rows are skipped."""
     errors, todo = [], []
     idx = _name_index(db)
     for line, r in _rows(text):
+        if not any(r.values()):
+            continue
         try:
             if r.get("first_name") or r.get("last_name"):
                 first, last = r.get("first_name", ""), r.get("last_name", "")
             else:
-                parts = r.get("name", "").split(None, 1)
-                first, last = (parts + [""])[:2]
+                first, last = _split_name(r.get("name", ""))
             if not first:
                 raise ValueError("name is missing")
+            existing = idx.get(f"{first} {last}".strip().lower())
             gender = GENDERS.get(r.get("gender", "").lower())
-            if not gender:
+            if r.get("gender") and not gender:
                 raise ValueError("gender should be Boys or Girls")
-            grade = _int_or_none(r.get("grade", ""), 6, 12, "grade")
-            if grade is None:
+            if not gender and not existing:
+                raise ValueError(f"add a gender (Boys or Girls) for new athlete '{first} {last}'")
+            grade = _grade(r.get("grade") or r.get("gr") or r.get("yr") or "")
+            if grade is None and not existing:
                 raise ValueError("grade is missing")
-            group = next((g for g in GROUPS if g.lower() == r.get("group", "JV").lower()), None)
-            if not group:
+            group = next((g for g in GROUPS if g.lower() == r.get("group", "").lower()), None)
+            if r.get("group") and not group:
                 raise ValueError("group should be Varsity, JV or Development")
-            todo.append((first, last, gender, grade, group,
+            todo.append((existing[0] if existing else None, first, last, gender, grade, group,
                          _int_or_none(r.get("hr_max", ""), 150, 230, "hr_max"), _int_or_none(r.get("hr_rest", ""), 30, 100, "hr_rest")))
         except ValueError as exc:
             errors.append(f"Line {line}: {exc}")
     if errors:
         raise ImportErrors(errors)
-    for first, last, gender, grade, group, hrmax, hrrest in todo:
-        existing = idx.get(f"{first} {last}".strip().lower())
-        a = existing[0] if existing else Athlete(first_name=first, last_name=last, link_token=new_link_token())
-        a.gender, a.grade, a.group, a.hr_max, a.hr_rest, a.active = gender, grade, group, hrmax, hrrest, True
-        if not existing:
+    for a, first, last, gender, grade, group, hrmax, hrrest in todo:
+        if a is None:
+            a = Athlete(first_name=first, last_name=last, link_token=new_link_token(), group=group or "JV")
             db.add(a)
-            idx[a.name.lower()] = [a]
+            idx[f"{first} {last}".strip().lower()] = [a]
+        for field, value in (("gender", gender), ("grade", grade), ("group", group), ("hr_max", hrmax), ("hr_rest", hrrest)):
+            if value is not None:
+                setattr(a, field, value)
+        a.active = True
     db.flush()
     return len(todo)
 

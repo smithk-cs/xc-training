@@ -40,7 +40,7 @@
 </div>
 <div class="card">
   <h2>Import a roster</h2>
-  <p class="small muted">CSV with columns <code>name, gender, grade, group</code> and optionally <code>hr_max, hr_rest</code>. Gender is Boys or Girls; group is Varsity, JV or Development. Existing names are updated.</p>
+  <p class="small muted">CSV with columns <code>name, gender, grade</code> and optionally <code>group, hr_max, hr_rest</code>. Names can be <code>First Last</code> or <code>Last, First</code>; grade can be 9–12 or Fr/So/Jr/Sr. Gender is Boys or Girls; group is Varsity, JV or Development (new athletes start in JV). Athletes already on the roster are updated, but only in the columns the file fills in.</p>
   <form method="post" action="/athletes/import" enctype="multipart/form-data">
     <input type="hidden" name="csrf" value="{{ csrf }}">
     <div class="form-row"><input type="file" name="file" accept=".csv,text/csv" required><button type="submit">Import</button></div>
