@@ -15,8 +15,15 @@
     </div>
     <div class="form-row">
       <label>Pace from<select name="pace_event">{% for e in EVENTS %}<option {% if e == (edit.pace_event if edit else '5K') %}selected{% endif %}>{{ e }}</option>{% endfor %}</select></label>
-      <label>Pace factor<input type="number" name="pace_factor" min="0.8" max="1.5" step="0.005" value="{{ '%.3f' % edit.pace_factor if edit else '1.00' }}"></label>
-      <span class="small muted">1.00 = race pace. Threshold is about 1.07 of 5K pace.</span>
+      {% set cur = pace_type(edit.pace_factor) if edit else 'Interval' %}
+      <label>Type<select name="pace_type" id="pace-type">
+        {% for name, f in PACE_TYPES.items() %}<option value="{{ name }}" {% if cur == name %}selected{% endif %}>{{ name }} (× {{ '%.2f' % f }})</option>{% endfor %}
+        <option value="Other" {% if cur == 'Other' %}selected{% endif %}>Other…</option>
+      </select></label>
+      <label id="pace-other"{% if cur != 'Other' %} hidden{% endif %}>Pace factor<input type="number" name="pace_factor" min="0.8" max="1.5" step="0.005" value="{{ '%.3f' % edit.pace_factor if edit else '1.00' }}"></label>
+      <span class="small muted">Factor × the pace event’s race pace: 1.00 = race pace, higher = slower.</span>
+      <script>(function () { var s = document.getElementById('pace-type'), o = document.getElementById('pace-other');
+        s.addEventListener('change', function () { o.hidden = s.value !== 'Other'; }); })();</script>
     </div>
     <div class="form-row">
       {% for g in GROUPS %}<label class="check"><input type="checkbox" name="group_{{ g }}"{% if edit and g in edit.groups.split(',') %} checked{% endif %}> {{ g }}</label>{% endfor %}
@@ -31,7 +38,7 @@
 <div class="card scroll">
   <table class="list"><thead><tr><th>Date</th><th>Workout</th><th class="num">Rep (m)</th><th>Pace</th><th>Groups</th><th class="num">Athletes matched</th><th></th></tr></thead><tbody>
   {% for w in rows %}
-  <tr><td>{{ w.date.strftime('%a %b %-d') }}</td><td>{{ w.title }}</td><td class="num">{{ w.rep_distance_m|int }}</td><td>{{ w.pace_event }} × {{ '%.3f' % w.pace_factor }}</td><td>{{ w.groups }}</td><td class="num">{{ counts.get(w.id, 0) }}</td>
+  <tr><td>{{ w.date.strftime('%a %b %-d') }}</td><td>{{ w.title }}</td><td class="num">{{ w.rep_distance_m|int }}</td><td>{{ pace_type(w.pace_factor) }} ({{ w.pace_event }} × {{ '%.2f' % w.pace_factor }})</td><td>{{ w.groups }}</td><td class="num">{{ counts.get(w.id, 0) }}</td>
   <td>{% if user.role != 'trainer' %}<a href="/workouts?edit={{ w.id }}#plan">Edit</a> <form method="post" action="/workouts/{{ w.id }}/delete" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="link" type="submit">Delete</button></form>{% endif %}</td></tr>
   {% else %}<tr><td colspan="7" class="muted">No workouts planned yet.</td></tr>{% endfor %}
   </tbody></table>

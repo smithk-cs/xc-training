@@ -526,6 +526,14 @@ def target_pace(db: Session, athlete_id: int, pw: PlannedWorkout) -> float | Non
     return best / EVENTS[pw.pace_event] * METERS_PER_MILE * pw.pace_factor
 
 
+# Workout types and their pace factor (times the pace event's race pace); anything else is "Other".
+PACE_TYPES = {"Interval": 1.00, "Threshold": 1.07, "Tempo": 1.10, "Long": 1.25, "Recovery": 1.35}
+
+
+def pace_type(factor: float) -> str:
+    return next((name for name, f in PACE_TYPES.items() if abs(factor - f) < 0.0005), "Other")
+
+
 RIEGEL_EXPONENT = 1.06  # race-time equivalence between distances: T2 = T1 * (D2 / D1) ** 1.06
 
 

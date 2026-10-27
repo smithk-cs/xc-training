@@ -142,7 +142,8 @@ def create_app() -> FastAPI:
                                  has_logo=has_logo, FEELS=FEELS, EFFORT_WORDS=EFFORT_WORDS, RUN_TYPES=A.RUN_TYPES,
                                  MISSED_REASONS=A.MISSED_REASONS, SIDES=A.SIDES, STARTED=A.STARTED, SEEN_BY=A.SEEN_BY,
                                  MORE_DAYS=A.MORE_DAYS, missed_label=A.missed_label,
-                                 run_type_of=A.run_type_of, ink=ink, fmt_gap=A.fmt_gap)
+                                 run_type_of=A.run_type_of, ink=ink, fmt_gap=A.fmt_gap, PACE_TYPES=A.PACE_TYPES,
+                                 pace_type=A.pace_type)
     limiter = _LoginLimiter()
     garmin_origin = "{0.scheme}://{0.netloc}".format(urlparse(s.garmin_authorize_url))
     dashboard_body = (HERE / "static" / "dashboard_body.html").read_text(encoding="utf-8")
@@ -670,7 +671,8 @@ def create_app() -> FastAPI:
             d = parse_date(f.get("date", ""))
             title = str(f.get("title", "")).strip()[:120]
             rep_m = float(f.get("rep_distance_m", 0))
-            factor = float(f.get("pace_factor", 1) or 1)
+            kind = f.get("pace_type", "Other")
+            factor = A.PACE_TYPES[kind] if kind in A.PACE_TYPES else float(f.get("pace_factor", 1) or 1)
             event = f.get("pace_event", "5K")
             if not title or not 100 <= rep_m <= 10000 or event not in A.EVENTS or not 0.8 <= factor <= 1.5:
                 raise ValueError("Check the title, rep distance (100 to 10000 m), pace event and pace factor (0.8 to 1.5).")

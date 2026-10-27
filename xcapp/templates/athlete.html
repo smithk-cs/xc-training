@@ -55,7 +55,7 @@
     {% for x in paces %}{% set w = x.workout %}
     <div class="wpace">
       <div class="d">{{ 'Today' if w.date.isoformat() == today else w.date.strftime('%a, %b %-d') }} · {{ w.title }}</div>
-      <div class="small muted">{{ '{:,}'.format(w.rep_distance_m|int) }} m reps at {{ w.pace_event }} pace{% if w.pace_factor != 1 %} × {{ '%.2f' % w.pace_factor }}{% endif %}</div>
+      <div class="small muted">{{ '{:,}'.format(w.rep_distance_m|int) }} m reps · {{ pace_type(w.pace_factor) }} ({{ w.pace_event }} pace{% if w.pace_factor != 1 %} × {{ '%.2f' % w.pace_factor }}{% endif %})</div>
       <div class="facts">
         {% for label, t, missing in (("From your current time", x.now, "Ask your coach to record a race or time trial."), ("From your goal", x.goal, "No goal set yet. Ask your coach.")) %}
         <div><span class="k">{{ label }}</span>

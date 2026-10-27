@@ -58,3 +58,30 @@ def test_edit_workout():
     t, tcsrf = login(app, "trainer1")
     assert t.post("/workouts", data={"csrf": tcsrf, "wid": str(wid), "date": D1.isoformat(), "title": "x",
                                      "rep_distance_m": "400", "pace_event": "5K"}).status_code == 403
+
+
+def test_workout_type_sets_the_pace_factor():
+    from xcapp import analysis as A
+    db = SessionLocal()
+    db.add(StaffUser(username="coach1", role="coach", password_hash=hash_password("correct-horse-1")))
+    db.commit()
+    db.close()
+    from xcapp.web import create_app
+    c, _ = login(create_app(), "coach1")
+    page = c.get("/workouts").text
+    assert '<option value="Threshold" >Threshold (× 1.07)</option>' in page and '<option value="Other" >Other…</option>' in page
+    csrf = re.search(r'name="csrf" value="([^"]+)"', page).group(1)
+    base = {"csrf": csrf, "date": D1.isoformat(), "rep_distance_m": "1600", "pace_event": "5K", "pace_factor": "1.00"}
+    for kind, factor in (("Tempo", 1.10), ("Recovery", 1.35), ("Long", 1.25), ("Interval", 1.00)):
+        c.post("/workouts", data={**base, "title": kind, "pace_type": kind})
+    c.post("/workouts", data={**base, "title": "Custom", "pace_type": "Other", "pace_factor": "1.15"})
+    db = SessionLocal()
+    got = {w.title: w.pace_factor for w in db.query(PlannedWorkout)}
+    db.close()
+    assert got == {"Tempo": 1.10, "Recovery": 1.35, "Long": 1.25, "Interval": 1.00, "Custom": 1.15}
+    assert [A.pace_type(f) for f in (1.07, 1.1, 1.15)] == ["Threshold", "Tempo", "Other"]
+    page = c.get("/workouts").text
+    assert "Tempo (5K × 1.10)" in page and "Other (5K × 1.15)" in page
+    wid = re.search(r'href="/workouts\?edit=(\d+)#plan">Edit</a>', page).group(1)
+    edit = c.get(f"/workouts?edit={wid}").text
+    assert re.search(r'<option value="(\w+)" selected>', edit)
