@@ -28,6 +28,7 @@ from . import garmin as G
 from . import merge as MG
 from . import photos as P
 from . import registration as REG
+from . import reports as RP
 from .config import settings
 from .db import SessionLocal, create_all
 from .fitfile import MAX_FITS_PER_UPLOAD, MAX_UPLOAD_BYTES, FitError, fit_files, parse_fit
@@ -142,7 +143,7 @@ def create_app() -> FastAPI:
             return True
         with SessionLocal() as db:
             return db.get(AppSetting, LOGO_TYPE_KEY) is not None
-    templates.env.globals.update(fmt_time=A.fmt_time, timedelta=dt.timedelta, EVENTS=list(A.EVENTS), GROUPS=GROUPS, team_name=s.team_name,
+    templates.env.globals.update(fmt_time=A.fmt_time, timedelta=dt.timedelta, now=A.team_today, EVENTS=list(A.EVENTS), GROUPS=GROUPS, team_name=s.team_name,
                                  has_logo=has_logo, FEELS=FEELS, EFFORT_WORDS=EFFORT_WORDS, RUN_TYPES=A.RUN_TYPES,
                                  MISSED_REASONS=A.MISSED_REASONS, SIDES=A.SIDES, STARTED=A.STARTED, SEEN_BY=A.SEEN_BY,
                                  MORE_DAYS=A.MORE_DAYS, missed_label=A.missed_label,
@@ -1557,6 +1558,64 @@ def create_app() -> FastAPI:
         fname = re.sub(r"[^A-Za-z0-9]+", "-", f"{m.name} entries {m.date:%Y-%m-%d}").strip("-") + ".pdf"
         return Response(data, media_type="application/pdf",
                         headers={"Content-Disposition": f'{"attachment" if download else "inline"}; filename="{fname}"'})
+
+    # ---------- reports ----------
+
+    def roster_params(request: Request, db: Session) -> dict:
+        q = request.query_params
+        seasons = RP.seasons_with_races(db)
+        cols = [c for c in q.getlist("cols") if c in RP.ROSTER_COLUMNS] or list(RP.DEFAULT_COLUMNS)
+        season = q.get("season") if q.get("season") in seasons else seasons[0]
+        distance = q.get("distance") if q.get("distance") in [n for n, _ in REG.DISTANCES] else "5K"
+        sort = q.get("sort") if q.get("sort") in list(RP.ROSTER_COLUMNS) + ["name"] else "name"
+        return {"seasons": seasons, "season": season, "distance": distance, "cols": cols, "sort": sort, "desc": q.get("desc") == "1",
+                "gender": q.get("gender") if q.get("gender") in ("Boys", "Girls") else "",
+                "grade": q.get("grade") if q.get("grade") in ("9", "10", "11", "12") else "",
+                "group": q.get("group", "")[:40], "title": (q.get("title") or f"{s.team_name} — {season} roster")[:120]}
+
+    def roster_subtitle(p: dict, n: int) -> str:
+        bits = [p["season"], f"times at {p['distance']}"]
+        bits += [x for x in (p["gender"], f"grade {p['grade']}" if p["grade"] else "", p["group"]) if x]
+        heading = "Athlete" if p["sort"] == "name" else RP.ROSTER_COLUMNS[p["sort"]][0]
+        return " · ".join(bits) + f" · {n} athlete{'' if n == 1 else 's'} · sorted by {heading.lower()}{' (high to low)' if p['desc'] else ''}"
+
+    @app.get("/reports", response_class=HTMLResponse)
+    def reports_page(request: Request, user=Depends(any_staff, scope="function"), db: Session = Depends(get_db, scope="function")):
+        p = roster_params(request, db)
+        groups = [g.name for g in db.scalars(select(TrainingGroup).order_by(TrainingGroup.position)).all()]
+        return render(request, "reports.html", user, rp=p, groups=groups, columns=RP.ROSTER_COLUMNS, distances=[n for n, _ in REG.DISTANCES],
+                      athletes=athletes_sorted(db))
+
+    @app.get("/reports/roster", response_class=HTMLResponse)
+    def report_roster(request: Request, user=Depends(any_staff, scope="function"), db: Session = Depends(get_db, scope="function")):
+        p = roster_params(request, db)
+        rows = RP.roster(db, p["season"], p["distance"], p["gender"], p["grade"], p["group"], p["sort"], p["desc"])
+        groups = [g.name for g in db.scalars(select(TrainingGroup).order_by(TrainingGroup.position)).all()]
+        return render(request, "report_roster.html", user, rp=p, rows=rows, groups=groups, columns=RP.ROSTER_COLUMNS,
+                      distances=[n for n, _ in REG.DISTANCES], subtitle=roster_subtitle(p, len(rows)), cell=RP.cell_text,
+                      staff_list=REG.contacts(db), query=request.url.query)
+
+    @app.get("/reports/roster.pdf")
+    def report_roster_pdf(request: Request, user=Depends(any_staff, scope="function"), db: Session = Depends(get_db, scope="function")):
+        p = roster_params(request, db)
+        rows = RP.roster(db, p["season"], p["distance"], p["gender"], p["grade"], p["group"], p["sort"], p["desc"])
+        data = RP.roster_pdf(rows, p["cols"], p["title"], roster_subtitle(p, len(rows)), s.team_name, logo_bytes(db), REG.contacts(db))
+        fname = re.sub(r"[^A-Za-z0-9]+", "-", p["title"]).strip("-") + ".pdf"
+        return Response(data, media_type="application/pdf", headers={"Content-Disposition": f'inline; filename="{fname}"'})
+
+    @app.get("/reports/athlete")
+    def report_athlete_pick(athlete_id: int, season: str = "", user=Depends(any_staff, scope="function")):
+        from urllib.parse import quote
+        return back(f"/reports/athlete/{athlete_id}" + (f"?season={quote(season)}" if season else ""))
+
+    @app.get("/reports/athlete/{athlete_id}", response_class=HTMLResponse)
+    def report_athlete(request: Request, athlete_id: int, user=Depends(any_staff, scope="function"), db: Session = Depends(get_db, scope="function")):
+        a = get_athlete(db, athlete_id)
+        seasons = RP.seasons_with_races(db)
+        season = request.query_params.get("season")
+        season = season if season in seasons else seasons[0]
+        return render(request, "report_athlete.html", user, o=RP.overview(db, a, season), seasons=seasons,
+                      photo_v=photo_versions(db).get(a.id), athletes=athletes_sorted(db))
 
     @app.get("/vdot", response_class=HTMLResponse)
     def vdot_page(request: Request, edit: int = 0, user=Depends(any_staff, scope="function"), db: Session = Depends(get_db, scope="function")):

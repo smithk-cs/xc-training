@@ -1,0 +1,18 @@
+<form method="get" action="/reports/roster">
+  <label>Title<input type="text" name="title" maxlength="120" value="{{ rp.title }}" style="width:100%"></label>
+  <div class="form-row">
+    <label>Season<select name="season">{% for x in rp.seasons %}<option{% if x == rp.season %} selected{% endif %}>{{ x }}</option>{% endfor %}</select></label>
+    <label>Times at<select name="distance">{% for n in distances %}<option{% if n == rp.distance %} selected{% endif %}>{{ n }}</option>{% endfor %}</select></label>
+    <label>Team<select name="gender"><option value="">Everyone</option>{% for g in ('Boys', 'Girls') %}<option{% if g == rp.gender %} selected{% endif %}>{{ g }}</option>{% endfor %}</select></label>
+    <label>Grade<select name="grade"><option value="">All</option>{% for g in ('9', '10', '11', '12') %}<option{% if g == rp.grade %} selected{% endif %}>{{ g }}</option>{% endfor %}</select></label>
+    <label>Running group<select name="group"><option value="">All</option>{% for g in groups %}<option{% if g == rp.group %} selected{% endif %}>{{ g }}</option>{% endfor %}</select></label>
+  </div>
+  <div class="form-row">
+    <label>Sort by<select name="sort"><option value="name">Last name</option>{% for k, (label, num) in columns.items() %}<option value="{{ k }}"{% if k == rp.sort %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+    <label class="check"><input type="checkbox" name="desc" value="1"{% if rp.desc %} checked{% endif %}> Reverse (Z–A, high to low)</label>
+  </div>
+  <fieldset class="pick"><legend class="small">Columns</legend>
+    <div class="form-row">{% for k, (label, num) in columns.items() %}<label class="check"><input type="checkbox" name="cols" value="{{ k }}"{% if k in rp.cols %} checked{% endif %}> {{ label }}</label>{% endfor %}</div>
+  </fieldset>
+  <div class="form-row"><button type="submit">Show roster</button></div>
+</form>

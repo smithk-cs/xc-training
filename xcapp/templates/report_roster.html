@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}{{ rp.title }}{% endblock %}
+{% block content %}
+<div class="no-print form-row" style="justify-content:space-between; margin-bottom:12px">
+  <a href="/reports">‹ Reports</a>
+  <span class="form-row"><button type="button" onclick="window.print()">Print</button><a class="button secondary" href="/reports/roster.pdf?{{ query }}" target="_blank" rel="noopener">PDF</a></span>
+</div>
+<details class="card no-print"><summary style="cursor:pointer; font-weight:600; color:var(--brand-red)">Change this report</summary>{% include "_roster_form.html" %}</details>
+<article class="paper">
+  <header class="paper-head">
+    {% if has_logo() %}<img src="/branding/logo" alt="">{% endif %}
+    <div><div class="paper-team">{{ team_name }}</div><div class="paper-kind">Official roster</div></div>
+  </header>
+  <h1 class="paper-title">{{ rp.title }}</h1>
+  <p class="paper-sub">{{ subtitle }}</p>
+  <table class="paper-table sortable">
+    <thead><tr><th class="num" data-nosort>#</th><th>Athlete</th>{% for c in rp.cols %}<th class="{{ 'num' if columns[c][1] else '' }}">{{ columns[c][0] }}</th>{% endfor %}</tr></thead>
+    <tbody>
+    {% for r in rows %}
+      <tr><td class="num">{{ loop.index }}</td><td data-sort="{{ r.athlete.last_name }} {{ r.athlete.first_name }}"><a href="/athletes/{{ r.athlete.id }}">{{ r.name }}</a></td>
+        {% for c in rp.cols %}<td class="{{ 'num' if columns[c][1] else '' }}" data-sort="{{ r[c] if r[c] is not none else '' }}">{% if c == 'group' and r.group %}<span class="pill" style="background:{{ r.color or '#FFFFF0' }}; color:{{ ink(r.color or '#FFFFF0') }}">{{ r.group }}</span>{% else %}{{ cell(r, c) }}{% endif %}</td>{% endfor %}</tr>
+    {% else %}<tr><td colspan="{{ rp.cols|length + 2 }}" class="muted">No athletes match.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+  {% if staff_list %}
+  <h2 class="paper-h2">Coaching staff</h2>
+  <table class="paper-table"><thead><tr><th>Name</th><th>Title</th><th>Cell</th><th>Email</th></tr></thead><tbody>
+  {% for u in staff_list %}<tr><td>{{ u.display_name }}</td><td>{{ u.title }}</td><td>{{ u.phone }}</td><td>{{ u.email }}</td></tr>{% endfor %}
+  </tbody></table>
+  {% endif %}
+  <footer class="paper-foot">{{ team_name }} · prepared {{ now().strftime('%b %-d, %Y') }}</footer>
+</article>
+{% endblock %}

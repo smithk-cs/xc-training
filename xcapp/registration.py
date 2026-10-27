@@ -23,13 +23,20 @@ DISTANCES = [("1 Mile", 1609.344), ("1.5 Miles", 2414.016), ("2 Miles", 3218.688
 COVERAGE = 0.75  # a close distance is shown when fewer than this share of the athletes listed have run the race's distance
 
 
+def _nearest(m: float) -> tuple[str, float] | None:
+    """The listed distance closest to m, if within 1% (5,000 Meters and 5K are one distance; 4K is not 2.5 miles)."""
+    best = min(DISTANCES, key=lambda x: abs(x[1] - m))
+    return best if abs(best[1] - m) <= best[1] * 0.01 else None
+
+
 def _key(m: float) -> float:
-    """Distances within 1% count as the same (5,000 Meters, 5K and 5 K are one distance)."""
-    return next((d for _, d in DISTANCES if abs(d - m) <= d * 0.01), round(m / 10) * 10)
+    n = _nearest(m)
+    return n[1] if n else round(m / 10) * 10
 
 
 def distance_label(m: float) -> str:
-    return next((n for n, d in DISTANCES if abs(d - m) <= d * 0.01), f"{m:,.0f} m")
+    n = _nearest(m)
+    return n[0] if n else f"{m:,.0f} m"
 
 
 def season_times(db: Session, on: dt.date) -> dict[int, dict[float, float]]:
@@ -150,13 +157,12 @@ class _Doc(FPDF):
         self.cell(0, 12, f"Page {self.page_no()} of {{nb}}", align="R")
 
 
-def as_pdf(meet: MeetEntry, divisions: list[dict], team: str, coach: str, coach_email: str,
-           logo: tuple[bytes, str] | None = None, staff: list | None = None) -> bytes:
+def branded_page(team: str, subtitle: str, logo: tuple[bytes, str] | None) -> tuple[_Doc, float]:
+    """A new letter-size PDF with the team's red and gold header band. Returns the document and the usable width."""
     pdf = _Doc(team, f"{team} · prepared {dt.date.today():%b %-d, %Y}")
     pdf.alias_nb_pages()
     pdf.add_page()
     w = pdf.w - 96
-    # Header band
     pdf.set_fill_color(*RED)
     pdf.rect(0, 0, pdf.w, 92, "F")
     pdf.set_fill_color(*GOLD)
@@ -174,7 +180,38 @@ def as_pdf(meet: MeetEntry, divisions: list[dict], team: str, coach: str, coach_
     pdf.cell(w - (x - 48), 30, team.upper())
     pdf.set_xy(x, 52)
     pdf.set_font("InterSemi", size=12)
-    pdf.cell(w - (x - 48), 18, "Meet entries")
+    pdf.cell(w - (x - 48), 18, subtitle)
+    return pdf, w
+
+
+def staff_table(pdf: _Doc, w: float, staff: list) -> None:
+    if not staff:
+        return
+    if pdf.get_y() > pdf.h - 60 - 22 * (len(staff) + 2):
+        pdf.add_page()
+    pdf.ln(12)
+    pdf.set_font("Barlow", size=13)
+    pdf.set_text_color(*RED)
+    pdf.cell(w, 18, "Coaching staff", new_x="LMARGIN", new_y="NEXT")
+    cols = [(0.30, "Name"), (0.24, "Title"), (0.18, "Cell"), (0.28, "Email")]
+    pdf.set_font("InterSemi", size=9)
+    pdf.set_fill_color(*INK)
+    pdf.set_text_color(255, 255, 255)
+    for frac, label in cols:
+        pdf.cell(w * frac, 18, label.upper(), fill=True)
+    pdf.ln(18)
+    pdf.set_font("Inter", size=10)
+    pdf.set_text_color(*INK)
+    pdf.set_draw_color(*LINE)
+    for u in staff:
+        for (frac, _), v in zip(cols, (u.display_name, u.title, u.phone, u.email)):
+            pdf.cell(w * frac, 20, v or "", border="B")
+        pdf.ln(20)
+
+
+def as_pdf(meet: MeetEntry, divisions: list[dict], team: str, coach: str, coach_email: str,
+           logo: tuple[bytes, str] | None = None, staff: list | None = None) -> bytes:
+    pdf, w = branded_page(team, "Meet entries", logo)
     # Meet details
     pdf.set_xy(48, 118)
     pdf.set_text_color(*INK)
@@ -231,25 +268,5 @@ def as_pdf(meet: MeetEntry, divisions: list[dict], team: str, coach: str, coach_
     pdf.set_text_color(*MUTED)
     pdf.multi_cell(w, 14, "Submitted by " + coach + (f"  ·  {coach_email}" if coach_email else "") + f"\n{team}",
                    new_x="LMARGIN", new_y="NEXT")
-    if staff:
-        if pdf.get_y() > pdf.h - 60 - 22 * (len(staff) + 2):
-            pdf.add_page()
-        pdf.ln(12)
-        pdf.set_font("Barlow", size=13)
-        pdf.set_text_color(*RED)
-        pdf.cell(w, 18, "Coaching staff", new_x="LMARGIN", new_y="NEXT")
-        cols = [(0.30, "Name"), (0.24, "Title"), (0.18, "Cell"), (0.28, "Email")]
-        pdf.set_font("InterSemi", size=9)
-        pdf.set_fill_color(*INK)
-        pdf.set_text_color(255, 255, 255)
-        for frac, label in cols:
-            pdf.cell(w * frac, 18, label.upper(), fill=True)
-        pdf.ln(18)
-        pdf.set_font("Inter", size=10)
-        pdf.set_text_color(*INK)
-        pdf.set_draw_color(*LINE)
-        for u in staff:
-            for (frac, _), v in zip(cols, (u.display_name, u.title, u.phone, u.email)):
-                pdf.cell(w * frac, 20, v or "", border="B")
-            pdf.ln(20)
+    staff_table(pdf, w, staff or [])
     return bytes(pdf.output())

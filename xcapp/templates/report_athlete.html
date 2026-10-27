@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}{{ o.athlete.name }} · {{ o.season }} overview{% endblock %}
+{% block content %}
+{% set a = o.athlete %}{% set st = o.stats %}{% set ab = o.ability %}
+<div class="no-print form-row" style="justify-content:space-between; margin-bottom:12px">
+  <a href="/reports">‹ Reports</a>
+  <form method="get" action="/reports/athlete" class="form-row">
+    <select name="athlete_id" aria-label="Athlete">{% for x in athletes %}<option value="{{ x.id }}"{% if x.id == a.id %} selected{% endif %}>{{ x.name }}</option>{% endfor %}</select>
+    <select name="season" aria-label="Season">{% for x in seasons %}<option{% if x == o.season %} selected{% endif %}>{{ x }}</option>{% endfor %}</select>
+    <button type="submit" class="secondary">Show</button>
+    <button type="button" onclick="window.print()">Print</button>
+  </form>
+</div>
+<article class="paper overview">
+  <header class="ov-head">
+    {% if photo_v %}<img class="ov-photo" src="/athletes/{{ a.id }}/photo?v={{ photo_v }}" alt="">{% else %}<span class="ov-photo blank">{{ a.first_name[:1] }}{{ a.last_name[:1] }}</span>{% endif %}
+    <div class="ov-id">
+      <div class="paper-kind">{{ team_name }} · {{ o.season }} season overview</div>
+      <h1>{{ a.name }}</h1>
+      <div class="ov-tags">
+        <span>Grade {{ a.grade }}</span>
+        {% if ab.group %}<span class="pill" style="background:{{ ab.color or '#FFFFF0' }}; color:{{ ink(ab.color or '#FFFFF0') }}">{{ ab.group }}</span>{% endif %}
+        {% if ab.vdot %}<span>VDOT <b>{{ ab.vdot }}</b></span>{% endif %}
+      </div>
+    </div>
+  </header>
+
+  <section class="kpis">
+    <div class="kpi"><span class="k">Races</span><span class="v">{{ st.races }}</span><span class="s">{% if st.prs %}{{ st.prs }} personal record{{ '' if st.prs == 1 else 's' }}{% else %}this season{% endif %}</span></div>
+    <div class="kpi"><span class="k">Best 5K equivalent</span><span class="v">{{ fmt_time(st.best_eq)[:-2] if st.best_eq else '–' }}</span><span class="s">any distance, converted</span></div>
+    <div class="kpi accent"><span class="k">Improvement</span><span class="v">{% if st.improve is not none %}{{ '−' if st.improve >= 0 else '+' }}{{ fmt_time(st.improve|abs)[:-2] if st.improve|abs >= 60 else ('%.0f s' % (st.improve|abs)) }}{% else %}–{% endif %}</span><span class="s">{% if st.improve_pct is not none %}{{ '%.1f' % (st.improve_pct|abs) }}% {{ 'faster' if st.improve >= 0 else 'slower' }}, first to latest race{% else %}needs two races{% endif %}</span></div>
+    <div class="kpi"><span class="k">VDOT</span><span class="v">{{ st.vdot_last if st.vdot_last else '–' }}</span><span class="s">{% if st.vdot_first and st.vdot_first != st.vdot_last %}from {{ st.vdot_first }} in the first race{% else %}from races{% endif %}</span></div>
+    <div class="kpi"><span class="k">Best place</span><span class="v">{{ st.best_place or '–' }}</span><span class="s">{% if st.avg_place %}average {{ '%.1f' % st.avg_place }}{% endif %}{% if st.avg_points %}{{ ' · ' if st.avg_place else '' }}{{ '%.1f' % st.avg_points }} team points{% endif %}</span></div>
+    <div class="kpi"><span class="k">Miles</span><span class="v">{{ '%g' % st.miles }}</span><span class="s">{{ '%g' % st.avg_week }} a week · top week {{ '%g' % st.top_week }}</span></div>
+    <div class="kpi"><span class="k">Runs logged</span><span class="v">{{ st.runs }}</span><span class="s">{{ st.workouts }} team workout{{ '' if st.workouts == 1 else 's' }}{% if st.avg_effort is not none %} · effort {{ st.avg_effort }}/10{% endif %}</span></div>
+    <div class="kpi"><span class="k">Days missed</span><span class="v">{{ st.missed }}</span><span class="s">{% if st.rhr_avg %}resting heart rate {{ st.rhr_avg }}{% else %}reported by the athlete{% endif %}</span></div>
+  </section>
+
+  {% if o.charts.races %}
+  <section class="ov-block">
+    <h2>Race progression</h2>
+    <p class="ov-note">Each race converted to a 5K equivalent, so different distances can be compared.</p>
+    {{ o.charts.races|safe }}
+  </section>
+  {% endif %}
+
+  <div class="ov-two">
+    {% if o.charts.miles %}<section class="ov-block wide"><h2>Weekly mileage</h2>{{ o.charts.miles|safe }}</section>{% endif %}
+    {% if o.charts.vdot %}<section class="ov-block"><h2>VDOT by race</h2>{{ o.charts.vdot|safe }}</section>{% endif %}
+    {% if o.charts.rhr %}<section class="ov-block"><h2>Resting heart rate</h2>{{ o.charts.rhr|safe }}</section>{% endif %}
+  </div>
+
+  <section class="ov-block">
+    <h2>Races</h2>
+    {% if o.rows %}
+    <div class="scroll"><table class="paper-table">
+      <thead><tr><th>Date</th><th>Meet</th><th>Distance</th><th class="num">Time</th><th class="num">Pace /mi</th><th class="num">Place</th><th class="num">Points</th><th class="num">5K equiv.</th><th class="num">vs last</th><th class="num">VDOT</th></tr></thead>
+      <tbody>{% for x in o.rows|reverse %}{% set r = x.r %}
+        <tr><td class="nowrap">{{ r.date.strftime('%b %-d') }}</td><td>{{ r.meet }}{% if x.pr %} <span class="pill good">PR</span>{% elif x.sb %} <span class="pill">SB</span>{% endif %}</td><td>{{ x.label }}</td>
+          <td class="num">{{ fmt_time(r.time_s) }}</td><td class="num">{{ fmt_time(x.pace)[:-2] }}</td><td class="num">{{ r.place or '–' }}</td><td class="num">{{ '%g' % r.points if r.points is not none else '–' }}</td>
+          <td class="num">{{ fmt_time(x.eq) }}</td><td class="num {{ 'faster' if x.vs_prev is not none and x.vs_prev < 0 else ('slower' if x.vs_prev else '') }}">{% if x.vs_prev is not none %}{{ '−' if x.vs_prev < 0 else '+' }}{{ '%.1f' % (x.vs_prev|abs) }} s{% else %}–{% endif %}</td><td class="num">{{ x.vdot }}</td></tr>
+      {% endfor %}</tbody>
+    </table></div>
+    {% else %}<p class="muted">No races recorded this season.</p>{% endif %}
+  </section>
+
+  {% if o.paces %}
+  <section class="ov-block">
+    <h2>Training paces from VDOT {{ ab.vdot }}</h2>
+    <div class="kpis small-kpis">{% for z in o.paces %}<div class="kpi"><span class="k">{{ z.name }}</span><span class="v">{{ fmt_time(z.mile)[:-2] }}</span><span class="s">per mile{% if z.lap %} · {{ '%.0f' % z.lap }} s/400{% endif %}</span></div>{% endfor %}</div>
+  </section>
+  {% endif %}
+  <footer class="paper-foot">{{ team_name }} · {{ o.season }} · prepared {{ now().strftime('%b %-d, %Y') }}</footer>
+</article>
+{% endblock %}
