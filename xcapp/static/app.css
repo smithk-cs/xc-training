@@ -311,3 +311,8 @@ ol.entries { columns: 2 260px; margin: 8px 0 12px; padding-left: 1.6em; } ol.ent
   .kpi, .paper-table tbody tr:nth-child(even) td, .pill, .paper-head, .ov-head { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   @page { size: letter; margin: 0.5in; }
 }
+details.panel.fold > summary { list-style: none; cursor: pointer; display: flex; align-items: center; justify-content: space-between; }
+details.panel.fold > summary::-webkit-details-marker { display: none; }
+details.panel.fold > summary::after { content: "▸"; color: var(--brand-red); font-size: 20px; }
+details.panel.fold[open] > summary::after { content: "▾"; }
+details.panel.fold:not([open]) { gap: 0; }

@@ -55,7 +55,7 @@ def test_garmin_section_moves_down_once_connected(app):
     db.close()
     page = c.get("/a/tok-ava").text
     assert page.count('id="g-h"') == 1 and "✓ Connected" in page
-    assert page.index("My training") < page.index('id="u-h"') < page.index('id="g-h"') < page.index('id="pv-h"')
+    assert '<details class="panel fold" id="add-runs">' in page and page.index("My training") < page.index('id="u-h"') < page.index('id="g-h"') < page.index('id="pv-h"')
 
 
 def test_group_colors_look_like_their_names(app):
