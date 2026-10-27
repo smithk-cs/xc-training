@@ -55,7 +55,8 @@ try:
     r = c.post("/login", data={"csrf": tok("/login"), "username": "coachk", "password": "e2e-password-1"})
     check("Coach signs in", r.status_code == 303 and r.headers["location"] == "/")
     home = c.get("/").text
-    check("Home shows the watch list and Garmin webhook address", "Watch list" in home and "/garmin/webhook/e2e-hook" in home)
+    check("Home shows the watch list; the Sync log shows the Garmin webhook address",
+          "Watch list" in home and "/garmin/webhook/e2e-hook" in c.get("/sync").text)
 
     r = c.post("/athletes", data={"csrf": tok("/athletes"), "first_name": "Test", "last_name": "Garmin", "gender": "Girls", "grade": "10", "group": "Varsity"})
     links = c.get("/athletes/links.csv").text
