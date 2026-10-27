@@ -7,7 +7,7 @@ from __future__ import annotations
 import datetime as dt
 
 from sqlalchemy import (
-    Boolean, Date, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint,
+    Boolean, Date, DateTime, Float, ForeignKey, Integer, LargeBinary, String, Text, UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -54,6 +54,7 @@ class Athlete(Base):
     injuries: Mapped[list["Injury"]] = relationship(back_populates="athlete", cascade="all, delete-orphan")
     pain_reports: Mapped[list["PainReport"]] = relationship(back_populates="athlete", cascade="all, delete-orphan")
     resting_hrs: Mapped[list["RestingHeartRate"]] = relationship(cascade="all, delete-orphan")
+    photo: Mapped["AthletePhoto | None"] = relationship(cascade="all, delete-orphan", uselist=False, lazy="select")
 
     @property
     def name(self) -> str:
@@ -242,6 +243,16 @@ class PainReport(Base):
     activity_id: Mapped[int | None] = mapped_column(ForeignKey("activities.id", ondelete="SET NULL"), nullable=True)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
     athlete: Mapped[Athlete] = relationship(back_populates="pain_reports")
+
+
+class AthletePhoto(Base):
+    """An athlete's roster photo, stored as a small JPEG with no metadata."""
+    __tablename__ = "athlete_photos"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    athlete_id: Mapped[int] = mapped_column(ForeignKey("athletes.id", ondelete="CASCADE"), unique=True)
+    media_type: Mapped[str] = mapped_column(String(30), default="image/jpeg")
+    data: Mapped[bytes] = mapped_column(LargeBinary)
+    updated_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
 
 
 class RestingHeartRate(Base):

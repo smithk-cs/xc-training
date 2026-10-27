@@ -2,6 +2,7 @@
   <div class="team">{% if has_logo() %}<img src="/branding/logo" alt="">{% endif %}<span>{{ team_name }}</span></div>
   {% if back_url %}<a class="back" href="{{ back_url }}">‹ {{ back_label }}</a>{% endif %}
   <div class="hero-title">
+    {% if hero_photo is defined and hero_photo %}<img class="hero-photo" src="{{ hero_photo }}" alt="">{% endif %}
     <h1>{{ hero_title }}</h1>
     {% if hero_group is defined and hero_group is not none %}{% set g = hero_group %}
     <details class="group-pop">

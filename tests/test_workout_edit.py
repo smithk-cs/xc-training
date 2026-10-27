@@ -25,7 +25,7 @@ def test_edit_workout():
     db = SessionLocal()
     for n, r in (("coach1", "coach"), ("trainer1", "trainer")):
         db.add(StaffUser(username=n, role=r, password_hash=hash_password("correct-horse-1")))
-    a = Athlete(first_name="Sam", last_name="Lowry", gender="Boys", grade=12, group="Varsity", link_token="t")
+    a = Athlete(first_name="Sam", last_name="Lowry", gender="Boys", grade=12, group="Varsity", link_token="t", ability_override="Gold")
     db.add(a)
     db.flush()
     pw = PlannedWorkout(date=D1, title="6 x 1K", rep_distance_m=1000, pace_event="5K", pace_factor=1.0)
@@ -42,19 +42,21 @@ def test_edit_workout():
     c, _ = login(app, "coach1")
     page = c.get(f"/workouts?edit={wid}").text
     assert "Edit workout" in page and 'value="6 x 1K"' in page and f'name="wid" value="{wid}"' in page and "Save changes" in page
-    assert f'href="/workouts?edit={wid}#plan">Edit</a>' in c.get("/workouts").text
+    listing = c.get("/workouts").text
+    assert f'class="row-link" data-href="/workouts?edit={wid}#plan"' in listing and ">Edit</a>" not in listing
+    assert 'name="group_Varsity"' not in listing and 'name="group_Gold"' in listing      # ability groups only
     csrf = re.search(r'name="csrf" value="([^"]+)"', page).group(1)
     c.post("/workouts", data={"csrf": csrf, "wid": str(wid), "date": D2.isoformat(), "title": "5 x 1K tempo",
-                              "rep_distance_m": "1000", "pace_event": "5K", "pace_factor": "1.07", "group_Varsity": "on"})
+                              "rep_distance_m": "1000", "pace_event": "5K", "pace_factor": "1.07", "group_Gold": "on", "group_Varsity": "on"})
     assert "Updated 5 x 1K tempo." in c.get("/workouts").text
     db = SessionLocal()
     w = db.query(PlannedWorkout).one()
-    assert (w.date, w.title, w.pace_factor, w.groups) == (D2, "5 x 1K tempo", 1.07, "Varsity")
+    assert (w.date, w.title, w.pace_factor, w.groups) == (D2, "5 x 1K tempo", 1.07, "Gold")
     matched = {x.local_date: x.planned_workout_id for x in db.query(Activity).filter_by(athlete_id=aid)}
     assert matched == {D1: None, D2: wid}                               # the match moved with the date
     db.close()
     page = c.get(f"/workouts?edit={wid}").text
-    assert 'name="group_Varsity" checked' in page and 'value="1.070"' in page
+    assert 'name="group_Gold" checked' in page and 'value="1.070"' in page
     t, tcsrf = login(app, "trainer1")
     assert t.post("/workouts", data={"csrf": tcsrf, "wid": str(wid), "date": D1.isoformat(), "title": "x",
                                      "rep_distance_m": "400", "pace_event": "5K"}).status_code == 403
@@ -82,6 +84,6 @@ def test_workout_type_sets_the_pace_factor():
     assert [A.pace_type(f) for f in (1.07, 1.1, 1.15)] == ["Threshold", "Tempo", "Other"]
     page = c.get("/workouts").text
     assert "Tempo (5K × 1.10)" in page and "Other (5K × 1.15)" in page
-    wid = re.search(r'href="/workouts\?edit=(\d+)#plan">Edit</a>', page).group(1)
+    wid = re.search(r'data-href="/workouts\?edit=(\d+)#plan"', page).group(1)
     edit = c.get(f"/workouts?edit={wid}").text
     assert re.search(r'<option value="(\w+)" selected>', edit)

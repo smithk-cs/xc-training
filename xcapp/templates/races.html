@@ -18,12 +18,13 @@ Flat SAC Invitational,2026-10-24,Gibson Ranch Regional Park,Boys Varsity Large S
   </form>
 </div>
 {% endif %}
+{% if meets %}<p class="small muted">Click a meet to open or close it.</p>{% endif %}
 {% for (date, meet, course), races in meets.items() %}
-<div class="card">
-  <div class="form-row" style="justify-content:space-between">
-    <h2 style="margin:0">{{ meet }}</h2>
-    <span class="muted">{{ date.strftime('%a, %b %-d, %Y') }}{% if course %} · {{ course }}{% endif %}</span>
-  </div>
+<details class="card meet"{% if loop.first %} open{% endif %}>
+  <summary>
+    <h2>{{ meet }}</h2>
+    <span class="muted">{{ date.strftime('%a, %b %-d, %Y') }}{% if course %} · {{ course }}{% endif %} · {{ races.values()|map('length')|sum }} results</span>
+  </summary>
   {% for (race, label, meters), rows in races.items() %}
   <h3>{{ race or 'Race' }} · {{ label }}</h3>
   <div class="scroll"><table class="list">
@@ -44,7 +45,7 @@ Flat SAC Invitational,2026-10-24,Gibson Ranch Regional Park,Boys Varsity Large S
       <button class="danger" type="submit">Delete</button></form>
   </details>
   {% endif %}
-</div>
+</details>
 {% else %}
 <div class="card"><p class="muted">No races yet. Import a meet’s results above.</p></div>
 {% endfor %}

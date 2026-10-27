@@ -11,3 +11,4 @@ anthropic==2.2.0
 garmin-fit-sdk==21.218.0
 # Postgres driver (Supabase). SQLite needs nothing extra.
 psycopg[binary]==3.3.6
+Pillow==11.3.0

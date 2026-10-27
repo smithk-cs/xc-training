@@ -71,6 +71,9 @@ def test_vdot_page_and_editing(app):
     page = c.get("/vdot").text
     assert '<a href="/vdot" aria-current="page">VDOT</a>' in page
     assert '<th class="name">Gold</th><th>VDOT 68-72</th>' in page and "easy: 6:21-6:39" in page and "tempo: 5:05-5:20" in page
+    assert "long run: 6:35-6:54" in page and "interval: 4:41-4:54" in page          # Gold's long run and interval ranges
+    sam_paces = [A.fmt_time(z["mile"])[:-2] for z in A.training_paces(A.abilities(SessionLocal(), A.team_today())[sam]["vdot"])]
+    assert "".join(f'<td class="pace">{x}</td>' for x in sam_paces) in page          # each athlete's own paces
     assert "<th>VDOT 73 +</th>" in page and "<th>VDOT 48 and below</th>" in page and "or slower" in page
     assert page.index("Platinum") < page.index("Gold") < page.index("Silver")
     assert "No VDOT yet" in page and "Pat Reed" in page
@@ -84,7 +87,8 @@ def test_vdot_page_and_editing(app):
     assert c.post("/vdot", data=data).headers["location"] == "/vdot"
     page = c.get("/vdot").text
     assert "<td>7x8=56</td>" in page and '<td class="mark">*</td>' in page and "<td>inj</td>" in page
-    assert "Set by coach" in page and "No VDOT yet" not in page                       # Pat now has a VDOT of 55
+    assert "Set by coach" not in page and "No VDOT yet" not in page                   # Pat now has a VDOT of 55
+    assert "Oak Hills, 4,000 Meters 12:47.9 on Oct 17, 2026" in page                    # most recent race listed
     data[f"vdot_{theo}"] = "200"
     c.post("/vdot", data=data)
     assert "not changed for Theo Marsh" in c.get("/vdot?edit=1").text
@@ -94,7 +98,9 @@ def test_vdot_page_and_editing(app):
     assert "VDOT 74, set by a coach" in c.get(f"/athletes/{sam}").text
     c.post(f"/athletes/{sam}/vdot", data={"csrf": csrf, "vdot": ""})
     assert "worked out from their most recent race" in c.get(f"/athletes/{sam}").text
-    assert "From your most recent race (Oak Hills" in TestClient(web).get("/a/t-sam").text
+    me = TestClient(web).get("/a/t-sam").text
+    assert "From your most recent race (Oak Hills" in me and 'id="tp-h">My training paces' in me
+    assert all(f">{x}<small" in me for x in sam_paces) and " s per 400</span>" in me
 
     t = login(web, "trainer1")
     assert "Edit marks" not in t.get("/vdot").text and 'name="plan_' not in t.get("/vdot?edit=1").text

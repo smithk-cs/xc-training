@@ -5,7 +5,7 @@
   <h1 style="margin:0">VDOT training groups</h1>
   {% if user.role != 'trainer' %}{% if edit %}<a class="button secondary" href="/vdot">Done</a>{% else %}<a class="button secondary" href="/vdot?edit=1">Edit marks, weekly plans and VDOT</a>{% endif %}{% endif %}
 </div>
-<p class="muted" style="max-width:80ch">VDOT comes from each athlete’s most recent race or time trial (1500 m to 10K), read on the team’s VDOT table, unless a coach has set it. Easy pace is {{ (easy_pct * 100)|round|int }}% of VDOT and tempo {{ (tempo_pct * 100)|round|int }}%. Group cutoffs are on the <a href="/groups">Groups</a> page.</p>
+<p class="muted" style="max-width:80ch">VDOT comes from each athlete’s most recent race or time trial (1500 m to 10K), read on the team’s VDOT table, unless a coach has set it. Paces per mile, as a share of VDOT: {% for n, pct in zones %}{{ n|lower }} {{ (pct * 100)|round(1)|string|replace('.0', '') }}%{{ ', ' if not loop.last else '' }}{% endfor %}. Group cutoffs are on the <a href="/groups">Groups</a> page.</p>
 {% if edit %}<form method="post" action="/vdot"><input type="hidden" name="csrf" value="{{ csrf }}">{% endif %}
 {% for b in board %}
 {% if board|length > 1 %}<h2>{{ b.gender }}</h2>{% endif %}
@@ -13,17 +13,16 @@
 {% for s in b.sections %}{% set c = s.group.color or '#E5E4E2' %}
 <div class="scroll"><table class="vdot-group" style="--g: {{ c }}; --g-ink: {{ ink(c) }}">
   <thead><tr><th class="name">{{ s.group.name }}</th><th>VDOT {{ s.range }}</th>
-    <th class="small">easy: {{ fmt_time(s.easy[0])[:-2] }}{% if s.slower %} or slower{% endif %}{% if not s.single %}-{{ fmt_time(s.easy[1])[:-2] }}{% endif %}</th>
-    <th class="small">tempo: {{ fmt_time(s.tempo[0])[:-2] }}{% if s.slower %} or slower{% endif %}{% if not s.single %}-{{ fmt_time(s.tempo[1])[:-2] }}{% endif %}</th>
-    <th class="small">Last race</th></tr></thead>
+    {% for z in s.zones %}<th class="small">{{ z.name|lower }}: {{ fmt_time(z.fast)[:-2] }}{% if s.slower %} or slower{% elif not s.single %}-{{ fmt_time(z.slow)[:-2] }}{% endif %}</th>{% endfor %}
+    <th class="small"></th><th class="small">Weekly plan</th><th class="small">Most recent race</th></tr></thead>
   <tbody>
-  {% for r in s.rows %}{% include "_vdot_row.html" %}{% else %}<tr><td colspan="5" class="small">Nobody yet.</td></tr>{% endfor %}
+  {% for r in s.rows %}{% include "_vdot_row.html" %}{% else %}<tr><td colspan="9" class="small">Nobody yet.</td></tr>{% endfor %}
   </tbody>
 </table></div>
 {% endfor %}
 {% if b.rest %}
 <div class="scroll"><table class="vdot-group" style="--g: #F6F4F1; --g-ink: #1B1B1F">
-  <thead><tr><th class="name">No VDOT yet</th><th></th><th></th><th></th><th class="small">Needs a race or a coach-set VDOT</th></tr></thead>
+  <thead><tr><th class="name">No VDOT yet</th><th></th><th></th><th></th><th></th><th></th><th></th><th></th><th class="small">Needs a race or a coach-set VDOT</th></tr></thead>
   <tbody>{% for r in b.rest %}{% include "_vdot_row.html" %}{% endfor %}</tbody>
 </table></div>
 {% endif %}

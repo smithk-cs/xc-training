@@ -25,13 +25,14 @@ from . import ai as AI
 from . import analysis as A
 from . import datasets as DS
 from . import garmin as G
+from . import photos as P
 from .config import settings
 from .db import SessionLocal, create_all
 from .fitfile import MAX_FITS_PER_UPLOAD, MAX_UPLOAD_BYTES, FitError, fit_files, parse_fit
 from .imports import GROUPS, ImportErrors, import_goals, import_races, import_results, import_roster, parse_date, set_goal
 from .ingest import ingest, log, rematch_day
 from .models import (Activity, AiRun, AppSetting, Athlete, DeletionRequest, GarminConnection, Injury, MissedDay,
-                     OAuthState, PainReport, PlannedWorkout, RaceResult, RestingHeartRate, Result, StaffUser, SyncLog, TrainingGroup, utcnow)
+                     OAuthState, PainReport, PlannedWorkout, RaceResult, RestingHeartRate, Result, StaffUser, AthletePhoto, SyncLog, TrainingGroup, utcnow)
 from .security import csrf_ok, csrf_token, hash_password, new_link_token, verify_password
 
 HERE = Path(__file__).parent
@@ -204,6 +205,16 @@ def create_app() -> FastAPI:
             raise HTTPException(404, "This athlete link is not valid. Ask your coach for a new one.")
         return a
 
+    def photo_versions(db: Session) -> dict[int, int]:
+        """athlete id -> a number that changes when their photo does (for cache-safe image links)."""
+        return {aid: int(ts.timestamp()) for aid, ts in db.execute(select(AthletePhoto.athlete_id, AthletePhoto.updated_at)).all()}
+
+    def photo_response(a: Athlete) -> Response:
+        if a.photo is None:
+            raise HTTPException(404, "No photo.")
+        return Response(a.photo.data, media_type=a.photo.media_type,
+                        headers={"Cache-Control": "private, max-age=86400", "Content-Security-Policy": LOGO_CSP})
+
     def athletes_sorted(db: Session):
         return db.scalars(select(Athlete).where(Athlete.active.is_(True)).order_by(Athlete.last_name, Athlete.first_name)).all()
 
@@ -348,7 +359,9 @@ def create_app() -> FastAPI:
     def athletes_page(request: Request, user=Depends(any_staff, scope="function"), db: Session = Depends(get_db, scope="function")):
         rows = db.scalars(select(Athlete).where(Athlete.active.is_(True)).options(selectinload(Athlete.garmin))
                           .order_by(Athlete.last_name, Athlete.first_name)).all()
-        return render(request, "athletes.html", user, athletes=rows, ab=A.abilities(db, A.team_today()))
+        ranks = {g.name: g.position for g in db.scalars(select(TrainingGroup)).all()}
+        return render(request, "athletes.html", user, athletes=rows, ab=A.abilities(db, A.team_today()), ranks=ranks,
+                      photos=photo_versions(db))
 
     @app.post("/athletes")
     async def add_athlete(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
@@ -405,7 +418,7 @@ def create_app() -> FastAPI:
         races = db.scalars(select(RaceResult).where(RaceResult.athlete_id == a.id).order_by(RaceResult.date.desc()).limit(30)).all()
         return render(request, "athlete_detail.html", user, a=a, acts=acts, results=results, run_pain=run_pain, races=races,
                       ability=ability, group_names=group_names, missed=missed, vo2=A.latest_vo2(db, a.id),
-                      rhr=A.resting_hr(db, a.id, A.team_today()),
+                      rhr=A.resting_hr(db, a.id, A.team_today()), photo_v=photo_versions(db).get(a.id),
                       injuries=sorted(a.injuries, key=lambda i: i.onset_date, reverse=True),
                       pains=sorted(a.pain_reports, key=lambda p: p.date, reverse=True)[:10],
                       goals=sorted(a.goals, key=lambda g: (g.season, g.event)), show_notes=user.role in ("admin", "trainer"))
@@ -679,7 +692,7 @@ def create_app() -> FastAPI:
             if not title or not 100 <= rep_m <= 10000 or event not in A.EVENTS or not 0.8 <= factor <= 1.5:
                 raise ValueError("Check the title, rep distance (100 to 10000 m), pace event and pace factor (0.8 to 1.5).")
             ability_names = [g.name for g in db.scalars(select(TrainingGroup).order_by(TrainingGroup.position)).all()]
-            groups = ",".join(g for g in list(GROUPS) + ability_names if f.get(f"group_{g}")) or "All"
+            groups = ",".join(g for g in ability_names if f.get(f"group_{g}")) or "All"
             pw = db.get(PlannedWorkout, int(f["wid"])) if str(f.get("wid", "")).isdigit() else None
             old_day = pw.date if pw else None
             if pw is None:
@@ -874,7 +887,7 @@ def create_app() -> FastAPI:
         return render(request, "athlete.html", None, history=history, paces=paces, a=a, acts=acts, tiles=tiles, seasons=seasons, need=need, ability=ability,
                       show_group=show_group, open_delete=open_delete, races=races, vo2=A.latest_vo2(db, a.id),
                       rhr=A.resting_hr(db, a.id, today), rhr_range=(A.RESTING_HR_MIN, A.RESTING_HR_MAX),
-                      rhr_cal=A.resting_hr_calendar(db, a.id, today),
+                      rhr_cal=A.resting_hr_calendar(db, a.id, today), photo_v=photo_versions(db).get(a.id), my_paces=A.training_paces(mine.get("vdot")) if show_group else [],
                       areas=BODY_AREAS, token=token, today=today.isoformat())
 
     @app.post("/a/{token}/connect")
@@ -1149,10 +1162,58 @@ def create_app() -> FastAPI:
             flash(request, msg, "error")
         return back("/groups")
 
+    @app.get("/athletes/{athlete_id}/photo")
+    def athlete_photo(athlete_id: int, user=Depends(any_staff, scope="function"), db: Session = Depends(get_db, scope="function")):
+        return photo_response(get_athlete(db, athlete_id))
+
+    @app.get("/a/{token}/photo")
+    def athlete_own_photo(token: str, db: Session = Depends(get_db, scope="function")):
+        return photo_response(athlete_by_token(db, token))
+
+    @app.post("/athletes/{athlete_id}/photo")
+    async def athlete_photo_upload(request: Request, athlete_id: int, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
+        f = await form_checked(request)
+        a = get_athlete(db, athlete_id)
+        if f.get("remove"):
+            if a.photo is not None:
+                db.delete(a.photo)
+            flash(request, f"Removed {a.name}'s photo.")
+            return back(f"/athletes/{a.id}")
+        up = f.get("photo")
+        if not up or not getattr(up, "filename", ""):
+            flash(request, "Choose a photo first.", "error")
+            return back(f"/athletes/{a.id}")
+        try:
+            P.save(db, a, await up.read(P.MAX_PHOTO_BYTES + 1))
+            flash(request, f"Saved {a.name}'s photo.")
+        except P.PhotoError as exc:
+            flash(request, str(exc), "error")
+        return back(f"/athletes/{a.id}")
+
+    @app.post("/athletes/photos")
+    async def athlete_photos_zip(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
+        f = await form_checked(request)
+        up = f.get("file")
+        if not up or not getattr(up, "filename", ""):
+            flash(request, "Choose a .zip of photos first.", "error")
+            return back("/athletes")
+        try:
+            done, missed = P.import_zip(db, await up.read(P.MAX_ZIP_BYTES + 1))
+        except P.PhotoError as exc:
+            flash(request, str(exc), "error")
+            return back("/athletes")
+        log(db, "admin", f"{user.username} added {len(done)} athlete photos.")
+        flash(request, f"Added {len(done)} photo{'' if len(done) == 1 else 's'}." if done else "No photos matched athletes on the roster.",
+              "ok" if done else "error")
+        if missed:
+            flash(request, "Not matched to an athlete (name the file after the athlete, such as Sam Lowry.jpg): " + ", ".join(missed[:40])
+                  + (f" and {len(missed) - 40} more" if len(missed) > 40 else ""), "error")
+        return back("/athletes")
+
     @app.get("/vdot", response_class=HTMLResponse)
     def vdot_page(request: Request, edit: int = 0, user=Depends(any_staff, scope="function"), db: Session = Depends(get_db, scope="function")):
         return render(request, "vdot.html", user, board=A.vdot_board(db, A.team_today()), edit=bool(edit) and user.role != "trainer",
-                      easy_pct=A.EASY_PCT, tempo_pct=A.TEMPO_PCT, vdot_limits=(A.VDOT_MIN, A.VDOT_MAX))
+                      zones=A.PACE_ZONES, vdot_limits=(A.VDOT_MIN, A.VDOT_MAX))
 
     @app.post("/vdot")
     async def vdot_save(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):

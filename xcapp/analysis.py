@@ -338,6 +338,19 @@ def abilities(db: Session, as_of: dt.date) -> dict[int, dict]:
 
 
 EASY_PCT, TEMPO_PCT = 0.67, 0.88   # share of VO2max for easy and tempo (threshold) running, as on the team's sheet
+LONG_PCT, INTERVAL_PCT = 0.64, 0.975   # long runs a touch slower than easy; intervals near VO2max (Daniels' I pace)
+PACE_ZONES = [("Easy", EASY_PCT), ("Long run", LONG_PCT), ("Tempo", TEMPO_PCT), ("Interval", INTERVAL_PCT)]
+
+
+def training_paces(v: float | None) -> list[dict]:
+    """Per-mile paces for each kind of run at VDOT v; intervals also per 400 m."""
+    if v is None:
+        return []
+    out = []
+    for name, pct in PACE_ZONES:
+        mile = pace_at(v, pct)
+        out.append({"name": name, "pct": pct, "mile": mile, "lap": mile * 400 / METERS_PER_MILE if name == "Interval" else None})
+    return out
 
 
 def pace_at(v: float, pct: float) -> float:
@@ -378,13 +391,14 @@ def vdot_board(db: Session, as_of: dt.date) -> list[dict]:
                              key=lambda a: (-(ab[a.id]["vdot"] or 0), a.last_name, a.first_name))
             bottom = lo < VDOT_MIN and hi is not None   # the catch-all group: "48 and below", paces of 48 or slower
             top = hi if hi is not None else lo
-            easy = (pace_at(top, EASY_PCT), pace_at(max(lo, VDOT_MIN), EASY_PCT))
-            tempo = (pace_at(top, TEMPO_PCT), pace_at(max(lo, VDOT_MIN), TEMPO_PCT))
+            zones = [{"name": n, "fast": pace_at(top, pct), "slow": pace_at(max(lo, VDOT_MIN), pct)} for n, pct in PACE_ZONES]
             rng = (f"{hi} and below" if bottom else f"{lo}-{hi}" if hi is not None and hi > lo else f"{lo} +" if hi is None else str(lo))
-            sections.append({"group": g, "range": rng, "easy": easy, "tempo": tempo,
+            sections.append({"group": g, "range": rng, "zones": zones,
                              "single": hi is None or hi <= lo or bottom, "slower": bottom,
-                             "rows": [{"a": a, **ab[a.id], "plan": weekly_plan_text(a.weekly_plan)} for a in members]})
-        rest = [{"a": a, **ab.get(a.id, {}), "plan": weekly_plan_text(a.weekly_plan)} for a in mine if not ab.get(a.id, {}).get("group")]
+                             "rows": [{"a": a, **ab[a.id], "plan": weekly_plan_text(a.weekly_plan),
+                                       "paces": training_paces(ab[a.id]["vdot"])} for a in members]})
+        rest = [{"a": a, **ab.get(a.id, {}), "plan": weekly_plan_text(a.weekly_plan), "paces": []}
+                for a in mine if not ab.get(a.id, {}).get("group")]
         out.append({"gender": gender, "sections": sections, "rest": rest})
     return out
 

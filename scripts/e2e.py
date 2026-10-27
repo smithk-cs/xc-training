@@ -155,7 +155,7 @@ try:
     check("New athlete is prompted to add effort", "needs your effort rating" in a.get(link).text and "Add effort" in runs_page)
     r = a.post(f"{link}/runs/{run_id}", data={"csrf": csrf, "rpe": "8", "feel": "Heavy", "pain_area": "Lower leg", "pain_level": "6", "note": "shin tight"})
     check("Athlete saves effort, legs and pain for a synced run", r.status_code == 303 and "Effort 8 · Heavy" in a.get(link + "/runs").text)
-    aid = re.search(r'href="/athletes/(\d+)">Test Garmin<', c.get("/athletes").text).group(1)
+    aid = re.search(r'href="/athletes/(\d+)">(?:<[^>]+>[^<]*</span>|<img [^>]+>)?Test Garmin<', c.get("/athletes").text).group(1)
     detail = c.get(f"/athletes/{aid}").text
     check("Coach sees the effort, legs, pain and note on the athlete page", "6/10 Lower leg" in detail and "Athlete note: shin tight" in detail and ">Heavy<" in detail)
     check("Pain from the run puts the athlete on the watch list", "Pain 6/10: Lower leg" in c.get("/").text)
