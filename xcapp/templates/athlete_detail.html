@@ -17,10 +17,11 @@
 <div class="grid">
 <div class="card">
   <h2>Recent runs</h2>
-  <div class="scroll"><table class="list"><thead><tr><th>Date</th><th>Type</th><th class="num">Miles</th><th class="num">Time</th><th class="num">Avg HR</th><th>Workout</th><th class="num">Effort</th><th>Legs</th><th>Pain</th><th>Device</th></tr></thead><tbody>
+  <div class="scroll"><table class="list"><thead><tr><th>Date</th><th>Type</th><th class="num">Miles</th><th class="num">Time</th><th class="num">Avg HR</th><th class="num">VO2 max</th><th>Workout</th><th class="num">Effort</th><th>Legs</th><th>Pain</th><th>Device</th></tr></thead><tbody>
   {% for act in acts %}
   <tr><td><a href="/athletes/{{ a.id }}/runs/{{ act.id }}">{{ act.local_date.strftime('%a %b %-d') }}</a></td><td>{{ run_type_of(act) }}</td><td class="num">{{ '%.1f' % (act.distance_m / 1609.344) }}</td>
   <td class="num">{{ fmt_time(act.duration_s)[:-2] }}</td><td class="num">{{ act.avg_hr|round|int if act.avg_hr else '' }}</td>
+  <td class="num">{{ '%.1f' % act.vo2_max if act.vo2_max else '' }}</td>
   <td>{% if act.planned %}{{ act.planned.title }}{% elif act.laps|selectattr('is_rep')|list %}{{ act.laps|selectattr('is_rep')|list|length }} reps (no plan that day){% endif %}</td>
   <td class="num">{{ act.rpe if act.rpe is not none else '' }}</td><td>{{ act.feel }}</td>
   <td>{% set rp = run_pain.get(act.id) %}{% if rp %}<span class="pill bad">{{ rp.severity }}/10 {{ rp.body_area }}</span>{% if rp.saw_trainer %} <span class="pill good">Saw trainer</span>{% endif %}{% endif %}</td>

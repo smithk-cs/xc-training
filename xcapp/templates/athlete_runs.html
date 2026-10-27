@@ -21,7 +21,7 @@
             <span style="display:flex; flex-wrap:wrap; gap:6px">
               {% if act.planned %}<span class="tag">{{ act.planned.title }}</span>{% elif act.run_type in ('Long', 'Race') %}<span class="tag">{{ 'Long run' if act.run_type == 'Long' else 'Race' }}</span>{% endif %}
               {% if pain %}<span class="pill bad">Pain {{ pain.severity }}/10 {{ pain.body_area }}</span>{% endif %}
-            </span></span>
+            </span>{% if act.vo2_max %}<span class="small muted">VO2 max {{ '%.1f' % act.vo2_max }}</span>{% endif %}</span>
           <span class="r"><span class="mi">{{ '%.1f' % (act.distance_m / 1609.344) }} <small>mi</small></span>
             {% if act.rpe is not none %}<span class="pill good">Effort {{ act.rpe }}{% if act.feel %} · {{ act.feel }}{% endif %}</span>{% else %}<span class="pill" style="color:var(--brand-red); border-color:var(--brand-red); background:var(--color-panel)">Add effort</span>{% endif %}</span>
         </a>

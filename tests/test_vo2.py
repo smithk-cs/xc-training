@@ -64,13 +64,17 @@ def test_stored_per_run_and_shown(app):
     assert "Watch VO2 max: 52.4</b> (Oct 12)" in page and "watch’s VO2 max estimate" in page
     assert "Watch VO2 max</span><span class=\"big\">51.0" in c.get(f"/a/tok-ava/runs/{ids[10]}").text
     assert "Watch VO2 max" not in c.get(f"/a/tok-ava/runs/{ids[14]}").text
+    assert page.count('<span class="small muted">VO2 max ') == 2 and "VO2 max 51.0</span>" in page   # Recent runs
+    assert c.get("/a/tok-ava/runs").text.count('<span class="small muted">VO2 max ') == 2           # My runs
     export = json.loads(c.get("/a/tok-ava/my-data.json").text)
     assert sorted((r["date"], r["watch_vo2_max"]) for r in export["runs"]) == [
         ("2026-10-10", 51.0), ("2026-10-12", 52.4), ("2026-10-14", None)]
 
     csrf = re.search(r'name="csrf" value="([^"]+)"', c.get("/login").text).group(1)
     c.post("/login", data={"csrf": csrf, "username": "coach1", "password": "correct-horse-1"})
-    assert "Watch VO2 max 52.4 (Oct 12;" in c.get(f"/athletes/{aid}").text
+    coach_page = c.get(f"/athletes/{aid}").text
+    assert "Watch VO2 max 52.4 (Oct 12;" in coach_page
+    assert '<th class="num">VO2 max</th>' in coach_page and '<td class="num">52.4</td>' in coach_page
     assert "Watch VO2 max</span><span class=\"big\">52.4" in c.get(f"/athletes/{aid}/runs/{ids[12]}").text
     assert "VO2 max estimate" in c.get("/privacy").text
 

@@ -84,7 +84,7 @@
       {% for act in acts[:6] %}
       <li><a class="row" href="/a/{{ token }}/runs/{{ act.id }}">
         <span class="l"><span class="d">{{ act.local_date.strftime('%a, %b %-d') }}</span>
-          {% if act.planned %}<span class="tag">{{ act.planned.title }}</span>{% endif %}</span>
+          {% if act.planned %}<span class="tag">{{ act.planned.title }}</span>{% endif %}{% if act.vo2_max %}<span class="small muted">VO2 max {{ '%.1f' % act.vo2_max }}</span>{% endif %}</span>
         <span class="r"><span class="mi">{{ '%.1f' % (act.distance_m / 1609.344) }} <small>mi</small></span>
           {% if act.rpe is not none %}<span class="small muted">Effort {{ act.rpe }}</span>{% else %}<span class="small" style="color:var(--brand-red); font-weight:600">Add effort</span>{% endif %}</span>
       </a></li>
