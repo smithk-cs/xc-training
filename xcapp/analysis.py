@@ -334,6 +334,16 @@ def save_resting_hr(db: Session, athlete_id: int, day: dt.date, bpm: int, source
     return row
 
 
+RESTING_HR_BACKDATE = 34   # athletes can fill in or fix days this far back (the calendar's five weeks)
+
+
+def resting_hr_calendar(db: Session, athlete_id: int, today: dt.date) -> dict:
+    """Five Monday-to-Sunday weeks ending with this one, and the values entered on those days."""
+    first = today - dt.timedelta(days=today.weekday() + 28)
+    rows = db.scalars(select(RestingHeartRate).where(RestingHeartRate.athlete_id == athlete_id, RestingHeartRate.date >= first)).all()
+    return {"today": today, "days": [first + dt.timedelta(days=i) for i in range(35)], "by_day": {r.date: r for r in rows}}
+
+
 def resting_hr_summary(rows: list[RestingHeartRate], as_of: dt.date) -> dict | None:
     """Latest value, this week's average (3+ days), the usual (median of the four weeks before, 7+ days), and whether
     this week is RESTING_HR_FLAG or more above usual. rows: one athlete's values, any order."""

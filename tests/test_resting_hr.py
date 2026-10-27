@@ -82,7 +82,8 @@ def test_pages_entry_export_and_never_to_ai():
     c = TestClient(create_app(), follow_redirects=False)
 
     page = c.get("/a/tok-ava").text
-    assert 'id="rhr-h">Resting heart rate' in page and "This morning’s resting heart rate" in page
+    assert 'id="rhr-h">Resting heart rate' in page and 'Resting heart rate for <b id="rhr-day">today</b>' in page
+    assert page.count('class="day garmin') == today.weekday() + 28 and page.count('class="day today"') == 1   # Garmin days colored; today empty
     assert "beats higher than usual this week" in page and "daily resting heart rate" in page
     csrf = re.search(r'name="csrf" value="([^"]+)"', page).group(1)
     c.post("/a/tok-ava/resting-hr", data={"csrf": csrf, "bpm": "300"})
@@ -90,9 +91,18 @@ def test_pages_entry_export_and_never_to_ai():
     c.post("/a/tok-ava/resting-hr", data={"csrf": csrf, "bpm": "57"})
     page = c.get("/a/tok-ava").text
     assert "Saved: 57 beats per minute this morning." in page and "you entered it" in page
-    assert "This morning’s resting heart rate" not in page                       # already entered today
+    assert 'class="day done today"' in page and 'value="57"> beats/min' in page    # today colored, value ready to fix
+    week_ago = (today - dt.timedelta(days=5)).isoformat()
+    c.post("/a/tok-ava/resting-hr", data={"csrf": csrf, "bpm": "50", "date": week_ago})
+    page = c.get("/a/tok-ava").text
+    assert f"Saved: 50 beats per minute for {today - dt.timedelta(days=5):%a, %b %-d}." in page
+    assert f'class="day done"\n        data-date="{week_ago}" data-bpm="50"' in page              # the athlete's value replaced Garmin's
+    for bad in ((today - dt.timedelta(days=40)).isoformat(), (today + dt.timedelta(days=1)).isoformat(), "nonsense"):
+        c.post("/a/tok-ava/resting-hr", data={"csrf": csrf, "bpm": "50", "date": bad})
+        assert "Pick a day from the past 34 days." in c.get("/a/tok-ava").text
     data = json.loads(c.get("/a/tok-ava/my-data.json").text)
     assert data["resting_heart_rate"][-1] == {"date": today.isoformat(), "bpm": 57, "source": "athlete"}
+    assert len(data["resting_heart_rate"]) == 34
 
     db = SessionLocal()
     snap = DS.snapshot(db)
@@ -102,14 +112,14 @@ def test_pages_entry_export_and_never_to_ai():
     csrf = re.search(r'name="csrf" value="([^"]+)"', c.get("/login").text).group(1)
     c.post("/login", data={"csrf": csrf, "username": "coach1", "password": "correct-horse-1"})
     home = c.get("/").text
-    assert "Resting heart rate up" in home and f'<a href="/athletes/{aid}">Ava Doyle</a>' in home and "+8" in home
+    assert "Resting heart rate up" in home and f'<a href="/athletes/{aid}">Ava Doyle</a>' in home and "+7" in home
     detail = c.get(f"/athletes/{aid}").text
-    assert "Resting heart rate 57 (" in detail and "athlete entered" in detail and "usual 48" in detail and "Up 8 bpm" in detail
+    assert "Resting heart rate 57 (" in detail and "athlete entered" in detail and "usual 48" in detail and "Up 7 bpm" in detail
     assert "Dailies" not in c.get("/privacy").text and "resting heart rate from Garmin’s daily summary" in c.get("/privacy").text
 
     c2 = TestClient(create_app(), follow_redirects=False)
     csrf = re.search(r'name="csrf" value="([^"]+)"', c2.get("/a/tok-ava").text).group(1)
     c2.post("/a/tok-ava/delete-garmin-data", data={"csrf": csrf, "confirm": "DELETE"})
     db = SessionLocal()
-    assert [(r.bpm, r.source) for r in db.scalars(select(RestingHeartRate))] == [(57, "athlete")]   # Garmin's are gone
+    assert sorted((r.bpm, r.source) for r in db.scalars(select(RestingHeartRate))) == [(50, "athlete"), (57, "athlete")]   # Garmin's are gone
     db.close()

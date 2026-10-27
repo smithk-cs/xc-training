@@ -874,6 +874,7 @@ def create_app() -> FastAPI:
         return render(request, "athlete.html", None, history=history, paces=paces, a=a, acts=acts, tiles=tiles, seasons=seasons, need=need, ability=ability,
                       show_group=show_group, open_delete=open_delete, races=races, vo2=A.latest_vo2(db, a.id),
                       rhr=A.resting_hr(db, a.id, today), rhr_range=(A.RESTING_HR_MIN, A.RESTING_HR_MAX),
+                      rhr_cal=A.resting_hr_calendar(db, a.id, today),
                       areas=BODY_AREAS, token=token, today=today.isoformat())
 
     @app.post("/a/{token}/connect")
@@ -933,11 +934,18 @@ def create_app() -> FastAPI:
             bpm = int(str(f.get("bpm", "")).strip())
         except ValueError:
             bpm = 0
-        if not A.RESTING_HR_MIN <= bpm <= A.RESTING_HR_MAX:
+        today = A.team_today()
+        try:
+            day = dt.date.fromisoformat(str(f.get("date") or today.isoformat()))
+        except ValueError:
+            day = None
+        if day is None or not today - dt.timedelta(days=A.RESTING_HR_BACKDATE) <= day <= today:
+            flash(request, f"Pick a day from the past {A.RESTING_HR_BACKDATE} days.", "error")
+        elif not A.RESTING_HR_MIN <= bpm <= A.RESTING_HR_MAX:
             flash(request, f"Enter your resting heart rate as beats per minute, between {A.RESTING_HR_MIN} and {A.RESTING_HR_MAX}.", "error")
         else:
-            A.save_resting_hr(db, a.id, A.team_today(), bpm, "athlete")
-            flash(request, f"Saved: {bpm} beats per minute this morning.")
+            A.save_resting_hr(db, a.id, day, bpm, "athlete")
+            flash(request, f"Saved: {bpm} beats per minute " + ("this morning." if day == today else f"for {day:%a, %b %-d}."))
         return back(f"/a/{token}#rhr")
 
     # ---------- branding ----------
