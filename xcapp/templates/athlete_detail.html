@@ -3,7 +3,23 @@
 {% block content %}
 {% if not a.active %}<p class="notice"><span><b>{{ a.name }} has left the team</b>{% if a.left_on %} ({{ a.left_on.strftime('%b %-d, %Y') }}). Their data is kept until {{ (a.left_on + timedelta(days=settings.retention_days)).strftime('%b %-d, %Y') }}, when the privacy policy says to delete it{% endif %}.</span></p>{% endif %}
 {% if a.is_test %}<p class="notice"><span><b>Test athlete.</b> Left out of team numbers, the watch list, the VDOT page and the AI briefing.</span></p>{% endif %}
+<div class="coach-title">
 <h1 class="with-photo">{% if photo_v %}<img class="avatar big zoom" src="/athletes/{{ a.id }}/photo?v={{ photo_v }}" alt="Photo of {{ a.name }}" tabindex="0" role="button">{% endif %}{{ a.name }}</h1>
+{% set g = ability %}
+<details class="group-pop">
+  <summary class="group-btn"{% if g.group and g.color %} style="background:{{ g.color }}; color:{{ ink(g.color) }}"{% endif %}>{% if g.group %}{{ g.group }}{% if g.vdot %} · VDOT {{ g.vdot }}{% endif %}{% else %}Running group: not set{% endif %}</summary>
+  <div class="group-card">
+    {% if g.group %}
+    <b>Running group: {{ g.group }}</b>
+    {% if g.target_1600 %}<div class="facts"><div><span class="k">800 target</span><span class="big">{{ g.target_800 }}</span></div><div><span class="k">1600 target</span><span class="big">{{ g.target_1600 }}</span></div></div>{% endif %}
+    <span class="small muted">{% if g.override %}Pinned to this group by a coach.{% elif g.vdot_set %}VDOT set by a coach{% if g.race_vdot %} (most recent race: {{ g.race_vdot }}){% endif %}.{% else %}From {{ a.first_name }}’s most recent race{% if g.source %} ({{ g.source }}){% endif %}.{% endif %}</span>
+    {% else %}
+    <span class="small">No VDOT yet. It comes from {{ a.first_name }}’s most recent race, or set one below or on the VDOT page.</span>
+    {% endif %}
+    {% if user.role != 'trainer' %}<a class="small" href="/vdot">Open the VDOT page</a>{% endif %}
+  </div>
+</details>
+</div>
 <p class="muted">{{ a.gender }}, grade {{ a.grade }}, {{ a.group }}.{% if ability.group %} Ability group <b>{{ ability.group }}</b>{% if ability.vdot %} (VDOT {{ ability.vdot }}, {% if ability.vdot_set %}set by a coach{% else %}from {{ ability.source }}{% endif %}){% endif %}{% if ability.override %}, pinned by a coach{% endif %}.{% if ability.target_1600 %} Targets: 800 {{ ability.target_800 }}, 1600 {{ ability.target_1600 }}.{% endif %}{% endif %}
 {% if rhr %} Resting heart rate {{ rhr.latest.bpm }} ({{ rhr.latest.date.strftime('%b %-d') }}, {{ 'Garmin' if rhr.latest.source == 'garmin' else 'athlete entered' }}){% if rhr.week is not none %}; this week {{ '%.0f' % rhr.week }}{% endif %}{% if rhr.usual is not none %}, usual {{ '%.0f' % rhr.usual }}{% endif %}{% if rhr.flag %} <span class="pill bad">Up {{ '%.0f' % rhr.up }} bpm</span>{% endif %}.{% endif %}
 {% if vo2 %} Watch VO2 max {{ '%.1f' % vo2.vo2_max }} ({{ vo2.local_date.strftime('%b %-d') }}; Garmin’s estimate, not used for groups).{% endif %}
