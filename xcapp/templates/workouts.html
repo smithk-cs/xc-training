@@ -10,13 +10,8 @@
     {% if edit %}<input type="hidden" name="wid" value="{{ edit.id }}">{% endif %}
     <div class="form-row">
       <label>Date<input type="date" name="date" value="{{ edit.date.isoformat() if edit else today }}" required></label>
-      <label style="flex:1">Name<input type="text" name="title" placeholder="6 x 1K @ 5K pace, or Easy 5 miles" value="{{ edit.title if edit else '' }}" required></label>
-      {% set mi = edit and edit.in_miles %}
-      <label>Distance<span class="form-row" style="gap:6px; flex-wrap:nowrap"><input type="number" name="rep_distance_m" id="dist" min="{{ 0.25 if mi else 100 }}" max="{{ 30 if mi else 10000 }}" step="{{ 0.05 if mi else 1 }}" value="{{ edit.distance_value if edit else 1000 }}" required style="width:7em">
-        <select name="distance_unit" id="dist-unit" aria-label="Unit"><option value="m"{% if not mi %} selected{% endif %}>meters per rep</option><option value="mi"{% if mi %} selected{% endif %}>miles</option></select></span></label>
-      <script>(function () { var u = document.getElementById('dist-unit'), d = document.getElementById('dist');
-        u.addEventListener('change', function () { var mi = u.value === 'mi';
-          d.min = mi ? 0.25 : 100; d.max = mi ? 30 : 10000; d.step = mi ? 0.05 : 1; d.value = mi ? 5 : 1000; }); })();</script>
+      <label style="flex:1">Name<input type="text" name="title" placeholder="6 x 1K @ 5K pace" value="{{ edit.title if edit else '' }}" required></label>
+      <label>Rep distance (m)<input type="number" name="rep_distance_m" min="100" max="10000" step="1" value="{{ edit.rep_distance_m|round|int if edit else 1000 }}" required></label>
     </div>
     <div class="form-row">
       <label>Pace from<select name="pace_event">{% for e in EVENTS %}<option {% if e == (edit.pace_event if edit else '5K') %}selected{% endif %}>{{ e }}</option>{% endfor %}</select></label>

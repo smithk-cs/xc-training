@@ -5,6 +5,60 @@
 {% block flashes %}{% endblock %}
 {% block content %}
 {# Garmin: near the top until the athlete connects (connect night), then near the bottom, under their training. #}
+{# Resting heart rate: near the top until today's value is in, then below the training charts. #}
+{% macro rhr_panel(garmin_connected) %}
+  <section class="panel" id="rhr" aria-labelledby="rhr-h">
+    <h2 id="rhr-h">Resting heart rate</h2>
+    {% if rhr %}
+    <div class="facts">
+      <div><span class="k">Latest</span><span class="big">{{ rhr.latest.bpm }}</span><span class="small muted">{{ 'Today' if rhr.latest.date.isoformat() == today else rhr.latest.date.strftime('%a, %b %-d') }} · {{ 'from Garmin' if rhr.latest.source == 'garmin' else 'you entered it' }}</span></div>
+      <div><span class="k">This week</span><span class="big">{{ '%.0f' % rhr.week if rhr.week is not none else '—' }}</span><span class="small muted">{{ 'average' if rhr.week is not none else 'needs 3 days' }}</span></div>
+      <div><span class="k">Your usual</span><span class="big">{{ '%.0f' % rhr.usual if rhr.usual is not none else '—' }}</span><span class="small muted">{{ 'the 4 weeks before' if rhr.usual is not none else 'needs a few weeks' }}</span></div>
+    </div>
+    {% if rhr.flag %}<p class="notice" style="margin-top:12px"><span>Your resting heart rate is {{ '%.0f' % rhr.up }} beats higher than usual this week. That can mean you’re getting sick, worn down or short on sleep. Tell your coach how you feel.</span></p>{% endif %}
+    {% else %}
+    <p class="muted small">{% if garmin_connected %}Your Garmin sends this each day. You can also enter it yourself.{% else %}Your resting heart rate each morning helps your coaches spot when you’re getting sick or worn down.{% endif %}</p>
+    {% endif %}
+    {% set r0 = rhr_cal.by_day.get(rhr_cal.today) %}
+    <form method="post" action="/a/{{ token }}/resting-hr" class="form-row" id="rhr-form"{% if r0 %} hidden{% endif %}>
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <input type="hidden" name="date" id="rhr-date" value="{{ rhr_cal.today.isoformat() }}">
+      <label>Resting heart rate for <b id="rhr-day">today</b> <input type="number" name="bpm" id="rhr-bpm" min="{{ rhr_range[0] }}" max="{{ rhr_range[1] }}" inputmode="numeric" required style="width:5em" value="{{ r0.bpm if r0 else '' }}"> beats/min</label>
+      <button type="submit">Save</button>
+    </form>
+    <p class="small muted" id="rhr-tip"{% if r0 %} hidden{% endif %}>Before you get out of bed, count your pulse for 30 seconds and double it.</p>
+    <details class="rhr-more">
+      <summary class="small" style="cursor:pointer; min-height:44px; display:flex; align-items:center">Add or fix earlier days</summary>
+    <div class="rhr-cal" role="group" aria-label="Pick a day to enter or fix">
+      {% for wd in ('Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun') %}<span class="wd">{{ wd }}</span>{% endfor %}
+      {% for d in rhr_cal.days %}{% set r = rhr_cal.by_day.get(d) %}
+      {% if d > rhr_cal.today %}<span class="day off" aria-hidden="true"></span>
+      {% else %}<button type="button" class="day{% if r %} {{ 'garmin' if r.source == 'garmin' else 'done' }}{% endif %}{% if d == rhr_cal.today %} today{% endif %}"
+        data-date="{{ d.isoformat() }}" data-bpm="{{ r.bpm if r else '' }}" data-label="{{ 'today' if d == rhr_cal.today else d.strftime('%a, %b %-d') }}"
+        aria-pressed="{{ 'true' if d == rhr_cal.today else 'false' }}" aria-label="{{ d.strftime('%a, %b %-d') }}{{ ': ' ~ r.bpm if r else ': not entered' }}">
+        <span class="n">{{ d.strftime('%b %-d') if d.day == 1 or loop.first else d.day }}</span><span class="v">{{ r.bpm if r else '' }}</span></button>
+      {% endif %}{% endfor %}
+    </div>
+    <p class="small muted rhr-key"><span><span class="sw done"></span> You entered</span><span><span class="sw garmin"></span> From Garmin</span><span>Tap a day to add or fix it.</span></p>
+    </details>
+    <script>
+      document.querySelectorAll('.rhr-cal button.day').forEach(function (b) {
+        b.addEventListener('click', function () {
+          document.querySelectorAll('.rhr-cal button.day').forEach(function (x) { x.setAttribute('aria-pressed', 'false'); });
+          b.setAttribute('aria-pressed', 'true');
+          document.getElementById('rhr-date').value = b.dataset.date;
+          document.getElementById('rhr-day').textContent = b.dataset.label;
+          var bpm = document.getElementById('rhr-bpm');
+          bpm.value = b.dataset.bpm;
+          document.getElementById('rhr-form').hidden = false;
+          document.getElementById('rhr-tip').hidden = false;
+          bpm.focus();
+        });
+      });
+    </script>
+  </section>
+{% endmacro %}
+
 {% macro garmin_panel() %}
   <section class="panel" aria-labelledby="g-h">
     <div class="panel-head">
@@ -83,60 +137,13 @@
   {% if need %}<p class="notice"><span>{{ need }} recent run{{ '' if need == 1 else 's' }} need{{ 's' if need == 1 else '' }} your effort rating.</span><a href="/a/{{ token }}/runs">Add effort ›</a></p>{% endif %}
 
   {% set garmin_connected = a.garmin and a.garmin.status == 'connected' %}
+  {% set rhr_done = rhr_cal.by_day.get(rhr_cal.today) %}
   {% if not garmin_connected %}{{ garmin_panel() }}{% endif %}
 
-  <section class="panel" id="rhr" aria-labelledby="rhr-h">
-    <h2 id="rhr-h">Resting heart rate</h2>
-    {% if rhr %}
-    <div class="facts">
-      <div><span class="k">Latest</span><span class="big">{{ rhr.latest.bpm }}</span><span class="small muted">{{ 'Today' if rhr.latest.date.isoformat() == today else rhr.latest.date.strftime('%a, %b %-d') }} · {{ 'from Garmin' if rhr.latest.source == 'garmin' else 'you entered it' }}</span></div>
-      <div><span class="k">This week</span><span class="big">{{ '%.0f' % rhr.week if rhr.week is not none else '—' }}</span><span class="small muted">{{ 'average' if rhr.week is not none else 'needs 3 days' }}</span></div>
-      <div><span class="k">Your usual</span><span class="big">{{ '%.0f' % rhr.usual if rhr.usual is not none else '—' }}</span><span class="small muted">{{ 'the 4 weeks before' if rhr.usual is not none else 'needs a few weeks' }}</span></div>
-    </div>
-    {% if rhr.flag %}<p class="notice" style="margin-top:12px"><span>Your resting heart rate is {{ '%.0f' % rhr.up }} beats higher than usual this week. That can mean you’re getting sick, worn down or short on sleep. Tell your coach how you feel.</span></p>{% endif %}
-    {% else %}
-    <p class="muted small">{% if garmin_connected %}Your Garmin sends this each day. You can also enter it yourself.{% else %}Your resting heart rate each morning helps your coaches spot when you’re getting sick or worn down.{% endif %}</p>
-    {% endif %}
-    {% set r0 = rhr_cal.by_day.get(rhr_cal.today) %}
-    <form method="post" action="/a/{{ token }}/resting-hr" class="form-row" id="rhr-form"{% if r0 %} hidden{% endif %}>
-      <input type="hidden" name="csrf" value="{{ csrf }}">
-      <input type="hidden" name="date" id="rhr-date" value="{{ rhr_cal.today.isoformat() }}">
-      <label>Resting heart rate for <b id="rhr-day">today</b> <input type="number" name="bpm" id="rhr-bpm" min="{{ rhr_range[0] }}" max="{{ rhr_range[1] }}" inputmode="numeric" required style="width:5em" value="{{ r0.bpm if r0 else '' }}"> beats/min</label>
-      <button type="submit">Save</button>
-    </form>
-    <p class="small muted" id="rhr-tip"{% if r0 %} hidden{% endif %}>Before you get out of bed, count your pulse for 30 seconds and double it.</p>
-    <details class="rhr-more">
-      <summary class="small" style="cursor:pointer; min-height:44px; display:flex; align-items:center">Add or fix earlier days</summary>
-    <div class="rhr-cal" role="group" aria-label="Pick a day to enter or fix">
-      {% for wd in ('Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun') %}<span class="wd">{{ wd }}</span>{% endfor %}
-      {% for d in rhr_cal.days %}{% set r = rhr_cal.by_day.get(d) %}
-      {% if d > rhr_cal.today %}<span class="day off" aria-hidden="true"></span>
-      {% else %}<button type="button" class="day{% if r %} {{ 'garmin' if r.source == 'garmin' else 'done' }}{% endif %}{% if d == rhr_cal.today %} today{% endif %}"
-        data-date="{{ d.isoformat() }}" data-bpm="{{ r.bpm if r else '' }}" data-label="{{ 'today' if d == rhr_cal.today else d.strftime('%a, %b %-d') }}"
-        aria-pressed="{{ 'true' if d == rhr_cal.today else 'false' }}" aria-label="{{ d.strftime('%a, %b %-d') }}{{ ': ' ~ r.bpm if r else ': not entered' }}">
-        <span class="n">{{ d.strftime('%b %-d') if d.day == 1 or loop.first else d.day }}</span><span class="v">{{ r.bpm if r else '' }}</span></button>
-      {% endif %}{% endfor %}
-    </div>
-    <p class="small muted rhr-key"><span><span class="sw done"></span> You entered</span><span><span class="sw garmin"></span> From Garmin</span><span>Tap a day to add or fix it.</span></p>
-    </details>
-    <script>
-      document.querySelectorAll('.rhr-cal button.day').forEach(function (b) {
-        b.addEventListener('click', function () {
-          document.querySelectorAll('.rhr-cal button.day').forEach(function (x) { x.setAttribute('aria-pressed', 'false'); });
-          b.setAttribute('aria-pressed', 'true');
-          document.getElementById('rhr-date').value = b.dataset.date;
-          document.getElementById('rhr-day').textContent = b.dataset.label;
-          var bpm = document.getElementById('rhr-bpm');
-          bpm.value = b.dataset.bpm;
-          document.getElementById('rhr-form').hidden = false;
-          document.getElementById('rhr-tip').hidden = false;
-          bpm.focus();
-        });
-      });
-    </script>
-  </section>
+  {% if not rhr_done %}{{ rhr_panel(garmin_connected) }}{% endif %}
 
   {% with chart_src="/a/" ~ token ~ "/series.json", chart_title="My training" %}{% include "_charts.html" %}{% endwith %}
+  {% if rhr_done %}{{ rhr_panel(garmin_connected) }}{% endif %}
 
   <section class="panel" aria-labelledby="r-h">
     <div class="panel-head"><h2 id="r-h">Recent runs</h2><a href="/a/{{ token }}/runs">All runs ›</a></div>
