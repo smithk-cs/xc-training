@@ -102,7 +102,8 @@ Garmin the link. Edit `wrangler.jsonc` on GitHub (open the file, click the penci
 
 * **Garmin:** add `GARMIN_CLIENT_ID` and `GARMIN_CLIENT_SECRET` as GitHub secrets, run the workflow again, then follow
   `plans/plan-garmin-go-live.md`. The webhook address is on the Sync log page (admins only); in Garmin's Endpoint Configuration,
-  enable it for Activities, Activity Details, Activity Files, Deregistrations and User Permissions Change. When an
+  enable it for Activities, Activity Details, Activity Files, Deregistrations and User Permissions Change, and, for daily
+  resting heart rate, **Dailies** (in the Health section). When an
   athlete connects, the app asks Garmin for their past `GARMIN_BACKFILL_DAYS` (90) days of runs; coaches can repeat
   that from the athlete's page (**Load past runs**).
 * **AI briefing:** get a key at platform.claude.com (**API Keys** → **Create Key**), add it as the `ANTHROPIC_API_KEY`

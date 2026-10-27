@@ -26,6 +26,7 @@ from .config import settings
 from .fitfile import MAX_FIT_BYTES, ParsedActivity, ParsedLap, parse_fit
 from .ingest import ingest, log
 from .models import Athlete, GarminBackfill, GarminConnection, OAuthState
+from . import analysis
 from .security import decrypt, encrypt
 
 STATE_MAX_AGE = dt.timedelta(minutes=15)
@@ -171,6 +172,7 @@ def complete_authorization(db: Session, code: str, state: str, http: httpx.Clien
 # (GarminBackfill), start a couple of minutes after connecting, go out at most once a minute, and are retried.
 BACKFILL_PATH = "/wellness-api/rest/backfill/{kind}"
 BACKFILL_KINDS = ("activities", "activityDetails")
+HEALTH_PERMISSION = "HEALTH_EXPORT"                 # daily summaries (resting heart rate) need this one too
 BACKFILL_START, BACKFILL_END = "summaryStartTimeInSeconds", "summaryEndTimeInSeconds"
 BACKFILL_MAX_DAYS = 90                              # longest range in one request
 BACKFILL_AFTER_CONNECT = dt.timedelta(minutes=2)    # let Garmin finish registering the athlete
@@ -198,7 +200,8 @@ def queue_backfill(db: Session, conn: GarminConnection, days: int, delay: dt.tim
     days = max(1, min(int(days), 365))
     end = _now()
     start = end - dt.timedelta(days=days)
-    for kind in BACKFILL_KINDS:  # activities first: mileage matters most for load ratios
+    kinds = BACKFILL_KINDS + (("dailies",) if HEALTH_PERMISSION in (conn.permissions or "").split(",") else ())
+    for kind in kinds:  # activities first: mileage matters most for load ratios
         chunk_end = end
         while chunk_end > start:
             chunk_start = max(start, chunk_end - dt.timedelta(days=BACKFILL_MAX_DAYS))
@@ -412,7 +415,7 @@ def _connection(db: Session, user_id) -> GarminConnection | None:
 
 
 def handle_notification(db: Session, payload: dict, http: httpx.Client) -> dict:
-    counts = {"created": 0, "upgraded": 0, "duplicate": 0, "skipped": 0, "errors": 0}
+    counts = {"created": 0, "upgraded": 0, "duplicate": 0, "resting_hr": 0, "skipped": 0, "errors": 0}
     if not isinstance(payload, dict):
         raise GarminError("Notification body must be a JSON object.")
     for key, items in payload.items():
@@ -433,6 +436,37 @@ def _save(db, conn, parsed, source, counts):
         return
     _, outcome = ingest(db, conn.athlete, parsed, source)
     counts[outcome] += 1
+    conn.last_sync_at = _now()
+
+
+def _rows(db: Session, conn: GarminConnection, key: str, item: dict, http: httpx.Client) -> list[dict]:
+    """A pushed notification carries the data itself; a ping carries a callback URL to fetch it from."""
+    if not item.get("callbackURL"):
+        return [item]
+    if not allowed_download(item["callbackURL"]):
+        raise GarminError("Refusing to fetch from a host that is not Garmin's.")
+    r = http.get(item["callbackURL"], headers={"Authorization": f"Bearer {access_token(db, conn, http)}"})
+    if r.status_code != 200:
+        raise GarminError(f"Garmin {key} callback failed ({r.status_code}).")
+    rows = r.json()
+    return [x for x in (rows if isinstance(rows, list) else [rows]) if isinstance(x, dict)]
+
+
+def _save_daily(db: Session, conn: GarminConnection, row: dict, counts: dict) -> None:
+    """From Garmin's daily summary only the resting heart rate is kept; steps, stress and the rest are ignored."""
+    bpm, day = row.get("restingHeartRateInBeatsPerMinute"), row.get("calendarDate")
+    try:
+        bpm, day = int(bpm), dt.date.fromisoformat(str(day))
+    except (TypeError, ValueError):
+        counts["skipped"] += 1
+        return
+    if not analysis.RESTING_HR_MIN <= bpm <= analysis.RESTING_HR_MAX:
+        counts["skipped"] += 1
+        return
+    if analysis.save_resting_hr(db, conn.athlete_id, day, bpm, "garmin") is None:
+        counts["skipped"] += 1
+        return
+    counts["resting_hr"] += 1
     conn.last_sync_at = _now()
 
 
@@ -470,18 +504,11 @@ def _handle_item(db: Session, key: str, item: dict, http: httpx.Client, counts: 
             return
         data = download(http, access_token(db, conn, http), item["callbackURL"])
         _save(db, conn, parse_fit(data), "garmin_file", counts)
+    elif key == "dailies":
+        for row in _rows(db, conn, key, item, http):
+            _save_daily(db, conn, row, counts)
     elif key in ("activities", "activityDetails"):
-        if item.get("callbackURL"):
-            if not allowed_download(item["callbackURL"]):
-                raise GarminError("Refusing to fetch from a host that is not Garmin's.")
-            r = http.get(item["callbackURL"], headers={"Authorization": f"Bearer {access_token(db, conn, http)}"})
-            if r.status_code != 200:
-                raise GarminError(f"Garmin {key} callback failed ({r.status_code}).")
-            rows = r.json()
-            rows = rows if isinstance(rows, list) else [rows]
-        else:
-            rows = [item]
-        for row in rows:
+        for row in _rows(db, conn, key, item, http):
             summary = row.get("summary") or row
             if not _is_running_type(summary.get("activityType")):
                 counts["skipped"] += 1

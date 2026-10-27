@@ -31,7 +31,7 @@ from .fitfile import MAX_FITS_PER_UPLOAD, MAX_UPLOAD_BYTES, FitError, fit_files,
 from .imports import GROUPS, ImportErrors, import_goals, import_races, import_results, import_roster, parse_date, set_goal
 from .ingest import ingest, log, rematch_day
 from .models import (Activity, AiRun, AppSetting, Athlete, DeletionRequest, GarminConnection, Injury, MissedDay,
-                     OAuthState, PainReport, PlannedWorkout, RaceResult, Result, StaffUser, SyncLog, TrainingGroup, utcnow)
+                     OAuthState, PainReport, PlannedWorkout, RaceResult, RestingHeartRate, Result, StaffUser, SyncLog, TrainingGroup, utcnow)
 from .security import csrf_ok, csrf_token, hash_password, new_link_token, verify_password
 
 HERE = Path(__file__).parent
@@ -299,7 +299,8 @@ def create_app() -> FastAPI:
         last_ai = db.scalar(select(AiRun).where(AiRun.kind == "briefing").order_by(AiRun.id.desc()))
         webhook = f"{s.base_url.rstrip('/')}/garmin/webhook/{s.garmin_webhook_secret}" if user.role == "admin" and s.garmin_webhook_secret else ""
         deletions = db.scalars(select(DeletionRequest).where(DeletionRequest.status == "open").order_by(DeletionRequest.created_at)).all()
-        return render(request, "home.html", user, snap=snap, stats=stats, last_ai=last_ai, webhook=webhook, deletions=deletions)
+        return render(request, "home.html", user, snap=snap, stats=stats, last_ai=last_ai, webhook=webhook, deletions=deletions,
+                      rhr_flags=A.resting_hr_flags(db, A.team_today()), rhr_flag=A.RESTING_HR_FLAG)
 
     # ---------- dashboard ----------
 
@@ -404,6 +405,7 @@ def create_app() -> FastAPI:
         races = db.scalars(select(RaceResult).where(RaceResult.athlete_id == a.id).order_by(RaceResult.date.desc()).limit(30)).all()
         return render(request, "athlete_detail.html", user, a=a, acts=acts, results=results, run_pain=run_pain, races=races,
                       ability=ability, group_names=group_names, missed=missed, vo2=A.latest_vo2(db, a.id),
+                      rhr=A.resting_hr(db, a.id, A.team_today()),
                       injuries=sorted(a.injuries, key=lambda i: i.onset_date, reverse=True),
                       pains=sorted(a.pain_reports, key=lambda p: p.date, reverse=True)[:10],
                       goals=sorted(a.goals, key=lambda g: (g.season, g.event)), show_notes=user.role in ("admin", "trainer"))
@@ -871,6 +873,7 @@ def create_app() -> FastAPI:
         history = A.race_history(races)
         return render(request, "athlete.html", None, history=history, paces=paces, a=a, acts=acts, tiles=tiles, seasons=seasons, need=need, ability=ability,
                       show_group=show_group, open_delete=open_delete, races=races, vo2=A.latest_vo2(db, a.id),
+                      rhr=A.resting_hr(db, a.id, today), rhr_range=(A.RESTING_HR_MIN, A.RESTING_HR_MAX),
                       areas=BODY_AREAS, token=token, today=today.isoformat())
 
     @app.post("/a/{token}/connect")
@@ -921,6 +924,21 @@ def create_app() -> FastAPI:
         except ValueError as exc:
             flash(request, str(exc), "error")
         return back(f"/a/{token}")
+
+    @app.post("/a/{token}/resting-hr")
+    async def athlete_resting_hr(request: Request, token: str, db: Session = Depends(get_db, scope="function")):
+        f = await form_checked(request)
+        a = athlete_by_token(db, token)
+        try:
+            bpm = int(str(f.get("bpm", "")).strip())
+        except ValueError:
+            bpm = 0
+        if not A.RESTING_HR_MIN <= bpm <= A.RESTING_HR_MAX:
+            flash(request, f"Enter your resting heart rate as beats per minute, between {A.RESTING_HR_MIN} and {A.RESTING_HR_MAX}.", "error")
+        else:
+            A.save_resting_hr(db, a.id, A.team_today(), bpm, "athlete")
+            flash(request, f"Saved: {bpm} beats per minute this morning.")
+        return back(f"/a/{token}#rhr")
 
     # ---------- branding ----------
 
@@ -1362,6 +1380,8 @@ def create_app() -> FastAPI:
             "goals": [{"season": g.season, "event": g.event, "goal_s": g.goal_s} for g in a.goals],
             "injuries": [{"onset": i.onset_date.isoformat(), "injury": i.injury, "body_area": i.body_area,
                           "return": i.return_date.isoformat() if i.return_date else None} for i in a.injuries],
+            "resting_heart_rate": [{"date": r.date.isoformat(), "bpm": r.bpm, "source": r.source}
+                                   for r in sorted(a.resting_hrs, key=lambda r: r.date)],
             "pain_reports": [{"date": p.date.isoformat(), "body_area": p.body_area, "severity": p.severity, "note": p.note or None,
                               "saw_athletic_trainer": p.saw_trainer} for p in a.pain_reports],
             "days_missed": [{"date": m.date.isoformat(), "reason": m.reason, "body_area": m.body_area or None, "side": m.side or None,
@@ -1390,6 +1410,8 @@ def create_app() -> FastAPI:
         for act in db.scalars(select(Activity).where(Activity.athlete_id == a.id, Activity.source.like("garmin%"))).all():
             db.delete(act)
             n += 1
+        for r in db.scalars(select(RestingHeartRate).where(RestingHeartRate.athlete_id == a.id, RestingHeartRate.source == "garmin")).all():
+            db.delete(r)
         log(db, "privacy", f"{a.name} deleted their Garmin data ({n} runs) and disconnected Garmin.")
         flash(request, f"Deleted {n} run{'' if n == 1 else 's'} that came from Garmin and disconnected your Garmin account.")
         return back(f"/a/{token}#privacy")

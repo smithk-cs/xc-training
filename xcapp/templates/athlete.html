@@ -33,7 +33,7 @@
       </div>
       <form method="post" action="/a/{{ token }}/connect" style="display:flex; flex-direction:column; gap:14px">
         <input type="hidden" name="csrf" value="{{ csrf }}">
-        <label class="consent"><input id="consent" type="checkbox" name="consent" value="yes"><span>My parent or guardian has said it’s OK to share my running data (including heart rate and my watch’s VO2 max estimate) with my coaches{% if settings.garmin_backfill_days %}, including my runs from the past {{ settings.garmin_backfill_days }} days{% endif %}, as described in the <a href="/privacy">privacy policy</a>.</span></label>
+        <label class="consent"><input id="consent" type="checkbox" name="consent" value="yes"><span>My parent or guardian has said it’s OK to share my running data (including heart rate, my daily resting heart rate and my watch’s VO2 max estimate) with my coaches{% if settings.garmin_backfill_days %}, including my runs from the past {{ settings.garmin_backfill_days }} days{% endif %}, as described in the <a href="/privacy">privacy policy</a>.</span></label>
         <button id="connect-btn" type="submit" class="big-btn">Connect Garmin</button>
       </form>
       <p class="muted small">You’ll sign in on Garmin’s page, then come right back here. You can disconnect any time.</p>
@@ -74,6 +74,28 @@
   {% if need %}<p class="notice"><span>{{ need }} recent run{{ '' if need == 1 else 's' }} need{{ 's' if need == 1 else '' }} your effort rating.</span><a href="/a/{{ token }}/runs">Add effort ›</a></p>{% endif %}
 
   {% set garmin_connected = a.garmin and a.garmin.status == 'connected' %}
+  <section class="panel" id="rhr" aria-labelledby="rhr-h">
+    <h2 id="rhr-h">Resting heart rate</h2>
+    {% if rhr %}
+    <div class="facts">
+      <div><span class="k">Latest</span><span class="big">{{ rhr.latest.bpm }}</span><span class="small muted">{{ 'Today' if rhr.latest.date.isoformat() == today else rhr.latest.date.strftime('%a, %b %-d') }} · {{ 'from Garmin' if rhr.latest.source == 'garmin' else 'you entered it' }}</span></div>
+      <div><span class="k">This week</span><span class="big">{{ '%.0f' % rhr.week if rhr.week is not none else '—' }}</span><span class="small muted">{{ 'average' if rhr.week is not none else 'needs 3 days' }}</span></div>
+      <div><span class="k">Your usual</span><span class="big">{{ '%.0f' % rhr.usual if rhr.usual is not none else '—' }}</span><span class="small muted">{{ 'the 4 weeks before' if rhr.usual is not none else 'needs a few weeks' }}</span></div>
+    </div>
+    {% if rhr.flag %}<p class="notice" style="margin-top:12px"><span>Your resting heart rate is {{ '%.0f' % rhr.up }} beats higher than usual this week. That can mean you’re getting sick, worn down or short on sleep. Tell your coach how you feel.</span></p>{% endif %}
+    {% else %}
+    <p class="muted small">{% if garmin_connected %}Your Garmin sends this each day. You can also enter it yourself.{% else %}Your resting heart rate each morning helps your coaches spot when you’re getting sick or worn down.{% endif %}</p>
+    {% endif %}
+    {% if not rhr or rhr.latest.date.isoformat() != today %}
+    <form method="post" action="/a/{{ token }}/resting-hr" class="form-row" style="margin-top:12px">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <label>This morning’s resting heart rate <input type="number" name="bpm" min="{{ rhr_range[0] }}" max="{{ rhr_range[1] }}" inputmode="numeric" required style="width:5em"> beats/min</label>
+      <button type="submit">Save</button>
+    </form>
+    <p class="small muted">Before you get out of bed, count your pulse for 30 seconds and double it.</p>
+    {% endif %}
+  </section>
+
   {% if not garmin_connected %}{{ garmin_panel() }}{% endif %}
 
   {% with chart_src="/a/" ~ token ~ "/series.json", chart_title="My training" %}{% include "_charts.html" %}{% endwith %}

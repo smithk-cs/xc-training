@@ -17,7 +17,8 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from .config import settings
-from .models import Activity, AppSetting, Athlete, Goal, Injury, MissedDay, PainReport, PlannedWorkout, Result, TrainingGroup
+from .models import (Activity, AppSetting, Athlete, Goal, Injury, MissedDay, PainReport, PlannedWorkout, RestingHeartRate, Result,
+                     TrainingGroup)
 
 METERS_PER_MILE = 1609.344
 # Coaching flags. The dashboard page uses the same three numbers; change both together.
@@ -313,6 +314,62 @@ def abilities(db: Session, as_of: dt.date) -> dict[int, dict]:
             "target_800": tgt[0] if tgt else "", "target_1600": tgt[1] if tgt else "",
             "source": f"{src.event} {fmt_time(src.time_s)} on {src.date:%b %-d, %Y}" if src is not None else "",
         }
+    return out
+
+
+RESTING_HR_MIN, RESTING_HR_MAX = 30, 120
+RESTING_HR_FLAG = 5      # bpm: a week this far above the athlete's usual is worth a check-in (illness, fatigue, poor sleep)
+RESTING_HR_WINDOW = 35   # days looked at: the past week, and the four weeks before it as "usual"
+
+
+def save_resting_hr(db: Session, athlete_id: int, day: dt.date, bpm: int, source: str) -> RestingHeartRate | None:
+    """Store one day's value. Garmin updates its own value through the day but never replaces one the athlete typed."""
+    row = db.scalar(select(RestingHeartRate).where(RestingHeartRate.athlete_id == athlete_id, RestingHeartRate.date == day))
+    if row is not None and source == "garmin" and row.source == "athlete":
+        return None
+    if row is None:
+        row = RestingHeartRate(athlete_id=athlete_id, date=day)
+        db.add(row)
+    row.bpm, row.source = bpm, source
+    return row
+
+
+def resting_hr_summary(rows: list[RestingHeartRate], as_of: dt.date) -> dict | None:
+    """Latest value, this week's average (3+ days), the usual (median of the four weeks before, 7+ days), and whether
+    this week is RESTING_HR_FLAG or more above usual. rows: one athlete's values, any order."""
+    rows = sorted((r for r in rows if r.date <= as_of), key=lambda r: r.date)
+    if not rows:
+        return None
+    week = [r.bpm for r in rows if r.date > as_of - dt.timedelta(days=7)]
+    before = [r.bpm for r in rows if as_of - dt.timedelta(days=RESTING_HR_WINDOW) < r.date <= as_of - dt.timedelta(days=7)]
+    avg = round(statistics.mean(week), 1) if len(week) >= 3 else None
+    usual = round(statistics.median(before), 1) if len(before) >= 7 else None
+    up = round(avg - usual, 1) if avg is not None and usual is not None else None
+    return {"latest": rows[-1], "week": avg, "usual": usual, "up": up, "flag": up is not None and up >= RESTING_HR_FLAG,
+            "recent": [r for r in rows if r.date > as_of - dt.timedelta(days=14)][::-1]}
+
+
+def resting_hr(db: Session, athlete_id: int, as_of: dt.date) -> dict | None:
+    return resting_hr_summary(db.scalars(select(RestingHeartRate).where(
+        RestingHeartRate.athlete_id == athlete_id, RestingHeartRate.date > as_of - dt.timedelta(days=RESTING_HR_WINDOW))).all(), as_of)
+
+
+def resting_hr_flags(db: Session, as_of: dt.date) -> list[dict]:
+    """Active athletes whose resting heart rate this week is well above their usual. Kept apart from the watch list,
+    which goes into the AI briefing: resting heart rate is never sent to the AI."""
+    rows = db.execute(select(RestingHeartRate, Athlete).join(Athlete, Athlete.id == RestingHeartRate.athlete_id)
+                      .where(Athlete.active.is_(True), RestingHeartRate.date > as_of - dt.timedelta(days=RESTING_HR_WINDOW))).all()
+    by = defaultdict(list)
+    people = {}
+    for r, a in rows:
+        by[a.id].append(r)
+        people[a.id] = a
+    out = []
+    for aid, rs in by.items():
+        sm = resting_hr_summary(rs, as_of)
+        if sm and sm["flag"]:
+            out.append({"athlete": people[aid], **sm})
+    out.sort(key=lambda x: (-x["up"], x["athlete"].name))
     return out
 
 

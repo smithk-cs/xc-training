@@ -50,6 +50,7 @@ class Athlete(Base):
     goals: Mapped[list["Goal"]] = relationship(cascade="all, delete-orphan")
     injuries: Mapped[list["Injury"]] = relationship(back_populates="athlete", cascade="all, delete-orphan")
     pain_reports: Mapped[list["PainReport"]] = relationship(back_populates="athlete", cascade="all, delete-orphan")
+    resting_hrs: Mapped[list["RestingHeartRate"]] = relationship(cascade="all, delete-orphan")
 
     @property
     def name(self) -> str:
@@ -238,6 +239,19 @@ class PainReport(Base):
     activity_id: Mapped[int | None] = mapped_column(ForeignKey("activities.id", ondelete="SET NULL"), nullable=True)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
     athlete: Mapped[Athlete] = relationship(back_populates="pain_reports")
+
+
+class RestingHeartRate(Base):
+    """An athlete's resting heart rate for one day: from Garmin's daily summary, or typed in by the athlete.
+    Never sent to the AI."""
+    __tablename__ = "resting_heart_rates"
+    __table_args__ = (UniqueConstraint("athlete_id", "date"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    athlete_id: Mapped[int] = mapped_column(ForeignKey("athletes.id", ondelete="CASCADE"), index=True)
+    date: Mapped[dt.date] = mapped_column(Date, index=True)
+    bpm: Mapped[int] = mapped_column(Integer)
+    source: Mapped[str] = mapped_column(String(10))  # garmin | athlete
+    updated_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
 
 
 class MissedDay(Base):

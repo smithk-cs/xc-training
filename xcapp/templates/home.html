@@ -33,6 +33,15 @@
     {% else %}<p class="muted">Nobody is flagged this week.</p>{% endif %}
     <p><a href="/dashboard">Open the dashboard</a></p>
   </div>
+  {% if rhr_flags %}
+  <div class="card">
+    <h2>Resting heart rate up</h2>
+    <table class="list"><thead><tr><th>Athlete</th><th class="num">This week</th><th class="num">Usual</th><th class="num">Up</th></tr></thead><tbody>
+    {% for f in rhr_flags %}<tr><td><a href="/athletes/{{ f.athlete.id }}">{{ f.athlete.name }}</a></td><td class="num">{{ '%.0f' % f.week }}</td><td class="num">{{ '%.0f' % f.usual }}</td><td class="num">+{{ '%.0f' % f.up }}</td></tr>{% endfor %}
+    </tbody></table>
+    <p class="small muted">A week’s average {{ rhr_flag }} or more beats above the athlete’s usual can mean illness, fatigue or poor sleep. Worth a check-in.</p>
+  </div>
+  {% endif %}
   <div class="card">
     <h2>AI briefing</h2>
     {% if last_ai %}
