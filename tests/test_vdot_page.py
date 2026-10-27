@@ -79,6 +79,7 @@ def test_vdot_page_and_editing(app):
     assert "No VDOT yet" in page and "Pat Reed" in page
     edit = c.get("/vdot?edit=1").text
     assert f'name="plan_{sam}"' in edit and f'placeholder="' in edit
+    assert '<button type="submit" form="vdot-form">Save and finish</button>' in edit and ">Done<" not in edit
     csrf = re.search(r'name="csrf" value="([^"]+)"', edit).group(1)
     data = {"csrf": csrf}
     for aid in (sam, theo, pat):
