@@ -50,6 +50,10 @@ def _name_index(db: Session) -> dict[str, list[Athlete]]:
     idx: dict[str, list[Athlete]] = {}
     for a in db.scalars(select(Athlete)).all():
         idx.setdefault(a.name.lower(), []).append(a)
+        for other in re.split(r"[;\n]", a.other_names or ""):
+            key = re.sub(r"\s+", " ", other.strip().lower())
+            if key and a not in idx.setdefault(key, []):
+                idx[key].append(a)
     return idx
 
 

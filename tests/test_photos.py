@@ -79,7 +79,7 @@ def test_zip_import_and_pages(app):
     assert r.status_code == 200 and r.headers["content-type"] == "image/jpeg" and r.headers["cache-control"].startswith("private")
     assert c.get(f"/athletes/{ids['Theo']}/photo").status_code == 404
     assert TestClient(app).get(f"/athletes/{ids['Sam']}/photo", follow_redirects=False).status_code in (302, 303, 401)
-    assert TestClient(app).get("/a/t-sam/photo").status_code == 200 and 'class="hero-photo"' in TestClient(app).get("/a/t-sam").text
+    assert TestClient(app).get("/a/t-sam/photo").status_code == 200 and 'class="hero-photo zoom"' in TestClient(app).get("/a/t-sam").text
 
     detail = c.get(f"/athletes/{ids['Theo']}").text
     csrf = re.search(r'name="csrf" value="([^"]+)"', detail).group(1)

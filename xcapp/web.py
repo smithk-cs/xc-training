@@ -25,6 +25,7 @@ from . import ai as AI
 from . import analysis as A
 from . import datasets as DS
 from . import garmin as G
+from . import merge as MG
 from . import photos as P
 from .config import settings
 from .db import SessionLocal, create_all
@@ -369,7 +370,8 @@ def create_app() -> FastAPI:
         ranks = {g.name: g.position for g in db.scalars(select(TrainingGroup)).all()}
         former = db.scalars(select(Athlete).where(Athlete.active.is_(False)).order_by(Athlete.left_on.desc(), Athlete.last_name)).all()
         return render(request, "athletes.html", user, athletes=rows, ab=A.abilities(db, A.team_today()), ranks=ranks,
-                      photos=photo_versions(db), former=former, delete_by=lambda a: delete_by(a))
+                      photos=photo_versions(db), former=former, delete_by=lambda a: delete_by(a),
+                      dupes=MG.likely_duplicates(list(rows) + list(former)))
 
     @app.post("/athletes")
     async def add_athlete(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
@@ -427,6 +429,8 @@ def create_app() -> FastAPI:
         return render(request, "athlete_detail.html", user, a=a, acts=acts, results=results, run_pain=run_pain, races=races,
                       ability=ability, group_names=group_names, missed=missed, vo2=A.latest_vo2(db, a.id),
                       rhr=A.resting_hr(db, a.id, A.team_today()), photo_v=photo_versions(db).get(a.id),
+                      others=db.scalars(select(Athlete).where(Athlete.id != a.id).order_by(Athlete.last_name, Athlete.first_name)).all(),
+                      merge_pick=request.query_params.get("merge", ""),
                       injuries=sorted(a.injuries, key=lambda i: i.onset_date, reverse=True),
                       pains=sorted(a.pain_reports, key=lambda p: p.date, reverse=True)[:10],
                       goals=sorted(a.goals, key=lambda g: (g.season, g.event)), show_notes=user.role in ("admin", "trainer"))
@@ -503,7 +507,39 @@ def create_app() -> FastAPI:
         elif action == "return" and not a.active:
             a.active, a.left_on = True, None
             flash(request, f"{a.name} is back on the roster. Their personal link works again; they can reconnect Garmin from it.")
+        nxt = str(f.get("next", ""))
+        return back(nxt if nxt in ("/athletes",) else f"/athletes/{a.id}")
+
+    @app.post("/athletes/{athlete_id}/other-names")
+    async def athlete_other_names(request: Request, athlete_id: int, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
+        f = await form_checked(request)
+        a = get_athlete(db, athlete_id)
+        a.other_names = ""
+        MG.add_other_names(a, [n for n in str(f.get("other_names", "")).replace(",", ";").split(";")])
+        flash(request, "Saved. Uploads with " + ("these names now match " + a.name + "." if a.other_names else "only their own name match them."))
         return back(f"/athletes/{a.id}")
+
+    @app.post("/athletes/{athlete_id}/merge")
+    async def athlete_merge(request: Request, athlete_id: int, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
+        f = await form_checked(request)
+        keep = get_athlete(db, athlete_id)
+        try:
+            other = get_athlete(db, f.get("other_id"))
+        except HTTPException:
+            flash(request, "Pick the athlete to combine with.", "error")
+            return back(f"/athletes/{keep.id}")
+        if other.id == keep.id or not f.get("confirm"):
+            flash(request, "Pick a different athlete and tick the box to confirm.", "error")
+            return back(f"/athletes/{keep.id}")
+        if keep.garmin and other.garmin and other.garmin.status != "revoked":
+            with G.make_client() as http:
+                G.disconnect(db, other.garmin, http)
+        name = other.name
+        n = MG.merge(db, keep, other)
+        log(db, "admin", f"{user.username} combined {name} into {keep.name} ({n['moved']} records moved, {n['dropped']} duplicates dropped).")
+        flash(request, f"Combined {name} into {keep.name}: {n['moved']} records moved"
+                       + (f", {n['dropped']} duplicates dropped" if n["dropped"] else "") + f". Uploads under “{name}” will now match {keep.name}.")
+        return back(f"/athletes/{keep.id}")
 
     @app.post("/athletes/{athlete_id}/delete")
     async def athlete_delete(request: Request, athlete_id: int, user=Depends(staff("admin"), scope="function"), db: Session = Depends(get_db, scope="function")):

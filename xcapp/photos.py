@@ -80,7 +80,9 @@ def import_zip(db: Session, data: bytes) -> tuple[list[str], list[str]]:
         raise PhotoError("That is not a readable .zip file.") from exc
     by_key: dict[str, list[Athlete]] = {}
     for a in db.scalars(select(Athlete).where(Athlete.active.is_(True))).all():
-        by_key.setdefault(name_key(f"{a.first_name} {a.last_name}"), []).append(a)
+        for n in [f"{a.first_name} {a.last_name}"] + re.split(r"[;\n]", a.other_names or ""):
+            if n.strip() and a not in by_key.setdefault(name_key(n), []):
+                by_key[name_key(n)].append(a)
     done, missed = [], []
     for info in zf.infolist():
         path = PurePosixPath(info.filename)

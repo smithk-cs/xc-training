@@ -249,3 +249,17 @@ details.meet[open] > summary { margin-bottom: 10px; }
 h1.with-photo { display: flex; align-items: center; }
 .hero-photo { width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 3px solid var(--brand-gold); flex: none; }
 td.nowrap, .nowrap { white-space: nowrap; }
+img.zoom { cursor: zoom-in; }
+dialog.photo-zoom { padding: 0; border: 0; border-radius: 16px; background: var(--color-panel); max-width: min(92vw, 420px); }
+dialog.photo-zoom::backdrop { background: rgba(0, 0, 0, .7); }
+dialog.photo-zoom figure { margin: 0; cursor: zoom-out; }
+dialog.photo-zoom img { display: block; width: 100%; height: auto; border-radius: 16px 16px 0 0; }
+dialog.photo-zoom figcaption { padding: 10px 14px; font-weight: 700; text-align: center; color: var(--color-fg); }
+table.compact th, table.compact td { padding-top: 3px; padding-bottom: 3px; vertical-align: middle; }
+table.compact .avatar { width: 26px; height: 26px; margin-right: 6px; }
+table.compact .avatar.blank { font-size: 10px; }
+table.compact .pill { padding-top: 0; padding-bottom: 0; font-size: 13px; }
+table.compact code.copy { font-size: 12px; padding: 1px 6px; }
+details.plink > summary { cursor: pointer; color: var(--brand-red); font-weight: 600; font-size: 13px; }
+details.plink[open] { min-width: 260px; }
+details.plink[open] > summary { margin-bottom: 4px; }
