@@ -21,8 +21,8 @@ RUN2 = rep_workout(dt.datetime(2026, 10, 22, 15, tzinfo=dt.timezone.utc), [(1000
 def app():
     db = SessionLocal()
     db.add(StaffUser(username="coach1", role="coach", password_hash=hash_password("correct-horse-1")))
-    rafa = Athlete(first_name="Rafa", last_name="Jopson", gender="Boys", grade=12, group="Varsity", link_token="t-rafa")
-    rafael = Athlete(first_name="Rafael", last_name="Jopson", gender="Boys", grade=12, group="JV", link_token="t-rafael", hr_max=199)
+    rafa = Athlete(first_name="Will", last_name="Pell", gender="Boys", grade=12, group="Varsity", link_token="t-rafa")
+    rafael = Athlete(first_name="William", last_name="Pell", gender="Boys", grade=12, group="JV", link_token="t-rafael", hr_max=199)
     db.add_all([rafa, rafael])
     db.flush()
     ingest(db, rafa, parse_fit(RUN1), "upload")
@@ -57,7 +57,7 @@ def test_combine(app):
     web, (rafa, rafael) = app
     c = login(web)
     roster = c.get("/athletes").text
-    assert f'href="/athletes/{rafa}?merge={rafael}#combine">Rafa Jopson and Rafael Jopson</a>' in roster
+    assert f'href="/athletes/{rafa}?merge={rafael}#combine">Will Pell and William Pell</a>' in roster
     page = c.get(f"/athletes/{rafa}?merge={rafael}").text
     assert '<details id="combine" open>' in page and f'<option value="{rafael}" selected>' in page
     csrf = re.search(r'name="csrf" value="([^"]+)"', page).group(1)
@@ -67,7 +67,7 @@ def test_combine(app):
     db.close()
     c.post(f"/athletes/{rafa}/merge", data={"csrf": csrf, "other_id": str(rafael), "confirm": "1"})
     msg = c.get(f"/athletes/{rafa}").text
-    assert "Combined Rafael Jopson into Rafa Jopson:" in msg and "duplicates dropped" in msg
+    assert "Combined William Pell into Will Pell:" in msg and "duplicates dropped" in msg
     db = SessionLocal()
     a = db.get(Athlete, rafa)
     assert db.get(Athlete, rafael) is None and db.query(Athlete).count() == 1
@@ -75,9 +75,9 @@ def test_combine(app):
     assert sorted((r.date.day, r.bpm, r.source) for r in db.query(RestingHeartRate)) == [(23, 50, "garmin"), (24, 48, "athlete")]
     assert db.query(Goal).one().athlete_id == rafa and db.query(RaceResult).one().athlete_id == rafa
     assert db.query(Result).one().athlete_id == rafa and db.query(AthletePhoto).one().athlete_id == rafa
-    assert (a.group, a.hr_max, a.other_names, a.link_token) == ("Varsity", 199, "Rafael Jopson", "t-rafa")
+    assert (a.group, a.hr_max, a.other_names, a.link_token) == ("Varsity", 199, "William Pell", "t-rafa")
     # The old name now matches on upload.
-    I.import_races(db, "meet,date,race,distance,athlete,time\nCity,2026-10-31,Boys Varsity,5K,Rafael Jopson,15:50\n", False)
+    I.import_races(db, "meet,date,race,distance,athlete,time\nCity,2026-10-31,Boys Varsity,5K,William Pell,15:50\n", False)
     assert db.query(RaceResult).filter_by(meet="City").one().athlete_id == rafa
     db.close()
     assert TestClient(web).get("/a/t-rafael").status_code == 404
@@ -87,10 +87,10 @@ def test_other_names(app):
     web, (rafa, rafael) = app
     c = login(web)
     csrf = re.search(r'name="csrf" value="([^"]+)"', c.get(f"/athletes/{rafa}").text).group(1)
-    c.post(f"/athletes/{rafa}/other-names", data={"csrf": csrf, "other_names": "R. Jopson, Raf Jopson; rafa jopson"})
+    c.post(f"/athletes/{rafa}/other-names", data={"csrf": csrf, "other_names": "W. Pell, Billy Pell; will pell"})
     db = SessionLocal()
-    assert db.get(Athlete, rafa).other_names == "R. Jopson; Raf Jopson"                   # its own name isn't repeated
-    I.import_races(db, "meet,date,race,distance,athlete,time\nCity,2026-10-31,Boys Varsity,5K,\"Jopson, Raf\",15:50\n", False)
+    assert db.get(Athlete, rafa).other_names == "W. Pell; Billy Pell"                   # its own name isn't repeated
+    I.import_races(db, "meet,date,race,distance,athlete,time\nCity,2026-10-31,Boys Varsity,5K,\"Pell, Billy\",15:50\n", False)
     assert db.query(RaceResult).filter_by(meet="City").one().athlete_id == rafa
     db.close()
 

@@ -126,7 +126,7 @@
   {% endif %}
   <form method="post" action="/athletes/{{ a.id }}/other-names" class="form-row" style="margin-top:10px">
     <input type="hidden" name="csrf" value="{{ csrf }}">
-    <label style="flex:1">Other names in uploads (separate with ;)<input type="text" name="other_names" maxlength="500" value="{{ a.other_names }}" placeholder="Rafael Jopson; Raf Jopson"></label>
+    <label style="flex:1">Other names in uploads (separate with ;)<input type="text" name="other_names" maxlength="500" value="{{ a.other_names }}" placeholder="William Pell; Billy Pell"></label>
     <button type="submit" class="secondary">Save</button>
   </form>
   <details id="combine"{% if merge_pick %} open{% endif %}><summary class="small" style="cursor:pointer; font-weight:600; color:var(--brand-red)">Combine with another athlete record</summary>

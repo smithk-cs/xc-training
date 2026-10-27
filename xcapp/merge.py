@@ -1,4 +1,4 @@
-"""Combining two roster entries for the same athlete (for example 'Rafa Jopson' from the roster and 'Rafael Jopson' from
+"""Combining two roster entries for the same athlete (for example 'Will Pell' from the roster and 'William Pell' from
 a meet's results): everything moves to the one kept, overlaps are dropped, and the other name is remembered so future
 uploads match it."""
 from __future__ import annotations

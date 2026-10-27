@@ -30,7 +30,7 @@ from . import photos as P
 from .config import settings
 from .db import SessionLocal, create_all
 from .fitfile import MAX_FITS_PER_UPLOAD, MAX_UPLOAD_BYTES, FitError, fit_files, parse_fit
-from .imports import GROUPS, ImportErrors, clean_email, import_goals, import_races, import_results, import_roster, parse_date, set_goal
+from .imports import GROUPS, ImportErrors, clean_email, import_vdots, import_goals, import_races, import_results, import_roster, parse_date, set_goal
 from .ingest import ingest, log, rematch_day
 from .models import (Activity, AiRun, AppSetting, Athlete, DeletionRequest, GarminConnection, Injury, MissedDay,
                      OAuthState, PainReport, PlannedWorkout, RaceResult, RestingHeartRate, Result, StaffUser, AthletePhoto, SyncLog, TrainingGroup, utcnow)
@@ -1316,6 +1316,22 @@ def create_app() -> FastAPI:
         else:
             flash(request, "Saved.")
         return back("/vdot?edit=1" if bad else "/vdot")
+
+    @app.post("/vdot/import")
+    async def vdot_import(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
+        f = await form_checked(request)
+        r = import_vdots(db, str(f.get("text", ""))[:50000])
+        n = len(r["set"]) + len(r["loose"])
+        flash(request, f"Set the VDOT for {n} athlete{'' if n == 1 else 's'}." if n else "No VDOTs were set.", "ok" if n else "error")
+        if r["loose"]:
+            flash(request, "Matched to a similar name on the roster (check these): "
+                  + "; ".join(f"{w} → {a.name} ({v})" for a, v, w in r["loose"]) + ". Add the other spelling on the athlete’s page to match it exactly next time.")
+        if r["unmatched"]:
+            flash(request, "Not on the roster, so not set: " + ", ".join(r["unmatched"]), "error")
+        if r["no_vdot"]:
+            flash(request, "No VDOT on the line, so left as they were: " + ", ".join(r["no_vdot"]))
+        log(db, "admin", f"{user.username} set {n} VDOTs from a pasted list.")
+        return back("/vdot")
 
     @app.post("/athletes/{athlete_id}/vdot")
     async def athlete_vdot(request: Request, athlete_id: int, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):

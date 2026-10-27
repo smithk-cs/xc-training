@@ -6,6 +6,16 @@
   {% if user.role != 'trainer' %}{% if edit %}<span class="form-row"><a href="/vdot">Cancel</a><button type="submit" form="vdot-form">Save and finish</button></span>{% else %}<a class="button secondary" href="/vdot?edit=1">Edit VDOT</a>{% endif %}{% endif %}
 </div>
 <p class="muted" style="max-width:80ch">VDOT comes from each athlete’s most recent race or time trial (1500 m to 10K), read on the team’s VDOT table, unless a coach has set it. Paces per mile, as a share of VDOT: {% for n, pct in zones %}{{ n|lower }} {{ (pct * 100)|round(1)|string|replace('.0', '') }}%{{ ', ' if not loop.last else '' }}{% endfor %}. Group cutoffs are on the <a href="/groups">Groups</a> page.</p>
+{% if user.role != 'trainer' and not edit %}
+<details class="card" style="max-width:980px"><summary style="cursor:pointer; font-weight:600; color:var(--brand-red)">Paste a VDOT list</summary>
+  <form method="post" action="/vdot/import" style="margin-top:10px">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <p class="small muted">One athlete per line: name, then VDOT (for example copied from the team’s VDOT sheet). Group headings, marks and workout columns are ignored; athletes not listed keep their VDOT. Each VDOT is saved as set by a coach.</p>
+    <textarea name="text" rows="10" style="width:100%" placeholder="Sam Lowry	69&#10;Theo Marsh	64" required></textarea>
+    <button type="submit">Set these VDOTs</button>
+  </form>
+</details>
+{% endif %}
 {% if edit %}<form method="post" action="/vdot" id="vdot-form"><input type="hidden" name="csrf" value="{{ csrf }}">{% endif %}
 {% for b in board %}
 {% if board|length > 1 %}<h2>{{ b.gender }}</h2>{% endif %}

@@ -316,3 +316,60 @@ def set_goal(db: Session, athlete_id: int, event: str, season: str, goal_s: floa
     else:
         g.goal_s = goal_s
     return g
+
+
+def _loose_match(athletes: list[Athlete], name: str) -> Athlete | None:
+    """One athlete whose name is close: same last name and a first name starting alike (Nicky / Nick, Ben / Benjamin),
+    or a near spelling (Mathews / Matthews). None when nothing or more than one fits."""
+    import difflib
+    parts = name.split(None, 1)
+    if len(parts) < 2:
+        return None
+    first, last = parts[0].lower(), parts[1].lower()
+    same = [a for a in athletes if a.last_name.lower() == last
+            and (a.first_name.lower().startswith(first[:3]) or first.startswith(a.first_name.lower()[:3]))]
+    if len(same) == 1:
+        return same[0]
+    names = {a.name.lower(): a for a in athletes}
+    close = difflib.get_close_matches(name.lower(), list(names), n=2, cutoff=0.88)
+    return names[close[0]] if len(close) == 1 else None
+
+
+def import_vdots(db: Session, text: str) -> dict:
+    """Set coach VDOTs from pasted lines such as 'Sam Lowry<TAB>69' (or 'Sam Lowry 69'), for example copied from the
+    team's VDOT sheet. Group headings ('Gold  VDOT 68-72 ...'), other columns and lines without a VDOT are skipped.
+    Returns {"set": [(athlete, vdot, name as written)], "loose": [...], "unmatched": [names], "no_vdot": [names]}."""
+    athletes = db.scalars(select(Athlete)).all()
+    idx = _name_index(db)
+    out = {"set": [], "loose": [], "unmatched": [], "no_vdot": []}
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or "vdot" in line.lower():
+            continue
+        cells = [c.strip() for c in re.split(r"\t|\s{2,}", line) if c.strip()]
+        if len(cells) == 1:  # 'Sam Lowry 69' typed with single spaces
+            m = re.fullmatch(r"(.+?)\s+(\d{1,3})\b.*", cells[0])
+            cells = [m.group(1), m.group(2)] if m else cells
+        name = re.sub(r"\s+", " ", cells[0])
+        if len(name.split()) < 2 or any(ch.isdigit() for ch in name):
+            continue
+        v = cells[1] if len(cells) > 1 and re.fullmatch(r"\d{1,3}", cells[1]) else None
+        try:
+            a, loose = _find(idx, name), False
+        except ValueError:
+            a, loose = _loose_match(athletes, name), True
+        if v is None:  # an athlete marked 'inj' and the like; other text lines are ignored
+            if a is not None:
+                out["no_vdot"].append(name)
+            continue
+        if a is None:
+            out["unmatched"].append(name)
+            continue
+        vdot = int(v)
+        if not 20 <= vdot <= 90:
+            out["unmatched"].append(f"{name} (VDOT {vdot} is outside 20-90)")
+            continue
+        a.vdot_override = vdot
+        out["loose" if loose else "set"].append((a, vdot, name))
+    db.flush()
+    return out
