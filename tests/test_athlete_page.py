@@ -75,3 +75,20 @@ def test_group_colors_look_like_their_names(app):
     db.close()
     page = TestClient(app).get("/a/tok-ava").text
     assert '<summary class="group-btn" style="background:#50C878; color:#1B1B1F">Emerald</summary>' in page
+
+
+def test_garmin_notification_address_is_on_the_sync_log_for_admins_only(app):
+    import re
+    from xcapp.models import StaffUser
+    from xcapp.security import hash_password
+    db = SessionLocal()
+    for n, r in (("admin1", "admin"), ("coach1", "coach")):
+        db.add(StaffUser(username=n, role=r, password_hash=hash_password("correct-horse-1")))
+    db.commit()
+    db.close()
+    for user, shown in (("admin1", True), ("coach1", False)):
+        c = TestClient(app, follow_redirects=False)
+        csrf = re.search(r'name="csrf" value="([^"]+)"', c.get("/login").text).group(1)
+        c.post("/login", data={"csrf": csrf, "username": user, "password": "correct-horse-1"})
+        assert ("/garmin/webhook/hooksecret" in c.get("/sync").text) is shown
+        assert "/garmin/webhook/" not in c.get("/").text

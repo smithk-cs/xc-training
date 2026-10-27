@@ -101,7 +101,7 @@ Garmin the link. Edit `wrangler.jsonc` on GitHub (open the file, click the penci
 ## Later
 
 * **Garmin:** add `GARMIN_CLIENT_ID` and `GARMIN_CLIENT_SECRET` as GitHub secrets, run the workflow again, then follow
-  `plans/plan-garmin-go-live.md`. The webhook address is on the admin home page; in Garmin's Endpoint Configuration,
+  `plans/plan-garmin-go-live.md`. The webhook address is on the Sync log page (admins only); in Garmin's Endpoint Configuration,
   enable it for Activities, Activity Details, Activity Files, Deregistrations and User Permissions Change. When an
   athlete connects, the app asks Garmin for their past `GARMIN_BACKFILL_DAYS` (90) days of runs; coaches can repeat
   that from the athlete's page (**Load past runs**).

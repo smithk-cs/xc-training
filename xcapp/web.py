@@ -833,7 +833,8 @@ def create_app() -> FastAPI:
     def sync_page(request: Request, user=Depends(any_staff, scope="function"), db: Session = Depends(get_db, scope="function")):
         conns = db.scalars(select(GarminConnection).options(selectinload(GarminConnection.athlete))).all()
         logs = db.scalars(select(SyncLog).order_by(SyncLog.id.desc()).limit(150)).all()
-        return render(request, "sync.html", user, conns=conns, logs=logs)
+        webhook = f"{s.base_url.rstrip('/')}/garmin/webhook/{s.garmin_webhook_secret}" if user.role == "admin" and s.garmin_webhook_secret else ""
+        return render(request, "sync.html", user, conns=conns, logs=logs, webhook=webhook)
 
     # ---------- athlete link pages ----------
 

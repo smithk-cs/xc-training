@@ -10,9 +10,6 @@
   </ul>
 </div>
 {% endif %}
-{% if webhook %}
-<div class="card"><h2>Garmin notification address</h2><p class="small muted">Paste this into the Garmin Developer Portal (Endpoint Configuration) as the endpoint for Activities, Activity Details and Activity Files, and for Deregistrations and User Permissions Change. Keep it private.</p><code class="copy">{{ webhook }}</code></div>
-{% endif %}
 {% if deletions %}
 <div class="card" style="border-color:var(--color-bad)">
   <h2>Deletion requests</h2>

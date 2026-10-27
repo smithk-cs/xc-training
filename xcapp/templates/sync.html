@@ -1,6 +1,9 @@
 {% extends "base.html" %}
 {% block content %}
 <h1>Sync log</h1>
+{% if webhook %}
+<div class="card"><h2>Garmin notification address</h2><p class="small muted">Paste this into the Garmin Developer Portal (Endpoint Configuration) as the endpoint for Activities, Activity Details and Activity Files, and for Deregistrations and User Permissions Change. Keep it private.</p><code class="copy">{{ webhook }}</code></div>
+{% endif %}
 <div class="card scroll">
   <h2>Garmin connections</h2>
   <table class="list"><thead><tr><th>Athlete</th><th>Status</th><th>Shared with the team</th><th>Connected</th><th>Last sync</th></tr></thead><tbody>
