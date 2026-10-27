@@ -55,12 +55,12 @@
     {% for x in paces %}{% set w = x.workout %}
     <div class="wpace">
       <div class="d">{{ 'Today' if w.date.isoformat() == today else w.date.strftime('%a, %b %-d') }} · {{ w.title }}</div>
-      <div class="small muted">{{ '{:,}'.format(w.rep_distance_m|int) }} m reps · {{ pace_type(w.pace_factor) }} ({{ w.pace_event }} pace{% if w.pace_factor != 1 %} × {{ '%.2f' % w.pace_factor }}{% endif %})</div>
+      <div class="small muted">{{ w.distance_text }}{{ '' if w.in_miles else ' reps' }} · {{ pace_type(w.pace_factor) }} ({{ w.pace_event }} pace{% if w.pace_factor != 1 %} × {{ '%.2f' % w.pace_factor }}{% endif %})</div>
       <div class="facts">
         {% for label, t, missing in (("From your current time", x.now, "Ask your coach to record a race or time trial."), ("From your goal", x.goal, "No goal set yet. Ask your coach.")) %}
         <div><span class="k">{{ label }}</span>
-          {% if t %}<span class="big">{{ fmt_time(t.rep) }}</span>
-          <span class="small">per rep · {{ fmt_time(t.mile) }}/mi{% if w.rep_distance_m > 400 %} · {{ fmt_time(t.lap) }}/400{% endif %}</span>
+          {% if t %}<span class="big">{{ fmt_time(t.mile)[:-2] ~ '/mi' if w.in_miles else fmt_time(t.rep) }}</span>
+          <span class="small">{% if w.in_miles %}about {{ fmt_time(t.rep)[:-2] }} for {{ w.distance_text }}{% else %}per rep · {{ fmt_time(t.mile) }}/mi{% if w.rep_distance_m > 400 %} · {{ fmt_time(t.lap) }}/400{% endif %}{% endif %}</span>
           <span class="small muted">{{ t.source[0]|upper }}{{ t.source[1:] }}</span>
           {% else %}<span class="small muted">{{ missing }}</span>{% endif %}
         </div>

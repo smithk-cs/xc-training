@@ -87,3 +87,43 @@ def test_workout_type_sets_the_pace_factor():
     wid = re.search(r'data-href="/workouts\?edit=(\d+)#plan"', page).group(1)
     edit = c.get(f"/workouts?edit={wid}").text
     assert re.search(r'<option value="(\w+)" selected>', edit)
+
+
+def test_workouts_in_miles():
+    import datetime as dt
+    import re
+    from fastapi.testclient import TestClient
+    from xcapp import analysis as A
+    from xcapp.db import SessionLocal
+    from xcapp.models import Athlete, PlannedWorkout, Result, StaffUser
+    from xcapp.security import hash_password
+    db = SessionLocal()
+    db.add(StaffUser(username="coach9", role="coach", password_hash=hash_password("correct-horse-1")))
+    a = Athlete(first_name="Ivy", last_name="Stone", gender="Girls", grade=10, group="JV", link_token="t-ivy")
+    db.add(a)
+    db.flush()
+    db.add(Result(athlete_id=a.id, date=A.team_today() - dt.timedelta(days=10), event="5K", time_s=20 * 60, kind="race", season="2026 XC"))
+    db.commit()
+    db.close()
+    from xcapp.web import create_app
+    c = TestClient(create_app(), follow_redirects=False)
+    csrf = re.search(r'name="csrf" value="([^"]+)"', c.get("/login").text).group(1)
+    c.post("/login", data={"csrf": csrf, "username": "coach9", "password": "correct-horse-1"})
+    csrf = re.search(r'name="csrf" value="([^"]+)"', c.get("/workouts").text).group(1)
+    day = (A.team_today() + dt.timedelta(days=1)).isoformat()
+    base = {"csrf": csrf, "date": day, "title": "Easy 5", "pace_event": "5K", "pace_type": "Recovery"}
+    c.post("/workouts", data={**base, "rep_distance_m": "50", "distance_unit": "mi"})
+    assert "Check the distance: 100 to 10,000 meters, or 0.25 to 30 miles." in c.get("/workouts").text
+    c.post("/workouts", data={**base, "rep_distance_m": "5", "distance_unit": "mi"})
+    page = c.get("/workouts").text
+    assert '<td class="num nowrap">5 mi</td>' in page
+    db = SessionLocal()
+    w = db.query(PlannedWorkout).one()
+    assert (round(w.rep_distance_m, 1), w.distance_unit, w.distance_value) == (8046.7, "mi", 5.0)
+    db.close()
+    edit = c.get(f"/workouts?edit={w.id}").text
+    assert '<option value="mi" selected>miles</option>' in edit and 'value="5.0"' in edit
+    me = TestClient(create_app()).get("/a/t-ivy").text
+    per_mile = 20 * 60 / 5000 * 1609.344 * 1.35                                     # 5K pace x the recovery factor
+    assert "5 mi · Recovery" in me and f'{A.fmt_time(per_mile)[:-2]}/mi</span>' in me
+    assert f"about {A.fmt_time(per_mile * 5)[:-2]} for 5 mi" in me and "/400" not in me.split("Upcoming workouts")[1].split("</section>")[0]

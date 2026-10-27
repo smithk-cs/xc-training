@@ -754,12 +754,16 @@ def create_app() -> FastAPI:
         try:
             d = parse_date(f.get("date", ""))
             title = str(f.get("title", "")).strip()[:120]
-            rep_m = float(f.get("rep_distance_m", 0))
+            unit = "mi" if f.get("distance_unit") == "mi" else "m"
+            amount = float(f.get("rep_distance_m", 0) or 0)
+            if not (0.25 <= amount <= 30 if unit == "mi" else 100 <= amount <= 10000):
+                raise ValueError("Check the distance: 100 to 10,000 meters, or 0.25 to 30 miles.")
+            rep_m = amount * 1609.344 if unit == "mi" else amount
             kind = f.get("pace_type", "Other")
             factor = A.PACE_TYPES[kind] if kind in A.PACE_TYPES else float(f.get("pace_factor", 1) or 1)
             event = f.get("pace_event", "5K")
-            if not title or not 100 <= rep_m <= 10000 or event not in A.EVENTS or not 0.8 <= factor <= 1.5:
-                raise ValueError("Check the title, rep distance (100 to 10000 m), pace event and pace factor (0.8 to 1.5).")
+            if not title or event not in A.EVENTS or not 0.8 <= factor <= 1.5:
+                raise ValueError("Check the title, pace event and pace factor (0.8 to 1.5).")
             ability_names = [g.name for g in db.scalars(select(TrainingGroup).order_by(TrainingGroup.position)).all()]
             groups = ",".join(g for g in ability_names if f.get(f"group_{g}")) or "All"
             pw = db.get(PlannedWorkout, int(f["wid"])) if str(f.get("wid", "")).isdigit() else None
@@ -768,6 +772,7 @@ def create_app() -> FastAPI:
                 pw = PlannedWorkout()
                 db.add(pw)
             pw.date, pw.title, pw.rep_distance_m, pw.pace_event, pw.pace_factor, pw.groups = d, title, rep_m, event, factor, groups
+            pw.distance_unit = unit
             db.flush()
             n = rematch_day(db, d) + (rematch_day(db, old_day) if old_day and old_day != d else 0)
             flash(request, f"{'Updated' if old_day else 'Saved'} {title}." + (f" Re-matched {n} runs already synced." if n else ""))

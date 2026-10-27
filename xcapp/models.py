@@ -121,10 +121,24 @@ class PlannedWorkout(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     date: Mapped[dt.date] = mapped_column(Date)
     title: Mapped[str] = mapped_column(String(120))
-    rep_distance_m: Mapped[float] = mapped_column(Float)
+    rep_distance_m: Mapped[float] = mapped_column(Float)  # always meters; distance_unit only sets how it's shown
+    distance_unit: Mapped[str] = mapped_column(String(2), default="m")  # m (interval reps) | mi (runs such as an easy 5 miles)
     pace_event: Mapped[str] = mapped_column(String(20), default="5K")
     pace_factor: Mapped[float] = mapped_column(Float, default=1.0)
     groups: Mapped[str] = mapped_column(String(120), default="All")  # "All" or comma list
+
+    @property
+    def in_miles(self) -> bool:
+        return self.distance_unit == "mi"
+
+    @property
+    def distance_value(self) -> float:
+        """The distance in the unit it was entered in (1000 for 1000 m, 5 for 5 miles)."""
+        return round(self.rep_distance_m / 1609.344, 2) if self.in_miles else round(self.rep_distance_m)
+
+    @property
+    def distance_text(self) -> str:
+        return f"{self.distance_value:g} mi" if self.in_miles else f"{int(self.distance_value):,} m"
 
     def applies_to(self, *groups: str) -> bool:
         g = [x.strip() for x in (self.groups or "All").split(",") if x.strip()]

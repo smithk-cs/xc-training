@@ -65,6 +65,7 @@ ADDED_COLUMNS = {
     "athletes": [("ability_override", "VARCHAR(40) DEFAULT ''"), ("ai_consent_at", "TIMESTAMP"), ("ai_consent_note", "VARCHAR(200) DEFAULT ''"),
                  ("vdot_override", "INTEGER"), ("is_test", "BOOLEAN DEFAULT FALSE"), ("other_names", "VARCHAR(500) DEFAULT ''"), ("email", "VARCHAR(254) DEFAULT ''"), ("left_on", "DATE"), ("vdot_mark", "VARCHAR(10) DEFAULT ''"), ("weekly_plan", "VARCHAR(20) DEFAULT ''")],
     "staff_users": [("email", "VARCHAR(254) DEFAULT ''")],
+    "planned_workouts": [("distance_unit", "VARCHAR(2) DEFAULT 'm'")],
     "training_groups": [("color", "VARCHAR(7) DEFAULT ''")],
     "pain_reports": [("activity_id", "INTEGER"), ("saw_trainer", "BOOLEAN DEFAULT FALSE")],
 }
