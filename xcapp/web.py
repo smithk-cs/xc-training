@@ -1149,6 +1149,50 @@ def create_app() -> FastAPI:
             flash(request, msg, "error")
         return back("/groups")
 
+    @app.get("/vdot", response_class=HTMLResponse)
+    def vdot_page(request: Request, edit: int = 0, user=Depends(any_staff, scope="function"), db: Session = Depends(get_db, scope="function")):
+        return render(request, "vdot.html", user, board=A.vdot_board(db, A.team_today()), edit=bool(edit) and user.role != "trainer",
+                      easy_pct=A.EASY_PCT, tempo_pct=A.TEMPO_PCT, vdot_limits=(A.VDOT_MIN, A.VDOT_MAX))
+
+    @app.post("/vdot")
+    async def vdot_save(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
+        f = await form_checked(request)
+        bad = []
+        for a in db.scalars(select(Athlete).where(Athlete.active.is_(True))).all():
+            if f"plan_{a.id}" not in f:
+                continue
+            a.vdot_mark = str(f.get(f"mark_{a.id}", "")).strip()[:10]
+            a.weekly_plan = str(f.get(f"plan_{a.id}", "")).strip()[:20]
+            raw = str(f.get(f"vdot_{a.id}", "")).strip()
+            try:
+                v = int(raw) if raw else None
+                if v is not None and not A.VDOT_MIN <= v <= A.VDOT_MAX:
+                    raise ValueError
+                a.vdot_override = v
+            except ValueError:
+                bad.append(a.name)
+        if bad:
+            flash(request, f"VDOT should be a whole number from {A.VDOT_MIN} to {A.VDOT_MAX}; not changed for " + ", ".join(bad) + ".", "error")
+        else:
+            flash(request, "Saved.")
+        return back("/vdot?edit=1" if bad else "/vdot")
+
+    @app.post("/athletes/{athlete_id}/vdot")
+    async def athlete_vdot(request: Request, athlete_id: int, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
+        f = await form_checked(request)
+        a = get_athlete(db, athlete_id)
+        raw = str(f.get("vdot", "")).strip()
+        try:
+            v = int(raw) if raw else None
+            if v is not None and not A.VDOT_MIN <= v <= A.VDOT_MAX:
+                raise ValueError
+        except ValueError:
+            flash(request, f"VDOT should be a whole number from {A.VDOT_MIN} to {A.VDOT_MAX}.", "error")
+            return back(f"/athletes/{a.id}")
+        a.vdot_override = v
+        flash(request, f"{a.name}'s VDOT is now " + (f"set to {v}." if v is not None else "worked out from their most recent race."))
+        return back(f"/athletes/{a.id}")
+
     @app.post("/athletes/{athlete_id}/ability")
     async def athlete_ability(request: Request, athlete_id: int, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
         f = await form_checked(request)

@@ -10,9 +10,9 @@
         {% if g.group %}
         <b>Running group: {{ g.group }}</b>
         {% if g.target_1600 %}<div class="facts"><div><span class="k">800 target</span><span class="big">{{ g.target_800 }}</span></div><div><span class="k">1600 target</span><span class="big">{{ g.target_1600 }}</span></div></div>{% endif %}
-        <span class="small muted">{% if g.override %}Your coach placed you in this group.{% else %}From your best 1 mile, 1.5 mile, 2 mile or 5K result{% if g.source %} ({{ g.source }}){% endif %}. It updates when your coach records a faster time.{% endif %}</span>
+        <span class="small muted">{% if g.override %}Your coach placed you in this group.{% elif g.vdot_set %}Your coach set your VDOT.{% else %}From your most recent race{% if g.source %} ({{ g.source }}){% endif %}. It updates after each race.{% endif %}</span>
         {% else %}
-        <span class="small">Your running group and VDOT come from your best 1 mile, 1.5 mile, 2 mile or 5K time. They appear here once your coach records one.</span>
+        <span class="small">Your running group and VDOT come from your most recent race. They appear here once your coach records one.</span>
         {% endif %}
         {% if hero_vo2 %}<div class="small" style="margin-top:8px"><b>Watch VO2 max: {{ '%.1f' % hero_vo2.vo2_max }}</b> ({{ hero_vo2.local_date.strftime('%b %-d') }}). Your Garmin’s own estimate. It doesn’t change your group.</div>{% endif %}
       </div>

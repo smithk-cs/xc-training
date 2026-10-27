@@ -17,7 +17,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from .config import settings
-from .models import (Activity, AppSetting, Athlete, Goal, Injury, MissedDay, PainReport, PlannedWorkout, RestingHeartRate, Result,
+from .models import (Activity, AppSetting, Athlete, Goal, Injury, MissedDay, PainReport, PlannedWorkout, RaceResult, RestingHeartRate, Result,
                      TrainingGroup)
 
 METERS_PER_MILE = 1609.344
@@ -286,34 +286,106 @@ def group_for(v: float | None, gender: str, groups: list[TrainingGroup]) -> str:
     return best
 
 
+VDOT_MIN_M, VDOT_MAX_M = 1500, 10000   # race distances the VDOT formula is used for
+VDOT_MIN, VDOT_MAX = 20, 90             # coach-set VDOT limits
+
+
+def latest_races(db: Session, since: dt.date, as_of: dt.date) -> dict[int, tuple[float, str, dt.date]]:
+    """athlete id -> (VDOT, description, date) from their most recent race or time trial in the window, at any distance
+    from 1500 m to 10K (benchmark results, and meet results at other distances such as 4K). Two on the same day: the faster."""
+    found: dict[int, tuple[dt.date, float, str]] = {}
+
+    def offer(aid, day, v, text):
+        cur = found.get(aid)
+        if cur is None or day > cur[0] or (day == cur[0] and v > cur[1]):
+            found[aid] = (day, v, text)
+
+    for r in db.scalars(select(Result).where(Result.date >= since, Result.date <= as_of)).all():
+        if r.event in EVENTS and r.time_s:
+            offer(r.athlete_id, r.date, vdot(EVENTS[r.event], r.time_s), f"{r.event} {fmt_time(r.time_s)} on {r.date:%b %-d, %Y}")
+    for r in db.scalars(select(RaceResult).where(RaceResult.date >= since, RaceResult.date <= as_of,
+                                                 RaceResult.result_id.is_(None))).all():
+        if r.time_s and VDOT_MIN_M <= r.distance_m <= VDOT_MAX_M:
+            offer(r.athlete_id, r.date, vdot(r.distance_m, r.time_s),
+                  f"{r.meet}, {r.distance_label} {fmt_time(r.time_s)} on {r.date:%b %-d, %Y}")
+    return {aid: (v, text, day) for aid, (day, v, text) in found.items()}
+
+
 def abilities(db: Session, as_of: dt.date) -> dict[int, dict]:
-    """athlete id -> {group, vdot, source, override} from the highest VDOT in the lookback window."""
+    """athlete id -> {group, vdot, source, override, ...}. VDOT comes from the athlete's most recent race in the look-back
+    window, read on the team's scale, unless a coach has set it; the group follows from VDOT unless a coach pinned one."""
     lookback = int(get_setting(db, "group_lookback_days", "365"))
     groups = db.scalars(select(TrainingGroup).order_by(TrainingGroup.position)).all()
     names = {g.name for g in groups}
     colors = {g.name: g.color or "" for g in groups}
     targets = vdot_targets(db)
-    best: dict[int, tuple[float, Result]] = {}
-    since = as_of - dt.timedelta(days=lookback)
-    for r in db.scalars(select(Result).where(Result.date >= since, Result.date <= as_of)).all():
-        if r.event not in EVENTS or not r.time_s:
-            continue
-        v = vdot(EVENTS[r.event], r.time_s)
-        if r.athlete_id not in best or v > best[r.athlete_id][0]:
-            best[r.athlete_id] = (v, r)
+    latest = latest_races(db, as_of - dt.timedelta(days=lookback), as_of)
     out = {}
     for a in db.scalars(select(Athlete).where(Athlete.active.is_(True))).all():
-        v, src = best.get(a.id, (None, None))
-        tv = team_vdot(v, targets) if v is not None else None
+        v, src, _day = latest.get(a.id, (None, "", None))
+        race_vdot = team_vdot(v, targets) if v is not None else None
+        tv = a.vdot_override if a.vdot_override is not None else race_vdot
         auto = group_for(tv, a.gender, groups)
         pinned = a.ability_override if a.ability_override in names else ""
         grp = pinned or auto
         tgt = targets.get(tv) if tv is not None else None
         out[a.id] = {
             "group": grp, "auto_group": auto, "override": pinned, "vdot": tv, "color": colors.get(grp, ""),
-            "target_800": tgt[0] if tgt else "", "target_1600": tgt[1] if tgt else "",
-            "source": f"{src.event} {fmt_time(src.time_s)} on {src.date:%b %-d, %Y}" if src is not None else "",
+            "race_vdot": race_vdot, "vdot_set": a.vdot_override is not None,
+            "target_800": tgt[0] if tgt else "", "target_1600": tgt[1] if tgt else "", "source": src,
         }
+    return out
+
+
+EASY_PCT, TEMPO_PCT = 0.67, 0.88   # share of VO2max for easy and tempo (threshold) running, as on the team's sheet
+
+
+def pace_at(v: float, pct: float) -> float:
+    """Seconds per mile when running at `pct` of VDOT `v` (Daniels' oxygen-cost equation, solved for speed)."""
+    target = v * pct
+    a, b, c = 0.000104, 0.182258, -4.60 - target
+    speed = (-b + math.sqrt(b * b - 4 * a * c)) / (2 * a)   # meters per minute
+    return METERS_PER_MILE / speed * 60
+
+
+def weekly_plan_text(plan: str) -> str:
+    """'7x8' -> '7x8=56'; anything else as typed."""
+    m = re.fullmatch(r"\s*(\d+)\s*[xX×*]\s*(\d+(?:\.\d+)?)\s*(?:=.*)?", plan or "")
+    if not m:
+        return (plan or "").strip()
+    total = int(m.group(1)) * float(m.group(2))
+    return f"{m.group(1)}x{m.group(2)}={total:g}"
+
+
+def vdot_board(db: Session, as_of: dt.date) -> list[dict]:
+    """The VDOT page: per gender with athletes, each group from fastest down with its VDOT range, easy and tempo pace
+    ranges, and its athletes by VDOT; then athletes with no VDOT yet."""
+    ab = abilities(db, as_of)
+    groups = db.scalars(select(TrainingGroup).order_by(TrainingGroup.position)).all()
+    people = db.scalars(select(Athlete).where(Athlete.active.is_(True)).order_by(Athlete.last_name, Athlete.first_name)).all()
+    out = []
+    for gender in ("Boys", "Girls"):
+        mine = [a for a in people if a.gender == gender]
+        if not mine:
+            continue
+        key = (lambda g: g.min_vdot_girls) if gender == "Girls" else (lambda g: g.min_vdot_boys)
+        ordered = sorted(groups, key=key, reverse=True)
+        sections = []
+        for i, g in enumerate(ordered):
+            lo = int(math.ceil(key(g)))
+            hi = int(math.ceil(key(ordered[i - 1]))) - 1 if i else None
+            members = sorted((a for a in mine if ab.get(a.id, {}).get("group") == g.name),
+                             key=lambda a: (-(ab[a.id]["vdot"] or 0), a.last_name, a.first_name))
+            bottom = lo < VDOT_MIN and hi is not None   # the catch-all group: "48 and below", paces of 48 or slower
+            top = hi if hi is not None else lo
+            easy = (pace_at(top, EASY_PCT), pace_at(max(lo, VDOT_MIN), EASY_PCT))
+            tempo = (pace_at(top, TEMPO_PCT), pace_at(max(lo, VDOT_MIN), TEMPO_PCT))
+            rng = (f"{hi} and below" if bottom else f"{lo}-{hi}" if hi is not None and hi > lo else f"{lo} +" if hi is None else str(lo))
+            sections.append({"group": g, "range": rng, "easy": easy, "tempo": tempo,
+                             "single": hi is None or hi <= lo or bottom, "slower": bottom,
+                             "rows": [{"a": a, **ab[a.id], "plan": weekly_plan_text(a.weekly_plan)} for a in members]})
+        rest = [{"a": a, **ab.get(a.id, {}), "plan": weekly_plan_text(a.weekly_plan)} for a in mine if not ab.get(a.id, {}).get("group")]
+        out.append({"gender": gender, "sections": sections, "rest": rest})
     return out
 
 

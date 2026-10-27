@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
 <h1>Races</h1>
-<p class="muted">Every meet your athletes ran, at each race’s real distance. Races at 1 mile, 1.5 miles, 2 miles or 5K also count toward VDOT and running groups.</p>
+<p class="muted">Every meet your athletes ran, at each race’s real distance. Each athlete’s VDOT and running group come from their most recent race (1500 m to 10K), shown on the <a href="/vdot">VDOT</a> page.</p>
 {% if user.role != 'trainer' %}
 <div class="card">
   <h2>Import race results</h2>

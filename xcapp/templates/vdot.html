@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}VDOT · {{ team_name }}{% endblock %}
+{% block content %}
+<div class="form-row" style="justify-content:space-between">
+  <h1 style="margin:0">VDOT training groups</h1>
+  {% if user.role != 'trainer' %}{% if edit %}<a class="button secondary" href="/vdot">Done</a>{% else %}<a class="button secondary" href="/vdot?edit=1">Edit marks, weekly plans and VDOT</a>{% endif %}{% endif %}
+</div>
+<p class="muted" style="max-width:80ch">VDOT comes from each athlete’s most recent race or time trial (1500 m to 10K), read on the team’s VDOT table, unless a coach has set it. Easy pace is {{ (easy_pct * 100)|round|int }}% of VDOT and tempo {{ (tempo_pct * 100)|round|int }}%. Group cutoffs are on the <a href="/groups">Groups</a> page.</p>
+{% if edit %}<form method="post" action="/vdot"><input type="hidden" name="csrf" value="{{ csrf }}">{% endif %}
+{% for b in board %}
+{% if board|length > 1 %}<h2>{{ b.gender }}</h2>{% endif %}
+<div class="vdot-board">
+{% for s in b.sections %}{% set c = s.group.color or '#E5E4E2' %}
+<div class="scroll"><table class="vdot-group" style="--g: {{ c }}; --g-ink: {{ ink(c) }}">
+  <thead><tr><th class="name">{{ s.group.name }}</th><th>VDOT {{ s.range }}</th>
+    <th class="small">easy: {{ fmt_time(s.easy[0])[:-2] }}{% if s.slower %} or slower{% endif %}{% if not s.single %}-{{ fmt_time(s.easy[1])[:-2] }}{% endif %}</th>
+    <th class="small">tempo: {{ fmt_time(s.tempo[0])[:-2] }}{% if s.slower %} or slower{% endif %}{% if not s.single %}-{{ fmt_time(s.tempo[1])[:-2] }}{% endif %}</th>
+    <th class="small">Last race</th></tr></thead>
+  <tbody>
+  {% for r in s.rows %}{% include "_vdot_row.html" %}{% else %}<tr><td colspan="5" class="small">Nobody yet.</td></tr>{% endfor %}
+  </tbody>
+</table></div>
+{% endfor %}
+{% if b.rest %}
+<div class="scroll"><table class="vdot-group" style="--g: #F6F4F1; --g-ink: #1B1B1F">
+  <thead><tr><th class="name">No VDOT yet</th><th></th><th></th><th></th><th class="small">Needs a race or a coach-set VDOT</th></tr></thead>
+  <tbody>{% for r in b.rest %}{% include "_vdot_row.html" %}{% endfor %}</tbody>
+</table></div>
+{% endif %}
+</div>
+{% else %}<div class="card"><p class="muted">No athletes on the roster yet.</p></div>
+{% endfor %}
+{% if edit %}<p class="small muted">Weekly plan: type days x miles, such as <code>7x8</code> (shown as 7x8=56), or anything short such as <code>inj</code>. VDOT: leave empty to use the race VDOT shown as the placeholder.</p>
+<button type="submit">Save</button></form>{% endif %}
+{% endblock %}

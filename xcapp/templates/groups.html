@@ -2,7 +2,7 @@
 {% block title %}Groups · {{ team_name }}{% endblock %}
 {% block content %}
 <h1>Training groups</h1>
-<p class="muted" style="max-width:78ch">Each athlete goes in the highest group their best VDOT reaches. VDOT is worked out from every 1 mile, 1.5 mile, 2 mile and 5K result in the look-back window, then read against the team’s 1600 targets below: a result counts as VDOT 60 if its 1600-equivalent time reaches the VDOT 60 target. Garmin’s own watch VO2max isn’t shared through Garmin’s developer API, so results are used instead. Cross country courses vary, so coaches can pin any athlete to a group on their athlete page.</p>
+<p class="muted" style="max-width:78ch">Each athlete goes in the highest group their VDOT reaches. VDOT is worked out from their most recent race or time trial in the look-back window (any distance from 1500 m to 10K), then read against the team’s 1600 targets below: a result counts as VDOT 60 if its 1600-equivalent time reaches the VDOT 60 target. The watch’s own VO2 max is shown on each run for interest but doesn’t set groups. Cross country courses vary, so coaches can set an athlete’s VDOT or pin them to a group on their athlete page or the <a href="/vdot">VDOT</a> page.</p>
 <form method="post" action="/groups">
   <input type="hidden" name="csrf" value="{{ csrf }}">
   <div class="card scroll">

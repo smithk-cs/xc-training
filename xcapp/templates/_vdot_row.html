@@ -1,0 +1,11 @@
+<tr>
+  <td class="name"><a href="/athletes/{{ r.a.id }}">{{ r.a.name }}</a></td>
+  {% if edit %}
+  <td><input type="number" name="vdot_{{ r.a.id }}" min="{{ vdot_limits[0] }}" max="{{ vdot_limits[1] }}" value="{{ r.a.vdot_override if r.a.vdot_override is not none else '' }}" placeholder="{{ r.race_vdot or '' }}" aria-label="VDOT for {{ r.a.name }}" style="width:5em"></td>
+  <td><input name="mark_{{ r.a.id }}" maxlength="10" value="{{ r.a.vdot_mark }}" aria-label="Mark for {{ r.a.name }}" style="width:4em"></td>
+  <td><input name="plan_{{ r.a.id }}" maxlength="20" value="{{ r.a.weekly_plan }}" aria-label="Weekly plan for {{ r.a.name }}" style="width:7em"></td>
+  {% else %}
+  <td class="v">{{ r.vdot or '' }}</td><td class="mark">{{ r.a.vdot_mark }}</td><td>{{ r.plan }}</td>
+  {% endif %}
+  <td class="small">{% if r.vdot_set %}Set by coach{% if r.race_vdot %} (race: {{ r.race_vdot }}){% endif %}{% else %}{{ r.source }}{% endif %}</td>
+</tr>
