@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from .config import settings
 from .models import (Activity, AppSetting, Athlete, Goal, Injury, MissedDay, PainReport, PlannedWorkout, RaceResult, RestingHeartRate, Result,
+                     VdotChange,
                      TrainingGroup)
 
 METERS_PER_MILE = 1609.344
@@ -379,6 +380,7 @@ def vdot_board(db: Session, as_of: dt.date) -> list[dict]:
     """The VDOT page: per gender with athletes, each group from fastest down with its VDOT range, easy and tempo pace
     ranges, and its athletes by VDOT; then athletes with no VDOT yet."""
     ab = abilities(db, as_of)
+    gains = vdot_gains(db, as_of)
     groups = db.scalars(select(TrainingGroup).order_by(TrainingGroup.position)).all()
     people = db.scalars(select(Athlete).where(on_team()).order_by(Athlete.last_name, Athlete.first_name)).all()
     out = []
@@ -400,7 +402,7 @@ def vdot_board(db: Session, as_of: dt.date) -> list[dict]:
             rng = (f"{hi} and below" if bottom else f"{lo}-{hi}" if hi is not None and hi > lo else f"{lo} +" if hi is None else str(lo))
             sections.append({"group": g, "range": rng, "zones": zones,
                              "single": hi is None or hi <= lo or bottom, "slower": bottom,
-                             "rows": [{"a": a, **ab[a.id], "plan": weekly_plan_text(a.weekly_plan),
+                             "rows": [{"a": a, **ab[a.id], "plan": weekly_plan_text(a.weekly_plan), "gain": gains.get(a.id),
                                        "paces": training_paces(ab[a.id]["vdot"])} for a in members]})
         rest = [{"a": a, **ab.get(a.id, {}), "plan": weekly_plan_text(a.weekly_plan), "paces": []}
                 for a in mine if not ab.get(a.id, {}).get("group")]
@@ -471,6 +473,73 @@ def resting_hr_flags(db: Session, as_of: dt.date) -> list[dict]:
         if sm and sm["flag"]:
             out.append({"athlete": people[aid], **sm})
     out.sort(key=lambda x: (-x["up"], x["athlete"].name))
+    return out
+
+
+def set_vdot(db: Session, a: Athlete, value: int | None, by: str, source: str) -> bool:
+    """Set (or clear, with None) a coach VDOT, keeping a history entry. Returns False when nothing changed."""
+    if a.vdot_override == value:
+        return False
+    db.add(VdotChange(athlete_id=a.id, date=team_today(), vdot=value, previous=a.vdot_override, by=by, source=source))
+    a.vdot_override = value
+    return True
+
+
+def vdot_gains(db: Session, as_of: dt.date, days: int = 7) -> dict[int, int]:
+    """athlete id -> coach VDOT points gained over the past `days` (only gains; the arrows on the VDOT page)."""
+    since = as_of - dt.timedelta(days=days)
+    out = {}
+    changes = db.scalars(select(VdotChange).order_by(VdotChange.at)).all()
+    by: dict[int, list[VdotChange]] = defaultdict(list)
+    for c in changes:
+        by[c.athlete_id].append(c)
+    for aid, cs in by.items():
+        recent = [c for c in cs if c.date > since]
+        if not recent or recent[-1].vdot is None:
+            continue
+        before = [c for c in cs if c.date <= since]
+        start = before[-1].vdot if before else recent[0].previous
+        if start is not None and recent[-1].vdot > start:
+            out[aid] = recent[-1].vdot - start
+    return out
+
+
+def achievements(db: Session, a: Athlete, as_of: dt.date) -> list[dict]:
+    """Recent things to celebrate on an athlete's page: VDOT up this week, a new PR in the last two weeks, a team
+    workout clearly faster than target this week, and a season-high training week without too big a jump."""
+    out = []
+    gain = vdot_gains(db, as_of).get(a.id)
+    if gain:
+        out.append({"kind": "vdot", "title": f"VDOT up {gain}", "detail": f"Your coach raised your VDOT to {a.vdot_override} this week."})
+    races = db.scalars(select(RaceResult).where(RaceResult.athlete_id == a.id, RaceResult.date <= as_of).order_by(RaceResult.date)).all()
+    for r in [r for r in races if r.date > as_of - dt.timedelta(days=14)][::-1]:
+        earlier = [x.time_s for x in races if x.date < r.date and abs(x.distance_m - r.distance_m) <= r.distance_m * 0.01]
+        if earlier and r.time_s < min(earlier):
+            out.append({"kind": "pr", "title": "New PR", "detail": f"{fmt_time(r.time_s)} for {r.distance_label} at {r.meet}, "
+                        f"{min(earlier) - r.time_s:.1f} s faster than before."})
+            break
+    acts = db.scalars(select(Activity).where(Activity.athlete_id == a.id, Activity.local_date > as_of - dt.timedelta(days=7),
+                                             Activity.local_date <= as_of, Activity.planned_workout_id.is_not(None))
+                      .options(selectinload(Activity.laps), selectinload(Activity.planned))).all()
+    for act in sorted(acts, key=lambda x: x.local_date, reverse=True):
+        reps = [l for l in act.laps if l.is_rep and l.distance_m]
+        tgt = target_pace(db, a.id, act.planned) if reps else None
+        if reps and tgt:
+            pace = statistics.fmean(l.timer_s / l.distance_m * METERS_PER_MILE for l in reps)
+            if pace <= tgt * 0.98:
+                out.append({"kind": "training", "title": "Faster than target",
+                            "detail": f"{act.planned.title}: reps averaged {fmt_time(pace)[:-2]}/mi against a {fmt_time(tgt)[:-2]} target."})
+                break
+    start, _ = season_range(as_of)
+    weeks = [w for w in week_starts(as_of, 30) if w + dt.timedelta(days=6) >= start]
+    runs = db.execute(select(Activity.local_date, Activity.distance_m, Activity.sport).where(
+        Activity.athlete_id == a.id, Activity.local_date >= weeks[0] if weeks else as_of, Activity.local_date <= as_of)).all()
+    miles = [sum(d for day, d, sp in runs if _is_run(sp) and w <= day <= w + dt.timedelta(days=6)) / METERS_PER_MILE for w in weeks]
+    if len(miles) >= 5 and miles[-1] >= 10 and miles[-1] > max(miles[:-1]):
+        prior = [m for m in miles[-5:-1]]
+        ratio = miles[-1] / statistics.fmean(prior) if any(prior) else None
+        if ratio is not None and ratio <= LOAD_RATIO_FLAG:
+            out.append({"kind": "training", "title": "Season-high week", "detail": f"{miles[-1]:.1f} miles in the past 7 days, your most this season."})
     return out
 
 

@@ -316,3 +316,13 @@ details.panel.fold > summary::-webkit-details-marker { display: none; }
 details.panel.fold > summary::after { content: "▸"; color: var(--brand-red); font-size: 20px; }
 details.panel.fold[open] > summary::after { content: "▾"; }
 details.panel.fold:not([open]) { gap: 0; }
+
+.up-arrows { display: inline-flex; align-items: center; gap: 0; margin-left: 4px; vertical-align: middle; }
+.up-arrows small { color: #1F9D55; font-weight: 700; margin-left: 2px; }
+.badges { display: flex; flex-wrap: wrap; gap: 8px; }
+.badge { display: inline-flex; align-items: center; gap: 8px; background: var(--color-panel); border: 1px solid var(--color-border-line); border-radius: 999px; padding: 6px 12px 6px 8px; }
+.badge > span { display: flex; flex-direction: column; line-height: 1.15; }
+.badge small { color: var(--color-fg-muted); font-size: 12px; }
+.badge-vdot { border-color: #1F9D55; } .badge-pr { border-color: var(--brand-gold); } .badge-training { border-color: var(--brand-red); }
+.hero .badges .badge { background: rgba(255,255,255,.95); color: #1B1B1F; border-color: transparent; }
+.hero .badges .badge small { color: #5E5850; }

@@ -68,6 +68,7 @@ class Athlete(Base):
     injuries: Mapped[list["Injury"]] = relationship(back_populates="athlete", cascade="all, delete-orphan")
     pain_reports: Mapped[list["PainReport"]] = relationship(back_populates="athlete", cascade="all, delete-orphan")
     resting_hrs: Mapped[list["RestingHeartRate"]] = relationship(cascade="all, delete-orphan")
+    vdot_changes: Mapped[list["VdotChange"]] = relationship(cascade="all, delete-orphan", order_by="VdotChange.at")
     entries: Mapped[list["DivisionAthlete"]] = relationship(cascade="all, delete-orphan", overlaps="athlete")
     meet_responses: Mapped[list["MeetResponse"]] = relationship(cascade="all, delete-orphan", overlaps="athlete")
     photo: Mapped["AthletePhoto | None"] = relationship(cascade="all, delete-orphan", uselist=False, lazy="select")
@@ -341,6 +342,19 @@ class DivisionAthlete(Base):
     position: Mapped[int] = mapped_column(Integer, default=0)
     division: Mapped[MeetDivision] = relationship(back_populates="entries")
     athlete: Mapped[Athlete] = relationship()
+
+
+class VdotChange(Base):
+    """Each time a coach sets or clears an athlete's VDOT: the history behind charts, improvement arrows and undo."""
+    __tablename__ = "vdot_changes"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    athlete_id: Mapped[int] = mapped_column(ForeignKey("athletes.id", ondelete="CASCADE"), index=True)
+    date: Mapped[dt.date] = mapped_column(Date, index=True)          # team date of the change
+    at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
+    vdot: Mapped[int | None] = mapped_column(Integer, nullable=True)      # None: cleared (back to the race VDOT)
+    previous: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    by: Mapped[str] = mapped_column(String(80), default="")
+    source: Mapped[str] = mapped_column(String(20), default="")      # athlete page | VDOT page | pasted list
 
 
 class RestingHeartRate(Base):

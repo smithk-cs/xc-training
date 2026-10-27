@@ -348,7 +348,7 @@ def _loose_match(athletes: list[Athlete], name: str) -> Athlete | None:
     return names[close[0]] if len(close) == 1 else None
 
 
-def import_vdots(db: Session, text: str) -> dict:
+def import_vdots(db: Session, text: str, by: str = "") -> dict:
     """Set coach VDOTs from pasted lines such as 'Sam Lowry<TAB>69' (or 'Sam Lowry 69'), for example copied from the
     team's VDOT sheet. Group headings ('Gold  VDOT 68-72 ...'), other columns and lines without a VDOT are skipped.
     Returns {"set": [(athlete, vdot, name as written)], "loose": [...], "unmatched": [names], "no_vdot": [names]}."""
@@ -382,7 +382,8 @@ def import_vdots(db: Session, text: str) -> dict:
         if not 20 <= vdot <= 90:
             out["unmatched"].append(f"{name} (VDOT {vdot} is outside 20-90)")
             continue
-        a.vdot_override = vdot
+        from .analysis import set_vdot
+        set_vdot(db, a, vdot, by, "pasted list")
         out["loose" if loose else "set"].append((a, vdot, name))
     db.flush()
     return out

@@ -319,3 +319,41 @@ def cell_text(r: dict, c: str) -> str:
 
 def _rgb(h: str) -> tuple[int, int, int]:
     return tuple(int(h[i:i + 2], 16) for i in (1, 3, 5))
+
+
+def vdot_history_chart(changes) -> str:
+    """Coach-set VDOT over time as steps; a cleared VDOT breaks the line."""
+    pts = [(c.date, c.vdot) for c in changes if c.vdot is not None]
+    if len(pts) < 2:
+        return ""
+    W, H, L, R, T, B = 640, 180, 36, 14, 12, 26
+    ys = [v for _, v in pts]
+    ticks = _nice(min(ys) - 1, max(ys) + 1, 3)
+    lo, hi = ticks[0], ticks[-1]
+    d0, d1 = pts[0][0], max(pts[-1][0], A.team_today())
+    span = max(1, (d1 - d0).days)
+    X = lambda d: L + (W - L - R) * (d - d0).days / span
+    Y = lambda v: H - B - (H - T - B) * (v - lo) / (hi - lo)
+    body = [f'<line x1="{L}" x2="{W-R}" y1="{Y(v):.1f}" y2="{Y(v):.1f}" stroke="{GRID}"/>'
+            f'<text x="{L-5}" y="{Y(v)+4:.1f}" font-size="10" text-anchor="end" fill="{MUTED}">{v:g}</text>' for v in ticks]
+    path, prev = [], None
+    for c in changes:
+        if c.vdot is None:
+            prev = None
+            continue
+        if prev is None:
+            path.append(f"M{X(c.date):.1f},{Y(c.vdot):.1f}")
+        else:
+            path.append(f"H{X(c.date):.1f}V{Y(c.vdot):.1f}")
+        prev = c.vdot
+    if prev is not None:
+        path.append(f"H{X(d1):.1f}")
+    body.append(f'<path d="{"".join(path)}" fill="none" stroke="{GOLD}" stroke-width="2.5"/>')
+    for c in changes:
+        if c.vdot is not None:
+            up = c.previous is not None and c.vdot > c.previous
+            body.append(f'<circle cx="{X(c.date):.1f}" cy="{Y(c.vdot):.1f}" r="4" fill="{"#1F6E43" if up else GOLD}">'
+                        f'<title>{c.date:%b %-d}: {c.previous if c.previous is not None else "race"} → {c.vdot}</title></circle>')
+    body.append(f'<text x="{L}" y="{H-6}" font-size="10" fill="{MUTED}">{d0:%b %-d}</text>'
+                f'<text x="{W-R}" y="{H-6}" font-size="10" text-anchor="end" fill="{MUTED}">{d1:%b %-d}</text>')
+    return _svg(W, H, "".join(body), "Coach-set VDOT over time")

@@ -1,0 +1,12 @@
+{% macro icon(kind, size=18) -%}
+{%- if kind == 'up' -%}<svg width="{{ size }}" height="{{ size }}" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4l7 9h-4.5v7h-5v-7H5z" fill="#1F9D55"/></svg>
+{%- elif kind == 'pr' -%}<svg width="{{ size }}" height="{{ size }}" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h10v3h3v2a5 5 0 0 1-4.6 5A5 5 0 0 1 13 15.9V18h3v3H8v-3h3v-2.1A5 5 0 0 1 8.6 13 5 5 0 0 1 4 8V6h3zm0 5V8H6a3 3 0 0 0 1 2.2zm10 0v2.2A3 3 0 0 0 18 8z" fill="#C99A2E"/></svg>
+{%- else -%}<svg width="{{ size }}" height="{{ size }}" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2L4 14h6l-1 8 9-12h-6z" fill="#A6192E"/></svg>
+{%- endif -%}
+{%- endmacro %}
+{% macro arrows(gain) -%}
+{%- if gain %}<span class="up-arrows" title="VDOT up {{ gain }} this week" aria-label="VDOT up {{ gain }} this week">{% for _ in range([gain, 3]|min) %}{{ icon('up', 16) }}{% endfor %}{% if gain > 3 %}<small>+{{ gain }}</small>{% endif %}</span>{% endif -%}
+{%- endmacro %}
+{% macro badges(list) -%}
+{%- if list %}<div class="badges">{% for b in list %}<span class="badge badge-{{ b.kind }}" title="{{ b.detail }}">{{ icon('up' if b.kind == 'vdot' else b.kind) }}<span><b>{{ b.title }}</b><small>{{ b.detail }}</small></span></span>{% endfor %}</div>{% endif -%}
+{%- endmacro %}

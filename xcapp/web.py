@@ -37,7 +37,7 @@ from .imports import GROUPS, ImportErrors, clean_email, clean_phone, import_vdot
 from .ingest import ingest, log, rematch_day
 from .models import (Activity, AiRun, AppSetting, Athlete, DeletionRequest, GarminConnection, Injury, MissedDay,
                      OAuthState, PainReport, PlannedWorkout, RaceResult, RestingHeartRate, Result, StaffUser, AthletePhoto,
-                     MeetEntry, MeetDivision, MeetResponse, DivisionAthlete, SyncLog, TrainingGroup, utcnow)
+                     MeetEntry, MeetDivision, MeetResponse, DivisionAthlete, SyncLog, TrainingGroup, VdotChange, utcnow)
 from .security import csrf_ok, csrf_token, hash_password, new_link_token, verify_password
 
 HERE = Path(__file__).parent
@@ -433,6 +433,8 @@ def create_app() -> FastAPI:
         return render(request, "athlete_detail.html", user, a=a, acts=acts, results=results, run_pain=run_pain, races=races,
                       ability=ability, group_names=group_names, missed=missed, vo2=A.latest_vo2(db, a.id),
                       rhr=A.resting_hr(db, a.id, A.team_today()), photo_v=photo_versions(db).get(a.id),
+                      vdot_changes=a.vdot_changes, vdot_chart=RP.vdot_history_chart(a.vdot_changes),
+                      wins=A.achievements(db, a, A.team_today()), gain=A.vdot_gains(db, A.team_today()).get(a.id),
                       others=db.scalars(select(Athlete).where(Athlete.id != a.id).order_by(Athlete.last_name, Athlete.first_name)).all(),
                       merge_pick=request.query_params.get("merge", ""),
                       injuries=sorted(a.injuries, key=lambda i: i.onset_date, reverse=True),
@@ -992,7 +994,8 @@ def create_app() -> FastAPI:
         return render(request, "athlete.html", None, history=history, paces=paces, a=a, acts=acts, tiles=tiles, seasons=seasons, need=need, ability=ability,
                       show_group=show_group, open_delete=open_delete, races=races, vo2=A.latest_vo2(db, a.id),
                       rhr=A.resting_hr(db, a.id, today), rhr_range=(A.RESTING_HR_MIN, A.RESTING_HR_MAX),
-                      rhr_cal=A.resting_hr_calendar(db, a.id, today), photo_v=photo_versions(db).get(a.id), meets=my_meets(db, a, today), my_paces=A.training_paces(mine.get("vdot")) if show_group else [],
+                      rhr_cal=A.resting_hr_calendar(db, a.id, today), photo_v=photo_versions(db).get(a.id), meets=my_meets(db, a, today),
+                      wins=A.achievements(db, a, today), my_paces=A.training_paces(mine.get("vdot")) if show_group else [],
                       areas=BODY_AREAS, token=token, today=today.isoformat())
 
     @app.post("/a/{token}/connect")
@@ -1673,7 +1676,10 @@ def create_app() -> FastAPI:
 
     @app.get("/vdot", response_class=HTMLResponse)
     def vdot_page(request: Request, edit: int = 0, user=Depends(any_staff, scope="function"), db: Session = Depends(get_db, scope="function")):
+        changes = db.execute(select(VdotChange, Athlete).join(Athlete, Athlete.id == VdotChange.athlete_id)
+                             .where(VdotChange.date > A.team_today() - dt.timedelta(days=30)).order_by(VdotChange.at.desc())).all()
         return render(request, "vdot.html", user, board=A.vdot_board(db, A.team_today()), edit=bool(edit) and user.role != "trainer",
+                      changes=changes, open_changes=request.query_params.get("changes") == "1",
                       zones=A.PACE_ZONES, vdot_limits=(A.VDOT_MIN, A.VDOT_MAX))
 
     @app.post("/vdot")
@@ -1688,7 +1694,7 @@ def create_app() -> FastAPI:
                 v = int(raw) if raw else None
                 if v is not None and not A.VDOT_MIN <= v <= A.VDOT_MAX:
                     raise ValueError
-                a.vdot_override = v
+                A.set_vdot(db, a, v, user.username, "VDOT page")
             except ValueError:
                 bad.append(a.name)
         if bad:
@@ -1700,7 +1706,7 @@ def create_app() -> FastAPI:
     @app.post("/vdot/import")
     async def vdot_import(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
         f = await form_checked(request)
-        r = import_vdots(db, str(f.get("text", ""))[:50000])
+        r = import_vdots(db, str(f.get("text", ""))[:50000], by=user.username)
         n = len(r["set"]) + len(r["loose"])
         flash(request, f"Set the VDOT for {n} athlete{'' if n == 1 else 's'}." if n else "No VDOTs were set.", "ok" if n else "error")
         if r["loose"]:
@@ -1712,6 +1718,27 @@ def create_app() -> FastAPI:
             flash(request, "No VDOT on the line, so left as they were: " + ", ".join(r["no_vdot"]))
         log(db, "admin", f"{user.username} set {n} VDOTs from a pasted list.")
         return back("/vdot")
+
+    @app.post("/athletes/{athlete_id}/vdot-history/{cid}/delete")
+    async def vdot_change_delete(request: Request, athlete_id: int, cid: int, user=Depends(coach_or_admin, scope="function"),
+                                 db: Session = Depends(get_db, scope="function")):
+        f = await form_checked(request)
+        a = get_athlete(db, athlete_id)
+        c = db.get(VdotChange, cid)
+        if c is None or c.athlete_id != a.id:
+            raise HTTPException(404, "Change not found.")
+        later = db.scalars(select(VdotChange).where(VdotChange.athlete_id == a.id, VdotChange.at > c.at).order_by(VdotChange.at)).first()
+        if later is None:  # the latest change: undo it
+            a.vdot_override = c.previous
+            msg = f"Removed. {a.name}'s VDOT is back to " + (f"{c.previous}." if c.previous is not None else "their race VDOT.")
+        else:              # an older one: keep the history joined up
+            later.previous = c.previous
+            msg = f"Removed that change from {a.name}'s history."
+        db.delete(c)
+        log(db, "admin", f"{user.username} removed a VDOT change for {a.name} ({c.previous} → {c.vdot} on {c.date}).")
+        flash(request, msg)
+        nxt = str(f.get("next", ""))
+        return back("/vdot?changes=1#changes" if nxt.startswith("/vdot") else f"/athletes/{a.id}#vdot-history")
 
     @app.post("/athletes/{athlete_id}/vdot")
     async def athlete_vdot(request: Request, athlete_id: int, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
@@ -1725,7 +1752,7 @@ def create_app() -> FastAPI:
         except ValueError:
             flash(request, f"VDOT should be a whole number from {A.VDOT_MIN} to {A.VDOT_MAX}.", "error")
             return back(f"/athletes/{a.id}")
-        a.vdot_override = v
+        A.set_vdot(db, a, v, user.username, "athlete page")
         flash(request, f"{a.name}'s VDOT is now " + (f"set to {v}." if v is not None else "worked out from their most recent race."))
         return back(f"/athletes/{a.id}")
 

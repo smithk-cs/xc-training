@@ -4,7 +4,7 @@
   <td><input type="number" name="vdot_{{ r.a.id }}" min="{{ vdot_limits[0] }}" max="{{ vdot_limits[1] }}" value="{{ r.a.vdot_override if r.a.vdot_override is not none else '' }}" placeholder="{{ r.race_vdot or '' }}" aria-label="VDOT for {{ r.a.name }}" style="width:5em"></td>
   {% include "_vdot_paces.html" %}
   {% else %}
-  <td class="v">{{ r.vdot or '' }}</td>{% include "_vdot_paces.html" %}
+  <td class="v">{{ r.vdot or '' }}{{ arrows(r.gain) }}</td>{% include "_vdot_paces.html" %}
   {% endif %}
   <td class="small">{{ r.source }}</td>
 </tr>

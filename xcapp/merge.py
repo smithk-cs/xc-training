@@ -10,7 +10,7 @@ from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session
 
 from .ingest import DUPLICATE_WINDOW_S
-from .models import (Activity, Athlete, AthletePhoto, DeletionRequest, DivisionAthlete, MeetResponse, GarminConnection, Goal, Injury, Insight, MissedDay,
+from .models import (Activity, Athlete, AthletePhoto, DeletionRequest, DivisionAthlete, MeetResponse, VdotChange, GarminConnection, Goal, Injury, Insight, MissedDay,
                      OAuthState, PainReport, RaceResult, RestingHeartRate, Result)
 
 
@@ -88,7 +88,7 @@ def merge(db: Session, keep: Athlete, other: Athlete) -> dict[str, int]:
             dropped += n or 0
     db.execute(delete(OAuthState).where(OAuthState.athlete_id == o))
     for model in (Activity, Result, RaceResult, Goal, Injury, PainReport, RestingHeartRate, MissedDay, GarminConnection,
-                  AthletePhoto, DeletionRequest, Insight, DivisionAthlete, MeetResponse):
+                  AthletePhoto, DeletionRequest, Insight, DivisionAthlete, MeetResponse, VdotChange):
         moved += db.execute(update(model).where(model.athlete_id == o).values(athlete_id=k)).rowcount or 0
 
     # Fill in what the kept athlete doesn't have yet.
