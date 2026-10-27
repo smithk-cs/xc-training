@@ -30,7 +30,7 @@ from . import photos as P
 from .config import settings
 from .db import SessionLocal, create_all
 from .fitfile import MAX_FITS_PER_UPLOAD, MAX_UPLOAD_BYTES, FitError, fit_files, parse_fit
-from .imports import GROUPS, ImportErrors, import_goals, import_races, import_results, import_roster, parse_date, set_goal
+from .imports import GROUPS, ImportErrors, clean_email, import_goals, import_races, import_results, import_roster, parse_date, set_goal
 from .ingest import ingest, log, rematch_day
 from .models import (Activity, AiRun, AppSetting, Athlete, DeletionRequest, GarminConnection, Injury, MissedDay,
                      OAuthState, PainReport, PlannedWorkout, RaceResult, RestingHeartRate, Result, StaffUser, AthletePhoto, SyncLog, TrainingGroup, utcnow)
@@ -355,11 +355,11 @@ def create_app() -> FastAPI:
         import io as _io
         buf = _io.StringIO()
         w = _csv.writer(buf, lineterminator="\n")
-        w.writerow(["athlete", "grade", "group", "garmin", "personal_link"])
+        w.writerow(["athlete", "grade", "email", "garmin", "personal_link"])
         for a in db.scalars(select(Athlete).where(Athlete.active.is_(True)).options(selectinload(Athlete.garmin))
                             .order_by(Athlete.last_name, Athlete.first_name)).all():
             status = a.garmin.status if a.garmin else "not connected"
-            w.writerow([a.name, a.grade, a.group, status, f"{s.base_url.rstrip('/')}/a/{a.link_token}"])
+            w.writerow([a.name, a.grade, a.email, status, f"{s.base_url.rstrip('/')}/a/{a.link_token}"])
         return Response(buf.getvalue(), media_type="text/csv; charset=utf-8",
                         headers={"Content-Disposition": 'attachment; filename="athlete-links.csv"'})
 
@@ -446,6 +446,7 @@ def create_app() -> FastAPI:
             a.grade, a.group = grade, f.get("group")
             a.hr_max = int(f["hr_max"]) if f.get("hr_max") else None
             a.hr_rest = int(f["hr_rest"]) if f.get("hr_rest") else None
+            a.email = clean_email(f.get("email", ""))
             flash(request, "Saved.")
         except ValueError as exc:
             flash(request, str(exc), "error")
@@ -887,7 +888,8 @@ def create_app() -> FastAPI:
                 raise ValueError("Pick a role.")
             if db.scalar(select(StaffUser).where(StaffUser.username == name)):
                 raise ValueError("That username is taken.")
-            db.add(StaffUser(username=name, role=f.get("role"), password_hash=hash_password(str(f.get("password", "")))))
+            db.add(StaffUser(username=name, role=f.get("role"), email=clean_email(f.get("email", "")),
+                             password_hash=hash_password(str(f.get("password", "")))))
             flash(request, f"Added {name}.")
         except ValueError as exc:
             flash(request, str(exc), "error")
@@ -904,6 +906,19 @@ def create_app() -> FastAPI:
             flash(request, "Password changed.")
         except ValueError as exc:
             flash(request, str(exc), "error")
+        return back("/staff" if user.role == "admin" else "/")
+
+    @app.post("/staff/{uid}/email")
+    async def staff_email(request: Request, uid: int, user=Depends(any_staff, scope="function"), db: Session = Depends(get_db, scope="function")):
+        f = await form_checked(request)
+        target = db.get(StaffUser, uid)
+        if target is None or (user.role != "admin" and target.id != user.id):
+            raise HTTPException(403, "You can only change your own email.")
+        try:
+            target.email = clean_email(f.get("email", ""))
+            flash(request, f"Saved {target.username}'s email.")
+        except ValueError as exc:
+            flash(request, str(exc) + ".", "error")
         return back("/staff" if user.role == "admin" else "/")
 
     @app.post("/staff/{uid}/delete")
@@ -1539,7 +1554,7 @@ def create_app() -> FastAPI:
         ab = A.abilities(db, A.team_today()).get(a.id, {})
         data = {
             "exported_at": utcnow().isoformat() + "Z", "team": s.team_name,
-            "athlete": {"name": a.name, "gender": a.gender, "grade": a.grade, "group": a.group, "hr_max": a.hr_max, "hr_rest": a.hr_rest,
+            "athlete": {"name": a.name, "email": a.email or None, "gender": a.gender, "grade": a.grade, "group": a.group, "hr_max": a.hr_max, "hr_rest": a.hr_rest,
                         "training_group": ab.get("group"), "vdot": ab.get("vdot"),
                         "ai_consent": a.ai_consent_at.isoformat() + "Z" if a.ai_consent_at else None},
             "garmin": None if a.garmin is None else {"status": a.garmin.status, "garmin_user_id": a.garmin.garmin_user_id,

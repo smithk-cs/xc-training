@@ -71,6 +71,7 @@
       <label>Group<select name="group">{% for g in GROUPS %}<option {% if g == a.group %}selected{% endif %}>{{ g }}</option>{% endfor %}</select></label>
       <label>Max HR<input type="number" name="hr_max" min="150" max="230" value="{{ a.hr_max or '' }}"></label>
       <label>Resting HR<input type="number" name="hr_rest" min="30" max="100" value="{{ a.hr_rest or '' }}"></label>
+      <label>Email<input type="email" name="email" maxlength="254" value="{{ a.email }}" placeholder="name@example.org" autocomplete="off"></label>
       <button type="submit">Save</button>
     </div>
   </form>
