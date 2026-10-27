@@ -10,6 +10,13 @@
   </ul>
 </div>
 {% endif %}
+{% if due %}
+<div class="card" style="border-color:var(--color-bad)">
+  <h2>Former athletes to delete</h2>
+  <p class="small muted">The privacy policy says to delete an athlete’s data within {{ settings.retention_days }} days after they leave. Open each one and use “Delete permanently” (admins).</p>
+  <ul>{% for a, d in due|sort(attribute='1') %}<li><a href="/athletes/{{ a.id }}">{{ a.name }}</a>, left {{ a.left_on.strftime('%b %-d') }}: delete by {{ d.strftime('%b %-d, %Y') }}</li>{% endfor %}</ul>
+</div>
+{% endif %}
 {% if deletions %}
 <div class="card" style="border-color:var(--color-bad)">
   <h2>Deletion requests</h2>

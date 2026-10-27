@@ -133,7 +133,7 @@ def import_roster(db: Session, text: str) -> int:
         for field, value in (("gender", gender), ("grade", grade), ("group", group), ("hr_max", hrmax), ("hr_rest", hrrest)):
             if value is not None:
                 setattr(a, field, value)
-        a.active = True
+        a.active, a.left_on = True, None
     db.flush()
     return len(todo)
 

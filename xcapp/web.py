@@ -139,7 +139,7 @@ def create_app() -> FastAPI:
             return True
         with SessionLocal() as db:
             return db.get(AppSetting, LOGO_TYPE_KEY) is not None
-    templates.env.globals.update(fmt_time=A.fmt_time, EVENTS=list(A.EVENTS), GROUPS=GROUPS, team_name=s.team_name,
+    templates.env.globals.update(fmt_time=A.fmt_time, timedelta=dt.timedelta, EVENTS=list(A.EVENTS), GROUPS=GROUPS, team_name=s.team_name,
                                  has_logo=has_logo, FEELS=FEELS, EFFORT_WORDS=EFFORT_WORDS, RUN_TYPES=A.RUN_TYPES,
                                  MISSED_REASONS=A.MISSED_REASONS, SIDES=A.SIDES, STARTED=A.STARTED, SEEN_BY=A.SEEN_BY,
                                  MORE_DAYS=A.MORE_DAYS, missed_label=A.missed_label,
@@ -214,6 +214,10 @@ def create_app() -> FastAPI:
             raise HTTPException(404, "No photo.")
         return Response(a.photo.data, media_type=a.photo.media_type,
                         headers={"Cache-Control": "private, max-age=86400", "Content-Security-Policy": LOGO_CSP})
+
+    def delete_by(a: Athlete) -> dt.date | None:
+        """When a former athlete's data is due for deletion under the privacy policy."""
+        return a.left_on + dt.timedelta(days=s.retention_days) if a.left_on else None
 
     def athletes_sorted(db: Session):
         return db.scalars(select(Athlete).where(Athlete.active.is_(True)).order_by(Athlete.last_name, Athlete.first_name)).all()
@@ -310,7 +314,10 @@ def create_app() -> FastAPI:
         last_ai = db.scalar(select(AiRun).where(AiRun.kind == "briefing").order_by(AiRun.id.desc()))
         webhook = f"{s.base_url.rstrip('/')}/garmin/webhook/{s.garmin_webhook_secret}" if user.role == "admin" and s.garmin_webhook_secret else ""
         deletions = db.scalars(select(DeletionRequest).where(DeletionRequest.status == "open").order_by(DeletionRequest.created_at)).all()
-        return render(request, "home.html", user, snap=snap, stats=stats, last_ai=last_ai, webhook=webhook, deletions=deletions,
+        soon = A.team_today() + dt.timedelta(days=14)
+        due = [(a, delete_by(a)) for a in db.scalars(select(Athlete).where(Athlete.active.is_(False), Athlete.left_on.is_not(None))).all()
+               if delete_by(a) <= soon]
+        return render(request, "home.html", user, snap=snap, stats=stats, last_ai=last_ai, webhook=webhook, deletions=deletions, due=due,
                       rhr_flags=A.resting_hr_flags(db, A.team_today()), rhr_flag=A.RESTING_HR_FLAG)
 
     # ---------- dashboard ----------
@@ -360,8 +367,9 @@ def create_app() -> FastAPI:
         rows = db.scalars(select(Athlete).where(Athlete.active.is_(True)).options(selectinload(Athlete.garmin))
                           .order_by(Athlete.last_name, Athlete.first_name)).all()
         ranks = {g.name: g.position for g in db.scalars(select(TrainingGroup)).all()}
+        former = db.scalars(select(Athlete).where(Athlete.active.is_(False)).order_by(Athlete.left_on.desc(), Athlete.last_name)).all()
         return render(request, "athletes.html", user, athletes=rows, ab=A.abilities(db, A.team_today()), ranks=ranks,
-                      photos=photo_versions(db))
+                      photos=photo_versions(db), former=former, delete_by=lambda a: delete_by(a))
 
     @app.post("/athletes")
     async def add_athlete(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
@@ -473,6 +481,28 @@ def create_app() -> FastAPI:
         f = await form_checked(request)
         a = get_athlete(db, athlete_id)
         flash(request, *await _upload(db, a, f.getlist("file")))
+        return back(f"/athletes/{a.id}")
+
+    @app.post("/athletes/{athlete_id}/status")
+    async def athlete_status(request: Request, athlete_id: int, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
+        f = await form_checked(request)
+        a = get_athlete(db, athlete_id)
+        action = f.get("action", "")
+        if action == "test":
+            a.is_test = bool(f.get("is_test"))
+            flash(request, f"{a.name} is " + ("now a test athlete: left out of team numbers, the watch list, the VDOT page and the AI briefing."
+                                               if a.is_test else "counted with the team again."))
+        elif action == "leave" and a.active:
+            if a.garmin and a.garmin.status != "revoked":
+                with G.make_client() as http:
+                    G.disconnect(db, a.garmin, http)
+            a.active, a.left_on = False, A.team_today()
+            log(db, "privacy", f"{user.username} marked {a.name} as having left the team.")
+            flash(request, f"{a.name} is off the roster. Their personal link no longer works and Garmin is disconnected. "
+                           f"Their data is kept until {delete_by(a):%b %-d, %Y}, when the privacy policy says to delete it.")
+        elif action == "return" and not a.active:
+            a.active, a.left_on = True, None
+            flash(request, f"{a.name} is back on the roster. Their personal link works again; they can reconnect Garmin from it.")
         return back(f"/athletes/{a.id}")
 
     @app.post("/athletes/{athlete_id}/delete")

@@ -1,6 +1,8 @@
 {% extends "base.html" %}
 {% block head %}<script src="/static/d3.v7.9.0.min.js"></script><script src="/static/athlete-charts.js" defer></script>{% endblock %}
 {% block content %}
+{% if not a.active %}<p class="notice"><span><b>{{ a.name }} has left the team</b>{% if a.left_on %} ({{ a.left_on.strftime('%b %-d, %Y') }}). Their data is kept until {{ (a.left_on + timedelta(days=settings.retention_days)).strftime('%b %-d, %Y') }}, when the privacy policy says to delete it{% endif %}.</span></p>{% endif %}
+{% if a.is_test %}<p class="notice"><span><b>Test athlete.</b> Left out of team numbers, the watch list, the VDOT page and the AI briefing.</span></p>{% endif %}
 <h1 class="with-photo">{% if photo_v %}<img class="avatar big" src="/athletes/{{ a.id }}/photo?v={{ photo_v }}" alt="">{% endif %}{{ a.name }}</h1>
 <p class="muted">{{ a.gender }}, grade {{ a.grade }}, {{ a.group }}.{% if ability.group %} Ability group <b>{{ ability.group }}</b>{% if ability.vdot %} (VDOT {{ ability.vdot }}, {% if ability.vdot_set %}set by a coach{% else %}from {{ ability.source }}{% endif %}){% endif %}{% if ability.override %}, pinned by a coach{% endif %}.{% if ability.target_1600 %} Targets: 800 {{ ability.target_800 }}, 1600 {{ ability.target_1600 }}.{% endif %}{% endif %}
 {% if rhr %} Resting heart rate {{ rhr.latest.bpm }} ({{ rhr.latest.date.strftime('%b %-d') }}, {{ 'Garmin' if rhr.latest.source == 'garmin' else 'athlete entered' }}){% if rhr.week is not none %}; this week {{ '%.0f' % rhr.week }}{% endif %}{% if rhr.usual is not none %}, usual {{ '%.0f' % rhr.usual }}{% endif %}{% if rhr.flag %} <span class="pill bad">Up {{ '%.0f' % rhr.up }} bpm</span>{% endif %}.{% endif %}
@@ -101,6 +103,26 @@
   </form>
   <p class="small">Personal link: <code class="copy">{{ settings.base_url.rstrip('/') }}/a/{{ a.link_token }}</code></p>
   <form method="post" action="/athletes/{{ a.id }}/new-link" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="secondary" type="submit">Make a new link (the old one stops working)</button></form>
+  <h3 style="margin-top:1.5em">Roster status</h3>
+  <form method="post" action="/athletes/{{ a.id }}/status" class="form-row">
+    <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="test">
+    <label class="check"><input type="checkbox" name="is_test" value="1"{% if a.is_test %} checked{% endif %}> Test athlete (a staff test account: left out of team numbers, the watch list, the VDOT page and the AI briefing)</label>
+    <button type="submit" class="secondary">Save</button>
+  </form>
+  {% if a.active %}
+  <details><summary class="small" style="cursor:pointer; font-weight:600; color:var(--brand-red)">Left the team</summary>
+    <form method="post" action="/athletes/{{ a.id }}/status" class="form-row" style="margin-top:8px">
+      <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="leave">
+      <span class="small">Takes {{ a.first_name }} off the roster but keeps their runs, results and races. Their personal link stops working and Garmin is disconnected. The privacy policy says to delete their data within {{ settings.retention_days }} days; the home page reminds you.</span>
+      <button type="submit" class="danger">Remove from roster</button>
+    </form>
+  </details>
+  {% else %}
+  <form method="post" action="/athletes/{{ a.id }}/status" class="form-row">
+    <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="return">
+    <button type="submit">Put back on the roster</button>
+  </form>
+  {% endif %}
   {% if user.role == 'admin' %}
   <form method="post" action="/athletes/{{ a.id }}/delete" style="margin-top:1em">
     <input type="hidden" name="csrf" value="{{ csrf }}">

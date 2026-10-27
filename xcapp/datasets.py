@@ -82,7 +82,7 @@ def snapshot(db: Session, as_of: dt.date | None = None) -> dict[str, list[dict]]
     data["injury_peaks"] = A.injury_peaks(data["injuries"], data["weekly_load"])
     data["recent_runs"] = recent_runs(db, as_of)
     from .models import Athlete as _Ath
-    data["ai_consented"] = {a.code for a in db.scalars(select(_Ath).where(_Ath.active.is_(True), _Ath.ai_consent_at.is_not(None))).all()}
+    data["ai_consented"] = {a.code for a in db.scalars(select(_Ath).where(A.on_team(), _Ath.ai_consent_at.is_not(None))).all()}
     data["missed_days"] = missed_days(db, as_of)
     data["as_of"] = as_of
     return data
@@ -92,7 +92,7 @@ def missed_days(db: Session, as_of: dt.date, days: int = 14) -> list[dict]:
     """Days athletes reported not running. The athlete's written description is left out on purpose."""
     from .models import Athlete, MissedDay
     q = (select(MissedDay, Athlete).join(Athlete, Athlete.id == MissedDay.athlete_id)
-         .where(Athlete.active.is_(True), MissedDay.date > as_of - dt.timedelta(days=days), MissedDay.date <= as_of)
+         .where(A.on_team(), MissedDay.date > as_of - dt.timedelta(days=days), MissedDay.date <= as_of)
          .order_by(MissedDay.date))
     return [{"athlete_id": a.code, "date": m.date.isoformat(), "reason": m.reason, "area": m.body_area or None,
              "side": m.side or None, "pain": m.pain, "started": m.started or None, "seen_by": m.seen_by or None,
@@ -102,7 +102,7 @@ def missed_days(db: Session, as_of: dt.date, days: int = 14) -> list[dict]:
 def recent_runs(db: Session, as_of: dt.date, days: int = 7) -> list[dict]:
     from .models import Activity, Athlete
     q = (select(Activity, Athlete).join(Athlete, Athlete.id == Activity.athlete_id)
-         .where(Athlete.active.is_(True), Activity.local_date > as_of - dt.timedelta(days=days), Activity.local_date <= as_of)
+         .where(A.on_team(), Activity.local_date > as_of - dt.timedelta(days=days), Activity.local_date <= as_of)
          .order_by(Activity.local_date))
     out = []
     for act, a in db.execute(q).all():

@@ -38,6 +38,8 @@ class Athlete(Base):
     hr_max: Mapped[int | None] = mapped_column(Integer, nullable=True)
     hr_rest: Mapped[int | None] = mapped_column(Integer, nullable=True)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_test: Mapped[bool] = mapped_column(Boolean, default=False)  # a staff test account: left out of team numbers and the AI
+    left_on: Mapped[dt.date | None] = mapped_column(Date, nullable=True)  # set when the athlete leaves the team (active is False)
     vdot_override: Mapped[int | None] = mapped_column(Integer, nullable=True)  # set by a coach; replaces the race VDOT
     vdot_mark: Mapped[str] = mapped_column(String(10), default="")     # coach's mark on the VDOT page, such as *
     weekly_plan: Mapped[str] = mapped_column(String(20), default="")   # coach's weekly mileage plan, such as 7x8 or inj

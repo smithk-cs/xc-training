@@ -13,7 +13,7 @@ import re
 import statistics
 from collections import defaultdict
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session, selectinload
 
 from .config import settings
@@ -211,6 +211,11 @@ def unlogged_days(db: Session, athlete: Athlete, as_of: dt.date, days: int = 14)
     return out
 
 
+def on_team():
+    """Athletes counted in team numbers, the watch list, the VDOT page and the AI: on the team and not a test account."""
+    return and_(Athlete.active.is_(True), Athlete.is_test.is_(False))
+
+
 def vdot(distance_m: float, time_s: float) -> float:
     """Jack Daniels and Jimmy Gilbert's VDOT: VO2max estimated from one race or time trial."""
     t = time_s / 60.0
@@ -375,7 +380,7 @@ def vdot_board(db: Session, as_of: dt.date) -> list[dict]:
     ranges, and its athletes by VDOT; then athletes with no VDOT yet."""
     ab = abilities(db, as_of)
     groups = db.scalars(select(TrainingGroup).order_by(TrainingGroup.position)).all()
-    people = db.scalars(select(Athlete).where(Athlete.active.is_(True)).order_by(Athlete.last_name, Athlete.first_name)).all()
+    people = db.scalars(select(Athlete).where(on_team()).order_by(Athlete.last_name, Athlete.first_name)).all()
     out = []
     for gender in ("Boys", "Girls"):
         mine = [a for a in people if a.gender == gender]
@@ -454,7 +459,7 @@ def resting_hr_flags(db: Session, as_of: dt.date) -> list[dict]:
     """Active athletes whose resting heart rate this week is well above their usual. Kept apart from the watch list,
     which goes into the AI briefing: resting heart rate is never sent to the AI."""
     rows = db.execute(select(RestingHeartRate, Athlete).join(Athlete, Athlete.id == RestingHeartRate.athlete_id)
-                      .where(Athlete.active.is_(True), RestingHeartRate.date > as_of - dt.timedelta(days=RESTING_HR_WINDOW))).all()
+                      .where(on_team(), RestingHeartRate.date > as_of - dt.timedelta(days=RESTING_HR_WINDOW))).all()
     by = defaultdict(list)
     people = {}
     for r, a in rows:
@@ -486,7 +491,7 @@ def run_type_of(act: Activity) -> str:
 # ---------- row builders (database -> dashboard columns) ----------
 
 def roster_rows(db: Session, as_of: dt.date | None = None) -> list[dict]:
-    rows = db.scalars(select(Athlete).where(Athlete.active.is_(True)).order_by(Athlete.id)).all()
+    rows = db.scalars(select(Athlete).where(on_team()).order_by(Athlete.id)).all()
     ab = abilities(db, as_of or team_today())
     return [{
         "athlete_id": a.code, "athlete": a.name, "gender": a.gender, "grade": a.grade, "group": a.group,
@@ -496,7 +501,7 @@ def roster_rows(db: Session, as_of: dt.date | None = None) -> list[dict]:
 
 
 def benchmark_rows(db: Session) -> list[dict]:
-    q = select(Result, Athlete).join(Athlete, Athlete.id == Result.athlete_id).where(Athlete.active.is_(True)).order_by(Result.date, Result.id)
+    q = select(Result, Athlete).join(Athlete, Athlete.id == Result.athlete_id).where(on_team()).order_by(Result.date, Result.id)
     return [{
         "athlete_id": a.code, "athlete": a.name, "gender": a.gender, "group": a.group, "season": r.season,
         "event": r.event, "time_sec": round(r.time_s, 1), "date": r.date.isoformat(), "course": r.course, "kind": r.kind,
@@ -510,7 +515,7 @@ def current_xc_season(benchmarks: list[dict], goals: list[dict] | None = None) -
 
 
 def goal_rows(db: Session, season: str | None = None) -> list[dict]:
-    q = select(Goal, Athlete).join(Athlete, Athlete.id == Goal.athlete_id).where(Athlete.active.is_(True))
+    q = select(Goal, Athlete).join(Athlete, Athlete.id == Goal.athlete_id).where(on_team())
     all_rows = [{"athlete_id": a.code, "event": g.event, "goal_sec": round(g.goal_s, 1), "season": g.season} for g, a in db.execute(q).all()]
     if season is None:
         season = current_xc_season(benchmark_rows(db), all_rows)
@@ -524,7 +529,7 @@ def _injury_is_on(inj_onset: dt.date, inj_return: dt.date | None, start: dt.date
 def weekly_load_rows(db: Session, as_of: dt.date, n_weeks: int = 21) -> list[dict]:
     starts = week_starts(as_of, n_weeks + 4)
     first = starts[0]
-    athletes = db.scalars(select(Athlete).where(Athlete.active.is_(True)).order_by(Athlete.id)).all()
+    athletes = db.scalars(select(Athlete).where(on_team()).order_by(Athlete.id)).all()
     acts = db.execute(
         select(Activity.athlete_id, Activity.local_date, Activity.distance_m, Activity.sport, Activity.rpe, Activity.duration_s)
         .where(Activity.local_date >= first, Activity.local_date <= as_of)
@@ -638,7 +643,7 @@ def _is_run(sport: str | None) -> bool:
 
 
 def injury_rows(db: Session, as_of: dt.date) -> list[dict]:
-    q = select(Injury, Athlete).join(Athlete, Athlete.id == Injury.athlete_id).where(Athlete.active.is_(True)).order_by(Injury.onset_date)
+    q = select(Injury, Athlete).join(Athlete, Athlete.id == Injury.athlete_id).where(on_team()).order_by(Injury.onset_date)
     out = []
     for i, a in db.execute(q).all():
         active = i.return_date is None or i.return_date > as_of
@@ -655,11 +660,11 @@ def pain_rows(db: Session, as_of: dt.date, days: int = 28) -> list[dict]:
     """Athlete pain reports, plus days missed through injury or sickness (those carry a reason)."""
     since = as_of - dt.timedelta(days=days)
     q = (select(PainReport, Athlete).join(Athlete, Athlete.id == PainReport.athlete_id)
-         .where(Athlete.active.is_(True), PainReport.date >= since, PainReport.date <= as_of))
+         .where(on_team(), PainReport.date >= since, PainReport.date <= as_of))
     rows = [{"report_id": f"P{p.id:03d}", "athlete_id": a.code, "athlete": a.name, "date": p.date.isoformat(),
              "body_area": p.body_area, "severity": p.severity, "reason": ""} for p, a in db.execute(q).all()]
     q = (select(MissedDay, Athlete).join(Athlete, Athlete.id == MissedDay.athlete_id)
-         .where(Athlete.active.is_(True), MissedDay.date >= since, MissedDay.date <= as_of, MissedDay.reason.in_(("Injury", "Sick"))))
+         .where(on_team(), MissedDay.date >= since, MissedDay.date <= as_of, MissedDay.reason.in_(("Injury", "Sick"))))
     for m, a in db.execute(q).all():
         where = ", ".join(x for x in (m.body_area, (m.side or "").lower()) if x)
         rows.append({"report_id": f"M{m.id:03d}", "athlete_id": a.code, "athlete": a.name, "date": m.date.isoformat(),
@@ -751,7 +756,7 @@ def segment_rows(db: Session) -> list[dict]:
     cache: dict[tuple[int, int], float | None] = {}
     for act in acts:
         pw, a = act.planned, act.athlete
-        if pw is None or not a.active:
+        if pw is None or not a.active or a.is_test:
             continue
         key = (a.id, pw.id)
         if key not in cache:

@@ -7,7 +7,7 @@
   <tbody>
   {% for a in athletes %}
   <tr>
-    <td data-sort="{{ a.last_name }} {{ a.first_name }}" class="nowrap"><a href="/athletes/{{ a.id }}">{% if photos.get(a.id) %}<img class="avatar" src="/athletes/{{ a.id }}/photo?v={{ photos[a.id] }}" alt="" loading="lazy">{% else %}<span class="avatar blank" aria-hidden="true">{{ a.first_name[:1] }}{{ a.last_name[:1] }}</span>{% endif %}{{ a.name }}</a></td><td>{{ a.grade }}</td><td data-sort="{{ ['Varsity', 'JV', 'Development'].index(a.group) if a.group in ['Varsity', 'JV', 'Development'] else 9 }}">{{ a.group }}</td>
+    <td data-sort="{{ a.last_name }} {{ a.first_name }}" class="nowrap"><a href="/athletes/{{ a.id }}">{% if photos.get(a.id) %}<img class="avatar" src="/athletes/{{ a.id }}/photo?v={{ photos[a.id] }}" alt="" loading="lazy">{% else %}<span class="avatar blank" aria-hidden="true">{{ a.first_name[:1] }}{{ a.last_name[:1] }}</span>{% endif %}{{ a.name }}</a>{% if a.is_test %} <span class="pill">Test</span>{% endif %}</td><td>{{ a.grade }}</td><td data-sort="{{ ['Varsity', 'JV', 'Development'].index(a.group) if a.group in ['Varsity', 'JV', 'Development'] else 9 }}">{{ a.group }}</td>
     {% set ai = ab.get(a.id, {}) %}<td data-sort="{{ ranks.get(ai.group, '') }}">{% if ai.group %}<span class="pill" style="background:{{ ai.color or '#FFFFF0' }}; color:{{ ink(ai.color or '#FFFFF0') }}; border-color:rgba(0,0,0,.18)">{{ ai.group }}</span>{% endif %}{% if ai.override %} <span class="small muted">(pinned)</span>{% endif %}</td><td class="num">{{ ai.vdot or '' }}</td><td>{% if a.ai_consent_at %}<span class="pill good">Yes</span>{% else %}<span class="pill">No</span>{% endif %}</td>
     <td>{% if a.garmin and a.garmin.status == 'connected' %}<span class="pill good">Connected</span>{% elif a.garmin and a.garmin.status == 'error' %}<span class="pill bad">Needs reconnect</span>{% else %}<span class="pill">Not connected</span>{% endif %}</td>
     <td class="small" data-sort="{{ a.garmin.last_sync_at.isoformat() if a.garmin and a.garmin.last_sync_at else '' }}">{{ a.garmin.last_sync_at.strftime('%b %-d %-I:%M %p') if a.garmin and a.garmin.last_sync_at else '' }}</td>
@@ -16,6 +16,14 @@
   {% else %}<tr><td colspan="9" class="muted">No athletes yet. Add them below or import a roster file.</td></tr>{% endfor %}
   </tbody>
 </table>
+{% if former %}
+<details style="margin:12px 0"><summary class="small" style="cursor:pointer; font-weight:600; color:var(--brand-red)">Former athletes ({{ former|length }})</summary>
+  <table class="list" style="margin-top:8px"><thead><tr><th>Athlete</th><th>Grade</th><th>Left</th><th>Data kept until</th></tr></thead><tbody>
+  {% for a in former %}<tr><td><a href="/athletes/{{ a.id }}">{{ a.name }}</a></td><td>{{ a.grade }}</td><td>{{ a.left_on.strftime('%b %-d, %Y') if a.left_on else '' }}</td><td>{{ delete_by(a).strftime('%b %-d, %Y') if a.left_on else '' }}</td></tr>{% endfor %}
+  </tbody></table>
+  <p class="small muted">Their runs, results and races are kept, but they’re left out of team numbers and the AI, and their personal links don’t work. Open one to put them back on the roster or delete their data.</p>
+</details>
+{% endif %}
 {% if user.role != 'trainer' %}<p><a class="button" href="/athletes/links.csv">Download every athlete’s link (CSV for a mail merge)</a></p>{% endif %}
 {% if user.role != 'trainer' %}
 <details style="margin:12px 0"><summary class="small" style="cursor:pointer; font-weight:600; color:var(--brand-red)">Add athlete photos</summary>
