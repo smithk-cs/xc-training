@@ -6,6 +6,7 @@ from fit_tool.profile.messages.activity_message import ActivityMessage
 from fit_tool.profile.messages.event_message import EventMessage
 from fit_tool.profile.messages.file_id_message import FileIdMessage
 from fit_tool.profile.messages.lap_message import LapMessage
+from fit_tool.profile.messages.max_met_data_message import MaxMetDataMessage
 from fit_tool.profile.messages.record_message import RecordMessage
 from fit_tool.profile.messages.session_message import SessionMessage
 from fit_tool.profile.profile_type import (Event, EventType, FileType, GarminProduct, Intensity, LapTrigger,
@@ -15,7 +16,7 @@ INT = {"warmup": Intensity.WARMUP, "active": Intensity.ACTIVE, "interval": Inten
        "rest": Intensity.REST, "cooldown": Intensity.COOLDOWN}
 
 
-def build_fit(start: dt.datetime, laps: list[dict], serial: int = 0x1234, sport=Sport.RUNNING) -> bytes:
+def build_fit(start: dt.datetime, laps: list[dict], serial: int = 0x1234, sport=Sport.RUNNING, vo2_max=None) -> bytes:
     """laps: dicts with dist (m), dur (s), hr (callable seconds-into-lap -> bpm), intensity, trigger."""
     ms0 = int(start.timestamp()) * 1000
     b = FitFileBuilder(auto_define=True, min_string_size=50)
@@ -62,6 +63,9 @@ def build_fit(start: dt.datetime, laps: list[dict], serial: int = 0x1234, sport=
     s.start_time = ms0; s.timestamp = ms0 + int(t * 1000); s.sport = sport
     s.total_distance = dist; s.total_timer_time = t; s.total_elapsed_time = t; s.num_laps = len(laps)
     b.add(s)
+    if vo2_max is not None:
+        m = MaxMetDataMessage(); m.update_time = ms0 + int(t * 1000); m.vo2_max = vo2_max; m.sport = sport
+        b.add(m)
     a = ActivityMessage(); a.timestamp = ms0 + int(t * 1000); a.num_sessions = 1; a.total_timer_time = t
     b.add(a)
     return b.build().to_bytes()
@@ -71,7 +75,7 @@ def flat(v):
     return lambda k: v
 
 
-def rep_workout(start, reps, rest_s=90, structured=True, wu=(2000, 600), cd=(1600, 500), rest_m=200):
+def rep_workout(start, reps, rest_s=90, structured=True, wu=(2000, 600), cd=(1600, 500), rest_m=200, vo2_max=None):
     """reps: list of (dist, dur, peak_hr, drop_in_first_60s_of_rest)."""
     trig = LapTrigger.SESSION_END if structured else LapTrigger.MANUAL
     laps = [{"dist": wu[0], "dur": wu[1], "hr": flat(140), "intensity": "warmup" if structured else "active", "trigger": trig}]
@@ -83,4 +87,4 @@ def rep_workout(start, reps, rest_s=90, structured=True, wu=(2000, 600), cd=(160
                          "hr": (lambda k, p=peak, dr=drop: p - dr * min(k, 60) / 60.0),
                          "intensity": "rest" if structured else "active", "trigger": trig})
     laps.append({"dist": cd[0], "dur": cd[1], "hr": flat(138), "intensity": "cooldown" if structured else "active", "trigger": trig})
-    return build_fit(start, laps)
+    return build_fit(start, laps, vo2_max=vo2_max)

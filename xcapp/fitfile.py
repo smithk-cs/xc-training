@@ -48,6 +48,7 @@ class ParsedActivity:
     avg_hr: float | None = None
     max_hr: float | None = None
     device: str = ""
+    vo2_max: float | None = None  # the watch's VO2 max estimate (mL/kg/min), when the file has one
     laps: list[ParsedLap] = field(default_factory=list)
     # (seconds since start, heart rate or None)
     hr_samples: list[tuple[float, int]] = field(default_factory=list)
@@ -160,6 +161,13 @@ def parse_fit(data: bytes) -> ParsedActivity:
     product_name = next((d.get("product_name") for d in dev_info if d.get("product_name") and d.get("device_index") in (0, "creator", None)), None)
     device = pretty_device(file_id.get("garmin_product"), product_name, file_id.get("manufacturer"))
 
+    # Garmin watches write their VO2 max estimate after a run (max_met_data); prefer the running one.
+    mets = [m for m in messages.get("max_met_data_mesgs") or [] if m.get("vo2_max")]
+    mets.sort(key=lambda m: str(m.get("sport", "")) != "running")
+    vo2 = float(mets[0]["vo2_max"]) if mets else None
+    if vo2 is not None and not 10 <= vo2 <= 100:
+        vo2 = None
+
     created = _utc(file_id.get("time_created")) or start
     serial = file_id.get("serial_number") or 0
     external_id = f"fit:{serial}:{int(created.timestamp())}"
@@ -167,7 +175,7 @@ def parse_fit(data: bytes) -> ParsedActivity:
     return ParsedActivity(
         external_id=external_id, start=start, duration_s=duration, distance_m=distance, sport=sport,
         avg_hr=float(avg_hr) if avg_hr else None, max_hr=float(max_hr) if max_hr else None,
-        device=device, laps=laps, hr_samples=hr_samples,
+        device=device, vo2_max=vo2, laps=laps, hr_samples=hr_samples,
     )
 
 

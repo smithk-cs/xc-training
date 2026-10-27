@@ -71,6 +71,8 @@ def ingest(db: Session, athlete: Athlete, parsed: ParsedActivity, source: str) -
     act.max_hr = parsed.max_hr
     act.sport = parsed.sport
     act.device = parsed.device
+    if parsed.vo2_max is not None:  # an upgrade from a source without it keeps the earlier value
+        act.vo2_max = parsed.vo2_max
 
     analysis = analyze(parsed.laps, parsed.hr_samples, parsed.start) if parsed.laps else []
     has_reps = any(a.is_rep for a in analysis)

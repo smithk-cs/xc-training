@@ -14,6 +14,7 @@
         {% else %}
         <span class="small">Your running group and VDOT come from your best 1 mile, 1.5 mile, 2 mile or 5K time. They appear here once your coach records one.</span>
         {% endif %}
+        {% if hero_vo2 %}<div class="small" style="margin-top:8px"><b>Watch VO2 max: {{ '%.1f' % hero_vo2.vo2_max }}</b> ({{ hero_vo2.local_date.strftime('%b %-d') }}). Your Garmin’s own estimate. It doesn’t change your group.</div>{% endif %}
       </div>
     </details>{% endif %}
   </div>

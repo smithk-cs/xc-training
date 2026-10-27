@@ -403,7 +403,7 @@ def create_app() -> FastAPI:
         group_names = [g.name for g in db.scalars(select(TrainingGroup).order_by(TrainingGroup.position)).all()]
         races = db.scalars(select(RaceResult).where(RaceResult.athlete_id == a.id).order_by(RaceResult.date.desc()).limit(30)).all()
         return render(request, "athlete_detail.html", user, a=a, acts=acts, results=results, run_pain=run_pain, races=races,
-                      ability=ability, group_names=group_names, missed=missed,
+                      ability=ability, group_names=group_names, missed=missed, vo2=A.latest_vo2(db, a.id),
                       injuries=sorted(a.injuries, key=lambda i: i.onset_date, reverse=True),
                       pains=sorted(a.pain_reports, key=lambda p: p.date, reverse=True)[:10],
                       goals=sorted(a.goals, key=lambda g: (g.season, g.event)), show_notes=user.role in ("admin", "trainer"))
@@ -870,7 +870,7 @@ def create_app() -> FastAPI:
                            .order_by(RaceResult.date.desc(), RaceResult.id.desc())).all()
         history = A.race_history(races)
         return render(request, "athlete.html", None, history=history, paces=paces, a=a, acts=acts, tiles=tiles, seasons=seasons, need=need, ability=ability,
-                      show_group=show_group, open_delete=open_delete, races=races,
+                      show_group=show_group, open_delete=open_delete, races=races, vo2=A.latest_vo2(db, a.id),
                       areas=BODY_AREAS, token=token, today=today.isoformat())
 
     @app.post("/a/{token}/connect")
@@ -1352,6 +1352,7 @@ def create_app() -> FastAPI:
                                                      "consent_note": a.garmin.consent_note},
             "runs": [{"date": x.local_date.isoformat(), "start_utc": x.start_utc.isoformat() + "Z", "source": x.source, "sport": x.sport,
                       "distance_m": x.distance_m, "duration_s": x.duration_s, "avg_hr": x.avg_hr, "max_hr": x.max_hr, "device": x.device,
+                      "watch_vo2_max": x.vo2_max,
                       "run_type": A.run_type_of(x), "team_workout": x.planned.title if x.planned else None,
                       "effort": x.rpe, "legs": x.feel or None, "note": x.athlete_note or None,
                       "laps": [{"lap": l.idx + 1, "distance_m": l.distance_m, "time_s": l.timer_s, "avg_hr": l.avg_hr, "max_hr": l.max_hr,

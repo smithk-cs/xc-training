@@ -316,6 +316,13 @@ def abilities(db: Session, as_of: dt.date) -> dict[int, dict]:
     return out
 
 
+def latest_vo2(db: Session, athlete_id: int) -> Activity | None:
+    """The most recent run that carried the watch's VO2 max estimate. Shown for interest only: VDOT and running
+    groups come from race results."""
+    return db.scalar(select(Activity).where(Activity.athlete_id == athlete_id, Activity.vo2_max.is_not(None))
+                     .order_by(Activity.start_utc.desc()).limit(1))
+
+
 def run_type_of(act: Activity) -> str:
     """The run type the athlete or coach chose, else a suggestion from the data."""
     if act.run_type:

@@ -135,6 +135,7 @@ class Activity(Base):
     max_hr: Mapped[float | None] = mapped_column(Float, nullable=True)
     sport: Mapped[str] = mapped_column(String(40), default="running")
     device: Mapped[str] = mapped_column(String(120), default="")
+    vo2_max: Mapped[float | None] = mapped_column(Float, nullable=True)  # the watch's estimate after this run; display only
     planned_workout_id: Mapped[int | None] = mapped_column(ForeignKey("planned_workouts.id", ondelete="SET NULL"), nullable=True)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
     # Added by the athlete after the run (never sent to the AI as free text)

@@ -12,6 +12,7 @@
     <div><span class="k">Time</span><span class="big">{{ fmt_time(act.duration_s)[:-2] }}</span></div>
     <div><span class="k">Average pace</span><span class="big">{{ fmt_time(act.duration_s / miles)[:-2] if miles > 0.2 else '—' }}</span></div>
     <div><span class="k">Average heart rate</span><span class="big">{{ act.avg_hr|round|int if act.avg_hr else '—' }}</span></div>
+{% if act.vo2_max %}<div><span class="k">Watch VO2 max</span><span class="big">{{ '%.1f' % act.vo2_max }}</span></div>{% endif %}
   </div>
   {% set reps = act.laps|selectattr('is_rep')|list %}
   {% if reps %}
