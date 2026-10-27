@@ -29,7 +29,7 @@
   <p class="small muted">Their runs, results and races are kept, but they’re left out of team numbers and the AI, and their personal links don’t work. Put one back if they return: their runs and results are still there and their personal link works again.</p>
 </details>
 {% endif %}
-{% if user.role != 'trainer' %}<p><a class="button" href="/athletes/links.csv">Download every athlete’s link (CSV for a mail merge)</a></p>{% endif %}
+{% if user.role != 'trainer' %}<p><a href="/reminders">Reminder emails</a> · <a class="button" href="/athletes/links.csv">Download every athlete’s link (CSV for a mail merge)</a></p>{% endif %}
 {% if user.role != 'trainer' %}
 <details style="margin:12px 0"><summary class="small" style="cursor:pointer; font-weight:600; color:var(--brand-red)">Add athlete photos</summary>
   <form method="post" action="/athletes/photos" enctype="multipart/form-data" class="form-row" style="margin-top:8px">

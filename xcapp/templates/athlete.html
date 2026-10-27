@@ -277,6 +277,15 @@
 
   <section class="panel" id="privacy" aria-labelledby="pv-h">
     <h2 id="pv-h">Your data and privacy</h2>
+    <h3 id="reminders" style="margin:0; font-size:17px">Reminder emails</h3>
+    {% if a.email %}
+    <form method="post" action="/a/{{ token }}/reminders" class="form-row">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <label class="check"><input type="checkbox" name="on" value="1"{% if a.email_reminders %} checked{% endif %} onchange="this.form.submit()"> Email me reminders at {{ a.email }} when I have runs to rate, days to explain or meets to answer. My parent or guardian is OK with this.</label>
+      <noscript><button type="submit" class="secondary">Save</button></noscript>
+    </form>
+    <p class="small muted">Sent by Resend, an email service, which receives your first name, email address and the reminder. Untick to stop.</p>
+    {% else %}<p class="small muted">Ask your coach to add your email address to get reminder emails.</p>{% endif %}
     <h3 style="margin:0; font-size:17px">AI analysis</h3>
     {% if a.ai_consent_at %}
       <p><span class="pill good">✓ On</span> since {{ a.ai_consent_at.strftime('%b %-d, %Y') }}. Each night your training numbers (not your name, and nothing you write) go to Claude, an AI from Anthropic, to help your coaches spot patterns. Coaches make every decision.</p>

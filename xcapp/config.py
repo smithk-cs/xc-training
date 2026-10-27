@@ -41,6 +41,9 @@ class Settings:
     anthropic_model: str
     anthropic_base_url: str
     nightly_hour: int
+    reminder_hour: int        # team-time hour for the daily reminder emails
+    resend_api_key: str       # email service (Resend) key; reminder emails are off without it
+    email_from: str           # sender, such as "Jesuit XC <reminders@yourdomain.org>" (a domain verified with Resend)
     ai_monthly_budget: float  # US dollars; AI requests stop for the month once this would be exceeded
     ai_effort: str            # how much Claude thinks before answering: low | medium | high
     cron_secret: str  # shared with the hosting platform's timer that calls POST /cron/nightly
@@ -54,6 +57,10 @@ class Settings:
     retention_days: int        # days after an athlete leaves before their data is deleted
     team_logo_file: str  # path to the approved logo (png, jpg, svg or webp)
     as_of_date: str  # optional fixed "today" (YYYY-MM-DD) for demos and testing
+
+    @property
+    def email_configured(self) -> bool:
+        return bool(self.resend_api_key and self.email_from)
 
     @property
     def tz(self) -> ZoneInfo:
@@ -94,6 +101,9 @@ class Settings:
             anthropic_model=_env("ANTHROPIC_MODEL", "claude-sonnet-5-5"),
             anthropic_base_url=_env("ANTHROPIC_BASE_URL", ""),
             nightly_hour=int(_env("NIGHTLY_HOUR", "4")),
+            reminder_hour=int(_env("REMINDER_HOUR", "17")),
+            resend_api_key=_env("RESEND_API_KEY", ""),
+            email_from=_env("EMAIL_FROM", ""),
             ai_monthly_budget=float(_env("AI_MONTHLY_BUDGET_USD", "25")),
             ai_effort=_env("AI_EFFORT", "medium"),
             cron_secret=_env("CRON_SECRET", ""),

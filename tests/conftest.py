@@ -32,7 +32,7 @@ def env(tmp_path, monkeypatch):
     monkeypatch.setenv("GARMIN_WEBHOOK_SECRET", "hooksecret")
     monkeypatch.setenv("BASE_URL", "https://xc.test")
     monkeypatch.setenv("TEAM_TIMEZONE", "America/Los_Angeles")
-    for k in ("ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL", "AS_OF_DATE", "GARMIN_FILE_HOSTS"):
+    for k in ("ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL", "AS_OF_DATE", "GARMIN_FILE_HOSTS", "RESEND_API_KEY", "EMAIL_FROM", "REMINDER_HOUR"):
         monkeypatch.delenv(k, raising=False)
     from xcapp import config, db, web
     monkeypatch.setattr(web, "BACKFILL_IN_BACKGROUND", False)  # tests drive the Garmin past-run queue themselves

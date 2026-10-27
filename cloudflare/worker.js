@@ -20,7 +20,8 @@ export default {
     return app(env).fetch(forApp(request));
   },
 
-  // Cron triggers (wrangler.jsonc): ask the app to run its nightly job; it checks the hour itself.
+  // Cron triggers (wrangler.jsonc): ask the app to run its scheduled jobs; it checks the hour itself
+  // (the nightly job at NIGHTLY_HOUR, reminder emails at REMINDER_HOUR).
   async scheduled(controller, env) {
     if (!env.CRON_SECRET) {
       console.error("CRON_SECRET is not set; the nightly job cannot run.");

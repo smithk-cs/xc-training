@@ -112,6 +112,19 @@ Garmin the link. Edit `wrangler.jsonc` on GitHub (open the file, click the penci
   and requests stop for the month once the next one could go over. `AI_EFFORT` (medium) sets how much Claude thinks
   before answering; higher costs more. A nightly briefing for about 60 athletes costs roughly $0.12–0.17. The nightly job runs at 4 a.m. Pacific
   (`NIGHTLY_HOUR` and `TEAM_TIMEZONE` in `wrangler.jsonc`; change the two `crons` there if you change them).
+* **Reminder emails:** the app can email athletes who opt in (on their own page) when they have runs to rate, days to
+  explain or meets to answer, each day at `REMINDER_HOUR` (17 = 5 p.m. team time). It sends through Resend (free for
+  3,000 emails a month, 100 a day):
+  1. Sign up at resend.com.
+  2. **Domains** → **Add Domain**. Resend sends only from a domain you control. Either ask school IT to add the DNS
+     records Resend shows for a subdomain such as `xc.jesuithighschool.org`, or buy a domain in Cloudflare (about $10 a
+     year) and let Resend add the records to Cloudflare for you. Wait until the domain shows **Verified**.
+  3. **API Keys** → **Create API Key** (sending access) → add it as the GitHub secret `RESEND_API_KEY`.
+  4. In `wrangler.jsonc`, set `EMAIL_FROM`, for example `"Jesuit Cross Country <reminders@xc.jesuithighschool.org>"`, and
+     commit. The deploy that follows turns email on.
+  5. Add your own email on the **Staff** page, then on **Reminder emails** (linked from Athletes) use **Email me a test**,
+     choose what to remind about, and tick **Send daily reminders**.
+  The privacy policy lists Resend once email is set up. Athletes need an email address on their athlete page to opt in.
 * **Your own address** (for example `xc.yourschool.org`): Cloudflare → the `xc-training` Worker → **Settings** →
   **Domains & Routes**, then update `BASE_URL`.
 * **Logs:** Cloudflare → Workers & Pages → `xc-training` → **Logs**. The app's own **Sync log** page shows syncs and

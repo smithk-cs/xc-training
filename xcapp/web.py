@@ -29,6 +29,7 @@ from . import merge as MG
 from . import photos as P
 from . import registration as REG
 from . import reports as RP
+from . import reminders as RM
 from .config import settings
 from .db import SessionLocal, create_all
 from .fitfile import MAX_FITS_PER_UPLOAD, MAX_UPLOAD_BYTES, FitError, fit_files, parse_fit
@@ -1617,6 +1618,59 @@ def create_app() -> FastAPI:
         return render(request, "report_athlete.html", user, o=RP.overview(db, a, season), seasons=seasons,
                       photo_v=photo_versions(db).get(a.id), athletes=athletes_sorted(db))
 
+    # ---------- reminder emails ----------
+
+    @app.get("/reminders", response_class=HTMLResponse)
+    def reminders_page(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
+        today = A.team_today()
+        people = db.scalars(select(Athlete).where(Athlete.active.is_(True))).all()
+        return render(request, "reminders.html", user, enabled=RM.enabled(db), items=RM.ITEMS, chosen=RM.chosen_items(db),
+                      preview=RM.recipients(db, today), opted=sum(1 for a in people if a.email_reminders and a.email),
+                      with_email=sum(1 for a in people if a.email), total=len(people),
+                      last_sent=A.get_setting(db, "reminders_last_sent", ""))
+
+    @app.post("/reminders")
+    async def reminders_save(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
+        f = await form_checked(request)
+        action = f.get("action", "save")
+        today = A.team_today()
+        if action == "test":
+            people = RM.recipients(db, today)
+            if not user.email:
+                flash(request, "Add your own email on the Staff page first, so the test has somewhere to go.", "error")
+            else:
+                a, lines = people[0] if people else (None, ["Rate how hard 2 runs felt (effort 0–10)."])
+                sample = a or Athlete(first_name="Sam", last_name="Sample", link_token="sample")
+                try:
+                    subject, text, html = RM.compose(sample, lines)
+                    RM.send_email(user.email, "[Test] " + subject, text, html)
+                    flash(request, f"Sent a test reminder to {user.email}" + (f", as {sample.first_name} would get it." if a else "."))
+                except RM.EmailError as exc:
+                    flash(request, str(exc), "error")
+            return back("/reminders")
+        if action == "send":
+            if not s.email_configured:
+                flash(request, "Email isn’t set up yet: add RESEND_API_KEY and EMAIL_FROM.", "error")
+            else:
+                r = RM.run(db, today)
+                flash(request, "Already sent today." if "skipped" in r else f"Sent {r['sent']} reminder{'' if r['sent'] == 1 else 's'}."
+                      + (f" {r['errors']} failed (see the Sync log)." if r.get("errors") else ""), "error" if r.get("errors") else "ok")
+            return back("/reminders")
+        A.set_setting(db, "reminders_enabled", "1" if f.get("enabled") else "0")
+        A.set_setting(db, "reminders_items", ",".join(i for i in RM.ITEMS if f.get(f"item_{i}")))
+        flash(request, "Saved. " + (f"Reminders go out each day at {dt.time(s.reminder_hour):%-I %p} to athletes who opted in."
+                                    if f.get("enabled") else "Daily reminders are off."))
+        return back("/reminders")
+
+    @app.post("/a/{token}/reminders")
+    async def athlete_reminders(request: Request, token: str, db: Session = Depends(get_db, scope="function")):
+        f = await form_checked(request)
+        a = athlete_by_token(db, token)
+        a.email_reminders = bool(f.get("on")) and bool(a.email)
+        flash(request, f"You’ll get a reminder email at {a.email} when something needs finishing." if a.email_reminders
+              else "Reminder emails are off.")
+        return back(f"/a/{token}#reminders")
+
     @app.get("/vdot", response_class=HTMLResponse)
     def vdot_page(request: Request, edit: int = 0, user=Depends(any_staff, scope="function"), db: Session = Depends(get_db, scope="function")):
         return render(request, "vdot.html", user, board=A.vdot_board(db, A.team_today()), edit=bool(edit) and user.role != "trainer",
@@ -2052,9 +2106,16 @@ def create_app() -> FastAPI:
     def cron_nightly(request: Request, background: BackgroundTasks, force: bool = False):
         """Called by the hosting platform's timer. Runs only during NIGHTLY_HOUR (team time) unless force=true."""
         from .cli import is_nightly_hour, nightly
+        from .db import session_scope
         auth = request.headers.get("authorization", "")
         if not s.cron_secret or not hmac.compare_digest(auth.encode(), f"Bearer {s.cron_secret}".encode()):
             raise HTTPException(404, "Not found.")
+        now_hour = dt.datetime.now(dt.timezone.utc).astimezone(s.tz).hour
+        if not force and now_hour == s.reminder_hour:
+            with session_scope() as db:
+                if not RM.enabled(db) or not s.email_configured:
+                    return {"reminders": "off"}
+                return {"reminders": RM.run(db, A.team_today())}
         if not force and not is_nightly_hour():
             return {"skipped": f"not {s.nightly_hour}:00 in {s.team_timezone}"}
         if not nightly_lock.acquire(blocking=False):

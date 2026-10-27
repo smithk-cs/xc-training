@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Reminder emails · {{ team_name }}{% endblock %}
+{% block content %}
+<h1>Reminder emails</h1>
+<p class="muted" style="max-width:80ch">Each day at {{ '%d' % (settings.reminder_hour % 12 or 12) }} {{ 'p.m.' if settings.reminder_hour >= 12 else 'a.m.' }} the app emails each athlete who opted in, but only when they have something to finish. Athletes opt in on their own page (it needs an email address on their athlete page).</p>
+{% if not settings.email_configured %}
+<p class="notice"><span><b>Email isn’t set up yet.</b> Nothing is sent until an admin adds the email service key (<code>RESEND_API_KEY</code>) and sender address (<code>EMAIL_FROM</code>); see DEPLOY.md. You can still choose the settings below.</span></p>
+{% endif %}
+<div class="card">
+  <div class="facts" style="margin-bottom:12px">
+    <div><span class="k">Opted in</span><span class="big">{{ opted }}</span><span class="small muted">of {{ total }} athletes</span></div>
+    <div><span class="k">Have an email</span><span class="big">{{ with_email }}</span><span class="small muted">add others on their athlete page</span></div>
+    <div><span class="k">Would get one today</span><span class="big">{{ preview|length }}</span><span class="small muted">{% if last_sent %}last sent {{ last_sent }}{% else %}none sent yet{% endif %}</span></div>
+  </div>
+  <form method="post" action="/reminders">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label class="check"><input type="checkbox" name="enabled" value="1"{% if enabled %} checked{% endif %}> Send daily reminders</label>
+    <fieldset class="pick"><legend class="small">Remind athletes about</legend>
+      {% for k, label in items.items() %}<label class="check" style="display:block"><input type="checkbox" name="item_{{ k }}" value="1"{% if k in chosen %} checked{% endif %}> {{ label }}</label>{% endfor %}
+    </fieldset>
+    <div class="form-row" style="margin-top:10px">
+      <button type="submit">Save</button>
+      <button type="submit" name="action" value="test" class="secondary" formnovalidate>Email me a test</button>
+      <button type="submit" name="action" value="send" class="secondary" formnovalidate onclick="return confirm('Send today’s reminders now?')">Send today’s now</button>
+    </div>
+  </form>
+</div>
+<div class="card">
+  <h2>Who would get one today</h2>
+  {% if preview %}
+  <table class="list compact sortable"><thead><tr><th>Athlete</th><th>Email</th><th>Reminder</th></tr></thead><tbody>
+  {% for a, lines in preview %}<tr><td data-sort="{{ a.last_name }} {{ a.first_name }}"><a href="/athletes/{{ a.id }}">{{ a.name }}</a></td><td class="small">{{ a.email }}</td><td class="small">{{ lines|join(' ') }}</td></tr>{% endfor %}
+  </tbody></table>
+  {% else %}<p class="muted">Nobody who opted in has anything to finish right now.</p>{% endif %}
+</div>
+{% endblock %}
