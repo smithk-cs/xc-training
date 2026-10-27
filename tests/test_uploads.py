@@ -58,7 +58,7 @@ def runs():
 
 def test_several_files_at_once(client):
     page = client.get("/a/tok-ava").text
-    assert 'accept=".fit,.zip" multiple' in page and "Export Your Data" in page
+    assert 'accept=".fit,.zip,.csv" multiple' in page and "Export Your Data" in page
     msgs = upload(client, [("a.fit", run(20)), ("b.fit", run(21)), ("c.fit", ride(22))])
     assert msgs == [("ok", "Added 2 runs (Oct 20 to Oct 21), 1 skipped because they weren&#39;t runs.")]
     assert runs() == [20, 21]
@@ -106,7 +106,45 @@ def test_coaches_can_upload_a_batch_for_an_athlete(client):
     aid = db.query(Athlete).one().id
     db.close()
     page = client.get(f"/athletes/{aid}").text
-    assert 'accept=".fit,.zip" multiple' in page
+    assert 'accept=".fit,.zip,.csv" multiple' in page
     msgs = upload(client, [("runs.zip", zipped([("1.fit", run(1)), ("2.fit", run(2))]))],
                   url=f"/athletes/{aid}/upload", page=f"/athletes/{aid}")
     assert ("ok", "Added 2 runs (Oct 1 to Oct 2).") in msgs and runs() == [1, 2]
+
+
+GC_CSV = """Activity Type,Date,Favorite,Title,Distance,Calories,Time,Avg HR,Max HR,Avg Pace,Moving Time,Elapsed Time
+Running,2026-10-24 07:30:00,false,"Morning Run","5.08","514","00:38:17","137","161","7:32","00:37:44","00:39:41"
+Treadmill Running,2026-10-22 16:00:00,false,"Treadmill","3.10","300","00:24:00","--","--","7:44","00:24:00","00:24:00"
+Rowing,2026-10-21 16:00:00,false,"Row","5.00","300","00:30:00","120","140","--","00:30:00","00:30:00"
+Running,2026-10-20 15:00:00,false,"Easy","1.04","100","00:08:30","130","140","8:10","00:08:30","00:08:30"
+"""
+
+
+def test_garmin_connect_activity_list(client):
+    msgs = upload(client, [("Activities.csv", GC_CSV.encode())])
+    assert msgs == [("ok", "Added 3 runs (Oct 20 to Oct 24), 1 skipped because they weren&#39;t runs, "
+                           "distances read as miles; runs from a Garmin Connect list have no laps, so no reps.")]
+    db = SessionLocal()
+    acts = sorted(db.query(Activity).all(), key=lambda x: x.local_date)
+    assert [(x.local_date.day, round(x.distance_m / 1609.344, 2), x.duration_s, x.avg_hr, x.sport, x.source) for x in acts] == [
+        (20, 1.04, 510.0, 130.0, "running", "garmin_csv"),
+        (22, 3.1, 1440.0, None, "treadmill_running", "garmin_csv"),
+        (24, 5.08, 2297.0, 137.0, "running", "garmin_csv")]
+    db.close()
+    assert upload(client, [("Activities.csv", GC_CSV.encode())])[0][1].startswith("Added 0 runs, 3 already here")
+    # The same run as a .fit file later replaces the summary with full detail.
+    fit = rep_workout(dt.datetime(2026, 10, 24, 14, 30, 20, tzinfo=dt.timezone.utc), [(1000, 200, 180, 20)] * 3)
+    assert upload(client, [("run.fit", fit)])[0][1].startswith("Added a ")
+    db = SessionLocal()
+    oct24 = [x for x in db.query(Activity).all() if x.local_date.day == 24]
+    assert len(oct24) == 1 and oct24[0].source == "upload" and oct24[0].laps
+    db.close()
+    assert upload(client, [("other.csv", b"a,b\n1,2\n")]) == [
+        ("error", "other.csv isn’t a Garmin Connect activity list. In Garmin Connect, open Activities and use Export CSV.")]
+
+
+def test_activity_list_in_kilometers():
+    from xcapp import garmin_csv as G
+    km = GC_CSV.replace('"5.08"', '"8.18"').replace('"3.10"', '"5.0"').replace('"1.04"', '"1.7"')
+    runs, skipped, unit = G.parse(km.encode())
+    assert unit == "km" and [round(r.distance_m) for r in runs] == [8180, 5000, 1700] and skipped == 1

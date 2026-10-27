@@ -268,10 +268,10 @@
 
   <details class="panel fold" id="add-runs">
     <summary><h2 id="u-h">Add runs by hand</h2></summary>
-    <p class="muted">For runs that didn’t sync, or a watch that isn’t Garmin. In Garmin Connect on a computer, open a run and choose Export Original. You can pick several .fit files at once, or a .zip of them, including Garmin’s full “Export Your Data” file: only runs are added, and runs already here aren’t doubled.</p>
+    <p class="muted">For runs that didn’t sync, or a watch that isn’t Garmin. In Garmin Connect on a computer, open a run and choose Export Original. You can pick several .fit files at once, or a .zip of them, including Garmin’s full “Export Your Data” file: only runs are added, and runs already here aren’t doubled. For a quick history, Garmin Connect’s Activities list has Export CSV; that file adds each run’s date, miles, time and heart rate (but not laps).</p>
     <form method="post" action="/a/{{ token }}/upload" enctype="multipart/form-data" style="display:flex; flex-direction:column; gap:10px">
       <input type="hidden" name="csrf" value="{{ csrf }}">
-      <input type="file" name="file" accept=".fit,.zip" multiple required aria-label="Run files (.fit, or a .zip of them)">
+      <input type="file" name="file" accept=".fit,.zip,.csv" multiple required aria-label="Run files (.fit, a .zip of them, or a Garmin Connect activity list .csv)">
       <button type="submit" class="ghost-btn">Upload runs</button>
     </form>
   </details>

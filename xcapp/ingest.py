@@ -12,7 +12,7 @@ from .models import Activity, Athlete, Lap, PlannedWorkout, SyncLog
 from .reps import analyze
 
 # Higher number wins when two copies of the same run arrive (e.g. a summary first, the file later).
-SOURCE_RANK = {"garmin_summary": 1, "garmin_details": 2, "upload": 3, "garmin_file": 3, "demo": 3}
+SOURCE_RANK = {"garmin_csv": 0, "garmin_summary": 1, "garmin_details": 2, "upload": 3, "garmin_file": 3, "demo": 3}
 DUPLICATE_WINDOW_S = 90
 
 

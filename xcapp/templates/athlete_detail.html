@@ -130,7 +130,7 @@
   {% if photo_v %}<form method="post" action="/athletes/{{ a.id }}/photo" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="remove" value="1"><button class="link" type="submit">Remove photo</button></form>{% endif %}
   <form method="post" action="/athletes/{{ a.id }}/upload" enctype="multipart/form-data">
     <input type="hidden" name="csrf" value="{{ csrf }}">
-    <div class="form-row"><label>Add runs from .fit files (several at once, or a .zip such as Garmin&rsquo;s data export)<input type="file" name="file" accept=".fit,.zip" multiple required></label><button type="submit">Upload</button></div>
+    <div class="form-row"><label>Add runs from .fit files (several at once, a .zip such as Garmin&rsquo;s data export, or the activity list .csv from Garmin Connect)<input type="file" name="file" accept=".fit,.zip,.csv" multiple required></label><button type="submit">Upload</button></div>
   </form>
   <p class="small">Personal link: <code class="copy">{{ settings.base_url.rstrip('/') }}/a/{{ a.link_token }}</code></p>
   <form method="post" action="/athletes/{{ a.id }}/new-link" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="secondary" type="submit">Make a new link (the old one stops working)</button></form>

@@ -30,6 +30,7 @@ from . import photos as P
 from . import registration as REG
 from . import reports as RP
 from . import reminders as RM
+from . import garmin_csv as GCSV
 from .config import settings
 from .db import SessionLocal, create_all
 from .fitfile import MAX_FITS_PER_UPLOAD, MAX_UPLOAD_BYTES, FitError, fit_files, parse_fit
@@ -572,21 +573,36 @@ def create_app() -> FastAPI:
         if not uploads:
             return "Choose a .fit or .zip file first.", "error"
         files: list[tuple[str, bytes]] = []
+        csv_runs, csv_skipped, unit = [], 0, ""
         try:
             for up in uploads:
                 raw = await up.read(MAX_UPLOAD_BYTES + 1)
                 if len(raw) > MAX_UPLOAD_BYTES:
                     return f"{up.filename} is over {MAX_UPLOAD_BYTES // (1024 * 1024)} MB. Upload it in smaller parts.", "error"
+                if up.filename.lower().endswith(".csv"):
+                    if not GCSV.is_activities_csv(up.filename, raw):
+                        return f"{up.filename} isn’t a Garmin Connect activity list. In Garmin Connect, open Activities and use Export CSV.", "error"
+                    runs, skipped, unit = GCSV.parse(raw)
+                    csv_runs += runs
+                    csv_skipped += skipped
+                    continue
                 files.extend(fit_files(up.filename, raw))
                 if len(files) > MAX_FITS_PER_UPLOAD:
                     raise FitError(f"That upload holds more than {MAX_FITS_PER_UPLOAD} activity files. Upload it in smaller parts.")
         except FitError as exc:
             return str(exc), "error"
-        if not files:
+        except GCSV.CsvError as exc:
+            return str(exc), "error"
+        if not files and not csv_runs and not csv_skipped:
             return "No .fit activity files were found in that upload.", "error"
-        if len(files) == 1 and not files[0][0].lower().endswith(".zip"):
+        if len(files) == 1 and not csv_runs and not csv_skipped and not files[0][0].lower().endswith(".zip"):
             return _upload_one(db, a, files[0][1])
-        counts, dates = {"created": 0, "upgraded": 0, "duplicate": 0, "not_run": 0, "unreadable": 0}, []
+        counts, dates = {"created": 0, "upgraded": 0, "duplicate": 0, "not_run": csv_skipped, "unreadable": 0}, []
+        for parsed in csv_runs:
+            act, outcome = ingest(db, a, parsed, "garmin_csv")
+            counts[outcome] += 1
+            if outcome != "duplicate":
+                dates.append(act.local_date)
         for _name, data in files:
             try:
                 parsed = parse_fit(data)
@@ -607,6 +623,8 @@ def create_app() -> FastAPI:
                           ("unreadable", "could not be read")):
             if counts[key]:
                 parts.append(f"{counts[key]} {text}")
+        if csv_runs:
+            parts.append(f"distances read as {unit}; runs from a Garmin Connect list have no laps, so no reps")
         return ", ".join(parts) + ".", "ok" if added or counts["duplicate"] else "error"
 
     def _upload_one(db: Session, a: Athlete, raw: bytes) -> tuple[str, str]:
