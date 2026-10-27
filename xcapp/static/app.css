@@ -186,4 +186,9 @@ td.num.slower { color: var(--color-bad); font-weight: 600; }
 .race-pick { display: flex; flex-direction: column; gap: 4px; }
 .race-pick select { width: 100%; max-width: 100%; }
 .nowrap { white-space: nowrap; }
+/* Workout paces */
+.wpace { display: flex; flex-direction: column; gap: 6px; padding: 10px 0; border-top: 1px solid var(--color-border-line); }
+.wpace:first-of-type { border-top: 0; padding-top: 0; }
+.wpace .d { font-weight: 600; }
+.wpace .facts > div { display: flex; flex-direction: column; gap: 2px; }
 

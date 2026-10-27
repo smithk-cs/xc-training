@@ -526,6 +526,53 @@ def target_pace(db: Session, athlete_id: int, pw: PlannedWorkout) -> float | Non
     return best / EVENTS[pw.pace_event] * METERS_PER_MILE * pw.pace_factor
 
 
+RIEGEL_EXPONENT = 1.06  # race-time equivalence between distances: T2 = T1 * (D2 / D1) ** 1.06
+
+
+def _pace_from(times: list[tuple[str, float, str]], event: str) -> tuple[float, str] | None:
+    """Best equivalent time for `event` from (event, seconds, where) entries: the event itself if present, otherwise the
+    fastest Riegel equivalent from another benchmark distance. Returns (seconds, plain-language source)."""
+    exact = [t for t in times if t[0] == event]
+    if exact:
+        ev, sec, where = min(exact, key=lambda t: t[1])
+        return sec, f"{where} {ev}, {fmt_time(sec)}"
+    best = None
+    for ev, sec, where in times:
+        eq = sec * (EVENTS[event] / EVENTS[ev]) ** RIEGEL_EXPONENT
+        if best is None or eq < best[0]:
+            best = (eq, f"estimated from {where} {ev}, {fmt_time(sec)}")
+    return best
+
+
+def workout_paces(db: Session, athlete, workouts) -> list[dict]:
+    """For each planned workout: the athlete's rep time, mile pace and 400 m split from their current best and from
+    their goal, in the workout's pace event times its pace factor."""
+    results = [r for r in db.scalars(select(Result).where(Result.athlete_id == athlete.id)).all() if r.event in EVENTS]
+    goals = [g for g in db.scalars(select(Goal).where(Goal.athlete_id == athlete.id)).all() if g.event in EVENTS]
+    out = []
+    for pw in workouts:
+        if pw.pace_event not in EVENTS:
+            continue
+        season = season_for(pw.date)
+        done = [r for r in results if r.date <= pw.date]
+        pool = [r for r in done if r.season == season] or [r for r in done if (pw.date - r.date).days <= 400]
+        now = _pace_from([(r.event, r.time_s, "your best") for r in pool], pw.pace_event)
+        goal_pool = [g for g in goals if g.season == season]
+        if not goal_pool and goals:
+            latest = max(g.season for g in goals)
+            goal_pool = [g for g in goals if g.season == latest]
+        goal = _pace_from([(g.event, g.goal_s, "your goal") for g in goal_pool], pw.pace_event)
+
+        def targets(found):
+            if found is None:
+                return None
+            per_mile = found[0] / EVENTS[pw.pace_event] * METERS_PER_MILE * pw.pace_factor
+            return {"rep": per_mile * pw.rep_distance_m / METERS_PER_MILE, "mile": per_mile,
+                    "lap": per_mile * 400 / METERS_PER_MILE, "source": found[1]}
+        out.append({"workout": pw, "now": targets(now), "goal": targets(goal)})
+    return out
+
+
 def segment_rows(db: Session) -> list[dict]:
     acts = db.scalars(
         select(Activity).where(Activity.planned_workout_id.is_not(None)).options(

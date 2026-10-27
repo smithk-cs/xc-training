@@ -851,11 +851,15 @@ def create_app() -> FastAPI:
         prog, seasons = A.progress(bench, [g for g in team_goals if g["athlete_id"] == a.code], roster)
         tiles = [p for p in prog if p["current"] is not None]
         show_group = A.get_setting(db, "show_group_to_athletes", "1") == "1"
-        ability = A.abilities(db, today).get(a.id, {}) if show_group else {}
+        mine = A.abilities(db, today).get(a.id, {})
+        ability = mine if show_group else {}
+        coming = db.scalars(select(PlannedWorkout).where(PlannedWorkout.date >= today, PlannedWorkout.date <= today + dt.timedelta(days=7))
+                            .order_by(PlannedWorkout.date, PlannedWorkout.id)).all()
+        paces = A.workout_paces(db, a, [w for w in coming if w.applies_to(a.group, mine.get("group") or "")])
         races = db.scalars(select(RaceResult).where(RaceResult.athlete_id == a.id)
                            .order_by(RaceResult.date.desc(), RaceResult.id.desc())).all()
         history = A.race_history(races)
-        return render(request, "athlete.html", None, history=history, a=a, acts=acts, tiles=tiles, seasons=seasons, need=need, ability=ability,
+        return render(request, "athlete.html", None, history=history, paces=paces, a=a, acts=acts, tiles=tiles, seasons=seasons, need=need, ability=ability,
                       show_group=show_group, open_delete=open_delete, races=races,
                       areas=BODY_AREAS, token=token, today=today.isoformat())
 

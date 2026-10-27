@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
 <h1>Workouts</h1>
-<p class="muted">Add the day’s rep workout here. Runs synced that day that contain reps are matched to it automatically, and each athlete’s target pace comes from their best time in the pace event (this season if they have one), times the pace factor.</p>
+<p class="muted">Add the day’s rep workout here. Runs synced that day that contain reps are matched to it automatically, and each athlete’s target pace comes from their best time in the pace event (this season if they have one), times the pace factor. Athletes see their rep times on their own page for the next 7 days, from their current best and from their goal (estimated from another distance when they have no time in the pace event).</p>
 {% if user.role != 'trainer' %}
 <div class="card">
   <h2>Plan a workout</h2>

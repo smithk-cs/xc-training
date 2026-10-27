@@ -61,6 +61,28 @@
     <p class="muted small">Your group and VDOT come from your best 1 mile, 1.5 mile, 2 mile or 5K time. They appear here once your coach records one.</p>
   </section>
   {% endif %}
+  {% if paces %}
+  <section class="panel" aria-labelledby="wp-h">
+    <h2 id="wp-h">Workout paces</h2>
+    <p class="muted small">Your targets for the workouts your coaches have planned, from your current best and from your goal.</p>
+    {% for x in paces %}{% set w = x.workout %}
+    <div class="wpace">
+      <div class="d">{{ 'Today' if w.date.isoformat() == today else w.date.strftime('%a, %b %-d') }} · {{ w.title }}</div>
+      <div class="small muted">{{ '{:,}'.format(w.rep_distance_m|int) }} m reps at {{ w.pace_event }} pace{% if w.pace_factor != 1 %} × {{ '%.2f' % w.pace_factor }}{% endif %}</div>
+      <div class="facts">
+        {% for label, t, missing in (("From your current time", x.now, "Ask your coach to record a race or time trial."), ("From your goal", x.goal, "No goal set yet. Ask your coach.")) %}
+        <div><span class="k">{{ label }}</span>
+          {% if t %}<span class="big">{{ fmt_time(t.rep) }}</span>
+          <span class="small">per rep · {{ fmt_time(t.mile) }}/mi{% if w.rep_distance_m > 400 %} · {{ fmt_time(t.lap) }}/400{% endif %}</span>
+          <span class="small muted">{{ t.source[0]|upper }}{{ t.source[1:] }}</span>
+          {% else %}<span class="small muted">{{ missing }}</span>{% endif %}
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endfor %}
+  </section>
+  {% endif %}
   {% if need %}<p class="notice"><span>{{ need }} recent run{{ '' if need == 1 else 's' }} need{{ 's' if need == 1 else '' }} your effort rating.</span><a href="/a/{{ token }}/runs">Add effort ›</a></p>{% endif %}
 
   {% set garmin_connected = a.garmin and a.garmin.status == 'connected' %}
