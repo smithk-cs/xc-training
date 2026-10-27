@@ -92,6 +92,61 @@ def season_for(d: dt.date) -> str:
     return f"{d.year + 1 if d.month == 12 else d.year} Track"
 
 
+def race_history(races) -> dict:
+    """An athlete's races (newest first) by season, with PR / season-best marks, and groups of similar races to compare:
+    same course and distance first (the fair comparison in cross country), then every race at one distance.
+    Distances within 1% count as the same."""
+    def dist_key(r):
+        return round(r.distance_m / 50)  # 50 m buckets: "5,000 Meters" and "5K" match, 4K and 5K don't
+    best: dict[int, float] = {}
+    season_best: dict[tuple[str, int], float] = {}
+    for r in races:
+        k, s = dist_key(r), season_for(r.date)
+        best[k] = min(best.get(k, r.time_s), r.time_s)
+        season_best[(s, k)] = min(season_best.get((s, k), r.time_s), r.time_s)
+    seasons: dict[str, list[dict]] = {}
+    for r in races:
+        s, k = season_for(r.date), dist_key(r)
+        seasons.setdefault(s, []).append({"r": r, "pr": r.time_s == best[k], "sb": r.time_s == season_best[(s, k)]})
+
+    def compare(rows, label):
+        rows = sorted(rows, key=lambda r: (r.date, r.id or 0))
+        top = min(r.time_s for r in rows)
+        out, prev = [], None
+        for r in rows:
+            out.append({"r": r, "vs_prev": None if prev is None else round(r.time_s - prev, 2), "vs_best": round(r.time_s - top, 2),
+                        "pr": r.time_s == top})
+            prev = r.time_s
+        return {"label": label, "rows": out}
+
+    by_course: dict[tuple, list] = {}
+    by_distance: dict[int, list] = {}
+    for r in races:
+        place = (r.course or r.meet or "").strip()
+        by_course.setdefault((place.lower(), dist_key(r)), []).append(r)
+        by_distance.setdefault(dist_key(r), []).append(r)
+    groups = []
+    for (_, _k), rows in sorted(by_course.items(), key=lambda kv: -max(r.date for r in kv[1]).toordinal()):
+        if len(rows) >= 2:
+            newest = max(rows, key=lambda r: r.date)  # labels as written most recently
+            groups.append(compare(rows, f"{(newest.course or newest.meet).strip()} · {newest.distance_label} ({len(rows)} races)"))
+    for _k, rows in sorted(by_distance.items(), key=lambda kv: -len(kv[1])):
+        if len(rows) >= 2:
+            groups.append(compare(rows, f"Every {max(rows, key=lambda r: r.date).distance_label} race ({len(rows)})"))
+    return {"seasons": list(seasons.items()), "compare": groups}
+
+
+def fmt_gap(seconds: float | None) -> str:
+    """Change in time for people: '-39.0 s', '+1:05.2', 'same'."""
+    if seconds is None:
+        return ""
+    if abs(seconds) < 0.05:
+        return "same"
+    sign = "−" if seconds < 0 else "+"
+    s = abs(seconds)
+    return f"{sign}{int(s // 60)}:{s % 60:04.1f}" if s >= 60 else f"{sign}{s:.1f} s"
+
+
 def team_today() -> dt.date:
     if settings().as_of_date:
         return dt.date.fromisoformat(settings().as_of_date)

@@ -97,14 +97,48 @@
   {% if races %}
   <section class="panel" aria-labelledby="mr-h">
     <h2 id="mr-h">My races</h2>
-    <ul class="runs">
-      {% for r in races %}
-      <li><div class="row">
-        <span class="l"><span class="d">{{ r.meet }}</span><span class="small muted">{{ r.date.strftime('%b %-d, %Y') }} · {% if r.race %}{{ r.race }} · {% endif %}{{ r.distance_label }}</span></span>
-        <span class="r"><span class="mi">{{ fmt_time(r.time_s) }}</span>{% if r.place %}<span class="small muted">Place {{ r.place }}</span>{% endif %}</span>
-      </div></li>
+    {% if history.compare %}<label class="race-pick small muted">Show
+      <select id="race-view">
+        <option value="rv-years">By year</option>
+        {% for g in history.compare %}<option value="rv-{{ loop.index }}">Compare: {{ g.label }}</option>{% endfor %}
+      </select></label>{% endif %}
+    <div class="race-view" id="rv-years">
+      {% for season, rows in history.seasons %}
+      <h3 class="season">{{ season }} <span class="small muted">{{ rows|length }} race{{ '' if rows|length == 1 else 's' }}</span></h3>
+      <ul class="runs">
+        {% for x in rows %}{% set r = x.r %}
+        <li><div class="row">
+          <span class="l"><span class="d">{{ r.meet }}</span><span class="small muted">{{ r.date.strftime('%b %-d') }} · {% if r.race %}{{ r.race }} · {% endif %}{{ r.distance_label }}</span></span>
+          <span class="r"><span class="mi">{{ fmt_time(r.time_s) }}</span>
+            <span class="small muted">{% if x.pr %}<span class="pill good">PR</span> {% elif x.sb %}<span class="pill">SB</span> {% endif %}{% if r.place %}Place {{ r.place }}{% endif %}</span></span>
+        </div></li>
+        {% endfor %}
+      </ul>
       {% endfor %}
-    </ul>
+      <p class="muted small">PR = your best ever at that distance. SB = your best that season.</p>
+    </div>
+    {% for g in history.compare %}
+    <div class="race-view" id="rv-{{ loop.index }}" hidden>
+      <h3 class="season">{{ g.label }}</h3>
+      <div class="scroll"><table class="list">
+        <thead><tr><th>Race</th><th class="num">Time</th><th class="num">vs last</th><th class="num">vs best</th></tr></thead>
+        <tbody>
+        {% for x in g.rows %}{% set r = x.r %}
+          <tr><td><span class="nowrap">{{ r.date.strftime("%b %-d, %Y") }}</span><br><span class="small muted">{{ r.meet }}</span></td>
+            <td class="num nowrap"><b>{{ fmt_time(r.time_s) }}</b>{% if x.pr %}<br><span class="pill good">PR</span>{% endif %}</td>
+            <td class="num nowrap{% if x.vs_prev is not none and x.vs_prev < -0.05 %} faster{% elif x.vs_prev is not none and x.vs_prev > 0.05 %} slower{% endif %}">{{ fmt_gap(x.vs_prev) }}</td>
+            <td class="num nowrap">{{ '' if x.pr else fmt_gap(x.vs_best) }}</td></tr>
+        {% endfor %}
+        </tbody>
+      </table></div>
+      <p class="muted small">Cross country times depend on the course, so the same course and distance is the fairest comparison.</p>
+    </div>
+    {% endfor %}
+    <script>
+      (function () { var sel = document.getElementById('race-view'); if (!sel) return;
+        var show = function () { document.querySelectorAll('.race-view').forEach(function (d) { d.hidden = d.id !== sel.value; }); };
+        sel.addEventListener('change', show); show(); })();
+    </script>
   </section>
   {% endif %}
 

@@ -142,7 +142,7 @@ def create_app() -> FastAPI:
                                  has_logo=has_logo, FEELS=FEELS, EFFORT_WORDS=EFFORT_WORDS, RUN_TYPES=A.RUN_TYPES,
                                  MISSED_REASONS=A.MISSED_REASONS, SIDES=A.SIDES, STARTED=A.STARTED, SEEN_BY=A.SEEN_BY,
                                  MORE_DAYS=A.MORE_DAYS, missed_label=A.missed_label,
-                                 run_type_of=A.run_type_of, ink=ink)
+                                 run_type_of=A.run_type_of, ink=ink, fmt_gap=A.fmt_gap)
     limiter = _LoginLimiter()
     garmin_origin = "{0.scheme}://{0.netloc}".format(urlparse(s.garmin_authorize_url))
     dashboard_body = (HERE / "static" / "dashboard_body.html").read_text(encoding="utf-8")
@@ -852,8 +852,10 @@ def create_app() -> FastAPI:
         tiles = [p for p in prog if p["current"] is not None]
         show_group = A.get_setting(db, "show_group_to_athletes", "1") == "1"
         ability = A.abilities(db, today).get(a.id, {}) if show_group else {}
-        races = db.scalars(select(RaceResult).where(RaceResult.athlete_id == a.id).order_by(RaceResult.date.desc()).limit(20)).all()
-        return render(request, "athlete.html", None, a=a, acts=acts, tiles=tiles, seasons=seasons, need=need, ability=ability,
+        races = db.scalars(select(RaceResult).where(RaceResult.athlete_id == a.id)
+                           .order_by(RaceResult.date.desc(), RaceResult.id.desc())).all()
+        history = A.race_history(races)
+        return render(request, "athlete.html", None, history=history, a=a, acts=acts, tiles=tiles, seasons=seasons, need=need, ability=ability,
                       show_group=show_group, open_delete=open_delete, races=races,
                       areas=BODY_AREAS, token=token, today=today.isoformat())
 

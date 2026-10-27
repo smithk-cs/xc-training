@@ -115,3 +115,53 @@ def test_deleting_a_meet_and_trainer_access(staff):
     db = SessionLocal()
     assert db.query(RaceResult).count() == 0 and db.query(Result).count() == 0 and db.query(Athlete).count() == 3
     db.close()
+
+
+HISTORY = """meet,date,course,race,distance,place,athlete,time,grade,gender
+Riverbend Invitational,2025-10-25,Riverbend Park,Boys JV,5K,20,Sam Lowry,16:20.0,11,Boys
+Hilltop Classic,2025-11-01,Hilltop Farm,Boys Varsity,"4,000 Meters",9,Sam Lowry,13:05.0,11,Boys
+Riverbend Invitational,2026-10-24,Riverbend Park,Boys Varsity Large School,"5,000 Meters",6,Sam Lowry,15:29.9,12,Boys
+Lakeside Open,2026-10-10,Lakeside Course,Boys Varsity,"5,000 Meters",3,Sam Lowry,15:45.5,12,Boys
+"""
+
+
+def test_race_history_by_year_and_comparisons(staff):
+    c = login(staff, "coach1")
+    post_import(c, HISTORY)
+    db = SessionLocal()
+    races = db.query(RaceResult).order_by(RaceResult.date.desc()).all()
+    h = A.race_history(races)
+    assert [(s, [x["r"].meet for x in rows]) for s, rows in h["seasons"]] == [
+        ("2026 XC", ["Riverbend Invitational", "Lakeside Open"]), ("2025 XC", ["Hilltop Classic", "Riverbend Invitational"])]
+    marks = {(x["r"].date.year, x["r"].meet): (x["pr"], x["sb"]) for _, rows in h["seasons"] for x in rows}
+    assert marks[(2026, "Riverbend Invitational")] == (True, True)      # best 5K ever ("5K" and "5,000 Meters" match)
+    assert marks[(2026, "Lakeside Open")] == (False, False)
+    assert marks[(2025, "Riverbend Invitational")] == (False, True)     # best 5K that season
+    assert marks[(2025, "Hilltop Classic")] == (True, True)             # only 4K: its own distance
+    assert [g["label"] for g in h["compare"]] == ["Riverbend Park · 5,000 Meters (2 races)", "Every 5,000 Meters race (3)"]
+    same_course = h["compare"][0]["rows"]
+    assert [(x["r"].date.year, x["vs_prev"], x["vs_best"]) for x in same_course] == [(2025, None, 50.1), (2026, -50.1, 0.0)]
+    assert [round(x["vs_prev"], 1) if x["vs_prev"] is not None else None for x in h["compare"][1]["rows"]] == [None, -34.5, -15.6]
+    assert [A.fmt_gap(x) for x in (-50.1, 15.6, 65.2, 0.0, None)] == ["−50.1 s", "+15.6 s", "+1:05.2", "same", ""]
+    token = db.query(Athlete).one().link_token
+    db.close()
+
+    page = TestClient(staff).get(f"/a/{token}").text
+    assert '<select id="race-view"' in page and "Compare: Riverbend Park · 5,000 Meters (2 races)" in page
+    assert '<h3 class="season">2026 XC <span class="small muted">2 races</span></h3>' in page
+    assert '<span class="pill good">PR</span>' in page and '<span class="pill">SB</span>' in page
+    assert 'class="num nowrap faster">−50.1 s</td>' in page and 'class="num nowrap">+15.6 s</td>' in page   # faster than last; gap to best
+    c2 = login(staff, "coach1")
+    post_import(c2, "meet,date,course,race,distance,athlete,time\nCity Finals,2026-11-07,Riverbend Park,Boys Varsity,5K,Sam Lowry,15:40.0\n")
+    page = TestClient(staff).get(f"/a/{token}").text
+    assert 'class="num nowrap slower">+10.1 s</td>' in page                                             # slower than the 15:29.9
+
+
+def test_one_race_has_nothing_to_compare(staff):
+    c = login(staff, "coach1")
+    post_import(c, MEET)
+    db = SessionLocal()
+    token = db.query(Athlete).filter_by(first_name="Sam").one().link_token
+    db.close()
+    page = TestClient(staff).get(f"/a/{token}").text
+    assert "My races" in page and "2026 XC" in page and 'id="race-view"' not in page

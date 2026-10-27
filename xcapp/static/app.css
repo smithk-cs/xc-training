@@ -178,3 +178,12 @@ input[type=file] { font-size: 15px; max-width: 100%; }
 .ac-empty { color: var(--color-fg-muted); font-size: 14px; padding: 2rem 0; text-align: center; }
 .ac-tip { position: absolute; z-index: 3; pointer-events: none; background: var(--cds-surface-popover); border: 1px solid var(--cds-border); border-radius: 10px; box-shadow: var(--cds-shadow-popover); padding: 6px 10px; font-size: 12.5px; line-height: 1.4; max-width: 16rem; }
 @media (max-width: 640px) { main { padding: var(--cds-pad-md); } .top { padding: 8px 14px; } .athlete-page main { padding: 0 0 24px; } }
+/* My races: seasons and comparisons */
+.race-view h3.season { margin: 14px 0 4px; font-size: 17px; display: flex; gap: 10px; align-items: baseline; }
+.race-view h3.season:first-child { margin-top: 0; }
+td.num.faster { color: var(--color-ok); font-weight: 600; }
+td.num.slower { color: var(--color-bad); font-weight: 600; }
+.race-pick { display: flex; flex-direction: column; gap: 4px; }
+.race-pick select { width: 100%; max-width: 100%; }
+.nowrap { white-space: nowrap; }
+
