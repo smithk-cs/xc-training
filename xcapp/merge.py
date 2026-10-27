@@ -10,7 +10,7 @@ from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session
 
 from .ingest import DUPLICATE_WINDOW_S
-from .models import (Activity, Athlete, AthletePhoto, DeletionRequest, DivisionAthlete, GarminConnection, Goal, Injury, Insight, MissedDay,
+from .models import (Activity, Athlete, AthletePhoto, DeletionRequest, DivisionAthlete, MeetResponse, GarminConnection, Goal, Injury, Insight, MissedDay,
                      OAuthState, PainReport, RaceResult, RestingHeartRate, Result)
 
 
@@ -62,7 +62,8 @@ def merge(db: Session, keep: Athlete, other: Athlete) -> dict[str, int]:
     if dup_runs:
         db.execute(delete(Activity).where(Activity.id.in_(drop(dup_runs))))
     # One per day / per event and season: the kept athlete's wins.
-    for model, cols in ((RestingHeartRate, ("date",)), (MissedDay, ("date",)), (Goal, ("event", "season")), (DivisionAthlete, ("division_id",))):
+    for model, cols in ((RestingHeartRate, ("date",)), (MissedDay, ("date",)), (Goal, ("event", "season")), (DivisionAthlete, ("division_id",)),
+                        (MeetResponse, ("meet_id",))):
         have = {tuple(getattr(r, c) for c in cols) for r in db.scalars(select(model).where(model.athlete_id == k)).all()}
         clash = [r.id for r in db.scalars(select(model).where(model.athlete_id == o)).all() if tuple(getattr(r, c) for c in cols) in have]
         if clash:
@@ -87,7 +88,7 @@ def merge(db: Session, keep: Athlete, other: Athlete) -> dict[str, int]:
             dropped += n or 0
     db.execute(delete(OAuthState).where(OAuthState.athlete_id == o))
     for model in (Activity, Result, RaceResult, Goal, Injury, PainReport, RestingHeartRate, MissedDay, GarminConnection,
-                  AthletePhoto, DeletionRequest, Insight, DivisionAthlete):
+                  AthletePhoto, DeletionRequest, Insight, DivisionAthlete, MeetResponse):
         moved += db.execute(update(model).where(model.athlete_id == o).values(athlete_id=k)).rowcount or 0
 
     # Fill in what the kept athlete doesn't have yet.

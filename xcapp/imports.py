@@ -81,6 +81,14 @@ def clean_email(text: str) -> str:
     return e
 
 
+def clean_phone(text: str) -> str:
+    """'' or a phone number such as (916) 555-0123 or +1 916 555 0123; raises ValueError otherwise."""
+    p = re.sub(r"\s+", " ", str(text or "").strip())
+    if p and (not re.fullmatch(r"\+?[\d\s().\-]{7,24}", p) or len(re.sub(r"\D", "", p)) < 7):
+        raise ValueError(f"'{text}' doesn't look like a phone number")
+    return p
+
+
 def _int_or_none(v: str, lo: int, hi: int, label: str):
     if not v:
         return None
@@ -228,6 +236,11 @@ def import_races(db: Session, text: str, add_athletes: bool = False) -> tuple[in
             meters = parse_distance(label)
             t = parse_time(r.get("time", ""))
             place = _int_or_none(r.get("place", ""), 1, 5000, "place")
+            pts = (r.get("points") or r.get("pts") or "").strip().lstrip("+").removesuffix("pts").strip()
+            try:
+                points = float(pts) if pts else None
+            except ValueError:
+                raise ValueError(f"Points '{pts}' should be a number") from None
             key = re.sub(r"\s+", " ", name.lower())
             try:
                 a = _find(idx, name)
@@ -253,7 +266,7 @@ def import_races(db: Session, text: str, add_athletes: bool = False) -> tuple[in
                     a = Athlete(first_name=first, last_name=last, gender=gender, grade=grade, group=group,
                                 link_token=new_link_token())
                     new[key] = a
-            todo.append((a, meet, d, (r.get("course") or "").strip()[:160], race[:120], meters, label[:40] or f"{meters:g} m", t, place))
+            todo.append((a, meet, d, (r.get("course") or "").strip()[:160], race[:120], meters, label[:40] or f"{meters:g} m", t, place, points))
         except ValueError as exc:
             errors.append(f"Line {line}: {exc}")
     if errors:
@@ -262,12 +275,12 @@ def import_races(db: Session, text: str, add_athletes: bool = False) -> tuple[in
         db.add(a)
     db.flush()
     n = 0
-    for a, meet, d, course, race, meters, label, t, place in todo:
+    for a, meet, d, course, race, meters, label, t, place, points in todo:
         if db.scalar(select(RaceResult.id).where(RaceResult.athlete_id == a.id, RaceResult.date == d, RaceResult.meet == meet,
                                                  RaceResult.race == race, RaceResult.time_s == t)):
             continue
         rr = RaceResult(athlete_id=a.id, meet=meet[:160], date=d, course=course, race=race, distance_m=meters,
-                        distance_label=label, time_s=t, place=place)
+                        distance_label=label, time_s=t, place=place, points=points)
         event = benchmark_event(meters)
         if event:
             res = db.scalar(select(Result).where(Result.athlete_id == a.id, Result.event == event, Result.date == d,

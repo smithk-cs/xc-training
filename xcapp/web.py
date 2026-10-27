@@ -31,11 +31,11 @@ from . import registration as REG
 from .config import settings
 from .db import SessionLocal, create_all
 from .fitfile import MAX_FITS_PER_UPLOAD, MAX_UPLOAD_BYTES, FitError, fit_files, parse_fit
-from .imports import GROUPS, ImportErrors, clean_email, import_vdots, import_goals, import_races, import_results, import_roster, parse_date, set_goal
+from .imports import GROUPS, ImportErrors, clean_email, clean_phone, import_vdots, import_goals, import_races, import_results, import_roster, parse_date, set_goal
 from .ingest import ingest, log, rematch_day
 from .models import (Activity, AiRun, AppSetting, Athlete, DeletionRequest, GarminConnection, Injury, MissedDay,
                      OAuthState, PainReport, PlannedWorkout, RaceResult, RestingHeartRate, Result, StaffUser, AthletePhoto,
-                     MeetEntry, MeetDivision, DivisionAthlete, SyncLog, TrainingGroup, utcnow)
+                     MeetEntry, MeetDivision, MeetResponse, DivisionAthlete, SyncLog, TrainingGroup, utcnow)
 from .security import csrf_ok, csrf_token, hash_password, new_link_token, verify_password
 
 HERE = Path(__file__).parent
@@ -913,6 +913,23 @@ def create_app() -> FastAPI:
             flash(request, str(exc), "error")
         return back("/staff" if user.role == "admin" else "/")
 
+    @app.post("/staff/{uid}/details")
+    async def staff_details(request: Request, uid: int, user=Depends(any_staff, scope="function"), db: Session = Depends(get_db, scope="function")):
+        f = await form_checked(request)
+        target = db.get(StaffUser, uid)
+        if target is None or (user.role != "admin" and target.id != user.id):
+            raise HTTPException(403, "You can only change your own details.")
+        try:
+            target.email, target.phone = clean_email(f.get("email", "")), clean_phone(f.get("phone", ""))
+            target.full_name = str(f.get("full_name", "")).strip()[:120]
+            target.title = str(f.get("title", "")).strip()[:80]
+            target.on_entries = bool(f.get("on_entries"))
+            flash(request, f"Saved {target.display_name}'s details.")
+        except ValueError as exc:
+            db.rollback()
+            flash(request, str(exc) + ".", "error")
+        return back("/staff" if user.role == "admin" else "/")
+
     @app.post("/staff/{uid}/email")
     async def staff_email(request: Request, uid: int, user=Depends(any_staff, scope="function"), db: Session = Depends(get_db, scope="function")):
         f = await form_checked(request)
@@ -973,7 +990,7 @@ def create_app() -> FastAPI:
         return render(request, "athlete.html", None, history=history, paces=paces, a=a, acts=acts, tiles=tiles, seasons=seasons, need=need, ability=ability,
                       show_group=show_group, open_delete=open_delete, races=races, vo2=A.latest_vo2(db, a.id),
                       rhr=A.resting_hr(db, a.id, today), rhr_range=(A.RESTING_HR_MIN, A.RESTING_HR_MAX),
-                      rhr_cal=A.resting_hr_calendar(db, a.id, today), photo_v=photo_versions(db).get(a.id), my_paces=A.training_paces(mine.get("vdot")) if show_group else [],
+                      rhr_cal=A.resting_hr_calendar(db, a.id, today), photo_v=photo_versions(db).get(a.id), meets=my_meets(db, a, today), my_paces=A.training_paces(mine.get("vdot")) if show_group else [],
                       areas=BODY_AREAS, token=token, today=today.isoformat())
 
     @app.post("/a/{token}/connect")
@@ -1341,22 +1358,37 @@ def create_app() -> FastAPI:
             return back("/registrations")
         db.add(m)
         db.flush()
-        for i, (name, dist) in enumerate((("Boys Varsity", "5K"), ("Boys JV", "5K")) if f.get("starter") else ()):
-            m.divisions.append(MeetDivision(name=name, distance=dist, position=i))
+        for i, level in enumerate(("Varsity", "JV") if f.get("starter") else ()):
+            m.divisions.append(MeetDivision(name=f"Boys {level}", gender="Boys", level=level, distance="5K", position=i))
         flash(request, f"Added {m.name}. Now add its races and pick who runs.")
         return back(f"/registrations/{m.id}")
+
+    def meet_state(db: Session, m: MeetEntry) -> dict:
+        """Who is in which race, who said they're absent, and who still needs a race."""
+        where = {e.athlete_id: d for d in m.divisions for e in d.entries}
+        responses = {r.athlete_id: r for r in m.responses}
+        absent = {aid for aid, r in responses.items() if r.status == "absent"}
+        genders = {d.gender for d in m.divisions} or set(REG.GENDERS)
+        people = db.scalars(select(Athlete).where(A.on_team())).all()
+        return {"where": where, "responses": responses, "absent": absent, "people": people,
+                "unassigned": sorted((a for a in people if a.id not in where and a.id not in absent and a.gender in genders),
+                                     key=lambda a: (a.last_name, a.first_name))}
 
     @app.get("/registrations/{mid}", response_class=HTMLResponse)
     def registration_page(request: Request, mid: int, user=Depends(any_staff, scope="function"), db: Session = Depends(get_db, scope="function")):
         m = get_meet(db, mid)
         divisions = REG.report(db, m)
+        st = meet_state(db, m)
         ab = A.abilities(db, A.team_today())
         ranks = {g.name: g.position for g in db.scalars(select(TrainingGroup)).all()}
-        people = db.scalars(select(Athlete).where(A.on_team())).all()
-        people.sort(key=lambda a: (ranks.get(ab.get(a.id, {}).get("group"), 99), -(ab.get(a.id, {}).get("vdot") or 0), a.last_name))
-        where = {e.athlete_id: d.name for d in m.divisions for e in d.entries}
-        seeds = {(d.id, a.id): REG.season_best(db, a.id, d.distance, m.date) for d in m.divisions for a in people}
-        team_text = REG.as_text(m, divisions, s.team_name, user.username, user.email)
+        order = lambda a: (ranks.get(ab.get(a.id, {}).get("group"), 99), -(ab.get(a.id, {}).get("vdot") or 0), a.last_name)
+        # Each race's picker: its own athletes plus those of its gender not in another race and not absent.
+        pickers = {d.id: sorted((a for a in st["people"] if a.gender == d.gender and a.id not in st["absent"]
+                                 and (a.id not in st["where"] or st["where"][a.id].id == d.id)), key=order)
+                   for d in m.divisions}
+        seeds = {(d.id, a.id): REG.season_best(db, a.id, d.distance, m.date) for d in m.divisions for a in pickers[d.id]}
+        staff_list = REG.contacts(db)
+        team_text = REG.as_text(m, divisions, s.team_name, user.display_name, user.email, staff_list)
         from urllib.parse import quote
         subject = quote(f"{s.team_name}: {REG.title(m)}")
         entered = [r["athlete"] for d in divisions for r in d["rows"]]
@@ -1367,8 +1399,11 @@ def create_app() -> FastAPI:
             "athletes": f"mailto:?bcc={quote(','.join(athlete_emails))}&subject={subject}&body={quote(team_text)}" if athlete_emails else "",
             "staff": f"mailto:?bcc={quote(','.join(staff_emails))}&subject={subject}&body={quote(team_text)}" if staff_emails else "",
         }
-        return render(request, "registration.html", user, m=m, divisions=divisions, people=people, ab=ab, where=where, seeds=seeds,
-                      mail=mail, missing_email=[a.name for a in entered if not a.email], text=team_text)
+        return render(request, "registration.html", user, m=m, divisions=divisions, pickers=pickers, ab=ab, seeds=seeds,
+                      responses=st["responses"], unassigned=st["unassigned"], mail=mail, staff_list=staff_list,
+                      absent=sorted((r for r in m.responses if r.status == "absent"), key=lambda r: r.athlete.last_name),
+                      missing_email=[a.name for a in entered if not a.email], text=team_text,
+                      genders=REG.GENDERS, levels=REG.LEVELS)
 
     @app.post("/registrations/{mid}")
     async def registration_edit(request: Request, mid: int, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
@@ -1390,17 +1425,23 @@ def create_app() -> FastAPI:
         db.delete(m)
         return back("/registrations")
 
+    def division_fields(f, d: MeetDivision) -> None:
+        gender = f.get("gender") if f.get("gender") in REG.GENDERS else d.gender or "Boys"
+        level = f.get("level") if f.get("level") in REG.LEVELS else d.level or "Varsity"
+        raw = str(f.get("max_entries", "")).strip()
+        limit = int(raw) if raw.isdigit() and int(raw) > 0 else None
+        d.gender, d.level, d.name, d.max_entries = gender, level, f"{gender} {level}", limit
+        d.distance = str(f.get("distance", d.distance or "")).strip()[:40]
+
     @app.post("/registrations/{mid}/divisions")
     async def division_add(request: Request, mid: int, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
         f = await form_checked(request)
         m = get_meet(db, mid)
-        name = str(f.get("name", "")).strip()[:120]
-        if not name:
-            flash(request, "Name the race, such as Boys Varsity.", "error")
-        else:
-            m.divisions.append(MeetDivision(name=name, distance=str(f.get("distance", "")).strip()[:40], position=len(m.divisions)))
-            flash(request, f"Added {name}.")
-        return back(f"/registrations/{mid}")
+        d = MeetDivision(position=len(m.divisions), distance="")
+        division_fields(f, d)
+        m.divisions.append(d)
+        flash(request, f"Added {d.name}" + (f" (up to {d.max_entries})" if d.max_entries else "") + ".")
+        return back(f"/registrations/{mid}#div-new")
 
     @app.post("/registrations/{mid}/divisions/{did}")
     async def division_save(request: Request, mid: int, did: int, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
@@ -1411,38 +1452,101 @@ def create_app() -> FastAPI:
             raise HTTPException(404, "Race not found.")
         if f.get("delete"):
             m.divisions.remove(d)
-            flash(request, f"Removed {d.name}.")
+            flash(request, f"Removed {d.name}. Its athletes are back on the not-yet-in-a-race list.")
             return back(f"/registrations/{mid}")
-        d.name = str(f.get("name", d.name)).strip()[:120] or d.name
-        d.distance = str(f.get("distance", d.distance)).strip()[:40]
+        division_fields(f, d)
         chosen = []
         for raw in f.getlist("athlete"):
             try:
                 chosen.append(int(raw))
             except ValueError:
                 pass
-        valid = {a.id for a in db.scalars(select(Athlete).where(Athlete.id.in_(chosen))).all()}
-        chosen = [a for a in dict.fromkeys(chosen) if a in valid]
-        # An athlete runs one race per meet: picking them here takes them out of the meet's other races.
-        moved = []
-        for other in m.divisions:
-            if other.id != d.id:
-                for e in list(other.entries):
-                    if e.athlete_id in chosen:
-                        other.entries.remove(e)
-                        moved.append(e.athlete.name)
+        st = meet_state(db, m)
+        valid = {a.id for a in st["people"]}
+        taken = [st["where"][a].name for a in chosen if a in st["where"] and st["where"][a].id != d.id]
+        chosen = [a for a in dict.fromkeys(chosen) if a in valid and a not in st["absent"]
+                  and (a not in st["where"] or st["where"][a].id == d.id)]
+        if d.max_entries and len(chosen) > d.max_entries:
+            name, limit = d.name, d.max_entries
+            db.rollback()
+            flash(request, f"{name} allows {limit} entries and {len(chosen)} were picked. Untick "
+                           f"{len(chosen) - limit} and save again.", "error")
+            return back(f"/registrations/{mid}#div-{did}")
         keep = {e.athlete_id: e for e in d.entries}
         d.entries = [keep.get(aid) or DivisionAthlete(athlete_id=aid) for aid in chosen]
         for i, e in enumerate(d.entries):
             e.position = i
-        flash(request, f"Saved {d.name}: {len(chosen)} athlete{'' if len(chosen) == 1 else 's'}."
-              + (f" Moved from another race: {', '.join(moved)}." if moved else ""))
+        flash(request, f"Saved {d.name}: {len(chosen)}" + (f" of {d.max_entries}" if d.max_entries else "")
+              + f" athlete{'' if len(chosen) == 1 else 's'}." + (" Some were already in another race and were left there." if taken else ""))
         return back(f"/registrations/{mid}#div-{d.id}")
+
+    def my_meets(db: Session, a: Athlete, today: dt.date) -> list[dict]:
+        """Upcoming meets for an athlete's page: their race if entered, their answer, and whether they can still answer."""
+        out = []
+        for m in db.scalars(select(MeetEntry).where(MeetEntry.date >= today, MeetEntry.date <= today + dt.timedelta(days=60))
+                            .order_by(MeetEntry.date)).all():
+            if m.divisions and a.gender not in {d.gender for d in m.divisions}:
+                continue
+            days = (m.date - today).days
+            out.append({"meet": m, "days": days, "response": next((r for r in m.responses if r.athlete_id == a.id), None),
+                        "race": next((d for d in m.divisions if any(e.athlete_id == a.id for e in d.entries)), None),
+                        "open": days > REG.ATTENDANCE_CUTOFF_DAYS})
+        return out
+
+    @app.post("/a/{token}/meets/{mid}")
+    async def athlete_meet_answer(request: Request, token: str, mid: int, db: Session = Depends(get_db, scope="function")):
+        f = await form_checked(request)
+        a = athlete_by_token(db, token)
+        m = get_meet(db, mid)
+        days = (m.date - A.team_today()).days
+        if days <= REG.ATTENDANCE_CUTOFF_DAYS:
+            flash(request, f"It’s too close to {m.name} to answer here. Talk to the coaching staff about attendance.", "error")
+        elif any(r.athlete_id == a.id for r in m.responses):
+            flash(request, f"You’ve already answered for {m.name}. Talk to the coaching staff to change it.", "error")
+        elif f.get("status") == "attending":
+            set_response(m, a, "attending", "", "athlete")
+            flash(request, f"Thanks. You’re confirmed for {m.name}.")
+        elif f.get("status") == "absent":
+            reason = str(f.get("reason", "")).strip()[:300]
+            if not reason:
+                flash(request, "Tell your coaches why you can’t be there.", "error")
+            else:
+                set_response(m, a, "absent", reason, "athlete")
+                flash(request, f"Thanks. Your coaches know you won’t be at {m.name}.")
+        return back(f"/a/{token}#meets")
+
+    @app.post("/registrations/{mid}/absent")
+    async def registration_absent(request: Request, mid: int, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
+        f = await form_checked(request)
+        m = get_meet(db, mid)
+        a = get_athlete(db, f.get("athlete_id"))
+        if f.get("clear"):
+            for r in [r for r in m.responses if r.athlete_id == a.id]:
+                m.responses.remove(r)
+            flash(request, f"{a.name} is no longer marked absent.")
+            return back(f"/registrations/{mid}#unassigned")
+        reason = str(f.get("reason", "")).strip()[:300]
+        if not reason:
+            flash(request, f"Add a reason for marking {a.name} absent.", "error")
+            return back(f"/registrations/{mid}#unassigned")
+        set_response(m, a, "absent", reason, "coach")
+        flash(request, f"Marked {a.name} absent: {reason}")
+        return back(f"/registrations/{mid}#unassigned")
+
+    def set_response(m: MeetEntry, a: Athlete, status: str, reason: str, by: str) -> None:
+        r = next((r for r in m.responses if r.athlete_id == a.id), None)
+        if r is None:
+            r = MeetResponse(athlete_id=a.id, status=status)
+            m.responses.append(r)
+        r.status, r.reason, r.by = status, reason, by
+        if status == "absent":  # not running: out of any race at this meet
+            for d in m.divisions:
+                d.entries = [e for e in d.entries if e.athlete_id != a.id]
 
     @app.get("/registrations/{mid}/entries.pdf")
     def registration_pdf(mid: int, download: int = 0, user=Depends(any_staff, scope="function"), db: Session = Depends(get_db, scope="function")):
         m = get_meet(db, mid)
-        data = REG.as_pdf(m, REG.report(db, m), s.team_name, user.username, user.email, logo_bytes(db))
+        data = REG.as_pdf(m, REG.report(db, m), s.team_name, user.display_name, user.email, logo_bytes(db), REG.contacts(db))
         fname = re.sub(r"[^A-Za-z0-9]+", "-", f"{m.name} entries {m.date:%Y-%m-%d}").strip("-") + ".pdf"
         return Response(data, media_type="application/pdf",
                         headers={"Content-Disposition": f'{"attachment" if download else "inline"}; filename="{fname}"'})

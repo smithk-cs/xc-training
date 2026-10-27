@@ -16,36 +16,43 @@
     {% if mail.athletes %}<a class="button secondary" href="{{ mail.athletes }}">Email the athletes entered</a>{% endif %}
     {% if mail.staff %}<a class="button secondary" href="{{ mail.staff }}">Email the coaching staff</a>{% endif %}
   </div>
-  <p class="small muted">Each button opens a new email in your own email app with the entries filled in (athletes and staff are blind-copied). To send the PDF too, download it and attach it.{% if missing_email %} No email address yet for: {{ missing_email|join(', ') }} (add it on their athlete page).{% endif %}</p>
+  <p class="small muted">Each button opens a new email in your own email app with the entries filled in (athletes and staff are blind-copied). To send the PDF too, download it and attach it. {% if staff_list %}Coaching staff listed at the bottom: {{ staff_list|map(attribute='display_name')|join(', ') }}{% else %}No coaching staff contacts yet{% endif %}{% if user.role == 'admin' %} (<a href="/staff">edit on the Staff page</a>){% endif %}.{% if missing_email %} No email address yet for: {{ missing_email|join(', ') }} (add it on their athlete page).{% endif %}</p>
   <details><summary class="small" style="cursor:pointer">Show the email text</summary><pre class="small" style="white-space:pre-wrap">{{ text }}</pre></details>
 </div>
 
-{% for d in divisions %}{% set div = d.division %}
+{% macro division_fields(div) %}
+  <label>Team<select name="gender">{% for g in genders %}<option{% if div and div.gender == g %} selected{% endif %}>{{ g }}</option>{% endfor %}</select></label>
+  <label>Division<select name="level">{% for l in levels %}<option{% if div and div.level == l %} selected{% endif %}>{{ l }}</option>{% endfor %}</select></label>
+  <label>Distance<input type="text" name="distance" value="{{ div.distance if div else '5K' }}" maxlength="40" placeholder="5K" style="width:7em"></label>
+  <label>Entry limit<input type="number" name="max_entries" min="1" max="500" value="{{ div.max_entries if div and div.max_entries else '' }}" placeholder="none" style="width:6em" class="limit-input"></label>
+{% endmacro %}
+{% macro reply(aid) %}{% set r = responses.get(aid) %}{% if r and r.status == 'attending' %}<span class="pill good">Confirmed</span>{% else %}<span class="small muted">No reply</span>{% endif %}{% endmacro %}
+
+{% for d in divisions %}{% set div = d.division %}{% set entered_ids = d.rows|map(attribute='athlete')|map(attribute='id')|list %}
 <div class="card" id="div-{{ div.id }}">
   <div class="form-row" style="justify-content:space-between">
     <h2 style="margin:0">{{ div.name }}{% if div.distance %} · {{ div.distance }}{% endif %}</h2>
-    <span class="muted">{{ d.rows|length }} entered</span>
+    <span class="muted">{{ d.rows|length }}{% if div.max_entries %} of {{ div.max_entries }}{% endif %} entered</span>
   </div>
   {% if d.rows %}<ol class="entries">{% for r in d.rows %}<li>{{ r.athlete.name }} <span class="small muted">grade {{ r.grade }}{% if r.seed %} · season best {{ fmt_time(r.seed) }}{% endif %}</span></li>{% endfor %}</ol>{% endif %}
   {% if user.role != 'trainer' %}
   <details{% if not d.rows %} open{% endif %}><summary style="cursor:pointer; font-weight:600; color:var(--brand-red)">Choose athletes</summary>
     <form method="post" action="/registrations/{{ m.id }}/divisions/{{ div.id }}" class="pick-athletes">
       <input type="hidden" name="csrf" value="{{ csrf }}">
-      <div class="form-row">
-        <label>Race<input type="text" name="name" value="{{ div.name }}" maxlength="120"></label>
-        <label>Distance<input type="text" name="distance" value="{{ div.distance }}" maxlength="40" placeholder="5K" style="width:7em"></label>
-      </div>
-      <table class="list compact"><thead><tr><th></th><th>Athlete</th><th>Grade</th><th>Group</th><th class="num">VDOT</th><th class="num">Season best</th><th></th></tr></thead><tbody>
-      {% for a in people %}{% set ai = ab.get(a.id, {}) %}{% set here = where.get(a.id) == div.name %}
-        <tr><td><input type="checkbox" name="athlete" value="{{ a.id }}" id="d{{ div.id }}a{{ a.id }}"{% if here %} checked{% endif %}></td>
-          <td><label for="d{{ div.id }}a{{ a.id }}">{{ a.name }}</label></td><td>{{ a.grade }}</td>
-          <td>{% if ai.group %}<span class="pill" style="background:{{ ai.color or '#FFFFF0' }}; color:{{ ink(ai.color or '#FFFFF0') }}">{{ ai.group }}</span>{% endif %}</td>
-          <td class="num">{{ ai.vdot or '' }}</td><td class="num">{{ fmt_time(seeds[(div.id, a.id)]) if seeds[(div.id, a.id)] else '' }}</td>
-          <td class="small muted">{% if where.get(a.id) and not here %}in {{ where.get(a.id) }}{% endif %}</td></tr>
+      <div class="form-row">{{ division_fields(div) }}</div>
+      <table class="list compact sortable"><thead><tr><th data-nosort></th><th>Athlete</th><th>Grade</th><th>Group</th><th class="num">VDOT</th><th class="num">Season best</th><th>Attending</th></tr></thead><tbody>
+      {% for a in pickers[div.id] %}{% set ai = ab.get(a.id, {}) %}{% set seed = seeds[(div.id, a.id)] %}
+        <tr><td><input type="checkbox" name="athlete" value="{{ a.id }}" id="d{{ div.id }}a{{ a.id }}"{% if a.id in entered_ids %} checked{% endif %}></td>
+          <td data-sort="{{ a.last_name }} {{ a.first_name }}"><label for="d{{ div.id }}a{{ a.id }}">{{ a.name }}</label></td><td>{{ a.grade }}</td>
+          <td data-sort="{{ ai.vdot or '' }}">{% if ai.group %}<span class="pill" style="background:{{ ai.color or '#FFFFF0' }}; color:{{ ink(ai.color or '#FFFFF0') }}">{{ ai.group }}</span>{% endif %}</td>
+          <td class="num">{{ ai.vdot or '' }}</td><td class="num" data-sort="{{ seed or '' }}">{{ fmt_time(seed) if seed else '' }}</td>
+          <td>{{ reply(a.id) }}</td></tr>
+      {% else %}<tr><td colspan="7" class="muted">No {{ div.gender|lower }} available: everyone is in another race or marked absent.</td></tr>
       {% endfor %}
       </tbody></table>
       <div class="form-row" style="margin-top:8px"><button type="submit">Save {{ div.name }}</button>
-        <span class="small muted">Picking an athlete already in another race at this meet moves them here.</span>
+        <span class="small muted picked-count"></span>
+        <span class="small muted">Athletes in another race at this meet, or marked absent, aren’t listed.</span>
         <button type="submit" name="delete" value="1" class="link" formnovalidate onclick="return confirm('Remove this race and its entries?')">Remove this race</button></div>
     </form>
   </details>
@@ -54,15 +61,64 @@
 {% endfor %}
 
 {% if user.role != 'trainer' %}
-<div class="card">
+<div class="card" id="div-new">
   <h2>Add a race</h2>
   <form method="post" action="/registrations/{{ m.id }}/divisions" class="form-row">
     <input type="hidden" name="csrf" value="{{ csrf }}">
-    <label>Race (division)<input type="text" name="name" maxlength="120" required placeholder="Boys Frosh/Soph"></label>
-    <label>Distance<input type="text" name="distance" maxlength="40" placeholder="3 Miles" style="width:8em"></label>
+    {{ division_fields(none) }}
     <button type="submit">Add race</button>
   </form>
 </div>
+{% endif %}
+
+<div class="card" id="unassigned">
+  <div class="form-row" style="justify-content:space-between"><h2 style="margin:0">Not in a race yet</h2><span class="muted">{{ unassigned|length }}</span></div>
+  {% if unassigned %}
+  <p class="small muted">Everyone on the roster who isn’t entered in a race at this meet and isn’t marked absent{% if user.role != 'trainer' %}. Mark someone absent with a reason so they drop off this list{% endif %}.</p>
+  <table class="list compact sortable"><thead><tr><th>Athlete</th><th>Grade</th><th>Group</th><th class="num">VDOT</th><th>Attending</th>{% if user.role != 'trainer' %}<th data-nosort>Mark absent</th>{% endif %}</tr></thead><tbody>
+  {% for a in unassigned %}{% set ai = ab.get(a.id, {}) %}
+    <tr><td data-sort="{{ a.last_name }} {{ a.first_name }}"><a href="/athletes/{{ a.id }}">{{ a.name }}</a></td><td>{{ a.grade }}</td>
+      <td data-sort="{{ ai.vdot or '' }}">{% if ai.group %}<span class="pill" style="background:{{ ai.color or '#FFFFF0' }}; color:{{ ink(ai.color or '#FFFFF0') }}">{{ ai.group }}</span>{% endif %}</td>
+      <td class="num">{{ ai.vdot or '' }}</td><td>{{ reply(a.id) }}</td>
+      {% if user.role != 'trainer' %}<td><form method="post" action="/registrations/{{ m.id }}/absent" class="form-row" style="gap:6px; flex-wrap:nowrap">
+        <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="athlete_id" value="{{ a.id }}">
+        <input type="text" name="reason" maxlength="300" placeholder="Reason" required aria-label="Reason {{ a.name }} is absent" style="width:12em">
+        <button class="secondary" type="submit">Absent</button></form></td>{% endif %}</tr>
+  {% endfor %}
+  </tbody></table>
+  {% else %}<p class="muted">Everyone is in a race or marked absent.</p>{% endif %}
+</div>
+
+{% if absent %}
+<div class="card">
+  <div class="form-row" style="justify-content:space-between"><h2 style="margin:0">Not attending</h2><span class="muted">{{ absent|length }}</span></div>
+  <table class="list compact sortable"><thead><tr><th>Athlete</th><th>Reason</th><th>Marked by</th><th>When</th>{% if user.role != 'trainer' %}<th data-nosort></th>{% endif %}</tr></thead><tbody>
+  {% for r in absent %}
+    <tr><td data-sort="{{ r.athlete.last_name }} {{ r.athlete.first_name }}"><a href="/athletes/{{ r.athlete_id }}">{{ r.athlete.name }}</a></td><td>{{ r.reason }}</td>
+      <td>{{ 'The athlete' if r.by == 'athlete' else 'A coach' }}</td><td data-sort="{{ r.updated_at.isoformat() }}" class="small">{{ r.updated_at.strftime('%b %-d') }}</td>
+      {% if user.role != 'trainer' %}<td><form method="post" action="/registrations/{{ m.id }}/absent" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}">
+        <input type="hidden" name="athlete_id" value="{{ r.athlete_id }}"><input type="hidden" name="clear" value="1"><button class="link" type="submit">Clear</button></form></td>{% endif %}</tr>
+  {% endfor %}
+  </tbody></table>
+</div>
+{% endif %}
+
+<script>
+  document.querySelectorAll('form.pick-athletes').forEach(function (f) {
+    var out = f.querySelector('.picked-count'), boxes = f.querySelectorAll('input[name=athlete]'), lim = f.querySelector('.limit-input');
+    function update() {
+      var n = 0, max = parseInt(lim.value, 10) || 0;
+      boxes.forEach(function (b) { if (b.checked) n++; });
+      out.textContent = n + (max ? ' of ' + max : '') + ' picked';
+      boxes.forEach(function (b) { b.disabled = !!max && n >= max && !b.checked; });
+    }
+    boxes.forEach(function (b) { b.addEventListener('change', update); });
+    lim.addEventListener('input', update);
+    update();
+  });
+</script>
+
+{% if user.role != 'trainer' %}
 <details class="card"><summary style="cursor:pointer; font-weight:600">Meet details</summary>
   <form method="post" action="/registrations/{{ m.id }}" style="margin-top:10px">
     <input type="hidden" name="csrf" value="{{ csrf }}">

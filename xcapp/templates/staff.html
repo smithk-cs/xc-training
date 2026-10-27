@@ -3,10 +3,17 @@
 <h1>Staff accounts</h1>
 <p class="muted">Admins manage everything. Coaches manage athletes, results, goals, workouts and injuries. Athletic trainers log injuries and are the only ones (with admins) who see injury notes.</p>
 <div class="card scroll">
-  <table class="list"><thead><tr><th>Username</th><th>Role</th><th>Email</th><th>Set a new password</th><th></th></tr></thead><tbody>
+  <table class="list"><thead><tr><th>Username</th><th>Role</th><th>Contact details (shown on meet entry sheets)</th><th>Set a new password</th><th></th></tr></thead><tbody>
   {% for u in rows %}
   <tr><td>{{ u.username }}</td><td>{{ u.role }}</td>
-  <td><form method="post" action="/staff/{{ u.id }}/email" class="form-row"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="email" name="email" maxlength="254" value="{{ u.email }}" aria-label="Email for {{ u.username }}"><button class="secondary" type="submit">Save</button></form></td>
+  <td><details><summary class="small" style="cursor:pointer">{{ u.display_name }}{% if u.title %}, {{ u.title }}{% endif %}{% if u.phone %} · {{ u.phone }}{% endif %}{% if u.email %} · {{ u.email }}{% endif %}{% if not u.on_entries %} <span class="small muted">(not on entry sheets)</span>{% endif %}</summary>
+    <form method="post" action="/staff/{{ u.id }}/details" class="form-row" style="margin-top:6px"><input type="hidden" name="csrf" value="{{ csrf }}">
+      <label>Full name<input type="text" name="full_name" maxlength="120" value="{{ u.full_name }}" aria-label="Full name for {{ u.username }}"></label>
+      <label>Title<input type="text" name="title" maxlength="80" value="{{ u.title }}" placeholder="Head Coach"></label>
+      <label>Cell phone<input type="tel" name="phone" maxlength="30" value="{{ u.phone }}"></label>
+      <label>Email<input type="email" name="email" maxlength="254" value="{{ u.email }}" aria-label="Email for {{ u.username }}"></label>
+      <label class="check"><input type="checkbox" name="on_entries" value="1"{% if u.on_entries %} checked{% endif %}> List on meet entry sheets</label>
+      <button class="secondary" type="submit">Save</button></form></details></td>
   <td><form method="post" action="/staff/{{ u.id }}/password" class="form-row"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="password" name="password" minlength="10" autocomplete="new-password" required><button class="secondary" type="submit">Change</button></form></td>
   <td>{% if u.id != user.id %}<form method="post" action="/staff/{{ u.id }}/delete" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="link" type="submit">Remove</button></form>{% endif %}</td></tr>
   {% endfor %}

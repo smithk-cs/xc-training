@@ -25,7 +25,15 @@ class StaffUser(Base):
     password_hash: Mapped[str] = mapped_column(String(300))
     role: Mapped[str] = mapped_column(String(20))  # admin | coach | trainer
     email: Mapped[str] = mapped_column(String(254), default="")
+    full_name: Mapped[str] = mapped_column(String(120), default="")
+    title: Mapped[str] = mapped_column(String(80), default="")      # such as Head Coach
+    phone: Mapped[str] = mapped_column(String(30), default="")      # cell phone, shown on meet entry sheets
+    on_entries: Mapped[bool] = mapped_column(Boolean, default=True)  # listed as a contact on meet entry sheets
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
+
+    @property
+    def display_name(self) -> str:
+        return self.full_name or self.username
 
 
 class Athlete(Base):
@@ -60,6 +68,7 @@ class Athlete(Base):
     pain_reports: Mapped[list["PainReport"]] = relationship(back_populates="athlete", cascade="all, delete-orphan")
     resting_hrs: Mapped[list["RestingHeartRate"]] = relationship(cascade="all, delete-orphan")
     entries: Mapped[list["DivisionAthlete"]] = relationship(cascade="all, delete-orphan", overlaps="athlete")
+    meet_responses: Mapped[list["MeetResponse"]] = relationship(cascade="all, delete-orphan", overlaps="athlete")
     photo: Mapped["AthletePhoto | None"] = relationship(cascade="all, delete-orphan", uselist=False, lazy="select")
 
     @property
@@ -222,6 +231,7 @@ class RaceResult(Base):
     distance_m: Mapped[float] = mapped_column(Float)
     distance_label: Mapped[str] = mapped_column(String(40), default="")  # as written in the results, e.g. "5,000 Meters"
     time_s: Mapped[float] = mapped_column(Float)
+    points: Mapped[float | None] = mapped_column(Float, nullable=True)  # team-scoring points, when the results give them
     place: Mapped[int | None] = mapped_column(Integer, nullable=True)
     result_id: Mapped[int | None] = mapped_column(ForeignKey("results.id", ondelete="SET NULL"), nullable=True)
     athlete: Mapped[Athlete] = relationship()
@@ -288,6 +298,7 @@ class MeetEntry(Base):
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
     divisions: Mapped[list["MeetDivision"]] = relationship(back_populates="meet", cascade="all, delete-orphan",
                                                            order_by="MeetDivision.position")
+    responses: Mapped[list["MeetResponse"]] = relationship(cascade="all, delete-orphan")
 
 
 class MeetDivision(Base):
@@ -297,10 +308,27 @@ class MeetDivision(Base):
     meet_id: Mapped[int] = mapped_column(ForeignKey("meet_entries.id", ondelete="CASCADE"), index=True)
     name: Mapped[str] = mapped_column(String(120))
     distance: Mapped[str] = mapped_column(String(40), default="")
+    gender: Mapped[str] = mapped_column(String(10), default="Boys")      # Boys | Girls
+    level: Mapped[str] = mapped_column(String(20), default="Varsity")    # Varsity | JV | Frosh/Soph | Freshman | Sophomore
+    max_entries: Mapped[int | None] = mapped_column(Integer, nullable=True)  # the meet's limit for this race, if any
     position: Mapped[int] = mapped_column(Integer, default=0)
     meet: Mapped[MeetEntry] = relationship(back_populates="divisions")
     entries: Mapped[list["DivisionAthlete"]] = relationship(back_populates="division", cascade="all, delete-orphan",
                                                             order_by="DivisionAthlete.position")
+
+
+class MeetResponse(Base):
+    """Whether an athlete will be at a meet: confirmed by the athlete, or marked absent by the athlete or a coach."""
+    __tablename__ = "meet_responses"
+    __table_args__ = (UniqueConstraint("meet_id", "athlete_id"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    meet_id: Mapped[int] = mapped_column(ForeignKey("meet_entries.id", ondelete="CASCADE"), index=True)
+    athlete_id: Mapped[int] = mapped_column(ForeignKey("athletes.id", ondelete="CASCADE"), index=True)
+    status: Mapped[str] = mapped_column(String(10))  # attending | absent
+    reason: Mapped[str] = mapped_column(String(300), default="")
+    by: Mapped[str] = mapped_column(String(10), default="athlete")  # athlete | coach
+    updated_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+    athlete: Mapped[Athlete] = relationship()
 
 
 class DivisionAthlete(Base):

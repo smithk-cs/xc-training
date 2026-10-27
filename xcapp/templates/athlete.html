@@ -134,6 +134,33 @@
     </div>
   </section>
   {% endif %}
+  {% if meets %}
+  <section class="panel" id="meets" aria-labelledby="mt-h">
+    <h2 id="mt-h">Upcoming meets</h2>
+    {% for x in meets %}{% set m = x.meet %}{% set r = x.response %}
+    <div class="wpace">
+      <div class="d">{{ m.name }}</div>
+      <div class="small muted">{{ m.date.strftime('%a, %b %-d') }}{% if m.location %} · {{ m.location }}{% endif %}{% if x.race %} · You’re entered in {{ x.race.name }}{% if x.race.distance %} {{ x.race.distance }}{% endif %}{% endif %}</div>
+      {% if r and r.status == 'attending' %}<p class="small"><span class="pill good">You’re confirmed</span></p>
+      {% elif r %}<p class="small">{% if r.by == 'athlete' %}You told your coaches you won’t be there{% else %}Your coaches have you down as not attending{% endif %}: {{ r.reason }}</p>
+      {% elif x.open %}
+      <div class="form-row">
+        <form method="post" action="/a/{{ token }}/meets/{{ m.id }}" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="status" value="attending"><button type="submit">I’ll be there</button></form>
+        <details><summary class="button secondary" style="cursor:pointer; list-style:none">I can’t make it</summary>
+          <form method="post" action="/a/{{ token }}/meets/{{ m.id }}" style="display:flex; flex-direction:column; gap:8px; margin-top:8px">
+            <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="status" value="absent">
+            <label>Why can’t you be there?<textarea name="reason" rows="2" maxlength="300" required></textarea></label>
+            <button type="submit">Tell my coaches</button>
+          </form>
+        </details>
+      </div>
+      <p class="small muted">Please answer by {{ (m.date - timedelta(days=5)).strftime('%a, %b %-d') }}.</p>
+      {% else %}<p class="notice"><span>{% if x.days == 0 %}The meet is today.{% else %}The meet is {{ x.days }} day{{ "" if x.days == 1 else "s" }} away.{% endif %} Talk to the coaching staff about whether you’ll be there.</span></p>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </section>
+  {% endif %}
   {% if need %}<p class="notice"><span>{{ need }} recent run{{ '' if need == 1 else 's' }} need{{ 's' if need == 1 else '' }} your effort rating.</span><a href="/a/{{ token }}/runs">Add effort ›</a></p>{% endif %}
 
   {% set garmin_connected = a.garmin and a.garmin.status == 'connected' %}

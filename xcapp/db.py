@@ -64,7 +64,10 @@ ADDED_COLUMNS = {
                    ("vo2_max", "FLOAT")],
     "athletes": [("ability_override", "VARCHAR(40) DEFAULT ''"), ("ai_consent_at", "TIMESTAMP"), ("ai_consent_note", "VARCHAR(200) DEFAULT ''"),
                  ("vdot_override", "INTEGER"), ("is_test", "BOOLEAN DEFAULT FALSE"), ("other_names", "VARCHAR(500) DEFAULT ''"), ("email", "VARCHAR(254) DEFAULT ''"), ("left_on", "DATE"), ("vdot_mark", "VARCHAR(10) DEFAULT ''"), ("weekly_plan", "VARCHAR(20) DEFAULT ''")],
-    "staff_users": [("email", "VARCHAR(254) DEFAULT ''")],
+    "staff_users": [("email", "VARCHAR(254) DEFAULT ''"), ("full_name", "VARCHAR(120) DEFAULT ''"), ("title", "VARCHAR(80) DEFAULT ''"),
+                    ("phone", "VARCHAR(30) DEFAULT ''"), ("on_entries", "BOOLEAN DEFAULT TRUE")],
+    "meet_divisions": [("gender", "VARCHAR(10) DEFAULT 'Boys'"), ("level", "VARCHAR(20) DEFAULT 'Varsity'"), ("max_entries", "INTEGER")],
+    "race_results": [("points", "FLOAT")],
     "planned_workouts": [("distance_unit", "VARCHAR(2) DEFAULT 'm'")],
     "training_groups": [("color", "VARCHAR(7) DEFAULT ''")],
     "pain_reports": [("activity_id", "INTEGER"), ("saw_trainer", "BOOLEAN DEFAULT FALSE")],
@@ -95,6 +98,15 @@ def create_all():
             import json
             conn.execute(text("INSERT INTO app_settings (key, value) VALUES ('vdot_targets', :v)"),
                          {"v": json.dumps({str(k): list(v) for k, v in DEFAULT_TARGETS.items()})})
+        # Races saved before they had team and division fields: read them from the race name (such as 'Boys JV').
+        rows = conn.execute(text("SELECT id, name, gender, level FROM meet_divisions")).all()
+        for rid, name, gender, level in rows:
+            if name == f"{gender} {level}":
+                continue
+            g = "Girls" if (name or "").lower().startswith(("girl", "women")) else "Boys"
+            lv = next((x for x in ("Frosh/Soph", "Freshman", "Sophomore", "Varsity", "JV") if x.lower() in (name or "").lower()), "Varsity")
+            if (g, lv) != (gender, level):
+                conn.execute(text("UPDATE meet_divisions SET gender = :g, level = :l WHERE id = :i"), {"g": g, "l": lv, "i": rid})
 
 
 def SessionLocal():

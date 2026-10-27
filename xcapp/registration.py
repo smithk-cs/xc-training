@@ -12,9 +12,23 @@ from sqlalchemy.orm import Session
 
 from . import analysis as A
 from .imports import parse_distance
-from .models import MeetEntry, RaceResult, Result
+from .models import MeetEntry, RaceResult, Result, StaffUser
 
 FONTS = Path(__file__).parent / "pdf_fonts"
+GENDERS = ("Boys", "Girls")
+LEVELS = ("Varsity", "JV", "Frosh/Soph", "Freshman", "Sophomore")
+ATTENDANCE_CUTOFF_DAYS = 4  # athletes can say whether they'll be at a meet until this many days before it
+
+
+def contacts(db: Session) -> list[StaffUser]:
+    """Staff listed on entry sheets: those marked for it who have a name, phone or email."""
+    order = {"admin": 0, "coach": 1, "trainer": 2}
+    staff = [u for u in db.scalars(select(StaffUser)).all() if u.on_entries and (u.full_name or u.phone or u.email)]
+    return sorted(staff, key=lambda u: (order.get(u.role, 3), u.id))
+
+
+def contact_line(u: StaffUser) -> str:
+    return " · ".join(x for x in (u.display_name + (f", {u.title}" if u.title else ""), u.phone, u.email) if x)
 RED, GOLD, INK, MUTED, LINE, SOFT = (166, 25, 46), (201, 154, 46), (27, 27, 31), (94, 88, 80), (221, 214, 205), (247, 244, 240)
 
 
@@ -54,7 +68,7 @@ def title(meet: MeetEntry) -> str:
     return f"{meet.name} entries, {meet.date:%a %b %-d, %Y}"
 
 
-def as_text(meet: MeetEntry, divisions: list[dict], team: str, coach: str, coach_email: str) -> str:
+def as_text(meet: MeetEntry, divisions: list[dict], team: str, coach: str, coach_email: str, staff: list | None = None) -> str:
     lines = [f"{team}: entries for {meet.name}", f"{meet.date:%A, %B %-d, %Y}" + (f" · {meet.location}" if meet.location else ""), ""]
     for d in divisions:
         div = d["division"]
@@ -67,6 +81,8 @@ def as_text(meet: MeetEntry, divisions: list[dict], team: str, coach: str, coach
     lines.append("Thank you,")
     lines.append(coach + (f" ({coach_email})" if coach_email else ""))
     lines.append(team)
+    if staff:
+        lines += ["", "Coaching staff:"] + [f"  {contact_line(u)}" for u in staff]
     return "\n".join(lines)
 
 
@@ -91,7 +107,7 @@ class _Doc(FPDF):
 
 
 def as_pdf(meet: MeetEntry, divisions: list[dict], team: str, coach: str, coach_email: str,
-           logo: tuple[bytes, str] | None = None) -> bytes:
+           logo: tuple[bytes, str] | None = None, staff: list | None = None) -> bytes:
     pdf = _Doc(team, f"{team} · prepared {dt.date.today():%b %-d, %Y}")
     pdf.alias_nb_pages()
     pdf.add_page()
@@ -169,5 +185,27 @@ def as_pdf(meet: MeetEntry, divisions: list[dict], team: str, coach: str, coach_
         pdf.ln(8)
     pdf.set_font("Inter", size=10)
     pdf.set_text_color(*MUTED)
-    pdf.multi_cell(w, 14, "Submitted by " + coach + (f"  ·  {coach_email}" if coach_email else "") + f"\n{team}")
+    pdf.multi_cell(w, 14, "Submitted by " + coach + (f"  ·  {coach_email}" if coach_email else "") + f"\n{team}",
+                   new_x="LMARGIN", new_y="NEXT")
+    if staff:
+        if pdf.get_y() > pdf.h - 60 - 22 * (len(staff) + 2):
+            pdf.add_page()
+        pdf.ln(12)
+        pdf.set_font("Barlow", size=13)
+        pdf.set_text_color(*RED)
+        pdf.cell(w, 18, "Coaching staff", new_x="LMARGIN", new_y="NEXT")
+        cols = [(0.30, "Name"), (0.24, "Title"), (0.18, "Cell"), (0.28, "Email")]
+        pdf.set_font("InterSemi", size=9)
+        pdf.set_fill_color(*INK)
+        pdf.set_text_color(255, 255, 255)
+        for frac, label in cols:
+            pdf.cell(w * frac, 18, label.upper(), fill=True)
+        pdf.ln(18)
+        pdf.set_font("Inter", size=10)
+        pdf.set_text_color(*INK)
+        pdf.set_draw_color(*LINE)
+        for u in staff:
+            for (frac, _), v in zip(cols, (u.display_name, u.title, u.phone, u.email)):
+                pdf.cell(w * frac, 20, v or "", border="B")
+            pdf.ln(20)
     return bytes(pdf.output())
