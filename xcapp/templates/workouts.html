@@ -4,24 +4,26 @@
 <p class="muted">Add the day’s rep workout here. Runs synced that day that contain reps are matched to it automatically, and each athlete’s target pace comes from their best time in the pace event (this season if they have one), times the pace factor. Athletes see their rep times on their own page for the next 7 days, from their current best and from their goal (estimated from another distance when they have no time in the pace event).</p>
 {% if user.role != 'trainer' %}
 <div class="card">
-  <h2>Plan a workout</h2>
+  <h2 id="plan">{% if edit %}Edit workout{% else %}Plan a workout{% endif %}</h2>
   <form method="post" action="/workouts">
     <input type="hidden" name="csrf" value="{{ csrf }}">
+    {% if edit %}<input type="hidden" name="wid" value="{{ edit.id }}">{% endif %}
     <div class="form-row">
-      <label>Date<input type="date" name="date" value="{{ today }}" required></label>
-      <label style="flex:1">Name<input type="text" name="title" placeholder="6 x 1K @ 5K pace" required></label>
-      <label>Rep distance (m)<input type="number" name="rep_distance_m" min="100" max="10000" step="1" value="1000" required></label>
+      <label>Date<input type="date" name="date" value="{{ edit.date.isoformat() if edit else today }}" required></label>
+      <label style="flex:1">Name<input type="text" name="title" placeholder="6 x 1K @ 5K pace" value="{{ edit.title if edit else '' }}" required></label>
+      <label>Rep distance (m)<input type="number" name="rep_distance_m" min="100" max="10000" step="1" value="{{ edit.rep_distance_m|int if edit else 1000 }}" required></label>
     </div>
     <div class="form-row">
-      <label>Pace from<select name="pace_event">{% for e in EVENTS %}<option {% if e == '5K' %}selected{% endif %}>{{ e }}</option>{% endfor %}</select></label>
-      <label>Pace factor<input type="number" name="pace_factor" min="0.8" max="1.5" step="0.005" value="1.00"></label>
+      <label>Pace from<select name="pace_event">{% for e in EVENTS %}<option {% if e == (edit.pace_event if edit else '5K') %}selected{% endif %}>{{ e }}</option>{% endfor %}</select></label>
+      <label>Pace factor<input type="number" name="pace_factor" min="0.8" max="1.5" step="0.005" value="{{ '%.3f' % edit.pace_factor if edit else '1.00' }}"></label>
       <span class="small muted">1.00 = race pace. Threshold is about 1.07 of 5K pace.</span>
     </div>
     <div class="form-row">
-      {% for g in GROUPS %}<label class="check"><input type="checkbox" name="group_{{ g }}"> {{ g }}</label>{% endfor %}
-      {% for g in ability_names %}<label class="check"><input type="checkbox" name="group_{{ g }}"> {{ g }}</label>{% endfor %}
+      {% for g in GROUPS %}<label class="check"><input type="checkbox" name="group_{{ g }}"{% if edit and g in edit.groups.split(',') %} checked{% endif %}> {{ g }}</label>{% endfor %}
+      {% for g in ability_names %}<label class="check"><input type="checkbox" name="group_{{ g }}"{% if edit and g in edit.groups.split(',') %} checked{% endif %}> {{ g }}</label>{% endfor %}
       <span class="small muted">Leave all unticked for the whole team.</span>
-      <button type="submit">Save workout</button>
+      <button type="submit">{% if edit %}Save changes{% else %}Save workout{% endif %}</button>
+      {% if edit %}<a href="/workouts">Cancel</a>{% endif %}
     </div>
   </form>
 </div>
@@ -30,7 +32,7 @@
   <table class="list"><thead><tr><th>Date</th><th>Workout</th><th class="num">Rep (m)</th><th>Pace</th><th>Groups</th><th class="num">Athletes matched</th><th></th></tr></thead><tbody>
   {% for w in rows %}
   <tr><td>{{ w.date.strftime('%a %b %-d') }}</td><td>{{ w.title }}</td><td class="num">{{ w.rep_distance_m|int }}</td><td>{{ w.pace_event }} × {{ '%.3f' % w.pace_factor }}</td><td>{{ w.groups }}</td><td class="num">{{ counts.get(w.id, 0) }}</td>
-  <td>{% if user.role != 'trainer' %}<form method="post" action="/workouts/{{ w.id }}/delete" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="link" type="submit">Delete</button></form>{% endif %}</td></tr>
+  <td>{% if user.role != 'trainer' %}<a href="/workouts?edit={{ w.id }}#plan">Edit</a> <form method="post" action="/workouts/{{ w.id }}/delete" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="link" type="submit">Delete</button></form>{% endif %}</td></tr>
   {% else %}<tr><td colspan="7" class="muted">No workouts planned yet.</td></tr>{% endfor %}
   </tbody></table>
 </div>

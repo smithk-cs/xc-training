@@ -659,7 +659,9 @@ def create_app() -> FastAPI:
         counts = dict(db.execute(select(Activity.planned_workout_id, func.count(Activity.id))
                                  .where(Activity.planned_workout_id.is_not(None)).group_by(Activity.planned_workout_id)).all())
         ability_names = [g.name for g in db.scalars(select(TrainingGroup).order_by(TrainingGroup.position)).all()]
-        return render(request, "workouts.html", user, rows=rows, counts=counts, today=A.team_today().isoformat(), ability_names=ability_names)
+        edit = db.get(PlannedWorkout, int(request.query_params["edit"])) if request.query_params.get("edit", "").isdigit() else None
+        return render(request, "workouts.html", user, rows=rows, counts=counts, today=A.team_today().isoformat(),
+                      ability_names=ability_names, edit=edit)
 
     @app.post("/workouts")
     async def add_workout(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
@@ -674,10 +676,15 @@ def create_app() -> FastAPI:
                 raise ValueError("Check the title, rep distance (100 to 10000 m), pace event and pace factor (0.8 to 1.5).")
             ability_names = [g.name for g in db.scalars(select(TrainingGroup).order_by(TrainingGroup.position)).all()]
             groups = ",".join(g for g in list(GROUPS) + ability_names if f.get(f"group_{g}")) or "All"
-            db.add(PlannedWorkout(date=d, title=title, rep_distance_m=rep_m, pace_event=event, pace_factor=factor, groups=groups))
+            pw = db.get(PlannedWorkout, int(f["wid"])) if str(f.get("wid", "")).isdigit() else None
+            old_day = pw.date if pw else None
+            if pw is None:
+                pw = PlannedWorkout()
+                db.add(pw)
+            pw.date, pw.title, pw.rep_distance_m, pw.pace_event, pw.pace_factor, pw.groups = d, title, rep_m, event, factor, groups
             db.flush()
-            n = rematch_day(db, d)
-            flash(request, f"Saved {title}." + (f" Matched {n} runs already synced." if n else ""))
+            n = rematch_day(db, d) + (rematch_day(db, old_day) if old_day and old_day != d else 0)
+            flash(request, f"{'Updated' if old_day else 'Saved'} {title}." + (f" Re-matched {n} runs already synced." if n else ""))
         except ValueError as exc:
             flash(request, str(exc), "error")
         return back("/workouts")
