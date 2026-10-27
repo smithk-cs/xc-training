@@ -49,22 +49,9 @@
 {% with hero_title="Hi " ~ a.first_name, hero_text="This is your personal page for the team’s training system. Keep this link to yourself.", back_url=None, hero_group=(ability if show_group else none) %}{% include "_hero.html" %}{% endwith %}
 <div class="stack">
   {% for level, text in messages %}<div class="flash {{ level }}" role="status">{{ text }}</div>{% endfor %}
-  {% if ability and ability.group %}
-  <section class="panel" id="group" aria-label="Running group" style="gap:10px">
-    <div class="panel-head"><span>Running group: <b>{{ ability.group }}</b></span><span class="pill" style="background:{{ ability.color or '#FFFFF0' }}; color:{{ ink(ability.color or '#FFFFF0') }}; border-color:rgba(0,0,0,.18)">{% if ability.vdot %}VDOT {{ ability.vdot }}{% else %}{{ ability.group }}{% endif %}</span></div>
-    {% if ability.target_1600 %}<div class="facts"><div><span class="k">800 target</span><span class="big">{{ ability.target_800 }}</span></div><div><span class="k">1600 target</span><span class="big">{{ ability.target_1600 }}</span></div></div>{% endif %}
-    <p class="muted small">{% if ability.override %}Your coach placed you in this group.{% else %}From your best 1 mile, 1.5 mile, 2 mile or 5K result{% if ability.source %} ({{ ability.source }}){% endif %}. It updates when your coach records a faster time.{% endif %}</p>
-  </section>
-  {% elif show_group %}
-  <section class="panel" id="group" aria-label="Running group" style="gap:10px">
-    <div class="panel-head"><span>Running group: <b>not set yet</b></span></div>
-    <p class="muted small">Your group and VDOT come from your best 1 mile, 1.5 mile, 2 mile or 5K time. They appear here once your coach records one.</p>
-  </section>
-  {% endif %}
-  {% if paces %}
   <section class="panel" aria-labelledby="wp-h">
-    <h2 id="wp-h">Workout paces</h2>
-    <p class="muted small">Your targets for the workouts your coaches have planned, from your current best and from your goal.</p>
+    <h2 id="wp-h">Upcoming workouts</h2>
+    {% if paces %}<p class="muted small">Your targets for the next 7 days, from your current best and from your goal.</p>{% endif %}
     {% for x in paces %}{% set w = x.workout %}
     <div class="wpace">
       <div class="d">{{ 'Today' if w.date.isoformat() == today else w.date.strftime('%a, %b %-d') }} · {{ w.title }}</div>
@@ -80,9 +67,10 @@
         {% endfor %}
       </div>
     </div>
+    {% else %}
+    <p class="muted">No workouts planned for the next 7 days yet. Your coaches add them here, with your target times.</p>
     {% endfor %}
   </section>
-  {% endif %}
   {% if need %}<p class="notice"><span>{{ need }} recent run{{ '' if need == 1 else 's' }} need{{ 's' if need == 1 else '' }} your effort rating.</span><a href="/a/{{ token }}/runs">Add effort ›</a></p>{% endif %}
 
   {% set garmin_connected = a.garmin and a.garmin.status == 'connected' %}

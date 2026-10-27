@@ -3,7 +3,19 @@
   {% if back_url %}<a class="back" href="{{ back_url }}">‹ {{ back_label }}</a>{% endif %}
   <div class="hero-title">
     <h1>{{ hero_title }}</h1>
-    {% if hero_group is defined and hero_group is not none %}<a class="group-btn" href="#group"{% if hero_group.group and hero_group.color %} style="background:{{ hero_group.color }}; color:{{ ink(hero_group.color) }}"{% endif %}>{% if hero_group.group %}{{ hero_group.group }}{% if hero_group.vdot %} · VDOT {{ hero_group.vdot }}{% endif %}{% else %}Running group: not set{% endif %}</a>{% endif %}
+    {% if hero_group is defined and hero_group is not none %}{% set g = hero_group %}
+    <details class="group-pop">
+      <summary class="group-btn"{% if g.group and g.color %} style="background:{{ g.color }}; color:{{ ink(g.color) }}"{% endif %}>{% if g.group %}{{ g.group }}{% if g.vdot %} · VDOT {{ g.vdot }}{% endif %}{% else %}Running group: not set{% endif %}</summary>
+      <div class="group-card">
+        {% if g.group %}
+        <b>Running group: {{ g.group }}</b>
+        {% if g.target_1600 %}<div class="facts"><div><span class="k">800 target</span><span class="big">{{ g.target_800 }}</span></div><div><span class="k">1600 target</span><span class="big">{{ g.target_1600 }}</span></div></div>{% endif %}
+        <span class="small muted">{% if g.override %}Your coach placed you in this group.{% else %}From your best 1 mile, 1.5 mile, 2 mile or 5K result{% if g.source %} ({{ g.source }}){% endif %}. It updates when your coach records a faster time.{% endif %}</span>
+        {% else %}
+        <span class="small">Your running group and VDOT come from your best 1 mile, 1.5 mile, 2 mile or 5K time. They appear here once your coach records one.</span>
+        {% endif %}
+      </div>
+    </details>{% endif %}
   </div>
   {% if hero_text %}<p>{{ hero_text }}</p>{% endif %}
 </header>

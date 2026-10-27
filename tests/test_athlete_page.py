@@ -22,8 +22,9 @@ def app():
 def test_group_button_and_explanation(app):
     c = TestClient(app)
     page = c.get("/a/tok-ava").text
-    assert '<a class="group-btn" href="#group">Running group: not set</a>' in page
-    assert 'id="group"' in page and "They appear here once your coach records one." in page
+    assert '<summary class="group-btn">Running group: not set</summary>' in page
+    assert "They appear here once your coach records one." in page
+    assert "Running group: <b>" not in page and 'id="group"' not in page          # no separate group section any more
 
     db = SessionLocal()
     a = db.query(Athlete).one()
@@ -31,20 +32,21 @@ def test_group_button_and_explanation(app):
     db.commit()
     db.close()
     page = c.get("/a/tok-ava").text
-    assert '<a class="group-btn" href="#group" style="background:#D4AF37; color:#1B1B1F">Gold</a>' in page and "Your coach placed you in this group." in page
+    assert '<summary class="group-btn" style="background:#D4AF37; color:#1B1B1F">Gold</summary>' in page
+    assert "<b>Running group: Gold</b>" in page and "Your coach placed you in this group." in page   # in the drop-down card
 
     db = SessionLocal()
     A.set_setting(db, "show_group_to_athletes", "0")
     db.commit()
     db.close()
     page = c.get("/a/tok-ava").text
-    assert "group-btn" not in page and 'id="group"' not in page
+    assert "group-btn" not in page and "group-card" not in page
 
 
 def test_garmin_section_moves_down_once_connected(app):
     c = TestClient(app)
     page = c.get("/a/tok-ava").text
-    assert page.index('id="g-h"') < page.index("My training") < page.index('id="pv-h"')   # top: connect night
+    assert page.index('id="wp-h"') < page.index('id="g-h"') < page.index("My training") < page.index('id="pv-h"')  # workouts, then Garmin
 
     db = SessionLocal()
     a = db.query(Athlete).one()
@@ -72,4 +74,4 @@ def test_group_colors_look_like_their_names(app):
     db.commit()
     db.close()
     page = TestClient(app).get("/a/tok-ava").text
-    assert '<a class="group-btn" href="#group" style="background:#50C878; color:#1B1B1F">Emerald</a>' in page
+    assert '<summary class="group-btn" style="background:#50C878; color:#1B1B1F">Emerald</summary>' in page
