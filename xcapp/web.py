@@ -1386,7 +1386,13 @@ def create_app() -> FastAPI:
         pickers = {d.id: sorted((a for a in st["people"] if a.gender == d.gender and a.id not in st["absent"]
                                  and (a.id not in st["where"] or st["where"][a.id].id == d.id)), key=order)
                    for d in m.divisions}
-        seeds = {(d.id, a.id): REG.season_best(db, a.id, d.distance, m.date) for d in m.divisions for a in pickers[d.id]}
+        times = REG.season_times(db, m.date)
+        cols = {}
+        for d in m.divisions:
+            own = REG.meters(d.distance)
+            near = REG.close_distance(times, [a.id for a in pickers[d.id]], own)
+            cols[d.id] = [(REG.distance_label(x), REG._key(x)) for x in (own, near) if x is not None]
+        seeds = {(d.id, a.id, k): times.get(a.id, {}).get(k) for d in m.divisions for a in pickers[d.id] for _, k in cols[d.id]}
         staff_list = REG.contacts(db)
         team_text = REG.as_text(m, divisions, s.team_name, user.display_name, user.email, staff_list)
         from urllib.parse import quote
@@ -1399,7 +1405,8 @@ def create_app() -> FastAPI:
             "athletes": f"mailto:?bcc={quote(','.join(athlete_emails))}&subject={subject}&body={quote(team_text)}" if athlete_emails else "",
             "staff": f"mailto:?bcc={quote(','.join(staff_emails))}&subject={subject}&body={quote(team_text)}" if staff_emails else "",
         }
-        return render(request, "registration.html", user, m=m, divisions=divisions, pickers=pickers, ab=ab, seeds=seeds,
+        return render(request, "registration.html", user, m=m, divisions=divisions, pickers=pickers, ab=ab, seeds=seeds, cols=cols,
+                      distances=[n for n, _ in REG.DISTANCES],
                       responses=st["responses"], unassigned=st["unassigned"], mail=mail, staff_list=staff_list,
                       absent=sorted((r for r in m.responses if r.status == "absent"), key=lambda r: r.athlete.last_name),
                       missing_email=[a.name for a in entered if not a.email], text=team_text,

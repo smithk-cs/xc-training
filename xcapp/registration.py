@@ -18,6 +18,50 @@ FONTS = Path(__file__).parent / "pdf_fonts"
 GENDERS = ("Boys", "Girls")
 LEVELS = ("Varsity", "JV", "Frosh/Soph", "Freshman", "Sophomore")
 ATTENDANCE_CUTOFF_DAYS = 4  # athletes can say whether they'll be at a meet until this many days before it
+DISTANCES = [("1 Mile", 1609.344), ("1.5 Miles", 2414.016), ("2 Miles", 3218.688), ("2.5 Miles", 4023.36), ("3 Miles", 4828.032),
+             ("4K", 4000.0), ("5K", 5000.0), ("6K", 6000.0)]
+COVERAGE = 0.75  # a close distance is shown when fewer than this share of the athletes listed have run the race's distance
+
+
+def _key(m: float) -> float:
+    """Distances within 1% count as the same (5,000 Meters, 5K and 5 K are one distance)."""
+    return next((d for _, d in DISTANCES if abs(d - m) <= d * 0.01), round(m / 10) * 10)
+
+
+def distance_label(m: float) -> str:
+    return next((n for n, d in DISTANCES if abs(d - m) <= d * 0.01), f"{m:,.0f} m")
+
+
+def season_times(db: Session, on: dt.date) -> dict[int, dict[float, float]]:
+    """athlete id -> {distance: best time} over the meet's season up to the meet, from meet and benchmark results."""
+    start, end = A.season_range(on)
+    out: dict[int, dict[float, float]] = {}
+
+    def add(aid, m, t):
+        k = _key(m)
+        if t and (k not in out.setdefault(aid, {}) or t < out[aid][k]):
+            out[aid][k] = t
+    for r in db.scalars(select(RaceResult).where(RaceResult.date >= start, RaceResult.date <= min(end, on))).all():
+        add(r.athlete_id, r.distance_m, r.time_s)
+    for r in db.scalars(select(Result).where(Result.date >= start, Result.date <= min(end, on))).all():
+        if r.event in A.EVENTS:
+            add(r.athlete_id, A.EVENTS[r.event], r.time_s)
+    return out
+
+
+def close_distance(times: dict[int, dict[float, float]], athlete_ids: list[int], m: float | None) -> float | None:
+    """When fewer than COVERAGE of these athletes have run distance m this season: the distance nearest to m that more than
+    COVERAGE of them have run. None when the race's own distance is enough, or nothing qualifies."""
+    if m is None or not athlete_ids:
+        return None
+    k = _key(m)
+    share = lambda d: sum(1 for a in athlete_ids if d in times.get(a, {})) / len(athlete_ids)
+    if share(k) >= COVERAGE:
+        return None
+    raced = {d for a in athlete_ids for d in times.get(a, {})} - {k}
+    good = [d for d in raced if share(d) > COVERAGE]
+    import math
+    return min(good, key=lambda d: abs(math.log(d / k))) if good else None
 
 
 def contacts(db: Session) -> list[StaffUser]:

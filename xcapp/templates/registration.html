@@ -23,7 +23,8 @@
 {% macro division_fields(div) %}
   <label>Team<select name="gender">{% for g in genders %}<option{% if div and div.gender == g %} selected{% endif %}>{{ g }}</option>{% endfor %}</select></label>
   <label>Division<select name="level">{% for l in levels %}<option{% if div and div.level == l %} selected{% endif %}>{{ l }}</option>{% endfor %}</select></label>
-  <label>Distance<input type="text" name="distance" value="{{ div.distance if div else '5K' }}" maxlength="40" placeholder="5K" style="width:7em"></label>
+  {% set cur = div.distance if div else '5K' %}
+  <label>Distance<select name="distance">{% for n in distances %}<option{% if n == cur %} selected{% endif %}>{{ n }}</option>{% endfor %}{% if cur and cur not in distances %}<option selected>{{ cur }}</option>{% endif %}</select></label>
   <label>Entry limit<input type="number" name="max_entries" min="1" max="500" value="{{ div.max_entries if div and div.max_entries else '' }}" placeholder="none" style="width:6em" class="limit-input"></label>
 {% endmacro %}
 {% macro reply(aid) %}{% set r = responses.get(aid) %}{% if r and r.status == 'attending' %}<span class="pill good">Confirmed</span>{% else %}<span class="small muted">No reply</span>{% endif %}{% endmacro %}
@@ -40,19 +41,19 @@
     <form method="post" action="/registrations/{{ m.id }}/divisions/{{ div.id }}" class="pick-athletes">
       <input type="hidden" name="csrf" value="{{ csrf }}">
       <div class="form-row">{{ division_fields(div) }}</div>
-      <table class="list compact sortable"><thead><tr><th data-nosort></th><th>Athlete</th><th>Grade</th><th>Group</th><th class="num">VDOT</th><th class="num">Season best</th><th>Attending</th></tr></thead><tbody>
-      {% for a in pickers[div.id] %}{% set ai = ab.get(a.id, {}) %}{% set seed = seeds[(div.id, a.id)] %}
+      <table class="list compact sortable"><thead><tr><th data-nosort></th><th>Athlete</th><th>Grade</th><th>Group</th><th class="num">VDOT</th>{% for label, k in cols[div.id] %}<th class="num"{% if not loop.first %} title="Fewer than 3 in 4 of these athletes have run {{ cols[div.id][0][0] }} this season"{% endif %}>SB {{ label }}{% if not loop.first %}*{% endif %}</th>{% endfor %}<th>Attending</th></tr></thead><tbody>
+      {% for a in pickers[div.id] %}{% set ai = ab.get(a.id, {}) %}
         <tr><td><input type="checkbox" name="athlete" value="{{ a.id }}" id="d{{ div.id }}a{{ a.id }}"{% if a.id in entered_ids %} checked{% endif %}></td>
           <td data-sort="{{ a.last_name }} {{ a.first_name }}"><label for="d{{ div.id }}a{{ a.id }}">{{ a.name }}</label></td><td>{{ a.grade }}</td>
           <td data-sort="{{ ai.vdot or '' }}">{% if ai.group %}<span class="pill" style="background:{{ ai.color or '#FFFFF0' }}; color:{{ ink(ai.color or '#FFFFF0') }}">{{ ai.group }}</span>{% endif %}</td>
-          <td class="num">{{ ai.vdot or '' }}</td><td class="num" data-sort="{{ seed or '' }}">{{ fmt_time(seed) if seed else '' }}</td>
+          <td class="num">{{ ai.vdot or '' }}</td>{% for label, k in cols[div.id] %}{% set t = seeds[(div.id, a.id, k)] %}<td class="num" data-sort="{{ t or '' }}">{% if t %}{{ fmt_time(t) }}{% else %}<span class="no-time" title="No {{ label }} race this season">– – –</span>{% endif %}</td>{% endfor %}
           <td>{{ reply(a.id) }}</td></tr>
-      {% else %}<tr><td colspan="7" class="muted">No {{ div.gender|lower }} available: everyone is in another race or marked absent.</td></tr>
+      {% else %}<tr><td colspan="8" class="muted">No {{ div.gender|lower }} available: everyone is in another race or marked absent.</td></tr>
       {% endfor %}
       </tbody></table>
       <div class="form-row" style="margin-top:8px"><button type="submit">Save {{ div.name }}</button>
         <span class="small muted picked-count"></span>
-        <span class="small muted">Athletes in another race at this meet, or marked absent, aren’t listed.</span>
+        <span class="small muted">Athletes in another race at this meet, or marked absent, aren’t listed. SB = season best; – – – = no race at that distance this season{% if cols[div.id]|length > 1 %}; * = a close distance most of these athletes have run{% endif %}.</span>
         <button type="submit" name="delete" value="1" class="link" formnovalidate onclick="return confirm('Remove this race and its entries?')">Remove this race</button></div>
     </form>
   </details>

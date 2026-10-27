@@ -182,3 +182,30 @@ def test_older_races_get_team_and_division_from_their_name():
     assert [(d.gender, d.level) for d in db.query(MeetDivision).order_by(MeetDivision.position)] == [
         ("Boys", "JV"), ("Girls", "Frosh/Soph"), ("Girls", "Varsity")]
     db.close()
+
+
+def test_distance_dropdown_and_close_distance(app):
+    from xcapp import registration as REG
+    c = login(app)
+    mid, varsity, jv, csrf = new_meet(c)
+    i = ids()
+    db = SessionLocal()
+    day = A.team_today() - dt.timedelta(days=5)
+    for first, t in (("José", 16 * 60 + 2), ("Theo", 17 * 60 + 30), ("Pat", 18 * 60)):   # 5K times for three of the four boys
+        db.add(RaceResult(athlete_id=i[first], date=day, meet="Lakeside", race="Boys", distance_m=5000, distance_label="5K", time_s=t))
+    db.add(RaceResult(athlete_id=i["Theo"], date=day - dt.timedelta(days=7), meet="Oak", race="Boys", distance_m=4828, distance_label="3 Miles",
+                      time_s=16 * 60 + 40))
+    db.commit()
+    db.close()
+    c.post(f"/registrations/{mid}/divisions/{varsity}", data={"csrf": csrf, "gender": "Boys", "level": "Varsity", "distance": "3 Miles"})
+    page = c.get(f"/registrations/{mid}").text
+    picker = page.split(f'id="div-{varsity}"')[1].split("</form>")[0]
+    assert '<option selected>3 Miles</option>' in picker and "<option>4K</option>" in picker
+    assert ">SB 3 Miles</th>" in picker and ">SB 5K*</th>" in picker                     # 1 of 4 ran 3 miles; 4 of 4 have a 5K
+    assert "16:40.0" in picker and "16:02.0" in picker and picker.count('class="no-time"') == 3   # 3 without 3 miles
+    db = SessionLocal()
+    times = REG.season_times(db, A.team_today())
+    assert REG.close_distance(times, [i["Sam"], i["José"], i["Theo"], i["Pat"]], 5000) is None   # 5K: enough of them have one
+    assert REG.close_distance(times, [i["Sam"], i["José"]], 1609.344) == 5000.0
+    assert REG.close_distance(times, [i["Sam"], i["Ivy"]], 1609.344) is None                      # nothing over 75%
+    db.close()

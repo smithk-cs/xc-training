@@ -266,3 +266,4 @@ details.plink[open] > summary { margin-bottom: 4px; }
 ol.entries { columns: 2 260px; margin: 8px 0 12px; padding-left: 1.6em; } ol.entries li { break-inside: avoid; padding: 2px 0; }
 .coach-title { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; position: relative; }
 .coach-title h1 { margin: 0; }
+.no-time { color: var(--color-fg-muted); letter-spacing: 1px; }
