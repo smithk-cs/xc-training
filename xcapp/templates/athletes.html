@@ -7,19 +7,41 @@
   {% for x, y in dupes %}<a href="/athletes/{{ x.id }}?merge={{ y.id }}#combine">{{ x.name }} and {{ y.name }}</a>{{ '; ' if not loop.last else '' }}{% endfor %}. Open one to combine them.</span></p>
 {% endif %}
 <table class="list sortable compact">
-  <thead><tr><th>Athlete</th><th>Grade</th><th>Ability group</th><th class="num">VDOT</th><th>AI consent</th><th>Garmin</th><th>Last sync</th>{% if user.role != 'trainer' %}<th data-nosort>Link</th>{% endif %}</tr></thead>
+  <thead><tr><th>Athlete</th><th>Grade</th><th>Class</th><th>Ability group</th><th class="num">VDOT</th><th>AI consent</th><th>Garmin</th><th>Last sync</th>{% if user.role != 'trainer' %}<th data-nosort>Link</th>{% endif %}</tr></thead>
   <tbody>
   {% for a in athletes %}
   <tr>
-    <td data-sort="{{ a.last_name }} {{ a.first_name }}" class="nowrap">{% if photos.get(a.id) %}<img class="avatar zoom" src="/athletes/{{ a.id }}/photo?v={{ photos[a.id] }}" alt="Photo of {{ a.name }}" loading="lazy" tabindex="0" role="button">{% else %}<span class="avatar blank" aria-hidden="true">{{ a.first_name[:1] }}{{ a.last_name[:1] }}</span>{% endif %}<a href="/athletes/{{ a.id }}">{{ a.name }}</a>{% if a.is_test %} <span class="pill">Test</span>{% endif %}</td><td>{{ a.grade }}</td>
+    <td data-sort="{{ a.last_name }} {{ a.first_name }}" class="nowrap">{% if photos.get(a.id) %}<img class="avatar zoom" src="/athletes/{{ a.id }}/photo?v={{ photos[a.id] }}" alt="Photo of {{ a.name }}" loading="lazy" tabindex="0" role="button">{% else %}<span class="avatar blank" aria-hidden="true">{{ a.first_name[:1] }}{{ a.last_name[:1] }}</span>{% endif %}<a href="/athletes/{{ a.id }}">{{ a.name }}</a>{% if a.is_test %} <span class="pill">Test</span>{% endif %}</td><td>{{ a.grade }}</td><td>{{ a.grad_year or '' }}</td>
     {% set ai = ab.get(a.id, {}) %}<td data-sort="{{ ranks.get(ai.group, '') }}">{% if ai.group %}<span class="pill" style="background:{{ ai.color or '#FFFFF0' }}; color:{{ ink(ai.color or '#FFFFF0') }}; border-color:rgba(0,0,0,.18)">{{ ai.group }}</span>{% endif %}{% if ai.override %} <span class="small muted">(pinned)</span>{% endif %}</td><td class="num">{{ ai.vdot or '' }}</td><td>{% if a.ai_consent_at %}<span class="pill good">Yes</span>{% else %}<span class="pill">No</span>{% endif %}</td>
     <td>{% if a.garmin and a.garmin.status == 'connected' %}<span class="pill good">Connected</span>{% elif a.garmin and a.garmin.status == 'error' %}<span class="pill bad">Needs reconnect</span>{% else %}<span class="pill">Not connected</span>{% endif %}</td>
     <td class="small" data-sort="{{ a.garmin.last_sync_at.isoformat() if a.garmin and a.garmin.last_sync_at else '' }}">{{ a.garmin.last_sync_at.strftime('%b %-d %-I:%M %p') if a.garmin and a.garmin.last_sync_at else '' }}</td>
     {% if user.role != 'trainer' %}<td><details class="plink"><summary>Show</summary>{% set url = settings.base_url.rstrip('/') ~ '/a/' ~ a.link_token %}<code class="copy">{{ url }}</code> <button type="button" class="link copy-btn" data-copy="{{ url }}">Copy</button></details></td>{% endif %}
   </tr>
-  {% else %}<tr><td colspan="8" class="muted">No athletes yet. Add them below or import a roster file.</td></tr>{% endfor %}
+  {% else %}<tr><td colspan="9" class="muted">No athletes yet. Add them below or import a roster file.</td></tr>{% endfor %}
   </tbody>
 </table>
+{% if confirm and user.role != 'trainer' %}
+<details class="card" open style="margin:12px 0"><summary style="cursor:pointer; font-weight:600; color:var(--brand-red)">Class years to confirm ({{ confirm|length }})</summary>
+  <p class="small muted">These athletes’ grades came from older race results, so their class year is a suggestion from their latest race. Check each one and save; anyone whose class has graduated moves to Alumni with all their records kept.</p>
+  <form method="post" action="/athletes/class-years">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <table class="list compact"><thead><tr><th>Athlete</th><th>Grade on record</th><th>Latest race</th><th>Class of</th></tr></thead><tbody>
+    {% for x in confirm %}<tr><td><a href="/athletes/{{ x.athlete.id }}">{{ x.athlete.name }}</a></td><td>{{ x.athlete.grade }}</td><td>{{ x.latest.strftime('%b %-d, %Y') }}</td>
+      <td><input type="number" name="cls_{{ x.athlete.id }}" value="{{ x.suggested }}" min="1990" max="2100" style="width:6em" aria-label="Class year for {{ x.athlete.name }}">{% if x.suggested < this_year %} <span class="small muted">graduated</span>{% endif %}</td></tr>{% endfor %}
+    </tbody></table>
+    <div class="form-row" style="margin-top:8px"><button type="submit">Save class years</button></div>
+  </form>
+</details>
+{% endif %}
+{% if alumni %}
+<details style="margin:12px 0"><summary class="small" style="cursor:pointer; font-weight:600; color:var(--brand-red)">Alumni ({{ n_alumni }})</summary>
+  <p class="small muted">Graduates stay in the system as team history: their races, results and training are kept and show in race history and reports. They’re left out of the roster, team numbers and the AI, and their personal links no longer work.</p>
+  {% for year, people in alumni.items() %}
+  <h3 style="margin:10px 0 4px; font-size:16px">{{ 'Class of ' ~ year if year else 'Class year not set' }}</h3>
+  <p class="small" style="margin:0">{% for a in people %}<a href="/athletes/{{ a.id }}">{{ a.name }}</a>{{ ', ' if not loop.last else '' }}{% endfor %}</p>
+  {% endfor %}
+</details>
+{% endif %}
 {% if former %}
 <details style="margin:12px 0"><summary class="small" style="cursor:pointer; font-weight:600; color:var(--brand-red)">Former athletes ({{ former|length }})</summary>
   <table class="list" style="margin-top:8px"><thead><tr><th>Athlete</th><th>Grade</th><th>Left</th><th>Data kept until</th>{% if user.role != 'trainer' %}<th></th>{% endif %}</tr></thead><tbody>

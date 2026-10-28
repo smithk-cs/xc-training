@@ -31,6 +31,7 @@ from . import registration as REG
 from . import reports as RP
 from . import reminders as RM
 from . import garmin_csv as GCSV
+from . import classyear as CY
 from .config import settings
 from .db import SessionLocal, create_all
 from .fitfile import MAX_FITS_PER_UPLOAD, MAX_UPLOAD_BYTES, FitError, fit_files, parse_fit
@@ -371,13 +372,37 @@ def create_app() -> FastAPI:
 
     @app.get("/athletes", response_class=HTMLResponse)
     def athletes_page(request: Request, user=Depends(any_staff, scope="function"), db: Session = Depends(get_db, scope="function")):
+        today = A.team_today()
+        CY.refresh(db, today)  # grades for this school year, and graduates moved to alumni (Garmin ends overnight)
         rows = db.scalars(select(Athlete).where(Athlete.active.is_(True)).options(selectinload(Athlete.garmin))
                           .order_by(Athlete.last_name, Athlete.first_name)).all()
         ranks = {g.name: g.position for g in db.scalars(select(TrainingGroup)).all()}
-        former = db.scalars(select(Athlete).where(Athlete.active.is_(False)).order_by(Athlete.left_on.desc(), Athlete.last_name)).all()
-        return render(request, "athletes.html", user, athletes=rows, ab=A.abilities(db, A.team_today()), ranks=ranks,
-                      photos=photo_versions(db), former=former, delete_by=lambda a: delete_by(a),
+        former = db.scalars(select(Athlete).where(Athlete.active.is_(False), Athlete.alumni.is_(False))
+                            .order_by(Athlete.left_on.desc(), Athlete.last_name)).all()
+        alumni = db.scalars(select(Athlete).where(Athlete.alumni.is_(True))
+                            .order_by(Athlete.grad_year.desc(), Athlete.last_name, Athlete.first_name)).all()
+        by_class: dict[int, list[Athlete]] = {}
+        for a in alumni:
+            by_class.setdefault(a.grad_year or 0, []).append(a)
+        return render(request, "athletes.html", user, athletes=rows, ab=A.abilities(db, today), ranks=ranks,
+                      photos=photo_versions(db), former=former, delete_by=lambda a: delete_by(a), alumni=by_class,
+                      n_alumni=len(alumni), confirm=CY.to_confirm(db, today), this_year=CY.school_year_end(today),
                       dupes=MG.likely_duplicates(list(rows) + list(former)))
+
+    @app.post("/athletes/class-years")
+    async def athletes_class_years(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
+        f = await form_checked(request)
+        n = 0
+        for key, raw in f.items():
+            if key.startswith("cls_") and str(raw).strip().isdigit():
+                a = db.get(Athlete, int(key[4:]))
+                y = int(str(raw).strip())
+                if a is not None and 1990 <= y <= 2100:
+                    a.grad_year = y
+                    n += 1
+        r = CY.refresh(db, A.team_today())
+        flash(request, f"Saved {n} class year{'' if n == 1 else 's'}." + (f" {r['graduated']} moved to alumni." if r["graduated"] else ""))
+        return back("/athletes")
 
     @app.post("/athletes")
     async def add_athlete(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
@@ -455,6 +480,23 @@ def create_app() -> FastAPI:
             a.hr_max = int(f["hr_max"]) if f.get("hr_max") else None
             a.hr_rest = int(f["hr_rest"]) if f.get("hr_rest") else None
             a.email = clean_email(f.get("email", ""))
+            raw_cls = str(f.get("grad_year", "")).strip()
+            today = A.team_today()
+            if raw_cls:
+                cls = int(raw_cls)
+                if not 1990 <= cls <= 2100:
+                    raise ValueError("Check the class year.")
+                if cls != a.grad_year:  # a new class year sets the grade
+                    a.grad_year = cls
+                    if 6 <= CY.grade_for(cls, today) <= 12:
+                        a.grade = CY.grade_for(cls, today)
+                elif grade != CY.grade_for(cls, today):  # a new grade moves the class year
+                    a.grad_year = CY.class_of(grade, today)
+            else:
+                a.grad_year = CY.class_of(grade, today)
+            if a.alumni and a.grad_year >= CY.school_year_end(today):  # back for another year
+                a.alumni, a.active, a.left_on = False, True, None
+            CY.refresh(db, today)
             flash(request, "Saved.")
         except ValueError as exc:
             flash(request, str(exc), "error")
@@ -514,7 +556,10 @@ def create_app() -> FastAPI:
             flash(request, f"{a.name} is off the roster. Their personal link no longer works and Garmin is disconnected. "
                            f"Their data is kept until {delete_by(a):%b %-d, %Y}, when the privacy policy says to delete it.")
         elif action == "return" and not a.active:
-            a.active, a.left_on = True, None
+            if a.alumni and (not a.grad_year or a.grad_year < CY.school_year_end(A.team_today())):
+                flash(request, f"{a.name} graduated with the class of {a.grad_year}. Change their class year below to bring them back.", "error")
+                return back(f"/athletes/{a.id}")
+            a.active, a.left_on, a.alumni = True, None, False
             flash(request, f"{a.name} is back on the roster. Their personal link works again; they can reconnect Garmin from it.")
         nxt = str(f.get("next", ""))
         return back(nxt if nxt in ("/athletes",) else f"/athletes/{a.id}")

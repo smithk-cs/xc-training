@@ -97,9 +97,14 @@ def nightly() -> dict:
     from .ingest import log
     out = {"tokens_refreshed": 0, "briefing": "skipped"}
     with session_scope() as db:
+        from . import analysis as A
+        from . import classyear as CY
         if settings().garmin_configured:
             with G.make_client() as http:
                 out["tokens_refreshed"] = G.refresh_expiring(db, http)
+                out["class_years"] = CY.refresh(db, A.team_today(), disconnect=lambda c: G.disconnect(db, c, http))
+        else:
+            out["class_years"] = CY.refresh(db, A.team_today())
         if settings().ai_configured:
             run = AI.generate_briefing(db)
             out["briefing"] = run.status if run.status == "ok" else f"failed: {run.error}"

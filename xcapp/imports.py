@@ -143,21 +143,32 @@ def import_roster(db: Session, text: str) -> int:
             if r.get("group") and not group:
                 raise ValueError("group should be Varsity, JV or Development")
             email = clean_email(r.get("email", ""))
-            todo.append((existing[0] if existing else None, first, last, gender, grade, group, email or None,
+            cls = _int_or_none(r.get("class") or r.get("class_of") or r.get("grad_year") or "", 1990, 2100, "class year")
+            todo.append((existing[0] if existing else None, first, last, gender, grade, group, email or None, cls,
                          _int_or_none(r.get("hr_max", ""), 150, 230, "hr_max"), _int_or_none(r.get("hr_rest", ""), 30, 100, "hr_rest")))
         except ValueError as exc:
             errors.append(f"Line {line}: {exc}")
     if errors:
         raise ImportErrors(errors)
-    for a, first, last, gender, grade, group, email, hrmax, hrrest in todo:
+    from .analysis import team_today
+    from .classyear import class_of, grade_for
+    today = team_today()
+    for a, first, last, gender, grade, group, email, cls, hrmax, hrrest in todo:
         if a is None:
             a = Athlete(first_name=first, last_name=last, link_token=new_link_token(), group=group or "JV")
             db.add(a)
             idx[f"{first} {last}".strip().lower()] = [a]
-        for field, value in (("gender", gender), ("grade", grade), ("group", group), ("email", email), ("hr_max", hrmax), ("hr_rest", hrrest)):
+        if cls is not None:          # the class year sets the grade
+            grade = grade_for(cls, today) if 6 <= grade_for(cls, today) <= 12 else grade
+        elif grade is not None:      # a roster lists this year's grades
+            cls = class_of(grade, today)
+        for field, value in (("gender", gender), ("grade", grade), ("group", group), ("email", email), ("hr_max", hrmax),
+                             ("hr_rest", hrrest), ("grad_year", cls)):
             if value is not None:
                 setattr(a, field, value)
         a.active, a.left_on = True, None
+        a.alumni = bool(a.grad_year and a.grad_year < (today.year + 1 if today.month >= 7 else today.year))
+        a.active = not a.alumni
     db.flush()
     return len(todo)
 
@@ -263,8 +274,9 @@ def import_races(db: Session, text: str, add_athletes: bool = False) -> tuple[in
                     group = next((g for g in GROUPS if g.lower() == (r.get("group") or "").lower()), None) or _from_race(
                         race, {"varsity": "Varsity", "jv": "JV", "frosh": "Development", "freshman": "Development",
                                "sophomore": "Development", "novice": "Development"}) or "Development"
+                    from .classyear import class_of
                     a = Athlete(first_name=first, last_name=last, gender=gender, grade=grade, group=group,
-                                link_token=new_link_token())
+                                link_token=new_link_token(), grad_year=class_of(grade, d))
                     new[key] = a
             todo.append((a, meet, d, (r.get("course") or "").strip()[:160], race[:120], meters, label[:40] or f"{meters:g} m", t, place, points))
         except ValueError as exc:

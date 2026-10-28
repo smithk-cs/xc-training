@@ -49,6 +49,8 @@ class Athlete(Base):
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     email: Mapped[str] = mapped_column(String(254), default="")  # optional; for contacting the athlete about the team
     other_names: Mapped[str] = mapped_column(String(500), default="")  # other spellings, separated by ';', matched on upload
+    grad_year: Mapped[int | None] = mapped_column(Integer, nullable=True)  # class year; grade follows from it each school year
+    alumni: Mapped[bool] = mapped_column(Boolean, default=False)           # graduated: off the roster, all data kept as history
     email_reminders: Mapped[bool] = mapped_column(Boolean, default=False)  # opted in to daily reminder emails
     is_test: Mapped[bool] = mapped_column(Boolean, default=False)  # a staff test account: left out of team numbers and the AI
     left_on: Mapped[dt.date | None] = mapped_column(Date, nullable=True)  # set when the athlete leaves the team (active is False)

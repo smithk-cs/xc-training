@@ -92,7 +92,7 @@ def merge(db: Session, keep: Athlete, other: Athlete) -> dict[str, int]:
         moved += db.execute(update(model).where(model.athlete_id == o).values(athlete_id=k)).rowcount or 0
 
     # Fill in what the kept athlete doesn't have yet.
-    for field in ("hr_max", "hr_rest", "vdot_override", "ai_consent_at", "ai_consent_note", "weekly_plan", "vdot_mark", "ability_override"):
+    for field in ("grad_year", "hr_max", "hr_rest", "vdot_override", "ai_consent_at", "ai_consent_note", "weekly_plan", "vdot_mark", "ability_override"):
         if not getattr(keep, field) and getattr(other, field):
             setattr(keep, field, getattr(other, field))
     add_other_names(keep, [other.name] + other_names(other))
