@@ -45,6 +45,7 @@ from .security import csrf_ok, csrf_token, hash_password, new_link_token, verify
 
 HERE = Path(__file__).parent
 BACKFILL_IN_BACKGROUND = True  # tests switch this off and run G.process_backfills themselves
+BIG_UPLOAD = 20                # uploads with more run files than this are added on a background thread
 INJURY_TYPES = ["Medial tibial stress (shin splints)", "Tibial bone stress injury", "Other bone stress injury",
                 "Achilles tendinopathy", "Plantar fasciitis", "IT band syndrome", "Patellofemoral pain",
                 "Hamstring strain", "Calf strain", "Hip flexor strain", "Ankle sprain", "Illness", "Other"]
@@ -652,6 +653,11 @@ def create_app() -> FastAPI:
             return "No .fit activity files were found in that upload.", "error"
         if len(files) == 1 and not csv_runs and not csv_skipped and not files[0][0].lower().endswith(".zip"):
             return _upload_one(db, a, files[0][1])
+        if len(files) > BIG_UPLOAD:
+            # Reading hundreds of .fit files takes minutes and would hold up every other page; do it in the background.
+            threading.Thread(target=_upload_in_background, args=(a.id, a.name, files), daemon=True).start()
+            return (f"Adding {len(files)} files in the background. Runs appear over the next few minutes; "
+                    "the Sync log says when it's done. The rest of the app works as usual meanwhile."), "ok"
         counts, dates = {"created": 0, "upgraded": 0, "duplicate": 0, "not_run": csv_skipped, "unreadable": 0}, []
         for parsed in csv_runs:
             act, outcome = ingest(db, a, parsed, "garmin_csv")
@@ -681,6 +687,36 @@ def create_app() -> FastAPI:
         if csv_runs:
             parts.append(f"distances read as {unit}; runs from a Garmin Connect list have no laps, so no reps")
         return ", ".join(parts) + ".", "ok" if added or counts["duplicate"] else "error"
+
+    def _upload_in_background(athlete_id: int, name: str, files: list[tuple[str, bytes]]) -> None:
+        """Add a large batch of .fit files, saving every 25 so a restart loses little, then log the outcome."""
+        counts = {"created": 0, "upgraded": 0, "duplicate": 0, "not_run": 0, "unreadable": 0}
+        db = SessionLocal()
+        try:
+            a = db.get(Athlete, athlete_id)
+            for i, (_name, data) in enumerate(files, 1):
+                try:
+                    parsed = parse_fit(data)
+                except FitError:
+                    counts["unreadable"] += 1
+                    continue
+                if not parsed.is_running:
+                    counts["not_run"] += 1
+                    continue
+                counts[ingest(db, a, parsed, "upload")[1]] += 1
+                if i % 25 == 0:
+                    db.commit()
+                time.sleep(0)  # let page requests in between files
+            added = counts["created"] + counts["upgraded"]
+            log(db, "upload", f"Upload for {name}: {added} runs added, {counts['duplicate']} already there, "
+                              f"{counts['not_run']} not runs, {counts['unreadable']} unreadable.")
+            db.commit()
+        except Exception as exc:
+            db.rollback()
+            log(db, "upload", f"Upload for {name} stopped: {exc}", "error")
+            db.commit()
+        finally:
+            db.close()
 
     def _upload_one(db: Session, a: Athlete, raw: bytes) -> tuple[str, str]:
         try:

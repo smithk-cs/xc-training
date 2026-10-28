@@ -148,3 +148,26 @@ def test_activity_list_in_kilometers():
     km = GC_CSV.replace('"5.08"', '"8.18"').replace('"3.10"', '"5.0"').replace('"1.04"', '"1.7"')
     runs, skipped, unit = G.parse(km.encode())
     assert unit == "km" and [round(r.distance_m) for r in runs] == [8180, 5000, 1700] and skipped == 1
+
+
+def test_big_uploads_run_in_the_background(client, monkeypatch):
+    from xcapp import web
+    started = []
+
+    class NowThread:  # runs the work straight away, so the test can check the result
+        def __init__(self, target, args, daemon):
+            started.append(daemon)
+            self.target, self.args = target, args
+
+        def start(self):
+            self.target(*self.args)
+    monkeypatch.setattr(web, "BIG_UPLOAD", 2)
+    monkeypatch.setattr(web.threading, "Thread", NowThread)
+    msgs = upload(client, [("runs.zip", zipped([(f"{d}.fit", run(d)) for d in (1, 2, 3)] + [("ride.fit", ride(4))]))])
+    assert msgs == [("ok", "Adding 4 files in the background. Runs appear over the next few minutes; the Sync log says when "
+                           "it&#39;s done. The rest of the app works as usual meanwhile.")]
+    assert started == [True] and runs() == [1, 2, 3]
+    from xcapp.models import SyncLog
+    db = SessionLocal()
+    assert db.query(SyncLog).filter_by(kind="upload").one().message == "Upload for Ava Doyle: 3 runs added, 0 already there, 1 not runs, 0 unreadable."
+    db.close()
