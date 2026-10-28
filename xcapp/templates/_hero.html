@@ -11,6 +11,11 @@
         {% if g.group %}
         <b>Running group: {{ g.group }}</b>
         {% if g.target_1600 %}<div class="facts"><div><span class="k">800 target</span><span class="big">{{ g.target_800 }}</span></div><div><span class="k">1600 target</span><span class="big">{{ g.target_1600 }}</span></div></div>{% endif %}
+        {% if hero_paces is defined and hero_paces %}
+        <b class="small">My training paces <span class="muted" style="font-weight:400">(VDOT {{ g.vdot }})</span></b>
+        <div class="facts paces">{% for z in hero_paces %}<div><span class="k">{{ z.name }}</span><span class="big">{{ fmt_time(z.mile)[:-2] }}<small class="small muted">/mi</small></span>{% if z.lap %}<span class="small muted">{{ '%.0f' % z.lap }} s per 400</span>{% endif %}</div>{% endfor %}</div>
+        <span class="small muted">For reference. Your coaches’ workout targets come first.</span>
+        {% endif %}
         <span class="small muted">{% if g.override %}Your coach placed you in this group.{% elif g.vdot_set %}Your coach set your VDOT.{% else %}From your most recent race{% if g.source %} ({{ g.source }}){% endif %}. It updates after each race.{% endif %}</span>
         {% else %}
         <span class="small">Your running group and VDOT come from your most recent race. They appear here once your coach records one.</span>

@@ -100,7 +100,7 @@ def test_vdot_page_and_editing(app):
     c.post(f"/athletes/{sam}/vdot", data={"csrf": csrf, "vdot": ""})
     assert "worked out from their most recent race" in c.get(f"/athletes/{sam}").text
     me = TestClient(web).get("/a/t-sam").text
-    assert "From your most recent race (Oak Hills" in me and 'id="tp-h">My training paces' in me
+    assert "From your most recent race (Oak Hills" in me and 'My training paces <span class="muted"' in me
     assert all(f">{x}<small" in me for x in sam_paces) and " s per 400</span>" in me
 
     t = login(web, "trainer1")

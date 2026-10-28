@@ -101,7 +101,7 @@
     {% endif %}
   </section>
 {% endmacro %}
-{% with hero_title="Hi " ~ a.first_name, hero_text="This is your personal page for the team’s training system. Keep this link to yourself.", back_url=None, hero_group=(ability if show_group else none), hero_vo2=vo2, hero_photo=('/a/' ~ token ~ '/photo?v=' ~ photo_v if photo_v else none), hero_name=a.name %}{% include "_hero.html" %}{% endwith %}
+{% with hero_title="Hi " ~ a.first_name, hero_text="This is your personal page for the team’s training system. Keep this link to yourself.", back_url=None, hero_group=(ability if show_group else none), hero_vo2=vo2, hero_photo=('/a/' ~ token ~ '/photo?v=' ~ photo_v if photo_v else none), hero_name=a.name, hero_paces=my_paces %}{% include "_hero.html" %}{% endwith %}
 <div class="stack">
   {% for level, text in messages %}<div class="flash {{ level }}" role="status">{{ text }}</div>{% endfor %}
   {{ badges(wins) }}
@@ -127,15 +127,6 @@
     <p class="muted">No workouts planned for the next 7 days yet. Your coaches add them here, with your target times.</p>
     {% endfor %}
   </section>
-  {% if my_paces %}
-  <section class="panel" aria-labelledby="tp-h">
-    <h2 id="tp-h">My training paces</h2>
-    <p class="muted small">For reference, from your VDOT of {{ ability.vdot }}. Your coaches’ workout targets above come first.</p>
-    <div class="facts">
-      {% for z in my_paces %}<div><span class="k">{{ z.name }}</span><span class="big">{{ fmt_time(z.mile)[:-2] }}<small class="small muted"> /mi</small></span>{% if z.lap %}<span class="small muted">{{ '%.0f' % z.lap }} s per 400</span>{% endif %}</div>{% endfor %}
-    </div>
-  </section>
-  {% endif %}
   {% if meets %}
   <section class="panel" id="meets" aria-labelledby="mt-h">
     <h2 id="mt-h">Upcoming meets</h2>

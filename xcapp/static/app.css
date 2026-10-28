@@ -339,3 +339,7 @@ details.fold-card[open] > summary::after { content: "▾"; }
 details.fold-card[open] > summary { margin-bottom: 10px; }
 details.card.meet { margin-bottom: 8px; padding-top: 12px; padding-bottom: 12px; }
 details.card.meet > summary h2 { font-size: 20px; }
+.group-card .facts.paces { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.group-card .facts.paces .big { font-size: 22px; }
+.badges { margin-top: 10px; }
+.coach-title + .badges { margin: 12px 0 8px; }
