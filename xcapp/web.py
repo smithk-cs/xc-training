@@ -652,10 +652,15 @@ def create_app() -> FastAPI:
     def races_page(request: Request, user=Depends(any_staff, scope="function"), db: Session = Depends(get_db, scope="function")):
         rows = db.scalars(select(RaceResult).options(selectinload(RaceResult.athlete))
                           .order_by(RaceResult.date.desc(), RaceResult.meet, RaceResult.race, RaceResult.place, RaceResult.time_s)).all()
+        seasons = sorted({A.season_for(r.date) for r in rows}, key=lambda x: (int(x.split()[0]), x.endswith("XC")), reverse=True)
+        pick = request.query_params.get("season", "")
+        season = pick if pick in seasons or pick == "all" else (seasons[0] if seasons else "")
         meets: dict[tuple, dict[tuple, list]] = {}
         for r in rows:
-            meets.setdefault((r.date, r.meet, r.course), {}).setdefault((r.race, r.distance_label, r.distance_m), []).append(r)
-        return render(request, "races.html", user, meets=meets)
+            if season in ("all", A.season_for(r.date)):
+                meets.setdefault((r.date, r.meet, r.course), {}).setdefault((r.race, r.distance_label, r.distance_m), []).append(r)
+        counts = {x: len({(r.date, r.meet) for r in rows if A.season_for(r.date) == x}) for x in seasons}
+        return render(request, "races.html", user, meets=meets, seasons=seasons, season=season, counts=counts)
 
     @app.post("/races/import")
     async def races_import(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
@@ -678,6 +683,10 @@ def create_app() -> FastAPI:
             flash(request, "Nothing was imported. Fix these rows and try again: " + "; ".join(exc.errors[:8]), "error")
         return back("/races")
 
+    def races_url(d: dt.date) -> str:
+        from urllib.parse import quote
+        return f"/races?season={quote(A.season_for(d))}"
+
     @app.post("/races/edit-meet")
     async def races_edit_meet(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
         f = await form_checked(request)
@@ -697,7 +706,7 @@ def create_app() -> FastAPI:
             sync_benchmark(db, r)
         log(db, "admin", f"{user.username} edited {meet} ({d}) → {name} ({new_date}).")
         flash(request, f"Saved {name} ({len(rows)} results).")
-        return back("/races")
+        return back(races_url(new_date))
 
     @app.post("/races/edit-race")
     async def races_edit_race(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
@@ -723,7 +732,7 @@ def create_app() -> FastAPI:
         log(db, "admin", f"{user.username} edited {meet} {old_race}: {old_m:g} m → {label}.")
         flash(request, f"Saved {race or 'the race'} at {label} ({len(rows)} results)." +
               (" These times now count toward VDOT." if rows and rows[0].result_id else ""))
-        return back("/races")
+        return back(races_url(d))
 
     @app.post("/races/delete")
     async def races_delete(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
@@ -741,7 +750,7 @@ def create_app() -> FastAPI:
                     db.delete(res)
             db.delete(r)
         flash(request, f"Deleted {meet} ({len(rows)} results).")
-        return back("/races")
+        return back(races_url(d))
 
     @app.get("/results", response_class=HTMLResponse)
     def results_page(request: Request, user=Depends(any_staff, scope="function"), db: Session = Depends(get_db, scope="function")):

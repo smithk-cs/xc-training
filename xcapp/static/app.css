@@ -327,3 +327,7 @@ details.panel.fold:not([open]) { gap: 0; }
 .hero .badges .badge { background: rgba(255,255,255,.95); color: #1B1B1F; border-color: transparent; }
 .hero .badges .badge small { color: #5E5850; }
 details.edit-box > summary { cursor: pointer; color: var(--brand-red); font-weight: 600; } details.edit-box[open] { flex-basis: 100%; margin: 6px 0 10px; }
+nav.tabs { display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 2px solid var(--color-border-line); margin: 16px 0 12px; }
+nav.tabs a { padding: 8px 14px; border-radius: 10px 10px 0 0; text-decoration: none; color: var(--color-fg-muted); font-weight: 600; margin-bottom: -2px; border-bottom: 3px solid transparent; }
+nav.tabs a:hover { color: var(--brand-red); }
+nav.tabs a[aria-current="page"] { color: var(--brand-red); border-bottom-color: var(--brand-red); background: var(--color-panel); }

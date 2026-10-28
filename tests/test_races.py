@@ -200,3 +200,16 @@ def test_editing_a_meet_and_a_race_distance(staff):
     db.close()
     t = login(staff, "trainer1")
     assert "Edit race" not in t.get("/races").text
+
+
+def test_season_tabs(staff):
+    c = login(staff, "coach1")
+    post_import(c, HISTORY)                                  # races in 2025 XC and 2026 XC
+    page = c.get("/races").text
+    assert '<nav class="tabs" aria-label="Seasons">' in page and '>2026 XC <span class="small">(2)</span></a>' in page
+    assert 'href="/races?season=2026%20XC" aria-current="page"' in page                     # latest season first
+    assert "Lakeside Open" in page and "Hilltop Classic" not in page
+    older = c.get("/races?season=2025 XC").text
+    assert "Hilltop Classic" in older and "Lakeside Open" not in older
+    both = c.get("/races?season=all").text
+    assert "Hilltop Classic" in both and "Lakeside Open" in both
