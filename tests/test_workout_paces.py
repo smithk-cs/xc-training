@@ -55,7 +55,7 @@ def test_paces_from_current_time_and_goal(app):
 
 def test_athlete_page_section(app):
     page = TestClient(app).get("/a/tok-sam").text
-    assert "Upcoming workouts" in page and page.index('id="wp-h"') < page.index("My training")   # near the top
+    assert "Upcoming workouts" in page and page.index('id="wp-h"') < page.index('id="ac-h"')   # above the charts
     assert "Today · 6 x 1K @ 5K pace" in page and "1,000 m reps · Interval (5K pace)" in page
     assert "Thu, Oct 29 · Tempo 3 x 1 mile" in page and "Threshold (5K pace × 1.07)" in page
     assert "Fri, Oct 30 · 8 x 400 @ mile pace" in page and "Estimated from your best 5K, 15:30.0" in page
