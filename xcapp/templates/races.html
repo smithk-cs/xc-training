@@ -5,7 +5,7 @@
 {% if user.role != 'trainer' %}
 <details class="card fold-card">
   <summary><h2>Import race results</h2></summary>
-  <p class="small muted">A CSV file with a header row: <code>meet, date, race, distance, athlete, time</code>, and optionally <code>course, place, points, grade, gender, group</code>. One row per athlete per race. Distances like <code>5,000 Meters</code>, <code>4K</code> or <code>3 Miles</code>. Importing the same file twice doesn’t double anything.</p>
+  <p class="small muted">A CSV file with a header row: <code>meet, date, race, distance, athlete, time</code>, and optionally <code>course, place, points, grade, gender</code>. One row per athlete per race. Distances like <code>5,000 Meters</code>, <code>4K</code> or <code>3 Miles</code>. Importing the same file twice doesn’t double anything.</p>
   <pre class="small" style="overflow-x:auto">meet,date,course,race,distance,place,athlete,time,grade,gender
 Flat SAC Invitational,2026-10-24,Gibson Ranch Regional Park,Boys Varsity Large School,"5,000 Meters",6,Ava Doyle,15:29.9,12,Boys</pre>
   <form method="post" action="/races/import" enctype="multipart/form-data">

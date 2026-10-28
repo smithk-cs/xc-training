@@ -414,9 +414,10 @@ def create_app() -> FastAPI:
             grade = int(f.get("grade", 0))
             if not 6 <= grade <= 12:
                 raise ValueError("Grade should be 6 to 12.")
-            gender, group = f.get("gender"), f.get("group")
-            if gender not in ("Boys", "Girls") or group not in GROUPS:
-                raise ValueError("Pick a team and a group.")
+            gender = f.get("gender")
+            group = f.get("group") if f.get("group") in GROUPS else "JV"  # no longer shown; kept for older data
+            if gender not in ("Boys", "Girls"):
+                raise ValueError("Pick a team.")
             hr_max = int(f["hr_max"]) if f.get("hr_max") else None
             db.add(Athlete(first_name=first, last_name=last, gender=gender, grade=grade, group=group,
                            hr_max=hr_max, link_token=new_link_token()))
@@ -474,9 +475,11 @@ def create_app() -> FastAPI:
         a = get_athlete(db, athlete_id)
         try:
             grade = int(f.get("grade", a.grade))
-            if not 6 <= grade <= 12 or f.get("group") not in GROUPS:
+            if not 6 <= grade <= 12:
                 raise ValueError("Check the grade and group.")
-            a.grade, a.group = grade, f.get("group")
+            a.grade = grade
+            if f.get("group") in GROUPS:
+                a.group = f.get("group")
             a.hr_max = int(f["hr_max"]) if f.get("hr_max") else None
             a.hr_rest = int(f["hr_rest"]) if f.get("hr_rest") else None
             a.email = clean_email(f.get("email", ""))

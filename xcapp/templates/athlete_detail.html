@@ -23,7 +23,7 @@
 </details>
 </div>
 {{ badges(wins) }}
-<p class="muted">{{ a.gender }}, grade {{ a.grade }}, {{ a.group }}.{% if ability.group %} Ability group <b>{{ ability.group }}</b>{% if ability.vdot %} (VDOT {{ ability.vdot }}, {% if ability.vdot_set %}set by a coach{% else %}from {{ ability.source }}{% endif %}){% endif %}{% if ability.override %}, pinned by a coach{% endif %}.{% if ability.target_1600 %} Targets: 800 {{ ability.target_800 }}, 1600 {{ ability.target_1600 }}.{% endif %}{% endif %}
+<p class="muted">{{ a.gender }}, grade {{ a.grade }}{% if a.grad_year %} (class of {{ a.grad_year }}){% endif %}.{% if ability.group %} Ability group <b>{{ ability.group }}</b>{% if ability.vdot %} (VDOT {{ ability.vdot }}, {% if ability.vdot_set %}set by a coach{% else %}from {{ ability.source }}{% endif %}){% endif %}{% if ability.override %}, pinned by a coach{% endif %}.{% if ability.target_1600 %} Targets: 800 {{ ability.target_800 }}, 1600 {{ ability.target_1600 }}.{% endif %}{% endif %}
 {% if rhr %} Resting heart rate {{ rhr.latest.bpm }} ({{ rhr.latest.date.strftime('%b %-d') }}, {{ 'Garmin' if rhr.latest.source == 'garmin' else 'athlete entered' }}){% if rhr.week is not none %}; this week {{ '%.0f' % rhr.week }}{% endif %}{% if rhr.usual is not none %}, usual {{ '%.0f' % rhr.usual }}{% endif %}{% if rhr.flag %} <span class="pill bad">Up {{ '%.0f' % rhr.up }} bpm</span>{% endif %}.{% endif %}
 {% if vo2 %} Watch VO2 max {{ '%.1f' % vo2.vo2_max }} ({{ vo2.local_date.strftime('%b %-d') }}; Garmin’s estimate, not used for groups).{% endif %}
 {% if a.garmin and a.garmin.status == 'connected' %} Garmin connected{% if a.garmin.consent_at %} (parent/guardian approval confirmed {{ a.garmin.consent_at.strftime('%b %-d, %Y') }}){% endif %}.{% else %} Garmin not connected.{% endif %}</p>
@@ -100,7 +100,6 @@
     <div class="form-row">
       <label>Grade<input type="number" name="grade" min="6" max="12" value="{{ a.grade }}"></label>
       <label>Class of<input type="number" name="grad_year" min="1990" max="2100" value="{{ a.grad_year or '' }}" style="width:6em"></label>
-      <label>Group<select name="group">{% for g in GROUPS %}<option {% if g == a.group %}selected{% endif %}>{{ g }}</option>{% endfor %}</select></label>
       <label>Max HR<input type="number" name="hr_max" min="150" max="230" value="{{ a.hr_max or '' }}"></label>
       <label>Resting HR<input type="number" name="hr_rest" min="30" max="100" value="{{ a.hr_rest or '' }}"></label>
       <label>Email<input type="email" name="email" maxlength="254" value="{{ a.email }}" placeholder="name@example.org" autocomplete="off"></label>
@@ -170,7 +169,7 @@
       <label class="check"><input type="checkbox" name="confirm" value="1" required> Move all their runs, results, races and reports to {{ a.name }} and remove the other entry</label>
       <button type="submit" class="danger">Combine</button>
     </form>
-    <p class="small muted">{{ a.name }}’s name, grade, group and personal link are kept; the other entry’s link stops working. The same run or result recorded under both names is kept once. The other name is saved above, so future uploads match {{ a.first_name }}.</p>
+    <p class="small muted">{{ a.name }}’s name, grade and personal link are kept; the other entry’s link stops working. The same run or result recorded under both names is kept once. The other name is saved above, so future uploads match {{ a.first_name }}.</p>
   </details>
   {% if user.role == 'admin' %}
   <form method="post" action="/athletes/{{ a.id }}/delete" style="margin-top:1em">
