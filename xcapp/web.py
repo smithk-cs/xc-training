@@ -40,7 +40,7 @@ from .imports import (GROUPS, ImportErrors, clean_email, clean_phone, import_goa
 from .ingest import ingest, log, rematch_day
 from .models import (Activity, AiRun, AppSetting, Athlete, DeletionRequest, GarminConnection, Injury, MissedDay,
                      OAuthState, PainReport, PlannedWorkout, RaceResult, RestingHeartRate, Result, StaffUser, AthletePhoto,
-                     MeetEntry, MeetDivision, MeetResponse, DivisionAthlete, SyncLog, TrainingGroup, VdotChange, utcnow)
+                     MeetEntry, MeetDivision, MeetResponse, DivisionAthlete, SyncLog, TrainingGroup, VdotChange, Announcement, utcnow)
 from .security import csrf_ok, csrf_token, hash_password, new_link_token, verify_password
 
 HERE = Path(__file__).parent
@@ -325,7 +325,13 @@ def create_app() -> FastAPI:
         soon = A.team_today() + dt.timedelta(days=14)
         due = [(a, delete_by(a)) for a in db.scalars(select(Athlete).where(Athlete.active.is_(False), Athlete.left_on.is_not(None))).all()
                if delete_by(a) <= soon]
+        today_ = A.team_today()
+        notes = db.scalars(select(Announcement).order_by(Announcement.start_date.desc(), Announcement.id.desc())).all()
         return render(request, "home.html", user, snap=snap, stats=stats, last_ai=last_ai, webhook=webhook, deletions=deletions, due=due,
+                      notes_now=[n for n in notes if n.start_date <= today_ <= n.end_date], notes_later=[n for n in notes if n.start_date > today_][::-1],
+                      notes_past=[n for n in notes if n.end_date < today_][:20], audiences=["Boys", "Girls"] + [g.name for g in
+                      db.scalars(select(TrainingGroup).order_by(TrainingGroup.position)).all()], today_iso=today_.isoformat(),
+                      week_iso=(today_ + dt.timedelta(days=7)).isoformat(),
                       rhr_flags=A.resting_hr_flags(db, A.team_today()), rhr_flag=A.RESTING_HR_FLAG)
 
     # ---------- dashboard ----------
@@ -1118,7 +1124,10 @@ def create_app() -> FastAPI:
                       show_group=show_group, open_delete=open_delete, races=races, vo2=A.latest_vo2(db, a.id),
                       rhr=A.resting_hr(db, a.id, today), rhr_range=(A.RESTING_HR_MIN, A.RESTING_HR_MAX),
                       rhr_cal=A.resting_hr_calendar(db, a.id, today), photo_v=photo_versions(db).get(a.id), meets=my_meets(db, a, today),
-                      wins=A.achievements(db, a, today), my_paces=A.training_paces(mine.get("vdot")) if show_group else [],
+                      wins=A.achievements(db, a, today),
+                      notes=[n for n in db.scalars(select(Announcement).where(Announcement.start_date <= today, Announcement.end_date >= today)
+                                                   .order_by(Announcement.start_date.desc(), Announcement.id.desc())).all()
+                             if n.for_athlete(a.gender, mine.get("group") or "")], my_paces=A.training_paces(mine.get("vdot")) if show_group else [],
                       areas=BODY_AREAS, token=token, today=today.isoformat())
 
     @app.post("/a/{token}/connect")
@@ -1743,6 +1752,35 @@ def create_app() -> FastAPI:
         season = season if season in seasons else seasons[0]
         return render(request, "report_athlete.html", user, o=RP.overview(db, a, season), seasons=seasons,
                       photo_v=photo_versions(db).get(a.id), athletes=athletes_sorted(db))
+
+    # ---------- announcements ----------
+
+    @app.post("/announcements")
+    async def announcement_save(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
+        f = await form_checked(request)
+        n = db.get(Announcement, int(f["id"])) if str(f.get("id", "")).isdigit() else None
+        if f.get("delete"):
+            if n is not None:
+                db.delete(n)
+                flash(request, f"Deleted “{n.title}”.")
+            return back("/#announcements")
+        try:
+            title = str(f.get("title", "")).strip()[:120]
+            start, end = parse_date(str(f.get("start_date", ""))), parse_date(str(f.get("end_date", "")))
+            if not title:
+                raise ValueError("Give the announcement a title.")
+            if end < start:
+                raise ValueError("The end date is before the start date.")
+        except ValueError as exc:
+            flash(request, str(exc), "error")
+            return back("/#announcements")
+        if n is None:
+            n = Announcement(created_by=user.username)
+            db.add(n)
+        n.title, n.body, n.start_date, n.end_date = title, str(f.get("body", "")).strip()[:2000], start, end
+        n.audience = str(f.get("audience", ""))[:40]
+        flash(request, f"Saved “{title}”: on athletes’ pages {start:%b %-d} to {end:%b %-d}.")
+        return back("/#announcements")
 
     # ---------- reminder emails ----------
 

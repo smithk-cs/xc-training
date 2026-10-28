@@ -104,6 +104,9 @@
 {% with hero_title="Hi " ~ a.first_name, hero_text="This is your personal page for the team’s training system. Keep this link to yourself.", back_url=None, hero_group=(ability if show_group else none), hero_vo2=vo2, hero_photo=('/a/' ~ token ~ '/photo?v=' ~ photo_v if photo_v else none), hero_name=a.name, hero_paces=my_paces %}{% include "_hero.html" %}{% endwith %}
 <div class="stack">
   {% for level, text in messages %}<div class="flash {{ level }}" role="status">{{ text }}</div>{% endfor %}
+  {% for n in notes %}<section class="announcement" role="note" aria-label="Announcement">
+    <div class="ann-title">{{ n.title }}</div>{% if n.body %}<div class="ann-body">{{ n.body }}</div>{% endif %}
+  </section>{% endfor %}
   {{ badges(wins) }}
   <section class="panel" aria-labelledby="wp-h">
     <h2 id="wp-h">Upcoming workouts</h2>

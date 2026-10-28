@@ -343,3 +343,10 @@ details.card.meet > summary h2 { font-size: 20px; }
 .group-card .facts.paces .big { font-size: 22px; }
 .badges { margin-top: 10px; }
 .coach-title + .badges { margin: 12px 0 8px; }
+
+.announcement { background: #FFF8E6; border: 1px solid var(--brand-gold); border-left: 6px solid var(--brand-gold); border-radius: 12px; padding: 12px 16px; color: #1B1B1F; }
+.announcement .ann-title { font-weight: 700; font-size: 17px; }
+.announcement .ann-body { white-space: pre-wrap; margin-top: 4px; font-size: 15px; }
+details.ann-row { border-top: 1px solid var(--color-border-line); padding: 6px 0; }
+details.ann-row > summary { cursor: pointer; }
+details.ann-row[open] > summary { margin-bottom: 8px; }

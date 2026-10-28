@@ -24,6 +24,33 @@
   <ul>{% for d in deletions %}<li>{% if d.athlete_id %}<a href="/athletes/{{ d.athlete_id }}">{{ d.athlete_name }}</a>{% else %}{{ d.athlete_name }}{% endif %}, asked {{ d.created_at.strftime('%b %-d') }}</li>{% endfor %}</ul>
 </div>
 {% endif %}
+{% macro note_form(n) %}
+<form method="post" action="/announcements" style="display:flex; flex-direction:column; gap:8px">
+  <input type="hidden" name="csrf" value="{{ csrf }}">{% if n %}<input type="hidden" name="id" value="{{ n.id }}">{% endif %}
+  <label>Title<input type="text" name="title" maxlength="120" required value="{{ n.title if n else '' }}" placeholder="Bus leaves at 6:45 a.m. Saturday"></label>
+  <label>Message (optional)<textarea name="body" rows="3" maxlength="2000">{{ n.body if n else '' }}</textarea></label>
+  <div class="form-row">
+    <label>Show from<input type="date" name="start_date" required value="{{ n.start_date.isoformat() if n else today_iso }}"></label>
+    <label>Until<input type="date" name="end_date" required value="{{ n.end_date.isoformat() if n else week_iso }}"></label>
+    <label>Who sees it<select name="audience"><option value="">Every athlete</option>{% for x in audiences %}<option{% if n and n.audience == x %} selected{% endif %}>{{ x }}</option>{% endfor %}</select></label>
+  </div>
+  <div class="form-row"><button type="submit">{{ 'Save' if n else 'Post announcement' }}</button>
+    {% if n %}<button type="submit" name="delete" value="1" class="link" formnovalidate onclick="return confirm('Delete this announcement?')">Delete</button>{% endif %}</div>
+</form>
+{% endmacro %}
+{% macro note_list(items, label) %}{% if items %}
+<h3 class="small" style="margin:12px 0 4px">{{ label }}</h3>
+{% for n in items %}<details class="ann-row"><summary><b>{{ n.title }}</b> <span class="small muted">{{ n.start_date.strftime('%b %-d') }} – {{ n.end_date.strftime('%b %-d') }}{% if n.audience %} · {{ n.audience }}{% endif %}</span></summary>{{ note_form(n) }}</details>{% endfor %}
+{% endif %}{% endmacro %}
+{% if user.role != 'trainer' %}
+<div class="card" id="announcements">
+  <h2>Announcements</h2>
+  <p class="small muted">Shown at the top of athletes’ pages between the dates you pick, and nowhere else.</p>
+  {{ note_list(notes_now, "Showing now") }}{{ note_list(notes_later, "Coming up") }}
+  <details{% if not notes_now and not notes_later %} open{% endif %} style="margin-top:10px"><summary style="cursor:pointer; font-weight:600; color:var(--brand-red)">New announcement</summary>{{ note_form(none) }}</details>
+  {% if notes_past %}<details style="margin-top:8px"><summary class="small" style="cursor:pointer">Past announcements ({{ notes_past|length }})</summary>{{ note_list(notes_past, "") }}</details>{% endif %}
+</div>
+{% endif %}
 <div class="stats">
   <div class="stat"><b>{{ stats.athletes }}</b><span class="muted small">athletes on the roster</span></div>
   <div class="stat"><b>{{ stats.connected }}</b><span class="muted small">connected to Garmin</span></div>

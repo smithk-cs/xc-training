@@ -359,6 +359,22 @@ class VdotChange(Base):
     source: Mapped[str] = mapped_column(String(20), default="")      # athlete page | VDOT page | pasted list
 
 
+class Announcement(Base):
+    """A coach's message shown at the top of athletes' pages between its start and end dates."""
+    __tablename__ = "announcements"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    title: Mapped[str] = mapped_column(String(120))
+    body: Mapped[str] = mapped_column(Text, default="")
+    start_date: Mapped[dt.date] = mapped_column(Date, index=True)
+    end_date: Mapped[dt.date] = mapped_column(Date, index=True)
+    audience: Mapped[str] = mapped_column(String(40), default="")  # "" everyone | Boys | Girls | a running group's name
+    created_by: Mapped[str] = mapped_column(String(80), default="")
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
+
+    def for_athlete(self, gender: str, group: str) -> bool:
+        return not self.audience or self.audience in (gender, group)
+
+
 class RestingHeartRate(Base):
     """An athlete's resting heart rate for one day: from Garmin's daily summary, or typed in by the athlete.
     Never sent to the AI."""
