@@ -387,3 +387,23 @@ def import_vdots(db: Session, text: str, by: str = "") -> dict:
         out["loose" if loose else "set"].append((a, vdot, name))
     db.flush()
     return out
+
+
+def sync_benchmark(db: Session, rr: RaceResult) -> None:
+    """Keep a meet result's benchmark time (used for VDOT and running groups) in step after its distance, date or
+    meet changes: created at a benchmark distance (1 mile, 1.5 mile, 2 mile, 5K), removed at any other."""
+    event = benchmark_event(rr.distance_m)
+    res = db.get(Result, rr.result_id) if rr.result_id else None
+    if event is None:
+        if res is not None:
+            db.delete(res)
+        rr.result_id = None
+        return
+    if res is None:
+        res = Result(athlete_id=rr.athlete_id, kind="race", time_s=round(rr.time_s, 2))
+        db.add(res)
+    res.event, res.date, res.season = event, rr.date, season_for(rr.date)
+    res.course = (rr.course or rr.meet)[:120]
+    res.note = (f"{rr.meet} ({rr.race})" if rr.race else rr.meet)[:200]
+    db.flush()
+    rr.result_id = res.id

@@ -326,3 +326,4 @@ details.panel.fold:not([open]) { gap: 0; }
 .badge-vdot { border-color: #1F9D55; } .badge-pr { border-color: var(--brand-gold); } .badge-training { border-color: var(--brand-red); }
 .hero .badges .badge { background: rgba(255,255,255,.95); color: #1B1B1F; border-color: transparent; }
 .hero .badges .badge small { color: #5E5850; }
+details.edit-box > summary { cursor: pointer; color: var(--brand-red); font-weight: 600; } details.edit-box[open] { flex-basis: 100%; margin: 6px 0 10px; }

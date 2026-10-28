@@ -25,8 +25,33 @@ Flat SAC Invitational,2026-10-24,Gibson Ranch Regional Park,Boys Varsity Large S
     <h2>{{ meet }}</h2>
     <span class="muted">{{ date.strftime('%a, %b %-d, %Y') }}{% if course %} · {{ course }}{% endif %} · {{ races.values()|map('length')|sum }} results</span>
   </summary>
+  {% if user.role != 'trainer' %}
+  <details class="edit-box"><summary class="small">Edit meet</summary>
+    <form method="post" action="/races/edit-meet" class="form-row">
+      <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="date" value="{{ date.isoformat() }}"><input type="hidden" name="meet" value="{{ meet }}">
+      <label style="flex:1">Meet<input type="text" name="name" value="{{ meet }}" maxlength="160" required></label>
+      <label>Date<input type="date" name="new_date" value="{{ date.isoformat() }}" required></label>
+      <label style="flex:1">Course<input type="text" name="course" value="{{ course or '' }}" maxlength="160"></label>
+      <button type="submit">Save meet</button>
+    </form>
+  </details>
+  {% endif %}
   {% for (race, label, meters), rows in races.items() %}
-  <h3>{{ race or 'Race' }} · {{ label }}</h3>
+  <div class="form-row" style="justify-content:space-between; align-items:baseline">
+    <h3>{{ race or 'Race' }} · {{ label }}</h3>
+    {% if user.role != 'trainer' %}
+    <details class="edit-box"><summary class="small">Edit race</summary>
+      <form method="post" action="/races/edit-race" class="form-row">
+        <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="date" value="{{ date.isoformat() }}">
+        <input type="hidden" name="meet" value="{{ meet }}"><input type="hidden" name="race" value="{{ race }}"><input type="hidden" name="meters" value="{{ meters }}">
+        <label>Race<input type="text" name="new_race" value="{{ race }}" maxlength="120"></label>
+        <label>Distance<input type="text" name="distance" value="{{ label }}" maxlength="40" list="race-distances" required style="width:9em"></label>
+        <button type="submit">Save race</button>
+      </form>
+      <p class="small muted">Changes this race for all {{ rows|length }} results. Times at 1 mile, 1.5 miles, 2 miles or 5K count toward VDOT.</p>
+    </details>
+    {% endif %}
+  </div>
   <div class="scroll"><table class="list">
     <thead><tr><th class="num">Place</th><th>Athlete</th><th class="num">Grade</th><th class="num">Time</th><th class="num">Pace / mile</th></tr></thead>
     <tbody>
@@ -49,4 +74,5 @@ Flat SAC Invitational,2026-10-24,Gibson Ranch Regional Park,Boys Varsity Large S
 {% else %}
 <div class="card"><p class="muted">No races yet. Import a meet’s results above.</p></div>
 {% endfor %}
+<datalist id="race-distances">{% for n in ('1 Mile', '1.5 Miles', '2 Miles', '2.5 Miles', '3 Miles', '4K', '5K', '6K', '4,000 Meters', '5,000 Meters') %}<option value="{{ n }}">{% endfor %}</datalist>
 {% endblock %}

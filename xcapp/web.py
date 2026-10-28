@@ -34,7 +34,8 @@ from . import garmin_csv as GCSV
 from .config import settings
 from .db import SessionLocal, create_all
 from .fitfile import MAX_FITS_PER_UPLOAD, MAX_UPLOAD_BYTES, FitError, fit_files, parse_fit
-from .imports import GROUPS, ImportErrors, clean_email, clean_phone, import_vdots, import_goals, import_races, import_results, import_roster, parse_date, set_goal
+from .imports import (GROUPS, ImportErrors, clean_email, clean_phone, import_goals, import_races, import_results, import_roster,
+                      import_vdots, parse_date, parse_distance, set_goal, sync_benchmark)
 from .ingest import ingest, log, rematch_day
 from .models import (Activity, AiRun, AppSetting, Athlete, DeletionRequest, GarminConnection, Injury, MissedDay,
                      OAuthState, PainReport, PlannedWorkout, RaceResult, RestingHeartRate, Result, StaffUser, AthletePhoto,
@@ -675,6 +676,53 @@ def create_app() -> FastAPI:
                 log(db, "admin", f"{user.username} added {added} athlete{'' if added == 1 else 's'} from a race results import.")
         except ImportErrors as exc:
             flash(request, "Nothing was imported. Fix these rows and try again: " + "; ".join(exc.errors[:8]), "error")
+        return back("/races")
+
+    @app.post("/races/edit-meet")
+    async def races_edit_meet(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
+        f = await form_checked(request)
+        try:
+            d = dt.date.fromisoformat(str(f.get("date", "")))
+            new_date = parse_date(str(f.get("new_date", "")))
+        except ValueError:
+            flash(request, "Check the date.", "error")
+            return back("/races")
+        meet, name = str(f.get("meet", "")), str(f.get("name", "")).strip()[:160]
+        if not name:
+            flash(request, "The meet needs a name.", "error")
+            return back("/races")
+        rows = db.scalars(select(RaceResult).where(RaceResult.date == d, RaceResult.meet == meet)).all()
+        for r in rows:
+            r.meet, r.date, r.course = name, new_date, str(f.get("course", "")).strip()[:160]
+            sync_benchmark(db, r)
+        log(db, "admin", f"{user.username} edited {meet} ({d}) → {name} ({new_date}).")
+        flash(request, f"Saved {name} ({len(rows)} results).")
+        return back("/races")
+
+    @app.post("/races/edit-race")
+    async def races_edit_race(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
+        f = await form_checked(request)
+        try:
+            d = dt.date.fromisoformat(str(f.get("date", "")))
+            old_m = float(f.get("meters", ""))
+        except ValueError:
+            raise HTTPException(400, "Bad race.")
+        label = str(f.get("distance", "")).strip()[:40]
+        try:
+            meters = parse_distance(label)
+        except ValueError:
+            flash(request, f"Distance '{label}' should look like 5K, 4,000 Meters or 3 Miles.", "error")
+            return back("/races")
+        meet, old_race = str(f.get("meet", "")), str(f.get("race", ""))
+        race = str(f.get("new_race", old_race)).strip()[:120]
+        rows = [r for r in db.scalars(select(RaceResult).where(RaceResult.date == d, RaceResult.meet == meet, RaceResult.race == old_race)).all()
+                if abs(r.distance_m - old_m) < 0.5]
+        for r in rows:
+            r.race, r.distance_label, r.distance_m = race, label, meters
+            sync_benchmark(db, r)
+        log(db, "admin", f"{user.username} edited {meet} {old_race}: {old_m:g} m → {label}.")
+        flash(request, f"Saved {race or 'the race'} at {label} ({len(rows)} results)." +
+              (" These times now count toward VDOT." if rows and rows[0].result_id else ""))
         return back("/races")
 
     @app.post("/races/delete")

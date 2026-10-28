@@ -165,3 +165,38 @@ def test_one_race_has_nothing_to_compare(staff):
     db.close()
     page = TestClient(staff).get(f"/a/{token}").text
     assert "My races" in page and "2026 XC" in page and 'id="race-view"' not in page
+
+
+def test_editing_a_meet_and_a_race_distance(staff):
+    c = login(staff, "coach1")
+    post_import(c, MEET)
+    page = c.get("/races").text
+    assert "Edit meet" in page and "Edit race" in page
+    csrf = re.search(r'name="csrf" value="([^"]+)"', page).group(1)
+    # The 4K was really a 5K: its time now counts toward VDOT.
+    c.post("/races/edit-race", data={"csrf": csrf, "date": "2026-10-24", "meet": "Riverbend Invitational", "race": "Girls JV",
+                                     "meters": "4000.0", "new_race": "Girls JV", "distance": "5,000 Meters"})
+    assert "Saved Girls JV at 5,000 Meters (1 results). These times now count toward VDOT." in c.get("/races").text
+    db = SessionLocal()
+    june = db.query(RaceResult).filter_by(race="Girls JV").one()
+    assert (june.distance_m, june.distance_label) == (5000.0, "5,000 Meters") and db.get(Result, june.result_id).event == "5K"
+    db.close()
+    # The boys' 5K was really 4K: the VDOT times go.
+    c.post("/races/edit-race", data={"csrf": csrf, "date": "2026-10-24", "meet": "Riverbend Invitational", "race": "Boys Varsity Large School",
+                                     "meters": "5000.0", "new_race": "Boys Varsity", "distance": "4K"})
+    db = SessionLocal()
+    boys = db.query(RaceResult).filter_by(race="Boys Varsity").all()
+    assert len(boys) == 2 and all(r.distance_m == 4000 and r.result_id is None for r in boys) and db.query(Result).count() == 1
+    db.close()
+    c.post("/races/edit-race", data={"csrf": csrf, "date": "2026-10-24", "meet": "Riverbend Invitational", "race": "Boys Varsity",
+                                     "meters": "4000.0", "distance": "far"})
+    assert "Distance &#39;far&#39; should look like 5K" in c.get("/races").text
+    c.post("/races/edit-meet", data={"csrf": csrf, "date": "2026-10-24", "meet": "Riverbend Invitational", "name": "Riverbend XC Classic",
+                                     "new_date": "2026-10-25", "course": "Riverbend Park North"})
+    db = SessionLocal()
+    assert {(r.meet, r.date, r.course) for r in db.query(RaceResult)} == {("Riverbend XC Classic", dt.date(2026, 10, 25), "Riverbend Park North")}
+    res = db.query(Result).one()
+    assert (res.date, res.course) == (dt.date(2026, 10, 25), "Riverbend Park North")
+    db.close()
+    t = login(staff, "trainer1")
+    assert "Edit race" not in t.get("/races").text
