@@ -331,3 +331,11 @@ nav.tabs { display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 2px solid va
 nav.tabs a { padding: 8px 14px; border-radius: 10px 10px 0 0; text-decoration: none; color: var(--color-fg-muted); font-weight: 600; margin-bottom: -2px; border-bottom: 3px solid transparent; }
 nav.tabs a:hover { color: var(--brand-red); }
 nav.tabs a[aria-current="page"] { color: var(--brand-red); border-bottom-color: var(--brand-red); background: var(--color-panel); }
+details.fold-card > summary { list-style: none; cursor: pointer; display: flex; align-items: center; justify-content: space-between; }
+details.fold-card > summary::-webkit-details-marker { display: none; }
+details.fold-card > summary h2 { margin: 0; }
+details.fold-card > summary::after { content: "▸"; color: var(--brand-red); font-size: 20px; }
+details.fold-card[open] > summary::after { content: "▾"; }
+details.fold-card[open] > summary { margin-bottom: 10px; }
+details.card.meet { margin-bottom: 8px; padding-top: 12px; padding-bottom: 12px; }
+details.card.meet > summary h2 { font-size: 20px; }
