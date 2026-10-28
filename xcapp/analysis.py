@@ -351,9 +351,20 @@ WORKOUT_ZONES = dict(PACE_ZONES + [("Repetition", REP_PCT)])
 OLD_TYPE_ZONE = {"Interval": "Interval", "Threshold": "Tempo", "Tempo": "Tempo", "Long": "Long run", "Recovery": "Easy"}
 
 
+def minutes_text(mins: float) -> str:
+    """14 -> '14 min', 1.5 -> '1:30 min'."""
+    whole, secs = int(mins), round(mins % 1 * 60)
+    return f"{whole}:{secs:02d} min" if secs else f"{whole} min"
+
+
+def distance_text(m: float) -> str:
+    """About how far: '1,250 m' under a mile, '2.3 mi' beyond."""
+    return f"{m:,.0f} m" if m < METERS_PER_MILE else f"{m / METERS_PER_MILE:.1f} mi"
+
+
 def part_label(p: dict) -> str:
-    """'2 × 4 × 400 m', '6 × 1,000 m', '3,200 m'."""
-    dist = f"{p['dist']:,.0f} m"
+    """'2 × 4 × 400 m', '6 × 1,000 m', '3,200 m', '4 × 5 min' (parts run for a time have 'mins' instead of 'dist')."""
+    dist = minutes_text(p["mins"]) if p.get("mins") else f"{p['dist']:,.0f} m"
     reps = f"{p['reps']} × {dist}" if p["reps"] > 1 else dist
     return f"{p['sets']} × {reps}" if p["sets"] > 1 else reps
 
@@ -376,6 +387,11 @@ def part_paces(parts: list[dict], v: float | None) -> list[dict]:
             out.append({"part": p, "label": part_label(p), "pace": None})
             continue
         mile = pace_at(v, WORKOUT_ZONES[p["zone"]])
+        if p.get("mins"):  # run for a time: how far that is at this pace
+            out.append({"part": p, "label": part_label(p), "pace": {
+                "rep": None, "about": distance_text(p["mins"] * 60 / mile * METERS_PER_MILE), "mile": mile,
+                "lap": mile * 400 / METERS_PER_MILE if p["zone"] in ("Tempo", "Interval", "Repetition") else None}})
+            continue
         out.append({"part": p, "label": part_label(p), "pace": {
             "rep": mile * p["dist"] / METERS_PER_MILE, "mile": mile,
             "lap": mile * 400 / METERS_PER_MILE if p["dist"] > 400 and p["zone"] in ("Tempo", "Interval", "Repetition") else None}})
@@ -398,7 +414,12 @@ def group_part_paces(db: Session, parts: list[dict]) -> list[dict]:
         times = []
         for p in parts:
             pct = WORKOUT_ZONES.get(p["zone"])
-            times.append(None if pct is None else (pace_at(hi, pct) * p["dist"] / METERS_PER_MILE, pace_at(lo, pct) * p["dist"] / METERS_PER_MILE))
+            if pct is None:
+                times.append(None)
+            elif p.get("mins"):  # timed parts show the pace per mile instead
+                times.append((pace_at(hi, pct), pace_at(lo, pct), "/mi"))
+            else:
+                times.append((pace_at(hi, pct) * p["dist"] / METERS_PER_MILE, pace_at(lo, pct) * p["dist"] / METERS_PER_MILE, ""))
         out.append({"group": g, "range": f"{hi} and below" if bottom else f"{lo}-{hi}" if hi > lo else f"{lo}+" if i == 0 else str(lo),
                     "times": times})
     return out
@@ -912,7 +933,7 @@ def segment_rows(db: Session) -> list[dict]:
         if key not in cache:
             cache[key] = target_pace(db, a.id, pw)
         tgt = cache[key]
-        rep_m = int(pw.rep_distance_m) if float(pw.rep_distance_m).is_integer() else pw.rep_distance_m
+        rep_m = "" if not pw.rep_distance_m else int(pw.rep_distance_m) if float(pw.rep_distance_m).is_integer() else pw.rep_distance_m
         for lap in act.laps:
             if not lap.is_rep or not lap.distance_m:
                 continue

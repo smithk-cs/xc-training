@@ -70,13 +70,14 @@ def parse(data: bytes) -> tuple[list[ParsedActivity], int, str]:
         if not dist or not secs or dist > 100:  # over 100 miles or km is a misread number
             skipped += 1
             continue
-        raw.append((start, sport, dist, secs, _number(r.get("Avg HR", "")), _number(r.get("Max HR", "")), (r.get("Title") or "").strip()))
+        vo2 = _number(r.get("VO2 Max", ""))
+        raw.append((start, sport, dist, secs, _number(r.get("Avg HR", "")), _number(r.get("Max HR", "")), vo2 if vo2 and 10 <= vo2 <= 100 else None))
     # Garmin writes distances in the account's units. High school runners' paces fall near 6-10 min per mile, so a
     # typical pace under 6:15 per unit means kilometers.
     paces = [secs / dist for _, _, dist, secs, *_ in raw]
     unit = KM if paces and statistics.median(paces) < 375 else MILE
     runs = [ParsedActivity(external_id=f"gccsv:{start.astimezone(dt.timezone.utc):%Y%m%dT%H%M%S}", start=start.astimezone(dt.timezone.utc),
                            duration_s=secs, distance_m=dist * unit, sport=sport if sport != "running" else "running",
-                           avg_hr=hr, max_hr=mx, device="Garmin Connect (summary)")
-            for start, sport, dist, secs, hr, mx, _title in raw]
+                           avg_hr=hr, max_hr=mx, vo2_max=vo2, device="Garmin Connect (summary)")
+            for start, sport, dist, secs, hr, mx, vo2 in raw]
     return runs, skipped, "km" if unit == KM else "miles"

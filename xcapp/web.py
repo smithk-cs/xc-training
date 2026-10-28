@@ -969,15 +969,21 @@ def create_app() -> FastAPI:
         try:
             d = parse_date(f.get("date", ""))
             parts = []
-            for sets, reps, dist, zone, rest in zip(f.getlist("p_sets"), f.getlist("p_reps"), f.getlist("p_dist"),
-                                                    f.getlist("p_zone"), f.getlist("p_rest")):
+            units = f.getlist("p_unit")
+            for i, (sets, reps, dist, zone, rest) in enumerate(zip(f.getlist("p_sets"), f.getlist("p_reps"), f.getlist("p_dist"),
+                                                                   f.getlist("p_zone"), f.getlist("p_rest"))):
                 if not str(dist).strip():
                     continue  # an empty row
-                p = {"sets": int(sets or 1), "reps": int(reps or 1), "dist": float(dist), "zone": zone, "rest": str(rest).strip()[:60]}
-                if not (1 <= p["sets"] <= 10 and 1 <= p["reps"] <= 40 and 100 <= p["dist"] <= 20000 and zone in A.WORKOUT_ZONES):
-                    raise ValueError(f"Check part {len(parts) + 1}: 1 to 10 sets, 1 to 40 reps, 100 to 20,000 meters, and a pace.")
-                if p["dist"].is_integer():
-                    p["dist"] = int(p["dist"])
+                by_time = i < len(units) and units[i] == "min"
+                amount = float(dist)
+                p = {"sets": int(sets or 1), "reps": int(reps or 1), "mins" if by_time else "dist": int(amount) if amount.is_integer() else amount,
+                     "zone": zone, "rest": str(rest).strip()[:60]}
+                if not (1 <= p["sets"] <= 10 and 1 <= p["reps"] <= 40 and zone in A.WORKOUT_ZONES):
+                    raise ValueError(f"Check part {len(parts) + 1}: 1 to 10 sets, 1 to 40 reps, and a pace.")
+                if by_time and not (0.25 <= amount <= 180):
+                    raise ValueError(f"Check part {len(parts) + 1}: a timed part runs from 0.25 to 180 minutes.")
+                if not by_time and not (100 <= amount <= 20000):
+                    raise ValueError(f"Check part {len(parts) + 1}: a distance runs from 100 to 20,000 meters.")
                 parts.append(p)
             if not parts:
                 raise ValueError("Add at least one part: sets, reps, distance and pace.")
@@ -991,7 +997,7 @@ def create_app() -> FastAPI:
                 db.add(pw)
             main = A.main_part(parts)
             pw.date, pw.title, pw.groups, pw.parts = d, title, groups, json.dumps(parts)
-            pw.rep_distance_m, pw.pace_event, pw.pace_factor, pw.distance_unit = float(main["dist"]), "5K", 1.0, "m"
+            pw.rep_distance_m, pw.pace_event, pw.pace_factor, pw.distance_unit = float(main.get("dist", 0)), "5K", 1.0, "m"
             db.flush()
             n = rematch_day(db, d) + (rematch_day(db, old_day) if old_day and old_day != d else 0)
             flash(request, f"{'Updated' if old_day else 'Saved'} {title}." + (f" Re-matched {n} runs already synced." if n else ""))

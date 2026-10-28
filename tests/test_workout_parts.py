@@ -59,7 +59,7 @@ def test_parts_workout(app):
     pat = TestClient(app).get("/a/t-pat").text
     assert "Your times appear once you have a VDOT" in pat
     c.post("/workouts", data={**form, "wid": str(w.id), "p_dist": ["3200", "50", "1600", ""]})
-    assert "Check part 2: 1 to 10 sets, 1 to 40 reps, 100 to 20,000 meters, and a pace." in c.get("/workouts").text
+    assert "Check part 2: a distance runs from 100 to 20,000 meters." in c.get("/workouts").text
     c.post("/workouts", data={**form, "p_dist": ["", "", "", ""]})
     assert "Add at least one part" in c.get("/workouts").text
 
@@ -72,4 +72,31 @@ def test_older_workout_opens_as_one_part(app):
     wid = db.query(PlannedWorkout).one().id
     db.close()
     page = c.get(f"/workouts?edit={wid}").text
-    assert 'name="p_dist" min="100" max="20000" step="1" value="1000"' in page and "<option selected>Tempo</option>" in page
+    assert 'name="p_dist" min="100" max="20000" step="1" value="1000"' in page and '<option value="m" selected>m</option>' in page and "<option selected>Tempo</option>" in page
+
+
+def test_parts_by_time(app):
+    c, csrf = login(app)
+    day = (A.team_today() + dt.timedelta(days=1)).isoformat()
+    form = {"csrf": csrf, "date": day, "title": "", "p_sets": ["1", "1", "1"], "p_reps": ["1", "4", "1"],
+            "p_dist": ["14", "5", "1600"], "p_unit": ["min", "min", "m"], "p_zone": ["Easy", "Tempo", "Easy"],
+            "p_rest": ["", "1 min easy", ""]}
+    c.post("/workouts", data=form)
+    page = c.get("/workouts").text
+    assert "Saved 14 min Easy + 4 × 5 min Tempo + 1,600 m Easy." in page and "4 × 5 min Tempo (1 min easy rest)" in page
+    assert "/mi</td>" in page                                                         # group preview shows pace for timed parts
+    db = SessionLocal()
+    w = db.query(PlannedWorkout).one()
+    assert json.loads(w.parts)[1] == {"sets": 1, "reps": 4, "mins": 5, "zone": "Tempo", "rest": "1 min easy"}
+    assert w.rep_distance_m == 0                                                      # the main (tempo) part is timed
+    sam = db.query(Athlete).filter_by(first_name="Sam").one()
+    assert round(A.target_pace(db, sam.id, w)) == round(A.pace_at(60, A.TEMPO_PCT))
+    db.close()
+    me = TestClient(app).get("/a/t-sam").text
+    tempo = A.pace_at(60, A.TEMPO_PCT)
+    assert "<b>4 × 5 min</b> Tempo" in me and f"<b>{A.fmt_time(tempo)[:-2]}/mi</b>" in me and "about 1," in me
+    assert A.minutes_text(1.5) == "1:30 min" and A.part_label({"sets": 1, "reps": 1, "mins": 14}) == "14 min"
+    page = c.get(f"/workouts?edit={w.id}").text
+    assert 'step="0.25" value="5"' in page and '<option value="min" selected>min</option>' in page
+    c.post("/workouts", data={**form, "wid": str(w.id), "p_dist": ["14", "500", "1600"]})
+    assert "Check part 2: a timed part runs from 0.25 to 180 minutes." in c.get("/workouts").text
