@@ -914,12 +914,19 @@ def create_app() -> FastAPI:
                                  .where(Activity.planned_workout_id.is_not(None)).group_by(Activity.planned_workout_id)).all())
         ability_names = [g.name for g in db.scalars(select(TrainingGroup).order_by(TrainingGroup.position)).all()]
         edit = db.get(PlannedWorkout, int(request.query_params["edit"])) if request.query_params.get("edit", "").isdigit() else None
+        edit_parts = edit.part_list if edit else []
+        if edit and not edit_parts:  # an older single-rep workout opens as one part
+            edit_parts = [{"sets": 1, "reps": 1, "dist": round(edit.rep_distance_m), "zone": A.OLD_TYPE_ZONE.get(A.pace_type(edit.pace_factor), "Interval"), "rest": ""}]
         return render(request, "workouts.html", user, rows=rows, counts=counts, today=A.team_today().isoformat(),
-                      ability_names=ability_names, edit=edit)
+                      ability_names=ability_names, edit=edit, edit_parts=edit_parts, zones=list(A.WORKOUT_ZONES),
+                      previews={w.id: A.group_part_paces(db, w.part_list) for w in rows[:30] if w.part_list},
+                      part_label=A.part_label)
 
     @app.post("/workouts")
     async def add_workout(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
         f = await form_checked(request)
+        if "p_dist" in f:
+            return save_workout_parts(request, db, f)
         try:
             d = parse_date(f.get("date", ""))
             title = str(f.get("title", "")).strip()[:120]
@@ -945,6 +952,42 @@ def create_app() -> FastAPI:
             flash(request, f"{'Updated' if old_day else 'Saved'} {title}." + (f" Re-matched {n} runs already synced." if n else ""))
         except ValueError as exc:
             flash(request, str(exc), "error")
+        return back("/workouts")
+
+    def save_workout_parts(request: Request, db: Session, f) -> Response:
+        """Save a workout made of parts (sets x reps x distance at a VDOT pace)."""
+        import json
+        try:
+            d = parse_date(f.get("date", ""))
+            parts = []
+            for sets, reps, dist, zone, rest in zip(f.getlist("p_sets"), f.getlist("p_reps"), f.getlist("p_dist"),
+                                                    f.getlist("p_zone"), f.getlist("p_rest")):
+                if not str(dist).strip():
+                    continue  # an empty row
+                p = {"sets": int(sets or 1), "reps": int(reps or 1), "dist": float(dist), "zone": zone, "rest": str(rest).strip()[:60]}
+                if not (1 <= p["sets"] <= 10 and 1 <= p["reps"] <= 40 and 100 <= p["dist"] <= 20000 and zone in A.WORKOUT_ZONES):
+                    raise ValueError(f"Check part {len(parts) + 1}: 1 to 10 sets, 1 to 40 reps, 100 to 20,000 meters, and a pace.")
+                if p["dist"].is_integer():
+                    p["dist"] = int(p["dist"])
+                parts.append(p)
+            if not parts:
+                raise ValueError("Add at least one part: sets, reps, distance and pace.")
+            title = str(f.get("title", "")).strip()[:120] or A.workout_summary(parts)[:120]
+            ability_names = [g.name for g in db.scalars(select(TrainingGroup).order_by(TrainingGroup.position)).all()]
+            groups = ",".join(g for g in ability_names if f.get(f"group_{g}")) or "All"
+            pw = db.get(PlannedWorkout, int(f["wid"])) if str(f.get("wid", "")).isdigit() else None
+            old_day = pw.date if pw else None
+            if pw is None:
+                pw = PlannedWorkout()
+                db.add(pw)
+            main = A.main_part(parts)
+            pw.date, pw.title, pw.groups, pw.parts = d, title, groups, json.dumps(parts)
+            pw.rep_distance_m, pw.pace_event, pw.pace_factor, pw.distance_unit = float(main["dist"]), "5K", 1.0, "m"
+            db.flush()
+            n = rematch_day(db, d) + (rematch_day(db, old_day) if old_day and old_day != d else 0)
+            flash(request, f"{'Updated' if old_day else 'Saved'} {title}." + (f" Re-matched {n} runs already synced." if n else ""))
+        except ValueError as exc:
+            flash(request, str(exc) if "part" in str(exc).lower() or "Add at least" in str(exc) else "Check the date and each part's numbers.", "error")
         return back("/workouts")
 
     @app.post("/workouts/{wid}/delete")

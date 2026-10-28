@@ -136,9 +136,20 @@ class PlannedWorkout(Base):
     title: Mapped[str] = mapped_column(String(120))
     rep_distance_m: Mapped[float] = mapped_column(Float)  # always meters; distance_unit only sets how it's shown
     distance_unit: Mapped[str] = mapped_column(String(2), default="m")  # m (interval reps) | mi (runs such as an easy 5 miles)
+    # Parts as JSON: [{"sets": 2, "reps": 4, "dist": 400, "zone": "Interval", "rest": "90 s jog"}, ...]. Empty for older
+    # workouts, which use rep_distance_m with pace_event x pace_factor instead of VDOT paces.
+    parts: Mapped[str] = mapped_column(Text, default="")
     pace_event: Mapped[str] = mapped_column(String(20), default="5K")
     pace_factor: Mapped[float] = mapped_column(Float, default=1.0)
     groups: Mapped[str] = mapped_column(String(120), default="All")  # "All" or comma list
+
+    @property
+    def part_list(self) -> list[dict]:
+        import json
+        try:
+            return json.loads(self.parts) if self.parts else []
+        except ValueError:
+            return []
 
     @property
     def in_miles(self) -> bool:

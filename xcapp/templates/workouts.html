@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
 <h1>Workouts</h1>
-<p class="muted">Add the day’s rep workout here. Runs synced that day that contain reps are matched to it automatically, and each athlete’s target pace comes from their best time in the pace event (this season if they have one), times the pace factor. Athletes see their rep times on their own page for the next 7 days, from their current best and from their goal (estimated from another distance when they have no time in the pace event).</p>
+<p class="muted" style="max-width:85ch">Plan a workout as parts: sets × reps × distance at a pace. Each athlete’s pace for every part comes from their VDOT (easy, long run, tempo, interval and repetition, as on the VDOT page), and they see their own times on their page for the next 7 days, from their current VDOT and from their goal. Runs synced that day with reps are matched to the workout automatically.</p>
 {% if user.role != 'trainer' %}
 <div class="card">
   <h2 id="plan">{% if edit %}Edit workout{% else %}Plan a workout{% endif %}</h2>
@@ -10,21 +10,36 @@
     {% if edit %}<input type="hidden" name="wid" value="{{ edit.id }}">{% endif %}
     <div class="form-row">
       <label>Date<input type="date" name="date" value="{{ edit.date.isoformat() if edit else today }}" required></label>
-      <label style="flex:1">Name<input type="text" name="title" placeholder="6 x 1K @ 5K pace" value="{{ edit.title if edit else '' }}" required></label>
-      <label>Rep distance (m)<input type="number" name="rep_distance_m" min="100" max="10000" step="1" value="{{ edit.rep_distance_m|round|int if edit else 1000 }}" required></label>
+      <label style="flex:1">Name (optional)<input type="text" name="title" placeholder="Made from the parts if left empty" value="{{ edit.title if edit else '' }}" maxlength="120"></label>
     </div>
-    <div class="form-row">
-      <label>Pace from<select name="pace_event">{% for e in EVENTS %}<option {% if e == (edit.pace_event if edit else '5K') %}selected{% endif %}>{{ e }}</option>{% endfor %}</select></label>
-      {% set cur = pace_type(edit.pace_factor) if edit else 'Interval' %}
-      <label>Type<select name="pace_type" id="pace-type">
-        {% for name, f in PACE_TYPES.items() %}<option value="{{ name }}" {% if cur == name %}selected{% endif %}>{{ name }} (× {{ '%.2f' % f }})</option>{% endfor %}
-        <option value="Other" {% if cur == 'Other' %}selected{% endif %}>Other…</option>
-      </select></label>
-      <label id="pace-other"{% if cur != 'Other' %} hidden{% endif %}>Pace factor<input type="number" name="pace_factor" min="0.8" max="1.5" step="0.005" value="{{ '%.3f' % edit.pace_factor if edit else '1.00' }}"></label>
-      <span class="small muted">Factor × the pace event’s race pace: 1.00 = race pace, higher = slower.</span>
-      <script>(function () { var s = document.getElementById('pace-type'), o = document.getElementById('pace-other');
-        s.addEventListener('change', function () { o.hidden = s.value !== 'Other'; }); })();</script>
-    </div>
+    <table class="list compact parts"><thead><tr><th>Sets</th><th>Reps</th><th>Distance (m)</th><th>Pace</th><th>Rest</th><th></th></tr></thead>
+      <tbody id="parts">
+      {% for p in (edit_parts or [{"sets": 1, "reps": 6, "dist": 1000, "zone": "Interval", "rest": "2 min jog"}]) %}
+        <tr class="part"><td><input type="number" name="p_sets" min="1" max="10" value="{{ p.sets }}" required style="width:4em" aria-label="Sets"></td>
+          <td><input type="number" name="p_reps" min="1" max="40" value="{{ p.reps }}" required style="width:4em" aria-label="Reps"></td>
+          <td><input type="number" name="p_dist" min="100" max="20000" step="1" value="{{ p.dist }}" required style="width:6em" aria-label="Distance in meters"></td>
+          <td><select name="p_zone" aria-label="Pace">{% for z in zones %}<option{% if z == p.zone %} selected{% endif %}>{{ z }}</option>{% endfor %}</select></td>
+          <td><input type="text" name="p_rest" maxlength="60" value="{{ p.rest }}" placeholder="90 s jog" style="width:9em" aria-label="Rest"></td>
+          <td><button type="button" class="link remove-part" aria-label="Remove this part">Remove</button></td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <div class="form-row" style="margin:6px 0 10px"><button type="button" class="secondary" id="add-part">Add a part</button>
+      <span class="small muted">For example 1 × 3,200 m Easy (warm-up), 2 sets × 4 × 400 m Interval, 1 × 1,600 m Tempo. Repetition is faster than interval pace, for short, quick reps.</span></div>
+    <script>(function () {
+      var body = document.getElementById('parts');
+      document.getElementById('add-part').addEventListener('click', function () {
+        var rows = body.querySelectorAll('tr.part');
+        if (rows.length >= 8) return;
+        var row = rows[rows.length - 1].cloneNode(true);
+        row.querySelector('[name=p_sets]').value = 1; row.querySelector('[name=p_rest]').value = '';
+        body.appendChild(row);
+      });
+      body.addEventListener('click', function (e) {
+        if (!e.target.classList.contains('remove-part')) return;
+        if (body.querySelectorAll('tr.part').length > 1) e.target.closest('tr').remove();
+      });
+    })();</script>
     <div class="form-row">
       {% for g in ability_names %}<label class="check"><input type="checkbox" name="group_{{ g }}"{% if edit and g in edit.groups.split(',') %} checked{% endif %}> {{ g }}</label>{% endfor %}
       <span class="small muted">Leave all unticked for the whole team.</span>
@@ -35,18 +50,23 @@
 </div>
 {% endif %}
 <div class="card scroll">
-  <table class="list"><thead><tr><th>Date</th><th>Workout</th><th class="num">Distance</th><th>Pace</th><th>Groups</th><th class="num">Athletes matched</th><th></th></tr></thead><tbody>
+  <table class="list"><thead><tr><th>Date</th><th>Workout</th><th>Parts</th><th>Groups</th><th class="num">Athletes matched</th><th></th></tr></thead><tbody>
   {% for w in rows %}
-  <tr{% if user.role != 'trainer' %} class="row-link" data-href="/workouts?edit={{ w.id }}#plan"{% endif %}><td>{{ w.date.strftime('%a %b %-d') }}</td><td>{% if user.role != 'trainer' %}<a href="/workouts?edit={{ w.id }}#plan">{{ w.title }}</a>{% else %}{{ w.title }}{% endif %}</td><td class="num nowrap">{{ w.distance_text }}</td><td>{{ pace_type(w.pace_factor) }} ({{ w.pace_event }} × {{ '%.2f' % w.pace_factor }})</td><td>{{ w.groups }}</td><td class="num">{{ counts.get(w.id, 0) }}</td>
+  <tr{% if user.role != 'trainer' %} class="row-link" data-href="/workouts?edit={{ w.id }}#plan"{% endif %}><td>{{ w.date.strftime('%a %b %-d') }}</td><td>{% if user.role != 'trainer' %}<a href="/workouts?edit={{ w.id }}#plan">{{ w.title }}</a>{% else %}{{ w.title }}{% endif %}</td><td class="small">{% if w.part_list %}{% for p in w.part_list %}{{ part_label(p) }} {{ p.zone }}{% if p.rest %} ({{ p.rest }} rest){% endif %}{{ '<br>'|safe if not loop.last else '' }}{% endfor %}
+    {% if previews.get(w.id) %}<details class="paces-preview"><summary>Paces by group</summary>
+      <table class="list compact"><thead><tr><th>Group</th><th>VDOT</th>{% for p in w.part_list %}<th class="num">{{ part_label(p) }}</th>{% endfor %}</tr></thead><tbody>
+      {% for g in previews[w.id] %}<tr><td>{{ g.group.name }}</td><td>{{ g.range }}</td>{% for t in g.times %}<td class="num nowrap">{% if t %}{{ fmt_time(t[0])[:-2] if t[0] >= 600 else fmt_time(t[0]) }}{% if t[1] - t[0] >= 0.5 %}–{{ fmt_time(t[1])[:-2] if t[1] >= 600 else fmt_time(t[1]) }}{% endif %}{% endif %}</td>{% endfor %}</tr>{% endfor %}
+      </tbody></table><p class="small muted">Time per rep across each group’s VDOT range.</p></details>{% endif %}
+    {% else %}{{ w.distance_text }} reps · {{ pace_type(w.pace_factor) }} ({{ w.pace_event }} × {{ '%.2f' % w.pace_factor }}){% endif %}</td><td>{{ w.groups }}</td><td class="num">{{ counts.get(w.id, 0) }}</td>
   <td>{% if user.role != 'trainer' %}<form method="post" action="/workouts/{{ w.id }}/delete" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="link" type="submit">Delete</button></form>{% endif %}</td></tr>
-  {% else %}<tr><td colspan="7" class="muted">No workouts planned yet.</td></tr>{% endfor %}
+  {% else %}<tr><td colspan="6" class="muted">No workouts planned yet.</td></tr>{% endfor %}
   </tbody></table>
   {% if user.role != 'trainer' %}<p class="small muted">Click a workout to edit it.</p>{% endif %}
 </div>
 <script>
   document.querySelectorAll('tr.row-link').forEach(function (tr) {
     tr.addEventListener('click', function (e) {
-      if (e.target.closest('a, button, form, input')) return;
+      if (e.target.closest('a, button, form, input, details')) return;
       location.href = tr.dataset.href;
     });
   });

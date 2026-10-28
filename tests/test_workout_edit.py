@@ -56,13 +56,13 @@ def test_edit_workout():
     assert matched == {D1: None, D2: wid}                               # the match moved with the date
     db.close()
     page = c.get(f"/workouts?edit={wid}").text
-    assert 'name="group_Gold" checked' in page and 'value="1.070"' in page
+    assert 'name="group_Gold" checked' in page and "<option selected>Tempo</option>" in page   # an older workout opens as one part
     t, tcsrf = login(app, "trainer1")
     assert t.post("/workouts", data={"csrf": tcsrf, "wid": str(wid), "date": D1.isoformat(), "title": "x",
                                      "rep_distance_m": "400", "pace_event": "5K"}).status_code == 403
 
 
-def test_workout_type_sets_the_pace_factor():
+def test_older_single_pace_workouts_still_save():
     from xcapp import analysis as A
     db = SessionLocal()
     db.add(StaffUser(username="coach1", role="coach", password_hash=hash_password("correct-horse-1")))
@@ -71,7 +71,6 @@ def test_workout_type_sets_the_pace_factor():
     from xcapp.web import create_app
     c, _ = login(create_app(), "coach1")
     page = c.get("/workouts").text
-    assert '<option value="Threshold" >Threshold (× 1.07)</option>' in page and '<option value="Other" >Other…</option>' in page
     csrf = re.search(r'name="csrf" value="([^"]+)"', page).group(1)
     base = {"csrf": csrf, "date": D1.isoformat(), "rep_distance_m": "1600", "pace_event": "5K", "pace_factor": "1.00"}
     for kind, factor in (("Tempo", 1.10), ("Recovery", 1.35), ("Long", 1.25), ("Interval", 1.00)):
@@ -86,5 +85,5 @@ def test_workout_type_sets_the_pace_factor():
     assert "Tempo (5K × 1.10)" in page and "Other (5K × 1.15)" in page
     wid = re.search(r'data-href="/workouts\?edit=(\d+)#plan"', page).group(1)
     edit = c.get(f"/workouts?edit={wid}").text
-    assert re.search(r'<option value="(\w+)" selected>', edit)
+    assert re.search(r'<option selected>(\w[\w ]*)</option>', edit)
 

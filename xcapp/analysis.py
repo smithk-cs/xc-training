@@ -346,6 +346,73 @@ def abilities(db: Session, as_of: dt.date) -> dict[int, dict]:
 EASY_PCT, TEMPO_PCT = 0.67, 0.88   # share of VO2max for easy and tempo (threshold) running, as on the team's sheet
 LONG_PCT, INTERVAL_PCT = 0.64, 0.975   # long runs a touch slower than easy; intervals near VO2max (Daniels' I pace)
 PACE_ZONES = [("Easy", EASY_PCT), ("Long run", LONG_PCT), ("Tempo", TEMPO_PCT), ("Interval", INTERVAL_PCT)]
+REP_PCT = 1.07   # Daniels' repetition (R) pace: short, fast reps, about mile race pace
+WORKOUT_ZONES = dict(PACE_ZONES + [("Repetition", REP_PCT)])
+OLD_TYPE_ZONE = {"Interval": "Interval", "Threshold": "Tempo", "Tempo": "Tempo", "Long": "Long run", "Recovery": "Easy"}
+
+
+def part_label(p: dict) -> str:
+    """'2 × 4 × 400 m', '6 × 1,000 m', '3,200 m'."""
+    dist = f"{p['dist']:,.0f} m"
+    reps = f"{p['reps']} × {dist}" if p["reps"] > 1 else dist
+    return f"{p['sets']} × {reps}" if p["sets"] > 1 else reps
+
+
+def workout_summary(parts: list[dict]) -> str:
+    """A name for a workout from its parts: '2 × 4 × 400 m Interval + 1,600 m Tempo'."""
+    return " + ".join(f"{part_label(p)} {p['zone']}" for p in parts)
+
+
+def main_part(parts: list[dict]) -> dict | None:
+    """The hardest part (the one rep-matching and targets use)."""
+    return max(parts, key=lambda p: WORKOUT_ZONES.get(p["zone"], 0)) if parts else None
+
+
+def part_paces(parts: list[dict], v: float | None) -> list[dict]:
+    """Each part with the athlete's time per rep, pace per mile and per 400 m at VDOT v."""
+    out = []
+    for p in parts:
+        if v is None or p["zone"] not in WORKOUT_ZONES:
+            out.append({"part": p, "label": part_label(p), "pace": None})
+            continue
+        mile = pace_at(v, WORKOUT_ZONES[p["zone"]])
+        out.append({"part": p, "label": part_label(p), "pace": {
+            "rep": mile * p["dist"] / METERS_PER_MILE, "mile": mile,
+            "lap": mile * 400 / METERS_PER_MILE if p["dist"] > 400 and p["zone"] in ("Tempo", "Interval", "Repetition") else None}})
+    return out
+
+
+def group_part_paces(db: Session, parts: list[dict]) -> list[dict]:
+    """For the coaches' preview: each running group's VDOT range and, per part, the rep time from its fastest to its
+    slowest member (boys' cutoffs; the lowest group shows its top VDOT only)."""
+    groups = sorted(db.scalars(select(TrainingGroup)).all(), key=lambda g: g.min_vdot_boys, reverse=True)
+    out = []
+    for i, g in enumerate(groups):
+        lo = max(int(math.ceil(g.min_vdot_boys)), VDOT_MIN)
+        hi = int(math.ceil(groups[i - 1].min_vdot_boys)) - 1 if i else lo
+        bottom = g.min_vdot_boys < VDOT_MIN and i  # the catch-all group: its top VDOT only
+        if bottom:
+            lo = hi
+        if hi < lo:
+            continue
+        times = []
+        for p in parts:
+            pct = WORKOUT_ZONES.get(p["zone"])
+            times.append(None if pct is None else (pace_at(hi, pct) * p["dist"] / METERS_PER_MILE, pace_at(lo, pct) * p["dist"] / METERS_PER_MILE))
+        out.append({"group": g, "range": f"{hi} and below" if bottom else f"{lo}-{hi}" if hi > lo else f"{lo}+" if i == 0 else str(lo),
+                    "times": times})
+    return out
+
+
+def goal_vdot(db: Session, athlete_id: int, on: dt.date) -> int | None:
+    """The VDOT of the athlete's fastest goal for this season (or their latest season of goals)."""
+    goals = [g for g in db.scalars(select(Goal).where(Goal.athlete_id == athlete_id)).all() if g.event in EVENTS and g.goal_s]
+    season = season_for(on)
+    pool = [g for g in goals if g.season == season] or ([g for g in goals if g.season == max(x.season for x in goals)] if goals else [])
+    if not pool:
+        return None
+    targets = vdot_targets(db)
+    return max(team_vdot(vdot(EVENTS[g.event], g.goal_s), targets) for g in pool)
 
 
 def training_paces(v: float | None) -> list[dict]:
@@ -744,7 +811,15 @@ def pain_rows(db: Session, as_of: dt.date, days: int = 28) -> list[dict]:
 
 
 def target_pace(db: Session, athlete_id: int, pw: PlannedWorkout) -> float | None:
-    """Target pace (sec/mile) from the athlete's best time in the workout's pace event."""
+    """Target pace (sec/mile): for a workout with parts, the hardest part's pace at the athlete's VDOT; for an older
+    workout, the athlete's best time in the workout's pace event times its pace factor."""
+    main = main_part(pw.part_list)
+    if main is not None:
+        key = ("abilities", pw.date)
+        if key not in db.info:  # one team calculation per workout day, not one per athlete
+            db.info[key] = abilities(db, pw.date)
+        v = db.info[key].get(athlete_id, {}).get("vdot")
+        return pace_at(v, WORKOUT_ZONES[main["zone"]]) if v and main["zone"] in WORKOUT_ZONES else None
     if pw.pace_event not in EVENTS:
         return None
     rs = db.scalars(select(Result).where(Result.athlete_id == athlete_id, Result.event == pw.pace_event, Result.date <= pw.date)).all()
@@ -792,7 +867,13 @@ def workout_paces(db: Session, athlete, workouts) -> list[dict]:
     results = [r for r in db.scalars(select(Result).where(Result.athlete_id == athlete.id)).all() if r.event in EVENTS]
     goals = [g for g in db.scalars(select(Goal).where(Goal.athlete_id == athlete.id)).all() if g.event in EVENTS]
     out = []
+    now_v = abilities(db, team_today()).get(athlete.id, {}).get("vdot") if any(w.part_list for w in workouts) else None
     for pw in workouts:
+        if pw.part_list:
+            gv = goal_vdot(db, athlete.id, pw.date)
+            out.append({"workout": pw, "vdot_now": now_v, "vdot_goal": gv,
+                        "parts": list(zip(part_paces(pw.part_list, now_v), part_paces(pw.part_list, gv)))})
+            continue
         if pw.pace_event not in EVENTS:
             continue
         season = season_for(pw.date)

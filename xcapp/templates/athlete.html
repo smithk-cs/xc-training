@@ -110,10 +110,21 @@
   {{ badges(wins) }}
   <section class="panel" aria-labelledby="wp-h">
     <h2 id="wp-h">Upcoming workouts</h2>
-    {% if paces %}<p class="muted small">Your targets for the next 7 days, from your current best and from your goal.</p>{% endif %}
+    {% if paces %}<p class="muted small">Your targets for the next 7 days, from your VDOT now and from your goal. Times are per rep.</p>{% endif %}
     {% for x in paces %}{% set w = x.workout %}
     <div class="wpace">
       <div class="d">{{ 'Today' if w.date.isoformat() == today else w.date.strftime('%a, %b %-d') }} · {{ w.title }}</div>
+      {% if x.parts is defined %}
+      <div class="scroll"><table class="list compact part-paces">
+        <thead><tr><th>Part</th><th class="num">At VDOT {{ x.vdot_now or '–' }}</th>{% if x.vdot_goal %}<th class="num">Goal VDOT {{ x.vdot_goal }}</th>{% endif %}</tr></thead>
+        <tbody>{% for now, goal in x.parts %}<tr>
+          <td><b>{{ now.label }}</b> {{ now.part.zone }}{% if now.part.rest %}<br><span class="small muted">{{ now.part.rest }} rest</span>{% endif %}</td>
+          {% for pc in ([now, goal] if x.vdot_goal else [now]) %}<td class="num">{% if pc.pace %}{% set q = pc.pace %}<b>{{ fmt_time(q.rep)[:-2] if q.rep >= 600 else fmt_time(q.rep) }}</b>
+            <br><span class="small muted">{{ fmt_time(q.mile)[:-2] }}/mi{% if q.lap %} · {{ '%.0f' % q.lap }} s/400{% endif %}</span>{% else %}<span class="small muted">–</span>{% endif %}</td>{% endfor %}
+        </tr>{% endfor %}</tbody>
+      </table></div>
+      {% if not x.vdot_now %}<p class="small muted">Your times appear once you have a VDOT (from a race, or set by your coach).</p>{% endif %}
+      {% else %}
       <div class="small muted">{{ w.distance_text }}{{ '' if w.in_miles else ' reps' }} · {{ pace_type(w.pace_factor) }} ({{ w.pace_event }} pace{% if w.pace_factor != 1 %} × {{ '%.2f' % w.pace_factor }}{% endif %})</div>
       <div class="facts">
         {% for label, t, missing in (("From your current time", x.now, "Ask your coach to record a race or time trial."), ("From your goal", x.goal, "No goal set yet. Ask your coach.")) %}
@@ -125,6 +136,7 @@
         </div>
         {% endfor %}
       </div>
+      {% endif %}
     </div>
     {% else %}
     <p class="muted">No workouts planned for the next 7 days yet. Your coaches add them here, with your target times.</p>
