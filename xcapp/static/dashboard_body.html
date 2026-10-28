@@ -519,7 +519,7 @@ dash.calc('injury_log', {
     root.querySelector('.xc-ai-note').textContent = 'Written by Claude from the team’s synced workouts, benchmark results, injury log and pain reports, with athletes sent as codes rather than names. It refreshes every night, and coaches can rerun it from the AI page. Click a name to load that athlete across every tab.';
   }
 
-  const failBox = (box) => { const f = el('div', 'xc-fail'); f.textContent = 'Failed to load'; box.replaceChildren(f); box.classList.remove('dash-skeleton'); };
+  const failBox = (box) => { const f = el('div', 'xc-fail'); f.textContent = 'Failed to load' + (window.__dashLoadError ? ': ' + window.__dashLoadError : ''); box.replaceChildren(f); box.classList.remove('dash-skeleton'); };
   const emptyMsg = (box, text) => { const m = el('div', 'xc-empty-msg'); m.textContent = text; box.replaceChildren(m); box.classList.remove('dash-skeleton'); };
 
   // tooltip

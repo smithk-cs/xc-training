@@ -349,7 +349,16 @@ def create_app() -> FastAPI:
     def dataset_csv(name: str, user=Depends(any_staff, scope="function"), db: Session = Depends(get_db, scope="function")):
         if name not in DS.COLUMNS:
             raise HTTPException(404, "Unknown dataset.")
-        return PlainTextResponse(DS.to_csv(name, DS.build(db, name)), media_type="text/csv; charset=utf-8")
+        try:
+            return PlainTextResponse(DS.to_csv(name, DS.build(db, name)), media_type="text/csv; charset=utf-8")
+        except Exception as exc:  # shown on the dashboard and kept in the Sync log, so it can be fixed
+            import traceback
+            db.rollback()
+            where = traceback.extract_tb(exc.__traceback__)[-1]
+            log(db, "dashboard", f"Dashboard data '{name}' failed: {type(exc).__name__}: {exc} "
+                                 f"({where.filename.rsplit('/', 1)[-1]} line {where.lineno})", "error")
+            db.commit()
+            return PlainTextResponse(f"{type(exc).__name__}: {exc}"[:300], status_code=500)
 
     # ---------- results charts (XC Stats-style) ----------
 

@@ -142,3 +142,28 @@ def test_workout_planning_and_delete_confirmation(app):
     db = SessionLocal()
     assert db.query(Athlete).count() == 0
     db.close()
+
+
+def test_dashboard_data_errors_are_reported(monkeypatch):
+    import re
+    from fastapi.testclient import TestClient
+    from xcapp import datasets as DS
+    from xcapp.db import SessionLocal
+    from xcapp.models import StaffUser, SyncLog
+    from xcapp.security import hash_password
+    db = SessionLocal()
+    db.add(StaffUser(username="coach9", role="coach", password_hash=hash_password("correct-horse-1")))
+    db.commit()
+    db.close()
+    from xcapp.web import create_app
+    c = TestClient(create_app(), follow_redirects=False)
+    csrf = re.search(r'name="csrf" value="([^"]+)"', c.get("/login").text).group(1)
+    c.post("/login", data={"csrf": csrf, "username": "coach9", "password": "correct-horse-1"})
+    def boom(db, name, as_of=None):
+        raise ValueError("bad row")
+    monkeypatch.setattr(DS, "build", boom)
+    r = c.get("/api/datasets/weekly_load.csv")
+    assert r.status_code == 500 and r.text == "ValueError: bad row"
+    db = SessionLocal()
+    assert "Dashboard data 'weekly_load' failed: ValueError: bad row" in db.query(SyncLog).filter_by(kind="dashboard").one().message
+    db.close()

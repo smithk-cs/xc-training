@@ -28,7 +28,11 @@
     if (sources[id]) return;
     sources[id] = { status: 'loading', data: [], columns: [] };
     fetch('/api/datasets/' + encodeURIComponent(id) + '.csv', { credentials: 'same-origin' })
-      .then((r) => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
+      .then((r) => {
+        if (r.redirected && /\/login/.test(r.url)) throw new Error('your sign-in has expired; reload the page and sign in again');
+        if (!r.ok) return r.text().then((t) => { throw new Error('the server could not build ' + id + ' (HTTP ' + r.status + (t ? ': ' + t.slice(0, 160) : '') + '); details are in the Sync log'); });
+        return r.text();
+      })
       .then((text) => {
         const rows = d3.csvParse(text);
         sources[id] = { status: 'ok', data: rows, columns: rows.columns || [] };
@@ -36,6 +40,7 @@
         emit();
       })
       .catch((e) => {
+        window.__dashLoadError = window.__dashLoadError || String(e && e.message || e);
         sources[id] = { status: 'error', data: [], columns: [], message: String(e) };
         recompute();
         emit();
@@ -52,6 +57,7 @@
       } catch (e) {
         console.error('calc ' + c.id, e);
         window.__dashErrors = (window.__dashErrors || []).concat('calc ' + c.id + ': ' + String(e && e.stack || e));
+        window.__dashLoadError = window.__dashLoadError || ('a calculation failed (' + c.id + ': ' + String(e && e.message || e) + ')');
         calcOut[c.id] = { status: 'error', data: [], message: String(e) };
       }
     }
