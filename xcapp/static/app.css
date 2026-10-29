@@ -352,3 +352,13 @@ details.ann-row > summary { cursor: pointer; }
 details.ann-row[open] > summary { margin-bottom: 8px; }
 details.paces-preview > summary { cursor: pointer; color: var(--brand-red); font-weight: 600; margin-top: 4px; } table.parts input, table.parts select { min-height: 36px; }
 .part-paces td { vertical-align: top; } .part-paces td.num b { font-size: 17px; }
+
+/* weekly mileage goal bars */
+.miles-bar { display: inline-block; vertical-align: middle; width: 9rem; height: 10px; border-radius: 5px; background: var(--color-soft); overflow: hidden; }
+.miles-bar.big { display: block; width: 100%; height: 14px; border-radius: 7px; margin: 4px 0 12px; }
+.miles-bar > span { display: block; height: 100%; background: var(--brand-red); border-radius: inherit; }
+.miles-bar > span.met { background: var(--color-ok); }
+td.ok { color: var(--color-ok); }
+table.mileage { table-layout: fixed; width: 100%; }
+table.mileage th:first-child { width: 34%; }
+table.mileage th:last-child { width: 7rem; }

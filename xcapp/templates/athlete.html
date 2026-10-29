@@ -108,6 +108,18 @@
     <div class="ann-title">{{ n.title }}</div>{% if n.body %}<div class="ann-body">{{ n.body }}</div>{% endif %}
   </section>{% endfor %}
   {{ badges(wins) }}
+  {% if miles_goal %}{% set mg = miles_goal %}
+  <section class="panel" aria-labelledby="mg-h">
+    <h2 id="mg-h">This week’s miles</h2>
+    <div class="miles-bar big" role="img" aria-label="{{ '%.1f' % mg.done }} of {{ '%g' % mg.goal }} miles"><span style="width:{{ (100 * mg.pct)|round }}%"{% if mg.done >= mg.goal %} class="met"{% endif %}></span></div>
+    <div class="facts">
+      <div><span class="k">So far</span><span class="big">{{ '%.1f' % mg.done }}</span><span class="small muted">of {{ '%g' % mg.goal }} mi, the {{ mg.group }} goal</span></div>
+      <div><span class="k">{{ 'Goal met' if mg.done >= mg.goal else 'To go' }}</span><span class="big">{{ '✓' if mg.done >= mg.goal else '%.1f' % mg.left }}</span><span class="small muted">{% if mg.done >= mg.goal %}nice work{% elif mg.days_left %}{{ mg.days_left }} day{{ '' if mg.days_left == 1 else 's' }} left after today{% else %}last day of the week{% endif %}</span></div>
+      <div><span class="k">Last week</span><span class="big">{{ '%.1f' % mg.last }}</span><span class="small muted">mi{% if mg.last >= mg.goal %} · goal met{% endif %}</span></div>
+    </div>
+    <p class="small muted">Weeks run Monday to Sunday. Runs count once they sync or you upload them.</p>
+  </section>
+  {% endif %}
   <section class="panel" aria-labelledby="wp-h">
     <h2 id="wp-h">Upcoming workouts</h2>
     {% if paces %}<p class="muted small">Your targets for the next 7 days, from your VDOT now and from your goal. Times are per rep; for parts run for a time, the pace to hold.</p>{% endif %}

@@ -160,6 +160,32 @@ def week_starts(as_of: dt.date, n: int) -> list[dt.date]:
     return [as_of - dt.timedelta(days=6 + 7 * k) for k in reversed(range(n))]
 
 
+def week_monday(d: dt.date) -> dt.date:
+    return d - dt.timedelta(days=d.weekday())
+
+
+def week_miles(db: Session, athlete_ids: list[int], monday: dt.date) -> dict[int, float]:
+    """Miles run in the Monday-to-Sunday week starting monday, per athlete."""
+    rows = db.execute(select(Activity.athlete_id, func.sum(Activity.distance_m))
+                      .where(Activity.athlete_id.in_(athlete_ids), Activity.local_date >= monday,
+                             Activity.local_date <= monday + dt.timedelta(days=6)).group_by(Activity.athlete_id)).all()
+    out = {aid: 0.0 for aid in athlete_ids}
+    out.update({aid: (m or 0) / METERS_PER_MILE for aid, m in rows})
+    return out
+
+
+def mileage_goal(db: Session, athlete_id: int, group: str, today: dt.date) -> dict | None:
+    """This week's miles against the athlete's group goal, or None when the group has no goal."""
+    g = db.scalar(select(TrainingGroup).where(TrainingGroup.name == group)) if group else None
+    if g is None or not g.weekly_miles:
+        return None
+    monday = week_monday(today)
+    done = week_miles(db, [athlete_id], monday)[athlete_id]
+    last = week_miles(db, [athlete_id], monday - dt.timedelta(days=7))[athlete_id]
+    return {"goal": g.weekly_miles, "done": done, "left": max(g.weekly_miles - done, 0), "pct": min(done / g.weekly_miles, 1),
+            "days_left": 6 - today.weekday(), "last": last, "group": g.name}
+
+
 def load_ratios(miles: list[float]) -> list[float | None]:
     """This week's miles divided by the average of the previous four weeks."""
     out: list[float | None] = []

@@ -1219,6 +1219,7 @@ def create_app() -> FastAPI:
                       rhr=A.resting_hr(db, a.id, today), rhr_range=(A.RESTING_HR_MIN, A.RESTING_HR_MAX),
                       rhr_cal=A.resting_hr_calendar(db, a.id, today), photo_v=photo_versions(db).get(a.id), meets=my_meets(db, a, today),
                       wins=A.achievements(db, a, today),
+                      miles_goal=A.mileage_goal(db, a.id, mine.get("group") or "", today) if show_group else None,
                       notes=[n for n in db.scalars(select(Announcement).where(Announcement.start_date <= today, Announcement.end_date >= today)
                                                    .order_by(Announcement.start_date.desc(), Announcement.id.desc())).all()
                              if n.for_athlete(a.gender, mine.get("group") or "")], my_paces=A.training_paces(mine.get("vdot")) if show_group else [],
@@ -1420,6 +1421,14 @@ def create_app() -> FastAPI:
             if k in counts:
                 counts[k] += 1
         unrated = sum(1 for at in athletes if not ab.get(at.id, {}).get("group"))
+        today = A.team_today()
+        monday = A.week_monday(today)
+        team = [at for at in athletes if not at.is_test]
+        now = A.week_miles(db, [at.id for at in team], monday)
+        last = A.week_miles(db, [at.id for at in team], monday - dt.timedelta(days=7))
+        mileage = [{"group": g, "athletes": [{"a": at, "now": now[at.id], "last": last[at.id]}
+                                             for at in team if ab.get(at.id, {}).get("group") == g.name]}
+                   for g in groups if g.weekly_miles]
         targets = A.vdot_targets(db)
         ranges = {}
         cuts = sorted({g.min_vdot_boys for g in groups})
@@ -1431,6 +1440,7 @@ def create_app() -> FastAPI:
                 ranges[g.id] = (rows[0][1], rows[-1][1], rows[0][0], rows[-1][0])
         table = "\n".join(f"{v},{t8},{t16}" for v, (t8, t16) in sorted(targets.items(), reverse=True))
         return render(request, "groups.html", user, groups=groups, counts=counts, unrated=unrated, ranges=ranges, table=table,
+                      mileage=[m for m in mileage if m["athletes"]], week=(monday, monday + dt.timedelta(days=6)), days_left=6 - today.weekday(),
                       lookback=A.get_setting(db, "group_lookback_days", "365"),
                       show_athletes=A.get_setting(db, "show_group_to_athletes", "1") == "1")
 
@@ -1458,6 +1468,10 @@ def create_app() -> FastAPI:
                 if color and not re.fullmatch(r"#[0-9A-Fa-f]{6}", color):
                     raise ValueError("Colors look like #B6D7A8.")
                 g.color = color.upper()
+                miles = str(f.get(f"miles_{g.id}", "")).strip()
+                g.weekly_miles = float(miles) if miles else 0
+                if not 0 <= g.weekly_miles <= 150:
+                    raise ValueError("Weekly mileage goals run from 0 to 150 miles.")
                 if old != name:
                     for at in db.scalars(select(Athlete).where(Athlete.ability_override == old)).all():
                         at.ability_override = name
@@ -1469,7 +1483,7 @@ def create_app() -> FastAPI:
                 if new.lower() in seen:
                     raise ValueError("Each group needs its own name.")
                 db.add(TrainingGroup(name=new, position=len(groups), min_vdot_boys=float(f.get("new_boys") or 0),
-                                     min_vdot_girls=float(f.get("new_girls") or 0)))
+                                     min_vdot_girls=float(f.get("new_girls") or 0), weekly_miles=float(f.get("new_miles") or 0)))
             if "targets" in f:
                 import json as _json
                 parsed = {}
