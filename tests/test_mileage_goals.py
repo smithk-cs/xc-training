@@ -50,5 +50,7 @@ def test_weekly_mileage_goals():
     assert "goal 35 mi · 0 of 1 there" in page and "10.0 / 35" in page and "40.0 ✓" in page
     me = TestClient(app).get("/a/t-sam").text
     assert "This week’s miles" in me and "<span class=\"big\">10.0</span>" in me and "the Gold goal" in me and "25.0" in me
-    goal = A.mileage_goal(SessionLocal(), aid, "Gold", today)
+    db = SessionLocal()
+    goal = A.mileage_goal(db, aid, "Gold", today)
+    db.close()
     assert goal["last"] == 40 and goal["done"] == 10
