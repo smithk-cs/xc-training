@@ -142,7 +142,7 @@ try:
         res = json.loads(out.stdout or "{}") if out.returncode == 0 else {"errors": [out.stderr[-500:]]}
         json.dump(res, open(os.path.join(tmp, f"athlete_charts_{who}.json"), "w"), indent=1)
         combos = res.get("combos", [])
-        n_combos = 20 if who == "athlete" else 24  # athletes' own page has no Benchmark times chart
+        n_combos = 25 if who == "athlete" else 30  # 5 ranges; athletes' own page has no Benchmark times chart
         check(f"{who.title()} charts: all {n_combos} chart/range combinations draw with no script errors or NaN",
               res.get("data_state") == "1" and len(combos) == n_combos and not res.get("errors") and res.get("bad_values") == []
               and all((c_["svg"] or c_["empty"]) and c_["summary"] for c_ in combos), {k: res.get(k) for k in ("data_state", "errors", "bad_values")})

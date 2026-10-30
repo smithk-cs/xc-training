@@ -151,7 +151,10 @@ def create_app() -> FastAPI:
             return True
         with SessionLocal() as db:
             return db.get(AppSetting, LOGO_TYPE_KEY) is not None
-    templates.env.globals.update(fmt_time=A.fmt_time, timedelta=dt.timedelta, now=A.team_today, EVENTS=list(A.EVENTS), GROUPS=GROUPS, team_name=s.team_name,
+    # A fingerprint of the style sheet and scripts: links carry it (?v=...), so browsers load new ones after each deploy.
+    import hashlib
+    asset_v = hashlib.sha256(b"".join(f.read_bytes() for f in sorted((HERE / "static").glob("*.[cj]s*")))).hexdigest()[:10]
+    templates.env.globals.update(asset_v=asset_v, fmt_time=A.fmt_time, timedelta=dt.timedelta, now=A.team_today, EVENTS=list(A.EVENTS), GROUPS=GROUPS, team_name=s.team_name,
                                  has_logo=has_logo, FEELS=FEELS, EFFORT_WORDS=EFFORT_WORDS, RUN_TYPES=A.RUN_TYPES,
                                  MISSED_REASONS=A.MISSED_REASONS, SIDES=A.SIDES, STARTED=A.STARTED, SEEN_BY=A.SEEN_BY,
                                  MORE_DAYS=A.MORE_DAYS, missed_label=A.missed_label,
@@ -480,6 +483,7 @@ def create_app() -> FastAPI:
         races = db.scalars(select(RaceResult).where(RaceResult.athlete_id == a.id).order_by(RaceResult.date.desc()).limit(30)).all()
         return render(request, "athlete_detail.html", user, a=a, experience_labels=A.EXPERIENCE_LABELS, acts=acts, results=results, run_pain=run_pain, races=races,
                       ability=ability, group_names=group_names, missed=missed, vo2=A.latest_vo2(db, a.id),
+                      goal_v=A.goal_vdot(db, a.id, A.team_today()),
                       rhr=A.resting_hr(db, a.id, A.team_today()), photo_v=photo_versions(db).get(a.id),
                       vdot_changes=a.vdot_changes, vdot_chart=RP.vdot_history_chart(a.vdot_changes),
                       wins=A.achievements(db, a, A.team_today()), gain=A.vdot_gains(db, A.team_today()).get(a.id),
@@ -1645,13 +1649,23 @@ def create_app() -> FastAPI:
 
     # ---------- per-athlete charts ----------
 
+    def series_with_goal(db: Session, a: Athlete, show_goal: bool = True) -> dict:
+        """The chart data plus the athlete's weekly miles goal (their group's, for their gender and experience)."""
+        today = A.team_today()
+        out = A.athlete_series(db, a, today)
+        group = A.abilities(db, today).get(a.id, {}).get("group") if show_goal else None
+        g = db.scalar(select(TrainingGroup).where(TrainingGroup.name == group)) if group else None
+        out["weekly_miles_goal"] = round(A.athlete_miles_goal(g, a.gender, a.experience), 1) or None
+        return out
+
     @app.get("/api/athletes/{athlete_id}/series.json")
     def athlete_series_staff(athlete_id: int, user=Depends(any_staff, scope="function"), db: Session = Depends(get_db, scope="function")):
-        return JSONResponse(A.athlete_series(db, get_athlete(db, athlete_id), A.team_today()))
+        return JSONResponse(series_with_goal(db, get_athlete(db, athlete_id)))
 
     @app.get("/a/{token}/series.json")
     def athlete_series_self(token: str, db: Session = Depends(get_db, scope="function")):
-        return JSONResponse(A.athlete_series(db, athlete_by_token(db, token), A.team_today()))
+        # The goal comes from the athlete's group, so it follows the "show athletes their own group" setting.
+        return JSONResponse(series_with_goal(db, athlete_by_token(db, token), A.get_setting(db, "show_group_to_athletes", "1") == "1"))
 
     # ---------- run type and team workout (athlete and coach) ----------
 

@@ -6,7 +6,7 @@
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#A6192E">
 <title>{% block title %}{{ team_name }}{% endblock %}</title>
-<link rel="stylesheet" href="/static/app.css">
+<link rel="stylesheet" href="/static/app.css?v={{ asset_v }}">
 {% block head %}{% endblock %}
 </head>
 <body class="{% block bodyclass %}{% endblock %}">
@@ -40,7 +40,7 @@
 {% block flashes %}{% for level, text in messages %}<div class="flash {{ level }}" role="status">{{ text }}</div>{% endfor %}{% endblock %}
 {% block content %}{% endblock %}
 </main>
-<script src="/static/sortable.js" defer></script>
-<script src="/static/photo-zoom.js" defer></script>
+<script src="/static/sortable.js?v={{ asset_v }}" defer></script>
+<script src="/static/photo-zoom.js?v={{ asset_v }}" defer></script>
 </body>
 </html>

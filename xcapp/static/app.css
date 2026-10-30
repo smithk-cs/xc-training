@@ -458,3 +458,5 @@ details.sub-fold[open] { display: flex; flex-direction: column; gap: 10px; }
 /* Athletes page: everything centered except the athlete's name */
 table.list.centered th, table.list.centered td, table.list.centered td.num, table.list.centered th.num { text-align: center; }
 table.list.centered th:first-child, table.list.centered td:first-child { text-align: left; }
+/* Folded Garmin and privacy panels: their status badges line up at the right, one above the other */
+details.garmin-fold > summary .pill { margin-left: auto; min-width: 8.5rem; justify-content: center; text-align: center; box-sizing: border-box; }

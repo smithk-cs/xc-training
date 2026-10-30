@@ -4,7 +4,7 @@
 {% block head %}
 <script>window.XC_APP = true; window.DASH_PARAMS = {{ params | safe }};</script>
 <script src="/static/d3.v7.9.0.min.js"></script>
-<script src="/static/dash-shim.js"></script>
+<script src="/static/dash-shim.js?v={{ asset_v }}"></script>
 {% endblock %}
 {% block content %}
 <div id="dash-root">

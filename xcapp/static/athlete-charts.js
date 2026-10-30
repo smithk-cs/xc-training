@@ -8,7 +8,7 @@
   const addDays = (d, n) => new Date(+d + n * DAY);
   const fmtPace = (s) => { const t = Math.round(s); const m = Math.floor(t / 60); return m + ':' + String(t - m * 60).padStart(2, '0'); };
   const fmtTime = (s) => { const t = Math.round(s * 10) / 10; const m = Math.floor(t / 60); return m + ':' + (t - m * 60).toFixed(1).padStart(4, '0'); };
-  const C = { main: 'var(--dash-c1)', alt: 'var(--dash-c2)', flag: 'var(--cds-chart-status-critical)', grid: 'var(--cds-chart-grid)', ref: 'var(--cds-chart-reference)' };
+  const C = { main: 'var(--dash-c1)', alt: 'var(--dash-c2)', flag: 'var(--cds-chart-status-critical)', grid: 'var(--cds-chart-grid)', ref: 'var(--cds-chart-reference)', goal: 'var(--color-ok)' };
   const EVENTS = ['1 Mile', '1.5 Mile', '2 Mile', '5K'];
   const EVENT_COLORS = { '1 Mile': 'var(--dash-c1)', '1.5 Mile': 'var(--dash-c2)', '2 Mile': 'var(--dash-c3)', '5K': 'var(--dash-c4)' };
   const NAMES = { miles: 'Miles', load: 'Load ratio', effort: 'Effort', hr: 'Heart rate', pace: 'Pace', results: 'Benchmark times' };
@@ -51,6 +51,10 @@
 
     function range() {
       const r = rangeSel.value, t = D.today;
+      if (r === 'thisweek') {  // Monday to Sunday, with the days still to come
+        const mon = addDays(t, -((t.getUTCDay() + 6) % 7));
+        return { start: mon, end: addDays(mon, 6), bin: 'day', label: 'this week', phrase: 'this week (Monday to Sunday)' };
+      }
       if (r === 'week') return { start: addDays(t, -6), end: t, bin: 'day', label: 'past week', phrase: 'the past week' };
       if (r === 'month') return { start: addDays(t, -29), end: t, bin: 'day', label: 'past month', phrase: 'the past month' };
       if (r === 'season') return { start: D.seasonStart <= t ? D.seasonStart : addDays(t, -29), end: t, bin: 'week', label: D.season.name + ' season', phrase: 'the ' + D.season.name + ' season' };
@@ -164,7 +168,9 @@
         const wk = rg.bin === 'week' ? D.weeks.find((w) => w.week_start === iso(b.a)) : null;
         return { ...b, miles: d3.sum(rs, (r) => r.miles), n: rs.length, ratio: wk ? wk.ratio : null };
       });
-      const max = d3.max(bs, (b) => b.miles) || 0;
+      // The day's share of the weekly miles goal (six running days), shaded so short days stand out.
+      const daily = rg.bin === 'day' && D.weekly_miles_goal ? D.weekly_miles_goal / 6 : null;
+      const max = Math.max(d3.max(bs, (b) => b.miles) || 0, daily || 0);
       const { svg, W, H } = frame(250);
       const y0 = d3.scaleLinear([0, Math.max(1, max) * 1.15], [0, 1]).nice();
       const ticks = y0.ticks(4);
@@ -175,19 +181,27 @@
       const points = [];
       const o = overlays(svg, x, rg, L.top, L.bottom, points);
       const flagged = (b) => b.ratio != null && b.ratio > D.load_ratio_flag;
+      if (daily) {
+        svg.append('rect').attr('x', L.ml).attr('width', W - L.mr - L.ml).attr('y', y(daily)).attr('height', y(0) - y(daily))
+          .attr('fill', C.goal).attr('fill-opacity', 0.16);
+      }
       svg.append('g').selectAll('rect').data(bs.filter((b) => b.miles > 0)).join('rect')
         .attr('x', (b) => x(b.a) + 1).attr('width', (b) => Math.max(1, x(addDays(b.b, 1)) - x(b.a) - 2))
         .attr('y', (b) => y(b.miles)).attr('height', (b) => Math.max(0, y(0) - y(b.miles))).attr('rx', 3)
         .attr('fill', (b) => (flagged(b) ? C.flag : C.main));
+      if (daily) svg.append('line').attr('x1', L.ml).attr('x2', W - L.mr).attr('y1', y(daily)).attr('y2', y(daily))  // over the bars
+        .attr('stroke', C.goal).attr('stroke-width', 2).attr('stroke-dasharray', '5 4');
       const label = rg.bin === 'day' ? d3.utcFormat('%a, %b %-d') : rg.bin === 'week' ? (b) => 'Week of ' + d3.utcFormat('%b %-d')(b) : d3.utcFormat('%B %Y');
       bs.forEach((b) => points.push({ x: (x(b.a) + x(addDays(b.b, 1))) / 2, y: y(b.miles), lines: [label(b.a), b.miles.toFixed(1) + ' miles, ' + b.n + ' run' + (b.n === 1 ? '' : 's'), ...(b.ratio != null ? ['Load ratio ' + b.ratio.toFixed(2)] : [])] }));
       xAxis(svg, x, rg, L.bottom);
       hover(svg, W, H, points);
       setLegend([[C.main, rg.bin === 'day' ? 'Miles per day' : rg.bin === 'week' ? 'Miles per week' : 'Miles per month'],
+        ...(daily ? [[C.goal, `Daily goal ${daily.toFixed(1)} mi (${D.weekly_miles_goal} a week ÷ 6 days)`, 'soft']] : []),
         ...(rg.bin === 'week' && bs.some(flagged) ? [[C.flag, 'Week above ' + D.load_ratio_flag + ' load ratio']] : []), ...overlayLegend(o)]);
       const total = d3.sum(bs, (b) => b.miles), n = d3.sum(bs, (b) => b.n);
       const days = (rg.end - rg.start) / DAY + 1;
-      return `${n} run${n === 1 ? '' : 's'}, ${total.toFixed(1)} miles in ${rg.phrase}` + (days > 8 ? `, about ${(total / (days / 7)).toFixed(1)} miles a week.` : '.');
+      const goalNote = rangeSel.value === 'thisweek' && D.weekly_miles_goal ? ` of a ${D.weekly_miles_goal}-mile goal` : '';
+      return `${n} run${n === 1 ? '' : 's'}, ${total.toFixed(1)} miles${goalNote} in ${rg.phrase}` + (days > 8 ? `, about ${(total / (days / 7)).toFixed(1)} miles a week.` : '.');
     }
 
     function drawLoad(rg) {

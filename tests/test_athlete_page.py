@@ -121,7 +121,7 @@ def test_athlete_page_layout(app_client=None):
     page = c.get("/a/t-lay").text
     assert page.index('id="wp-h"') < page.index('id="rhr-h"') < page.index('id="ac-h"')
     assert '<details class="panel fold" id="workouts" open>' in page and '<details class="panel fold" id="rhr" open>' in page
-    assert "Enter today’s ›" in page and ">This week<" not in page
+    assert "Enter today’s ›" in page and '<span class="k">This week</span>' not in page
     assert '<option value="results">' not in page and "<section class=\"panel\" aria-labelledby=\"g-h\">" in page
     db = SessionLocal()
     db.add(RestingHeartRate(athlete_id=aid, date=A.team_today(), bpm=47, source="athlete"))
@@ -166,3 +166,25 @@ def test_compact_header_without_the_intro_sentence():
     page = TestClient(create_app()).get("/a/t-hd").text
     assert '<header class="hero compact">' in page and "This is your personal page" not in page
     assert "This page’s link is your sign-in: keep it to yourself." in page
+
+
+def test_effort_reminder_is_at_the_top_and_assets_are_versioned():
+    import datetime as dt
+    from fastapi.testclient import TestClient
+    from xcapp import analysis as A
+    from xcapp.db import SessionLocal
+    from xcapp.models import Activity, Announcement, Athlete
+    from xcapp.web import create_app
+    db = SessionLocal()
+    a = Athlete(first_name="Ava", last_name="Doyle", gender="Girls", grade=11, group="Varsity", link_token="t-ef")
+    db.add(a)
+    db.flush()
+    d = A.team_today()
+    db.add(Activity(athlete_id=a.id, source="upload", external_id="e1", start_utc=dt.datetime(d.year, d.month, d.day, 15), local_date=d,
+                    duration_s=1800, distance_m=6000, sport="running"))
+    db.add(Announcement(title="Team dinner", start_date=d, end_date=d))
+    db.commit()
+    db.close()
+    page = TestClient(create_app()).get("/a/t-ef").text
+    assert page.index("Add effort ›") < page.index("Team dinner") < page.index('id="wp-h"')
+    assert '/static/app.css?v=' in page and '/static/athlete-charts.js?v=' in page

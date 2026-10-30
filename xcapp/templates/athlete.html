@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}{{ a.first_name }} · {{ team_name }}{% endblock %}
 {% block bodyclass %}athlete-page{% endblock %}
-{% block head %}<script src="/static/d3.v7.9.0.min.js"></script><script src="/static/athlete-charts.js" defer></script>{% endblock %}
+{% block head %}<script src="/static/d3.v7.9.0.min.js"></script><script src="/static/athlete-charts.js?v={{ asset_v }}" defer></script>{% endblock %}
 {% block flashes %}{% endblock %}
 {% block content %}
 {% from '_icons.html' import badges %}
@@ -107,6 +107,7 @@
 {% with hero_title="Hi " ~ a.first_name, hero_text=None, hero_compact=True, back_url=None, hero_group=(ability if show_group else none), hero_vo2=vo2, hero_photo=('/a/' ~ token ~ '/photo?v=' ~ photo_v if photo_v else none), hero_name=a.name, hero_paces_link=paces_link %}{% include "_hero.html" %}{% endwith %}
 <div class="stack">
   {% for level, text in messages %}<div class="flash {{ level }}" role="status">{{ text }}</div>{% endfor %}
+  {% if need %}<p class="notice"><span>{{ need }} recent run{{ '' if need == 1 else 's' }} need{{ 's' if need == 1 else '' }} your effort rating.</span><a href="/a/{{ token }}/runs">Add effort ›</a></p>{% endif %}
   {% for n in notes %}<section class="announcement" role="note" aria-label="Announcement">
     <div class="ann-title">{{ n.title }}</div>{% if n.body %}<div class="ann-body">{{ n.body }}</div>{% endif %}
   </section>{% endfor %}
@@ -198,7 +199,6 @@
     <p class="small muted">Every minute you run earns points, and harder minutes earn more ({% for z, r in rates.items() %}{{ z|lower }} {{ r }}{{ ', ' if not loop.last else '' }}{% endfor %} a minute). Your target comes from the team’s plan for your group. Hit it and you’re at 100%. Your score is 80% points and 20% days run. Run on pace, run on the days you’re scheduled, and the points take care of themselves.</p>
   </section>
   {% endif %}
-  {% if need %}<p class="notice"><span>{{ need }} recent run{{ '' if need == 1 else 's' }} need{{ 's' if need == 1 else '' }} your effort rating.</span><a href="/a/{{ token }}/runs">Add effort ›</a></p>{% endif %}
 
   {% set garmin_connected = a.garmin and a.garmin.status == 'connected' %}
   {% set rhr_done = rhr_cal.by_day.get(rhr_cal.today) %}

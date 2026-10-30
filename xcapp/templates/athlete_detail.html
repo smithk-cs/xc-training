@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block head %}<script src="/static/d3.v7.9.0.min.js"></script><script src="/static/athlete-charts.js" defer></script>{% endblock %}
+{% block head %}<script src="/static/d3.v7.9.0.min.js"></script><script src="/static/athlete-charts.js?v={{ asset_v }}" defer></script>{% endblock %}
 {% block content %}
 {% from '_icons.html' import arrows, badges %}
 {% if a.alumni %}<p class="notice"><span><b>Alumni{% if a.grad_year %}, class of {{ a.grad_year }}{% endif %}.</b> Kept as team history with all their records; off the roster. To bring them back for another season, change their class year below.</span></p>
@@ -72,6 +72,7 @@
   {% else %}<tr><td colspan="5" class="muted">No results yet.</td></tr>{% endfor %}
   </tbody></table>
   <h2 style="margin-top:1em">Goals</h2>
+  <p class="small">{% if goal_v %}<b>Goal VDOT {{ goal_v }}</b>, from the fastest goal time this season (or the latest season with goals). {% else %}No goal VDOT yet. {% endif %}It sets the “Goal VDOT” workout targets the athlete sees. {% if user.role != 'trainer' %}<a href="/results?athlete={{ a.id }}#set-goal">Set or change goals ›</a>{% endif %}</p>
   <table class="list"><tbody>{% for g in goals %}<tr><td>{{ g.season }}</td><td>{{ g.event }}</td><td class="num">{{ fmt_time(g.goal_s) }}</td></tr>{% else %}<tr><td class="muted">No goals yet.</td></tr>{% endfor %}</tbody></table>
 </div>
 <div class="card">
