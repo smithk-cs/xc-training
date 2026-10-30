@@ -71,13 +71,13 @@ def test_courses_page_and_race_conditions():
     c, csrf = login("coach1")
     page = c.get("/courses").text
     assert "No courses yet." in page and "not added here yet: Gibson Ranch" in page
-    base = {"csrf": csrf, "name": "Gibson Ranch", "location": "Elverta", "distance_mi": "3.11", "surface": "Firm grass",
+    base = {"csrf": csrf, "name": "Gibson Ranch", "location": "Elverta", "distance": "5K", "dist_2 mi": "on", "surface": "Firm grass",
             "turns": "Some", "elevation_gain_ft": "60", "altitude_ft": "100", "hill_tier": "", "adjust_s_per_mile": "", "map_url": "", "notes": "Two loops"}
     c.post("/courses", data={**base, "map_url": "javascript:alert(1)"})
     assert "should start with https://" in c.get("/courses").text
     c.post("/courses", data=base)
     page = c.get("/courses").text
-    assert "Added Gibson Ranch." in page and "3.11 mi" in page and "12 s/mi" in page and "not added here yet" not in page
+    assert "Added Gibson Ranch." in page and '<span class="tag usual">5K</span>' in page and '<span class="tag">2 mi</span>' in page and "12 s/mi" in page and "not added here yet" not in page
     c.post("/courses", data={**base, "name": "gibson ranch"})
     assert "already a course called Gibson Ranch" in c.get("/courses").text
 
@@ -93,6 +93,19 @@ def test_courses_page_and_race_conditions():
     assert fmt_time(adj) in races
     c.post("/races/conditions", data={"csrf": csrf, "date": "2026-10-24", "meet": "Flat SAC", "temp_f": "200"})
     assert "Temperature should be from -20 to 120." in c.get("/races?season=all").text
+
+    db = SessionLocal()
+    odd = Course(name="Odd Loop", distance_m=5100)
+    db.add(odd)
+    db.commit()
+    oid = odd.id
+    db.close()
+    edit_page = c.get(f"/courses?edit={oid}").text
+    assert '<option value="keep" selected>3.17 mi (as saved)</option>' in edit_page
+    c.post("/courses", data={**base, "cid": str(oid), "name": "Odd Loop", "distance": "keep"})
+    db = SessionLocal()
+    assert db.get(Course, oid).distance_m == 5100                                  # a saved odd distance is kept
+    db.close()
 
     t, tcsrf = login("trainer1")
     assert "Add a course" not in t.get("/courses").text and "Race-day conditions" not in t.get("/races?season=all").text
@@ -140,3 +153,8 @@ def test_course_video_on_athletes_upcoming_meets():
     c.post(f"/registrations/{mid}", data={"csrf": csrf, "name": "Clovis Invite", "date": soon.isoformat(), "location": "Woodward Park, Fresno",
                                           "director_name": "", "director_email": "", "notes": "", "course_id": str(oid)})
     assert "▶ Course video: Lagoon Valley" in TestClient(app).get("/a/t-ava").text    # the chosen course wins
+
+
+def test_course_distances():
+    assert C.distance_label(5000) == "5K" and C.distance_label(2 * 1609.344) == "2 mi" and C.distance_label(5100) == "3.17 mi"
+    assert list(C.KM_DISTANCES)[:3] == ["2K", "3K", "4K"] and "1.5 mi" in C.MILE_DISTANCES
