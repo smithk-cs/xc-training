@@ -417,6 +417,9 @@ td.pace-bad { background: color-mix(in srgb, #D0191B 10%, transparent); }
   .pace-grid .long { display: none; }
   .pace-grid .short { display: inline; }
 }
+/* The team's place and score beside a race's name on the Races page. */
+.team-result { font-family: var(--font-body, inherit); font-weight: 500; color: var(--color-fg-muted); margin-left: 6px; }
+.team-result b { color: var(--color-fg); }
 /* A report opened from a link (such as the Week page's Pain button) stands out. */
 tr:target td { background: color-mix(in srgb, var(--brand-gold) 22%, transparent); }
 @media (prefers-color-scheme: dark) {

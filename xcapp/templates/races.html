@@ -1,5 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
+{% macro ord(n) %}{{ n }}{% if n % 100 in (11, 12, 13) %}th{% elif n % 10 == 1 %}st{% elif n % 10 == 2 %}nd{% elif n % 10 == 3 %}rd{% else %}th{% endif %}{% endmacro %}
+{% macro team_line(t) %}{% if t.place %}<b>{{ ord(t.place) }}</b>{% if t.teams %} of {{ t.teams }} teams{% endif %}{% endif %}{% if t.place and t.points is not none %} · {% endif %}{% if t.points is not none %}<b>{{ '%g' % t.points }}</b> points{% endif %}{% endmacro %}
 <h1>Races</h1>
 <p class="muted">Every meet your athletes ran, at each race’s real distance. Each athlete’s VDOT and running group come from their most recent race (1500 m to 10K), shown on the <a href="/vdot">VDOT</a> page.</p>
 {% if user.role != 'trainer' %}
@@ -23,6 +25,14 @@ Flat SAC Invitational,2026-10-24,Gibson Ranch Regional Park,Boys Varsity Large S
   {% for x in seasons %}<a href="/races?season={{ x|urlencode }}"{% if x == season %} aria-current="page"{% endif %}>{{ x }} <span class="small">({{ counts[x] }})</span></a>{% endfor %}
   {% if seasons|length > 1 %}<a href="/races?season=all"{% if season == 'all' %} aria-current="page"{% endif %}>All</a>{% endif %}
 </nav>
+{% endif %}
+{% if season_teams %}
+<details class="card fold-card" id="team-results"><summary><h2>Team results{% if season and season != 'all' %}, {{ season }}{% endif %} ({{ season_teams|length }})</h2></summary>
+  <div class="scroll"><table class="list compact sortable"><thead><tr><th>Date</th><th>Meet</th><th>Race</th><th class="num">Place</th><th class="num">Teams</th><th class="num">Points</th></tr></thead><tbody>
+  {% for t in season_teams %}<tr><td data-sort="{{ t.date.isoformat() }}" class="nowrap">{{ t.date.strftime('%b %-d') }}</td><td>{{ t.meet }}</td><td>{{ t.race or 'Race' }}</td>
+    <td class="num">{{ ord(t.place) if t.place else '' }}</td><td class="num">{{ t.teams or '' }}</td><td class="num">{{ '%g' % t.points if t.points is not none else '' }}</td></tr>{% endfor %}
+  </tbody></table></div>
+</details>
 {% endif %}
 {% if meets %}<p class="small muted">Click a meet to open or close it.</p>{% endif %}
 {% for (date, meet, course), races in meets.items() %}
@@ -67,9 +77,9 @@ Flat SAC Invitational,2026-10-24,Gibson Ranch Regional Park,Boys Varsity Large S
     </form>
   </details>
   {% endif %}
-  {% for (race, label, meters), rows in races.items() %}
+  {% for (race, label, meters), rows in races.items() %}{% set t = teams.get((date, meet, race)) %}{% set sug = suggested.get((date, meet, race)) %}
   <div class="form-row" style="justify-content:space-between; align-items:baseline">
-    <h3>{{ race or 'Race' }} · {{ label }}</h3>
+    <h3>{{ race or 'Race' }} · {{ label }}{% if t %} <span class="small team-result">Team: {{ team_line(t) }}</span>{% endif %}</h3>
     {% if user.role != 'trainer' %}
     <details class="edit-box"><summary class="small">Edit race</summary>
       <form method="post" action="/races/edit-race" class="form-row">
@@ -81,14 +91,25 @@ Flat SAC Invitational,2026-10-24,Gibson Ranch Regional Park,Boys Varsity Large S
       </form>
       <p class="small muted">Changes this race for all {{ rows|length }} results. Times at 1 mile, 1.5 miles, 2 miles or 5K count toward VDOT.</p>
     </details>
+    <details class="edit-box"><summary class="small">Team place and points</summary>
+      <form method="post" action="/races/team" class="form-row">
+        <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="date" value="{{ date.isoformat() }}">
+        <input type="hidden" name="meet" value="{{ meet }}"><input type="hidden" name="race" value="{{ race }}">
+        <label>Team place<input type="number" name="place" value="{{ t.place if t and t.place else '' }}" min="1" max="500" style="width:5em"></label>
+        <label>of how many teams<input type="number" name="teams" value="{{ t.teams if t and t.teams else '' }}" min="1" max="500" style="width:5em"></label>
+        <label>Team points<input type="number" name="points" value="{{ '%g' % t.points if t and t.points is not none else ('%g' % sug if sug else '') }}" min="0" max="5000" step="any" style="width:6em"></label>
+        <button type="submit">Save team result</button>
+      </form>
+      {% if sug and not (t and t.points is not none) %}<p class="small muted">Points filled in from the top five runners’ points in the results ({{ '%g' % sug }}). Change it if the meet scored differently.</p>{% endif %}
+    </details>
     {% endif %}
   </div>
   <div class="scroll"><table class="list">
-    <thead><tr><th class="num">Place</th><th>Athlete</th><th class="num">Grade</th><th class="num">Time</th><th class="num">Pace / mile</th>{% if mi.course or cond %}<th class="num" title="On a track at 55°F or cooler, at sea level, with a low dew point">Adjusted</th>{% endif %}</tr></thead>
+    <thead><tr><th class="num">Place</th><th>Athlete</th><th class="num">Grade</th>{% set has_pts = rows|selectattr('points', 'ne', none)|list %}<th class="num">Time</th><th class="num">Pace / mile</th>{% if has_pts %}<th class="num">Points</th>{% endif %}{% if mi.course or cond %}<th class="num" title="On a track at 55°F or cooler, at sea level, with a low dew point">Adjusted</th>{% endif %}</tr></thead>
     <tbody>
     {% for r in rows %}
       <tr><td class="num">{{ r.place or '' }}</td><td><a href="/athletes/{{ r.athlete_id }}">{{ r.athlete.name }}</a></td><td class="num">{{ r.athlete.grade }}</td>
-        <td class="num">{{ fmt_time(r.time_s) }}</td><td class="num">{{ fmt_time(r.time_s / (meters / 1609.344)) }}</td>
+        <td class="num">{{ fmt_time(r.time_s) }}</td><td class="num">{{ fmt_time(r.time_s / (meters / 1609.344)) }}</td>{% if has_pts %}<td class="num">{{ '%g' % r.points if r.points is not none else '' }}</td>{% endif %}
         {% if mi.course or cond %}{% set adj = mi.adjusted.get(r.id) %}<td class="num">{% if adj %}{{ fmt_time(adj) }}<br><span class="small muted">{{ fmt_time(adj / (meters / 1609.344)) }}/mi</span>{% endif %}</td>{% endif %}</tr>
     {% endfor %}
     </tbody>
