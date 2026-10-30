@@ -2,14 +2,14 @@
 {% block title %}Courses · {{ team_name }}{% endblock %}
 {% block content %}
 <h1>Courses</h1>
-<p class="muted" style="max-width:88ch">General information about each course, entered once. Race-day conditions (temperature, dew point, wind, footing) go on each meet on the <a href="/races">Races</a> page after the event. Together they turn each time into what it would be on a track at 55°F or cooler, at sea level, with a low dew point, so times on different courses and days compare like for like.</p>
+<p class="muted" style="max-width:88ch">General information about each course, entered once. Athletes see a Course video button on their upcoming meets when the meet’s course has a video. Race-day conditions (temperature, dew point, wind, footing) go on each meet on the <a href="/races">Races</a> page after the event. Together they turn each time into what it would be on a track at 55°F or cooler, at sea level, with a low dew point, so times on different courses and days compare like for like.</p>
 
 <div class="card scroll">
 <table class="list">
   <thead><tr><th>Course</th><th>Location</th><th class="num">Distance</th><th>Surface</th><th class="num">Climb</th><th class="num">Hills</th><th>Turns</th><th class="num">Altitude</th><th class="num">Adds</th><th class="num">Meets</th>{% if user.role != 'trainer' %}<th></th>{% endif %}</tr></thead>
   <tbody>
   {% for c in courses %}{% set tier = CS.hill_tier(c) %}
-  <tr><td><b>{{ c.name }}</b>{% if c.map_url %} <a class="small" href="{{ c.map_url }}" target="_blank" rel="noopener">map</a>{% endif %}{% if c.notes %}<br><span class="small muted">{{ c.notes|truncate(90) }}</span>{% endif %}</td>
+  <tr><td><b>{{ c.name }}</b>{% if c.map_url %} <a class="small" href="{{ c.map_url }}" target="_blank" rel="noopener">map</a>{% endif %}{% if c.video_url %} <a class="small" href="{{ c.video_url }}" target="_blank" rel="noopener">video</a>{% endif %}{% if c.notes %}<br><span class="small muted">{{ c.notes|truncate(90) }}</span>{% endif %}</td>
     <td class="small">{{ c.location }}</td>
     <td class="num">{{ '%.2f mi' % (c.distance_m / 1609.344) if c.distance_m else '' }}</td>
     <td>{{ c.surface }}</td>
@@ -46,6 +46,7 @@
     <div class="form-row">
       <label>Course adjustment (s/mile)<input type="number" name="adjust_s_per_mile" value="{{ '%g' % edit.adjust_s_per_mile if edit and edit.adjust_s_per_mile is not none else '' }}" step="1" min="-30" max="120" placeholder="worked out" style="width:8em"></label>
       <label style="flex:1">Map link<input type="url" name="map_url" value="{{ edit.map_url if edit else '' }}" maxlength="500" placeholder="https://www.strava.com/routes/..."></label>
+      <label style="flex:1">Course video (YouTube)<input type="url" name="video_url" value="{{ edit.video_url if edit else '' }}" maxlength="500" placeholder="https://youtu.be/..."></label>
     </div>
     <label>Notes<textarea name="notes" rows="3" style="width:100%" maxlength="4000" placeholder="Where the hills are, where the course gets muddy, the start box, parking">{{ edit.notes if edit else '' }}</textarea></label>
     <div class="form-row" style="margin-top:8px"><button type="submit">{% if edit %}Save course{% else %}Add course{% endif %}</button>{% if edit %}<a href="/courses">Cancel</a>{% endif %}</div>

@@ -57,6 +57,7 @@ class Athlete(Base):
     vdot_override: Mapped[int | None] = mapped_column(Integer, nullable=True)  # set by a coach; replaces the race VDOT
     vdot_mark: Mapped[str] = mapped_column(String(10), default="")     # coach's mark on the VDOT page, such as *
     weekly_plan: Mapped[str] = mapped_column(String(20), default="")   # coach's weekly mileage plan, such as 7x8 or inj
+    experience: Mapped[int] = mapped_column(Integer, default=2, server_default="2")  # 1 new to running, 2 usual, 3 experienced
     ability_override: Mapped[str] = mapped_column(String(40), default="")  # coach-pinned ability group, "" = automatic
     ai_consent_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)  # explicit opt-in to AI analysis
     ai_consent_note: Mapped[str] = mapped_column(String(200), default="")
@@ -323,7 +324,9 @@ class MeetEntry(Base):
     director_name: Mapped[str] = mapped_column(String(120), default="")
     director_email: Mapped[str] = mapped_column(String(254), default="")
     notes: Mapped[str] = mapped_column(Text, default="")
+    course_id: Mapped[int | None] = mapped_column(ForeignKey("courses.id", ondelete="SET NULL"), nullable=True)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
+    course: Mapped["Course | None"] = relationship()
     divisions: Mapped[list["MeetDivision"]] = relationship(back_populates="meet", cascade="all, delete-orphan",
                                                            order_by="MeetDivision.position")
     responses: Mapped[list["MeetResponse"]] = relationship(cascade="all, delete-orphan")
@@ -488,6 +491,7 @@ class Course(Base):
     hill_tier: Mapped[int | None] = mapped_column(Integer, nullable=True)          # 1 flat to 5 very hilly; empty = from the climb
     adjust_s_per_mile: Mapped[float | None] = mapped_column(Float, nullable=True)  # coach's own course adjustment, if set
     map_url: Mapped[str] = mapped_column(String(500), default="")
+    video_url: Mapped[str] = mapped_column(String(500), default="")   # a YouTube video of the course, for athletes
     notes: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
 

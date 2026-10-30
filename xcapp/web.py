@@ -478,7 +478,7 @@ def create_app() -> FastAPI:
         missed = db.scalars(select(MissedDay).where(MissedDay.athlete_id == a.id).order_by(MissedDay.date.desc()).limit(20)).all()
         group_names = [g.name for g in db.scalars(select(TrainingGroup).order_by(TrainingGroup.position)).all()]
         races = db.scalars(select(RaceResult).where(RaceResult.athlete_id == a.id).order_by(RaceResult.date.desc()).limit(30)).all()
-        return render(request, "athlete_detail.html", user, a=a, acts=acts, results=results, run_pain=run_pain, races=races,
+        return render(request, "athlete_detail.html", user, a=a, experience_labels=A.EXPERIENCE_LABELS, acts=acts, results=results, run_pain=run_pain, races=races,
                       ability=ability, group_names=group_names, missed=missed, vo2=A.latest_vo2(db, a.id),
                       rhr=A.resting_hr(db, a.id, A.team_today()), photo_v=photo_versions(db).get(a.id),
                       vdot_changes=a.vdot_changes, vdot_chart=RP.vdot_history_chart(a.vdot_changes),
@@ -502,6 +502,8 @@ def create_app() -> FastAPI:
                 a.group = f.get("group")
             a.hr_max = int(f["hr_max"]) if f.get("hr_max") else None
             a.hr_rest = int(f["hr_rest"]) if f.get("hr_rest") else None
+            if str(f.get("experience", "")).isdigit() and int(f["experience"]) in A.EXPERIENCE:
+                a.experience = int(f["experience"])
             a.email = clean_email(f.get("email", ""))
             raw_cls = str(f.get("grad_year", "")).strip()
             today = A.team_today()
@@ -834,6 +836,10 @@ def create_app() -> FastAPI:
         if url and not url.startswith(("https://", "http://")):
             raise ValueError("The map link should start with https://.")
         c.map_url = url
+        video = str(f.get("video_url", "")).strip()[:500]
+        if video and not video.startswith("https://"):
+            raise ValueError("The video link should start with https:// (copy it from YouTube's Share button).")
+        c.video_url = video
         c.notes = str(f.get("notes", "")).strip()[:4000]
 
     @app.get("/courses", response_class=HTMLResponse)
@@ -1371,7 +1377,7 @@ def create_app() -> FastAPI:
                       rhr=A.resting_hr(db, a.id, today), rhr_range=(A.RESTING_HR_MIN, A.RESTING_HR_MAX),
                       rhr_cal=A.resting_hr_calendar(db, a.id, today), photo_v=photo_versions(db).get(a.id), meets=my_meets(db, a, today),
                       wins=A.achievements(db, a, today),
-                      miles_goal=A.mileage_goal(db, a.id, mine.get("group") or "", today, a.gender) if show_group else None,
+                      miles_goal=A.mileage_goal(db, a.id, mine.get("group") or "", today, a.gender, a.experience) if show_group else None,
                       my_points=PT.team_week(db, A.week_monday(today), athletes=[a])[0] if show_group else None, rates=PT.RATES,
                       notes=[n for n in db.scalars(select(Announcement).where(Announcement.start_date <= today, Announcement.end_date >= today)
                                                    .order_by(Announcement.start_date.desc(), Announcement.id.desc())).all()
@@ -1750,6 +1756,9 @@ def create_app() -> FastAPI:
         m.director_name = str(f.get("director_name", "")).strip()[:120]
         m.director_email = clean_email(f.get("director_email", ""))
         m.notes = str(f.get("notes", "")).strip()[:2000]
+        if "course_id" in f:  # the course, for the course video on athletes' pages
+            cid = str(f.get("course_id", ""))
+            m.course_id = int(cid) if cid.isdigit() else None
 
     @app.get("/registrations", response_class=HTMLResponse)
     def registrations(request: Request, user=Depends(any_staff, scope="function"), db: Session = Depends(get_db, scope="function")):
@@ -1817,7 +1826,7 @@ def create_app() -> FastAPI:
             "athletes": f"mailto:?bcc={quote(','.join(athlete_emails))}&subject={subject}&body={quote(team_text)}" if athlete_emails else "",
             "staff": f"mailto:?bcc={quote(','.join(staff_emails))}&subject={subject}&body={quote(team_text)}" if staff_emails else "",
         }
-        return render(request, "registration.html", user, m=m, divisions=divisions, pickers=pickers, ab=ab, seeds=seeds, cols=cols,
+        return render(request, "registration.html", user, m=m, courses=db.scalars(select(Course).order_by(Course.name)).all(), matched=meet_course(db, m), divisions=divisions, pickers=pickers, ab=ab, seeds=seeds, cols=cols,
                       distances=[n for n, _ in REG.DISTANCES],
                       responses=st["responses"], unassigned=st["unassigned"], mail=mail, staff_list=staff_list,
                       absent=sorted((r for r in m.responses if r.status == "absent"), key=lambda r: r.athlete.last_name),
@@ -1899,6 +1908,14 @@ def create_app() -> FastAPI:
               + f" athlete{'' if len(chosen) == 1 else 's'}." + (" Some were already in another race and were left there." if taken else ""))
         return back(f"/registrations/{mid}#div-{d.id}")
 
+    def meet_course(db: Session, m: MeetEntry) -> Course | None:
+        """The meet's course: the one chosen for it, else a course whose name is in the meet's location or name."""
+        if m.course is not None:
+            return m.course
+        where = f"{m.location} {m.name}".lower()
+        return next((c for c in db.scalars(select(Course).order_by(func.length(Course.name).desc())).all()
+                     if c.name.strip().lower() in where), None)
+
     def my_meets(db: Session, a: Athlete, today: dt.date) -> list[dict]:
         """Upcoming meets for an athlete's page: their race if entered, their answer, and whether they can still answer."""
         out = []
@@ -1907,7 +1924,7 @@ def create_app() -> FastAPI:
             if m.divisions and a.gender not in {d.gender for d in m.divisions}:
                 continue
             days = (m.date - today).days
-            out.append({"meet": m, "days": days, "response": next((r for r in m.responses if r.athlete_id == a.id), None),
+            out.append({"meet": m, "days": days, "course": meet_course(db, m), "response": next((r for r in m.responses if r.athlete_id == a.id), None),
                         "race": next((d for d in m.divisions if any(e.athlete_id == a.id for e in d.entries)), None),
                         "open": days > REG.ATTENDANCE_CUTOFF_DAYS})
         return out

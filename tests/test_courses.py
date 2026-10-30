@@ -97,3 +97,46 @@ def test_courses_page_and_race_conditions():
     t, tcsrf = login("trainer1")
     assert "Add a course" not in t.get("/courses").text and "Race-day conditions" not in t.get("/races?season=all").text
     assert t.post("/courses", data={**base, "csrf": tcsrf}).status_code == 403
+
+
+def test_course_video_on_athletes_upcoming_meets():
+    import re
+
+    from fastapi.testclient import TestClient
+
+    from xcapp import analysis as A
+    from xcapp.db import SessionLocal
+    from xcapp.models import Athlete, MeetEntry, StaffUser
+    from xcapp.security import hash_password
+    db = SessionLocal()
+    db.add(StaffUser(username="coach1", role="coach", password_hash=hash_password("correct-horse-1")))
+    db.add(Athlete(first_name="Ava", last_name="Doyle", gender="Girls", grade=11, group="Varsity", link_token="t-ava"))
+    soon = A.team_today() + dt.timedelta(days=10)
+    db.add(MeetEntry(name="Clovis Invite", date=soon, location="Woodward Park, Fresno"))
+    db.commit()
+    db.close()
+    from xcapp.web import create_app
+    app = create_app()
+    c = TestClient(app, follow_redirects=False)
+    csrf = re.search(r'name="csrf" value="([^"]+)"', c.get("/login").text).group(1)
+    c.post("/login", data={"csrf": csrf, "username": "coach1", "password": "correct-horse-1"})
+    csrf = re.search(r'name="csrf" value="([^"]+)"', c.get("/courses").text).group(1)
+    form = {"csrf": csrf, "name": "Woodward Park", "surface": "Firm grass", "turns": "Some", "video_url": "http://youtube.com/x"}
+    c.post("/courses", data=form)
+    assert "The video link should start with https://" in c.get("/courses").text
+    c.post("/courses", data={**form, "video_url": "https://youtu.be/abc123"})
+    assert 'href="https://youtu.be/abc123" target="_blank" rel="noopener">video</a>' in c.get("/courses").text
+    me = TestClient(app).get("/a/t-ava").text
+    assert '<a class="button secondary" href="https://youtu.be/abc123" target="_blank" rel="noopener">▶ Course video: Woodward Park</a>' in me   # matched by location
+    db = SessionLocal()
+    meet = db.query(MeetEntry).one()
+    other = Course(name="Lagoon Valley", video_url="https://youtu.be/lagoon")
+    db.add(other)
+    db.commit()
+    mid, oid = meet.id, other.id
+    db.close()
+    page = c.get(f"/registrations/{mid}").text
+    assert "Woodward Park (matched by name)" in page and "Lagoon Valley (video)" in page
+    c.post(f"/registrations/{mid}", data={"csrf": csrf, "name": "Clovis Invite", "date": soon.isoformat(), "location": "Woodward Park, Fresno",
+                                          "director_name": "", "director_email": "", "notes": "", "course_id": str(oid)})
+    assert "▶ Course video: Lagoon Valley" in TestClient(app).get("/a/t-ava").text    # the chosen course wins

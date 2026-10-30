@@ -161,3 +161,25 @@ def test_week_page_and_athlete_panel():
     assert "Target days run from 1 to 7" in c.get("/week?team=Girls").text
     me = TestClient(app).get("/a/t-ava").text
     assert "This week’s points" in me and "Hit it and you’re at 100%" in me
+    page = c.get(f"/athletes/{aid}").text
+    assert '<option value="2" selected>2: usual</option>' in page
+    c.post(f"/athletes/{aid}/edit", data={"csrf": csrf, "grade": "11", "experience": "3"})
+    assert "Experience level 3: experienced (10% more miles)." in c.get(f"/athletes/{aid}").text
+    assert "experienced +10%" in c.get(f"/week?team=Girls&start={monday.isoformat()}").text and "of 33" in c.get(f"/week?team=Girls&start={monday.isoformat()}").text
+
+
+def test_experience_changes_the_miles_goal_and_target(session):
+    runs = [(0, [(PACE["Easy"], 40)])]
+    a = make_week(session, runs, goal=30)
+    usual = P.team_week(session, MON, athletes=[a])[0]
+    assert usual["goal_miles"] == 30
+    a.experience = 1
+    new = P.team_week(session, MON, athletes=[a])[0]
+    a.experience = 3
+    pro = P.team_week(session, MON, athletes=[a])[0]
+    assert new["goal_miles"] == pytest.approx(27) and pro["goal_miles"] == pytest.approx(33)
+    easy_points_per_mile = PACE["Easy"] / 60 * 0.2
+    assert usual["target"] - new["target"] == pytest.approx(3 * easy_points_per_mile)
+    assert pro["target"] - usual["target"] == pytest.approx(3 * easy_points_per_mile)
+    goal = A.mileage_goal(session, a.id, usual["group_name"], MON, "Girls", 3)
+    assert goal["goal"] == pytest.approx(33)
