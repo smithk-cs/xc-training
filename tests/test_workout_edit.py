@@ -56,7 +56,7 @@ def test_edit_workout():
     assert matched == {D1: None, D2: wid}                               # the match moved with the date
     db.close()
     page = c.get(f"/workouts?edit={wid}").text
-    assert 'name="group_Gold" checked' in page and "<option selected>Tempo</option>" in page   # an older workout opens as one part
+    assert 'name="group_Gold" checked' in page and "<option selected>Threshold</option>" in page   # an older workout opens as one part
     t, tcsrf = login(app, "trainer1")
     assert t.post("/workouts", data={"csrf": tcsrf, "wid": str(wid), "date": D1.isoformat(), "title": "x",
                                      "rep_distance_m": "400", "pace_event": "5K"}).status_code == 403

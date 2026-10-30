@@ -1,1 +1,1 @@
-{% for z in r.paces %}<td class="pace">{{ fmt_time(z.mile)[:-2] }}</td>{% else %}<td></td><td></td><td></td><td></td>{% endfor %}
+{% for z in r.paces %}<td class="pace">{{ fmt_time(z.mile)[:-2] }}</td>{% else %}{% for _ in zones %}<td></td>{% endfor %}{% endfor %}

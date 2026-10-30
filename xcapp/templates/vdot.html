@@ -10,16 +10,6 @@
   {% if user.role != 'trainer' %}{% if edit %}<span class="form-row"><a href="/vdot?team={{ team }}">Cancel</a><button type="submit" form="vdot-form">Save and finish</button></span>{% else %}<a class="button secondary" href="/vdot?team={{ team }}&edit=1">Edit VDOT</a>{% endif %}{% endif %}
 </div>
 <p class="muted" style="max-width:80ch">VDOT comes from each athlete’s most recent race or time trial (1500 m to 10K), read on the team’s VDOT table, unless a coach has set it. Paces per mile, as a share of VDOT: {% for n, pct in zones %}{{ n|lower }} {{ (pct * 100)|round(1)|string|replace('.0', '') }}%{{ ', ' if not loop.last else '' }}{% endfor %}. Boys and girls each have their own group cutoffs and weekly mileage goals, set on the <a href="/groups">Groups</a> page.</p>
-{% if user.role != 'trainer' and not edit %}
-<details class="card" style="max-width:980px"><summary style="cursor:pointer; font-weight:600; color:var(--brand-red)">Paste a VDOT list</summary>
-  <form method="post" action="/vdot/import" style="margin-top:10px">
-    <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="team" value="{{ team }}">
-    <p class="small muted">One athlete per line: name, then VDOT (for example copied from the team’s VDOT sheet). Group headings, marks and workout columns are ignored; athletes not listed keep their VDOT. Each VDOT is saved as set by a coach.</p>
-    <textarea name="text" rows="10" style="width:100%" placeholder="Sam Lowry	69&#10;Theo Marsh	64" required></textarea>
-    <button type="submit">Set these VDOTs</button>
-  </form>
-</details>
-{% endif %}
 {% if edit %}<form method="post" action="/vdot" id="vdot-form"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="team" value="{{ team }}">{% endif %}
 {% for b in board %}
 <div class="vdot-board">
@@ -28,13 +18,13 @@
   <thead><tr><th class="name">{{ s.group.name }}{% if s.miles %}<br><span class="small" style="font-weight:400">{{ '%g' % s.miles }} mi a week</span>{% endif %}</th><th>VDOT {{ s.range }}</th>
     {% for z in s.zones %}<th class="small">{{ z.name|lower }}: {{ fmt_time(z.fast)[:-2] }}{% if s.slower %} or slower{% elif not s.single %}-{{ fmt_time(z.slow)[:-2] }}{% endif %}</th>{% endfor %}</tr></thead>
   <tbody>
-  {% for r in s.rows %}{% include "_vdot_row.html" %}{% else %}<tr><td colspan="6" class="small">Nobody yet.</td></tr>{% endfor %}
+  {% for r in s.rows %}{% include "_vdot_row.html" %}{% else %}<tr><td colspan="{{ zones|length + 2 }}" class="small">Nobody yet.</td></tr>{% endfor %}
   </tbody>
 </table></div>
 {% endfor %}
 {% if b.rest %}
 <div class="scroll"><table class="vdot-group" style="--g: #F6F4F1; --g-ink: #1B1B1F">{{ cols }}
-  <thead><tr><th class="name">No VDOT yet</th><th colspan="5" class="small">Needs a race or a coach-set VDOT</th></tr></thead>
+  <thead><tr><th class="name">No VDOT yet</th><th colspan="{{ zones|length + 1 }}" class="small">Needs a race or a coach-set VDOT</th></tr></thead>
   <tbody>{% for r in b.rest %}{% include "_vdot_row.html" %}{% endfor %}</tbody>
 </table></div>
 {% endif %}

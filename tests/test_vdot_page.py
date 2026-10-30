@@ -61,7 +61,7 @@ def test_most_recent_race_sets_vdot(app):
 
 def test_paces_and_plans():
     assert [A.fmt_time(A.pace_at(v, A.EASY_PCT))[:-2] for v in (73, 68)] == ["6:17", "6:39"]       # the team sheet's values
-    assert [A.fmt_time(A.pace_at(v, A.TEMPO_PCT))[:-2] for v in (72, 68)] == ["5:05", "5:20"]
+    assert [A.fmt_time(A.pace_at(v, A.THRESHOLD_PCT))[:-2] for v in (72, 68)] == ["5:05", "5:20"]
     assert [A.weekly_plan_text(x) for x in ("7x8", "6 X 6", "7x8=56", "inj", "")] == ["7x8=56", "6x6=36", "7x8=56", "inj", ""]
 
 
@@ -70,8 +70,9 @@ def test_vdot_page_and_editing(app):
     c = login(web, "coach1")
     page = c.get("/vdot").text
     assert '<a href="/vdot" aria-current="page">VDOT</a>' in page
-    assert '<th class="name">Gold</th><th>VDOT 68-72</th>' in page and "easy: 6:21-6:39" in page and "tempo: 5:05-5:20" in page
-    assert "long run: 6:35-6:54" in page and "interval: 4:41-4:54" in page          # Gold's long run and interval ranges
+    assert '<th class="name">Gold</th><th>VDOT 68-72</th>' in page and "easy: 6:21-6:39" in page and "threshold: 5:05-5:20" in page
+    assert "moderate: 5:23-5:39" in page and "interval: 4:41-4:54" in page and "repetition: 4:21-4:33" in page   # Gold's other ranges
+    assert "long run" not in page and "tempo:" not in page and "Paste a VDOT list" not in page
     sam_paces = [A.fmt_time(z["mile"])[:-2] for z in A.training_paces(A.abilities(SessionLocal(), A.team_today())[sam]["vdot"])]
     assert "".join(f'<td class="pace">{x}</td>' for x in sam_paces) in page          # each athlete's own paces
     assert "<th>VDOT 73 +</th>" in page and "<th>VDOT 48 and below</th>" in page and "or slower" in page

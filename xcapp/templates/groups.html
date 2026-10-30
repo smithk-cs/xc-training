@@ -14,7 +14,7 @@
     {% for g in groups %}
     <tr>
       <td><input type="number" name="position_{{ g.id }}" value="{{ g.position }}" min="0" max="50" style="width:4.5rem" aria-label="Order of {{ g.name }}"></td>
-      <td><span class="pill" style="background:{{ g.color or '#FFFFF0' }}; color:{{ ink(g.color or '#FFFFF0') }}; border-color:rgba(0,0,0,.18); margin-right:6px">{{ g.name }}</span><input type="text" name="name_{{ g.id }}" value="{{ g.name }}" maxlength="40" required aria-label="Name" style="width:9rem"></td>
+      <td class="group-cell"><span class="pill-slot"><span class="pill" style="background:{{ g.color or '#FFFFF0' }}; color:{{ ink(g.color or '#FFFFF0') }}; border-color:rgba(0,0,0,.18)">{{ g.name }}</span></span><input type="text" name="name_{{ g.id }}" value="{{ g.name }}" maxlength="40" required aria-label="Name" style="width:9rem"></td>
       <td><input type="text" name="color_{{ g.id }}" value="{{ g.color }}" maxlength="7" pattern="#[0-9A-Fa-f]{6}" placeholder="#B6D7A8" style="width:6.5rem" aria-label="{{ g.name }} color"></td>
       <td class="num"><input type="number" name="{{ mk }}_{{ g.id }}" value="{{ g.min_vdot(team)|int }}" step="1" min="0" max="90" style="width:5rem" aria-label="{{ g.name }} {{ team|lower }} cutoff"></td>
       {% set goal = g.miles_goal(team) %}<td class="num"><input type="number" name="{{ 'miles_girls' if girls else 'miles' }}_{{ g.id }}" value="{{ '%g' % goal if goal else '' }}" step="0.5" min="0" max="150" placeholder="none" style="width:5.5rem" aria-label="{{ g.name }} {{ team|lower }} weekly miles goal"></td>
@@ -25,7 +25,7 @@
     {% endfor %}
     {% if user.role != 'trainer' %}
     <tr>
-      <td></td><td><input type="text" name="new_name" maxlength="40" placeholder="Add a group" aria-label="New group name" style="width:9rem"></td><td></td>
+      <td></td><td class="group-cell"><span class="pill-slot"></span><input type="text" name="new_name" maxlength="40" placeholder="Add a group" aria-label="New group name" style="width:9rem"></td><td></td>
       <td class="num"><input type="number" name="new_{{ mk }}" step="1" min="0" max="90" style="width:5rem" aria-label="New group {{ team|lower }} cutoff"></td>
       <td class="num"><input type="number" name="{{ 'new_miles_girls' if girls else 'new_miles' }}" step="0.5" min="0" max="150" placeholder="none" style="width:5.5rem" aria-label="New group {{ team|lower }} weekly miles goal"></td><td></td><td></td><td></td>
     </tr>
