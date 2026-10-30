@@ -267,14 +267,15 @@ def rhr_chart(rows) -> str:
 
 
 def roster_pdf(rows: list[dict], columns: list[str], title: str, subtitle: str, team: str, logo, staff) -> bytes:
-    pdf, w = REG.branded_page(team, "Official roster", logo)
+    """Everything centered except athletes' and coaches' names."""
+    pdf, w = REG.branded_page(team, "Official roster", logo, center=True)
     pdf.set_xy(48, 118)
     pdf.set_text_color(*_rgb(INK))
     pdf.set_font("Barlow", size=22)
-    pdf.multi_cell(w, 26, title, new_x="LMARGIN", new_y="NEXT")
+    pdf.multi_cell(w, 26, title, align="C", new_x="LMARGIN", new_y="NEXT")
     pdf.set_font("Inter", size=11)
     pdf.set_text_color(*_rgb(MUTED))
-    pdf.multi_cell(w, 16, subtitle, new_x="LMARGIN", new_y="NEXT")
+    pdf.multi_cell(w, 16, subtitle, align="C", new_x="LMARGIN", new_y="NEXT")
     pdf.ln(8)
     widths = {"#": 0.05, "name": 0.25}
     if "group" in columns:
@@ -302,7 +303,7 @@ def roster_pdf(rows: list[dict], columns: list[str], title: str, subtitle: str, 
         for (c, _, align), v in zip(heads, vals):
             pdf.cell(w * widths.get(c, rest), 19, v, align=align, fill=True, border="B")
         pdf.ln(19)
-    REG.staff_table(pdf, w, staff)
+    REG.staff_table(pdf, w, staff, center=True)
     return bytes(pdf.output())
 
 

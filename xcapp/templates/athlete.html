@@ -101,7 +101,7 @@
     {% endif %}
   </section>
 {% endmacro %}
-{% with hero_title="Hi " ~ a.first_name, hero_text="This is your personal page for the team’s training system. Keep this link to yourself.", back_url=None, hero_group=(ability if show_group else none), hero_vo2=vo2, hero_photo=('/a/' ~ token ~ '/photo?v=' ~ photo_v if photo_v else none), hero_name=a.name, hero_paces=my_paces %}{% include "_hero.html" %}{% endwith %}
+{% with hero_title="Hi " ~ a.first_name, hero_text="This is your personal page for the team’s training system. Keep this link to yourself.", back_url=None, hero_group=(ability if show_group else none), hero_vo2=vo2, hero_photo=('/a/' ~ token ~ '/photo?v=' ~ photo_v if photo_v else none), hero_name=a.name, hero_paces_link=paces_link %}{% include "_hero.html" %}{% endwith %}
 <div class="stack">
   {% for level, text in messages %}<div class="flash {{ level }}" role="status">{{ text }}</div>{% endfor %}
   {% for n in notes %}<section class="announcement" role="note" aria-label="Announcement">
@@ -174,6 +174,7 @@
     <div class="wpace">
       <div class="d">{{ m.name }}</div>
       <div class="small muted">{{ m.date.strftime('%a, %b %-d') }}{% if m.location %} · {{ m.location }}{% endif %}{% if x.race %} · You’re entered in {{ x.race.name }}{% if x.race.distance %} {{ x.race.distance }}{% endif %}{% endif %}</div>
+      {% if x.course and x.course.video_url %}<p style="margin:8px 0"><a class="button secondary" href="{{ x.course.video_url }}" target="_blank" rel="noopener">▶ Course video: {{ x.course.name }}</a></p>{% endif %}
       {% if r and r.status == 'attending' %}<p class="small"><span class="pill good">You’re confirmed</span></p>
       {% elif r %}<p class="small">{% if r.by == 'athlete' %}You told your coaches you won’t be there{% else %}Your coaches have you down as not attending{% endif %}: {{ r.reason }}</p>
       {% elif x.open %}

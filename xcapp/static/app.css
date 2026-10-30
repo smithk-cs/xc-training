@@ -385,3 +385,15 @@ table.mileage th:last-child { width: 7rem; }
 .week-table tr.group-row td { background: var(--color-soft); padding-top: 6px; padding-bottom: 6px; }
 .week-table details.flags summary { cursor: pointer; color: var(--color-warn); font-weight: 600; }
 .week-table details.flags ul { margin: 4px 0 0; padding-left: 16px; font-weight: 400; white-space: normal; max-width: 240px; }
+/* An athlete's times by distance and training zone. */
+.pace-grid th[scope="row"] { white-space: nowrap; }
+.pace-grid td { font-variant-numeric: tabular-nums; }
+.pace-grid tr.per-mile th, .pace-grid tr.per-mile td { border-top: 2px solid var(--color-border-line); font-weight: 600; }
+.pace-grid .short { display: none; }
+@media (max-width: 520px) {
+  .pace-panel { padding-left: 10px; padding-right: 10px; }
+  .pace-grid { font-size: 12.5px; }
+  .pace-grid th, .pace-grid td { padding-left: 3px; padding-right: 3px; }
+  .pace-grid .long { display: none; }
+  .pace-grid .short { display: inline; }
+}

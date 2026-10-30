@@ -102,8 +102,21 @@ def test_vdot_page_and_editing(app):
     c.post(f"/athletes/{sam}/vdot", data={"csrf": csrf, "vdot": ""})
     assert "worked out from their most recent race" in c.get(f"/athletes/{sam}").text
     me = TestClient(web).get("/a/t-sam").text
-    assert "From your most recent race (Oak Hills" in me and 'My training paces <span class="muted"' in me
-    assert all(f">{x}<small" in me for x in sam_paces) and " s per 400</span>" in me
+    assert "From your most recent race (Oak Hills" in me and "My training paces" not in me
+    assert '<a class="button secondary" href="/a/t-sam/paces">My paces: 100 m to 1600 m</a>' in me
+    paces = TestClient(web).get("/a/t-sam/paces").text
+    v = A.abilities(SessionLocal(), A.team_today())[sam]["vdot"]
+    assert f"from your VDOT of {v} (Silver group)" in paces
+    for z, pct in A.PACE_ZONES:
+        assert f"<th class=\"num\"><span class=\"long\">{z}</span>" in paces
+    assert "<span class=\"long\">1,600 m</span>" in paces and "<span class=\"long\">300 m</span>" in paces
+    assert f"<td class=\"num\">{A.pace_at(v, A.REP_PCT) * 100 / A.METERS_PER_MILE:.1f}</td>" in paces          # 100 m at repetition
+    assert f"<td class=\"num\">{A.fmt_time(A.pace_at(v, A.EASY_PCT) * 1600 / A.METERS_PER_MILE)}</td>" in paces  # 1600 m easy
+    db = SessionLocal()
+    db.add(Athlete(first_name="New", last_name="Runner", gender="Boys", grade=9, group="JV", link_token="t-new"))
+    db.commit()
+    db.close()
+    assert "appear here once you have a VDOT" in TestClient(web).get("/a/t-new/paces").text
 
     t = login(web, "trainer1")
     assert "Edit VDOT" not in t.get("/vdot").text and 'name="vdot_' not in t.get("/vdot?edit=1").text

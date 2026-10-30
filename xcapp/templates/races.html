@@ -42,6 +42,31 @@ Flat SAC Invitational,2026-10-24,Gibson Ranch Regional Park,Boys Varsity Large S
     </form>
   </details>
   {% endif %}
+  {% set mi = info[(date, meet)] %}{% set cond = mi.cond %}
+  <div class="small" style="margin:6px 0 10px">
+    {% if mi.course %}Course: <a href="/courses">{{ mi.course.name }}</a>.{% elif course %}<span class="muted">{{ course }} isn’t on the <a href="/courses">Courses</a> page yet.</span>{% endif %}
+    {% if cond and (cond.temp_f is not none or cond.dew_point_f is not none or cond.footing) %} Race day: {% if cond.temp_f is not none %}{{ '%g' % cond.temp_f }}°F{% endif %}{% if cond.dew_point_f is not none %}, dew point {{ '%g' % cond.dew_point_f }}°F{% endif %}{% if cond.humidity_pct is not none %}, {{ '%g' % cond.humidity_pct }}% humidity{% endif %}{% if cond.wind_mph is not none %}, wind {{ '%g' % cond.wind_mph }} mph{% endif %}{% if cond.footing %}, {{ cond.footing|lower }}{% endif %}.{% endif %}
+    {% if mi.course or cond %} <span class="muted">Adjusted times: {{ mi.explain }}.</span>{% endif %}
+  </div>
+  {% if user.role != 'trainer' %}
+  <details class="edit-box"><summary class="small">Race-day conditions</summary>
+    <form method="post" action="/races/conditions">
+      <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="date" value="{{ date.isoformat() }}"><input type="hidden" name="meet" value="{{ meet }}">
+      <div class="form-row">
+        <label>Course<select name="course_id"><option value="">{% if mi.course and not (cond and cond.course_id) %}{{ mi.course.name }} (matched by name){% else %}Match by name{% endif %}</option>
+          {% for c in courses %}<option value="{{ c.id }}"{% if cond and cond.course_id == c.id %} selected{% endif %}>{{ c.name }}</option>{% endfor %}</select></label>
+        <label>Temperature (°F)<input type="number" name="temp_f" value="{{ '%g' % cond.temp_f if cond and cond.temp_f is not none else '' }}" step="1" min="-20" max="120" style="width:6em"></label>
+        <label>Dew point (°F)<input type="number" name="dew_point_f" value="{{ '%g' % cond.dew_point_f if cond and cond.dew_point_f is not none else '' }}" step="1" min="-20" max="90" style="width:6em"></label>
+        <label>Humidity (%)<input type="number" name="humidity_pct" value="{{ '%g' % cond.humidity_pct if cond and cond.humidity_pct is not none else '' }}" step="1" min="0" max="100" style="width:6em"></label>
+        <label>Wind (mph)<input type="number" name="wind_mph" value="{{ '%g' % cond.wind_mph if cond and cond.wind_mph is not none else '' }}" step="1" min="0" max="60" style="width:6em"></label>
+        <label>Footing<select name="footing"><option value="">Not noted</option>{% for x in footings %}<option{% if cond and cond.footing == x %} selected{% endif %}>{{ x }}</option>{% endfor %}</select></label>
+      </div>
+      <label>Notes<input type="text" name="notes" value="{{ cond.notes if cond else '' }}" maxlength="1000" style="width:100%" placeholder="Hot start, headwind on the back stretch, course re-routed..."></label>
+      <div class="form-row" style="margin-top:6px"><button type="submit">Save conditions</button>
+        <span class="small muted">Enter after the race. Dew point is the best humidity measure; humidity and wind are kept for reference.</span></div>
+    </form>
+  </details>
+  {% endif %}
   {% for (race, label, meters), rows in races.items() %}
   <div class="form-row" style="justify-content:space-between; align-items:baseline">
     <h3>{{ race or 'Race' }} · {{ label }}</h3>
@@ -59,11 +84,12 @@ Flat SAC Invitational,2026-10-24,Gibson Ranch Regional Park,Boys Varsity Large S
     {% endif %}
   </div>
   <div class="scroll"><table class="list">
-    <thead><tr><th class="num">Place</th><th>Athlete</th><th class="num">Grade</th><th class="num">Time</th><th class="num">Pace / mile</th></tr></thead>
+    <thead><tr><th class="num">Place</th><th>Athlete</th><th class="num">Grade</th><th class="num">Time</th><th class="num">Pace / mile</th>{% if mi.course or cond %}<th class="num" title="On a track at 55°F or cooler, at sea level, with a low dew point">Adjusted</th>{% endif %}</tr></thead>
     <tbody>
     {% for r in rows %}
       <tr><td class="num">{{ r.place or '' }}</td><td><a href="/athletes/{{ r.athlete_id }}">{{ r.athlete.name }}</a></td><td class="num">{{ r.athlete.grade }}</td>
-        <td class="num">{{ fmt_time(r.time_s) }}</td><td class="num">{{ fmt_time(r.time_s / (meters / 1609.344)) }}</td></tr>
+        <td class="num">{{ fmt_time(r.time_s) }}</td><td class="num">{{ fmt_time(r.time_s / (meters / 1609.344)) }}</td>
+        {% if mi.course or cond %}{% set adj = mi.adjusted.get(r.id) %}<td class="num">{% if adj %}{{ fmt_time(adj) }}<br><span class="small muted">{{ fmt_time(adj / (meters / 1609.344)) }}/mi</span>{% endif %}</td>{% endif %}</tr>
     {% endfor %}
     </tbody>
   </table></div>

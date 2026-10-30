@@ -91,3 +91,29 @@ def test_season_overview(app):
     assert re.search(r'<span class="k">Miles</span><span class="v">(\d+(\.\d)?)</span>', page).group(1) == "136.7"
     empty = c.get(f"/reports/athlete/{pat}?season={SEASON}").text
     assert "No races recorded this season." in empty and "needs two races" in empty
+
+
+def test_roster_pdf_centered_except_names(monkeypatch):
+    import types
+
+    import fpdf
+
+    from xcapp import reports as RP
+    drawn = {}   # text -> how it was aligned
+    cell, multi_cell = fpdf.FPDF.cell, fpdf.FPDF.multi_cell
+
+    def record(orig):
+        def wrapped(self, w=None, h=None, text="", *args, **kw):
+            if str(text).strip():
+                drawn.setdefault(str(text).strip(), str(kw.get("align", "L")).upper()[:1])
+            return orig(self, w, h, text, *args, **kw)
+        return wrapped
+    monkeypatch.setattr(fpdf.FPDF, "cell", record(cell))
+    monkeypatch.setattr(fpdf.FPDF, "multi_cell", record(multi_cell))
+    coach = types.SimpleNamespace(display_name="Keegan Smith", title="Head coach", phone="916-555-0100", email="coach@example.org")
+    RP.roster_pdf([{"name": "Ava Doyle", "grade": 11, "group": "Gold", "vdot": 60}], ["grade", "group", "vdot"],
+                  "Team roster", "2026 XC", "XC Training", None, [coach])
+    assert drawn["Ava Doyle"] == "L" and drawn["Keegan Smith"] == "L" and drawn["ATHLETE"] == "L" and drawn["NAME"] == "L"
+    for text in ("XC TRAINING", "Official roster", "Team roster", "2026 XC", "Coaching staff", "GRADE", "11", "Gold", "60",
+                 "TITLE", "Head coach", "916-555-0100", "coach@example.org"):
+        assert drawn[text] == "C", text

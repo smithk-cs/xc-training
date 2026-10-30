@@ -192,7 +192,7 @@ def team_week(db: Session, monday: dt.date, gender: str | None = None, athletes:
 
 
 def _athlete_week(a, v, g, days, mine, acts_by, pain_by, missed_by, min_minutes, offset) -> dict:
-    goal_miles = g.miles_goal(a.gender) if g is not None else 0
+    goal_miles = A.athlete_miles_goal(g, a.gender, a.experience)   # adjusted for experience
     workout_miles = workout_pts = 0.0
     cells, total, miles, run_days, flags = [], 0.0, 0.0, 0, []
     for d0 in days:

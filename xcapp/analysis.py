@@ -174,10 +174,21 @@ def week_miles(db: Session, athlete_ids: list[int], monday: dt.date) -> dict[int
     return out
 
 
-def mileage_goal(db: Session, athlete_id: int, group: str, today: dt.date, gender: str = "Boys") -> dict | None:
-    """This week's miles against the athlete's group goal for their gender, or None when there is no goal."""
+# Experience level: 1 new to running, 2 usual, 3 experienced. The weekly miles goal (and so the points target) is 10% lower
+# for new runners and 10% higher for experienced ones.
+EXPERIENCE = {1: 0.9, 2: 1.0, 3: 1.1}
+EXPERIENCE_LABELS = {1: "1: new to running (10% fewer miles)", 2: "2: usual", 3: "3: experienced (10% more miles)"}
+
+
+def athlete_miles_goal(g: TrainingGroup | None, gender: str, experience: int | None) -> float:
+    """The athlete's weekly miles goal: their group's goal for boys or girls, adjusted for experience."""
+    return (g.miles_goal(gender) if g is not None else 0) * EXPERIENCE.get(experience or 2, 1.0)
+
+
+def mileage_goal(db: Session, athlete_id: int, group: str, today: dt.date, gender: str = "Boys", experience: int = 2) -> dict | None:
+    """This week's miles against the athlete's group goal for their gender and experience, or None when there is no goal."""
     g = db.scalar(select(TrainingGroup).where(TrainingGroup.name == group)) if group else None
-    goal = g.miles_goal(gender) if g is not None else 0
+    goal = athlete_miles_goal(g, gender, experience)
     if not goal:
         return None
     monday = week_monday(today)
@@ -487,6 +498,18 @@ def training_paces(v: float | None) -> list[dict]:
         mile = pace_at(v, pct)
         out.append({"name": name, "pct": pct, "mile": mile, "lap": mile * 400 / METERS_PER_MILE if name in ("Interval", "Repetition") else None})
     return out
+
+
+PACE_TABLE_DISTANCES = (100, 200, 300, 400, 800, 1600)   # meters
+
+
+def pace_table(v: float | None) -> list[dict]:
+    """Time for each distance at each training zone at VDOT v: [{"meters": 100, "times": {"Easy": 33.2, ...}}, ...]."""
+    if v is None:
+        return []
+    miles = {name: pace_at(v, pct) for name, pct in PACE_ZONES}
+    return [{"meters": m, "times": {z: s * m / METERS_PER_MILE for z, s in miles.items()}} for m in PACE_TABLE_DISTANCES] \
+        + [{"meters": None, "times": miles}]   # the last row: pace per mile
 
 
 def pace_at(v: float, pct: float) -> float:

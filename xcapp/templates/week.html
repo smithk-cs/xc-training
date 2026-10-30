@@ -21,7 +21,7 @@
   <tr class="group-row"><td colspan="12">{% if r.group_name %}<span class="pill" style="background:{{ c or '#FFFFF0' }}; color:{{ ink(c or '#FFFFF0') }}; border-color:rgba(0,0,0,.18)">{{ r.group_name }}</span>{% if r.goal_miles %} <span class="small muted">{{ '%g' % r.goal_miles }} mi a week</span>{% endif %}{% else %}<span class="small muted">No group yet (needs a VDOT)</span>{% endif %}</td></tr>
   {% endif %}
   <tr>
-    <td class="who"><a href="/athletes/{{ r.a.id }}">{{ r.a.name }}</a>{% if r.vdot %}<br><span class="small muted">VDOT {{ r.vdot }}</span>{% endif %}
+    <td class="who"><a href="/athletes/{{ r.a.id }}">{{ r.a.name }}</a>{% if r.vdot or r.a.experience in (1, 3) %}<br><span class="small muted">{% if r.vdot %}VDOT {{ r.vdot }}{% endif %}{% if r.a.experience == 1 %} · new runner −10%{% elif r.a.experience == 3 %} · experienced +10%{% endif %}</span>{% endif %}
       {% if r.flags %}<details class="flags"><summary class="small">{{ r.flags|length }} flag{{ '' if r.flags|length == 1 else 's' }}</summary><ul class="small">{% for f in r.flags %}<li>{{ f }}</li>{% endfor %}</ul></details>{% endif %}</td>
     <td class="num">{{ '%.1f' % r.miles }}{% if r.goal_miles %}<br><span class="small muted">of {{ '%g' % r.goal_miles }}</span>{% endif %}</td>
     <td class="num">{{ '%.0f' % r.points }}{% if r.target %}<br><span class="small muted">of {{ '%.0f' % r.target }}</span>{% endif %}</td>
