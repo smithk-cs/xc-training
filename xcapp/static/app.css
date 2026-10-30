@@ -89,7 +89,9 @@ button, .button { background: var(--brand-red); color: #FFFFFF; border: 1px soli
 button:hover, .button:hover { background: var(--brand-red-dark); border-color: var(--brand-red-dark); color: #FFFFFF; }
 button.secondary { background: transparent; color: var(--color-fg); border-color: var(--color-input-line); }
 button.secondary:hover { background: var(--color-soft); color: var(--color-fg); }
-/* The VDOT page's Boys / Girls switch: the team not shown is an outlined button. */
+/* The Boys / Girls switch beside the Groups and VDOT titles: the team not shown is an outlined button. */
+.title-row { align-items: center; margin-bottom: 0; }
+.team-switch { margin-bottom: 0; gap: 8px; }
 .team-switch a.button.secondary { background: transparent; color: var(--color-fg); border-color: var(--color-input-line); }
 .team-switch a.button.secondary:hover { background: var(--color-soft); color: var(--color-fg); }
 button.danger { background: transparent; color: var(--color-bad); border-color: var(--color-bad); }

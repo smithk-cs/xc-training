@@ -199,6 +199,15 @@ def load_ratios(miles: list[float]) -> list[float | None]:
     return out
 
 
+def local_time(t: dt.datetime | None) -> dt.datetime | None:
+    """A stored time (UTC, saved without a zone) as the team's local time (Pacific by default), for showing."""
+    if t is None:
+        return None
+    if t.tzinfo is None:
+        t = t.replace(tzinfo=dt.timezone.utc)
+    return t.astimezone(settings().tz)
+
+
 def local_date(start_utc: dt.datetime) -> dt.date:
     if start_utc.tzinfo is None:
         start_utc = start_utc.replace(tzinfo=dt.timezone.utc)

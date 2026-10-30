@@ -150,13 +150,36 @@ def test_boys_and_girls_pages(app):
     assert c.post("/vdot/import", data={"csrf": csrf, "team": "Girls", "text": "Ava Cole\t59"}).headers["location"] == "/vdot?team=Girls"
 
     # The Groups page keeps a weekly goal for each, and athletes see their own team's goal.
-    page = c.get("/groups").text
-    assert f'name="miles_{silver.id}" value="40"' in page and f'name="miles_girls_{silver.id}" value="32"' in page
-    assert "Girls <span class=\"pill\"" in page and "8.0 / 32" in page
-    me = TestClient(web).get("/a/t-ava").text
-    assert "the Silver goal" in me and "24.0" in me                                     # 32 - 8 miles left
+    boys = c.get("/groups").text                                                       # boys by default
+    assert "Boys training groups" in boys and '<a class="button" href="/groups?team=Boys" aria-current="page">Boys</a>' in boys
+    assert f'name="miles_{silver.id}" value="40"' in boys and "miles_girls_" not in boys and "girls_" not in boys
+    page = c.get("/groups?team=Girls").text
+    assert "Girls training groups" in page and f'name="miles_girls_{silver.id}" value="32"' in page and f'name="girls_{silver.id}" value="56"' in page
+    assert f'name="miles_{silver.id}"' not in page and f'name="boys_{silver.id}"' not in page
+    assert "Girls weekly mileage" in page and "8.0 / 32" in page
+
+    # Saving the girls' page changes only the girls' numbers; a group added there starts the same for the boys.
     db = SessionLocal()
-    assert A.mileage_goal(db, ava_id, "Silver", A.team_today(), "Girls")["goal"] == 32
+    groups = db.query(TrainingGroup).all()
+    form = {"csrf": csrf, "team": "Girls", "lookback": "365", "show_athletes": "on", "new_name": "Diamond", "new_girls": "64", "new_miles_girls": "50"}
+    for g in groups:
+        form.update({f"name_{g.id}": g.name, f"position_{g.id}": str(g.position), f"color_{g.id}": g.color,
+                     f"girls_{g.id}": str(int(g.min_vdot_girls)), f"miles_girls_{g.id}": "%g" % g.weekly_miles_girls if g.weekly_miles_girls else ""})
+    db.close()
+    form[f"girls_{silver.id}"], form[f"miles_girls_{silver.id}"] = "55", "30"
+    assert c.post("/groups", data=form).headers["location"] == "/groups?team=Girls"
+    db = SessionLocal()
+    s2 = db.get(TrainingGroup, silver.id)
+    assert (s2.min_vdot_boys, s2.weekly_miles, s2.min_vdot_girls, s2.weekly_miles_girls) == (62, 40, 55, 30)
+    d = db.query(TrainingGroup).filter_by(name="Diamond").one()
+    assert (d.min_vdot_boys, d.min_vdot_girls, d.weekly_miles, d.weekly_miles_girls) == (64, 64, 50, 50)
+    db.close()
+    page = c.get("/groups?team=Girls").text
+    assert "8.0 / 30" in page
+    me = TestClient(web).get("/a/t-ava").text
+    assert "the Silver goal" in me and "22.0" in me                                     # 30 - 8 miles left
+    db = SessionLocal()
+    assert A.mileage_goal(db, ava_id, "Silver", A.team_today(), "Girls")["goal"] == 30
     assert A.mileage_goal(db, ava_id, "Silver", A.team_today(), "Boys")["goal"] == 40
     assert A.mileage_goal(db, ava_id, "Gold", A.team_today(), "Girls") is None         # no girls' goal for Gold
     db.close()

@@ -96,7 +96,7 @@
   <table class="list compact sortable"><thead><tr><th>Athlete</th><th>Reason</th><th>Marked by</th><th>When</th>{% if user.role != 'trainer' %}<th data-nosort></th>{% endif %}</tr></thead><tbody>
   {% for r in absent %}
     <tr><td data-sort="{{ r.athlete.last_name }} {{ r.athlete.first_name }}"><a href="/athletes/{{ r.athlete_id }}">{{ r.athlete.name }}</a></td><td>{{ r.reason }}</td>
-      <td>{{ 'The athlete' if r.by == 'athlete' else 'A coach' }}</td><td data-sort="{{ r.updated_at.isoformat() }}" class="small">{{ r.updated_at.strftime('%b %-d') }}</td>
+      <td>{{ 'The athlete' if r.by == 'athlete' else 'A coach' }}</td><td data-sort="{{ r.updated_at.isoformat() }}" class="small">{{ (r.updated_at|local).strftime('%b %-d') }}</td>
       {% if user.role != 'trainer' %}<td><form method="post" action="/registrations/{{ m.id }}/absent" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}">
         <input type="hidden" name="athlete_id" value="{{ r.athlete_id }}"><input type="hidden" name="clear" value="1"><button class="link" type="submit">Clear</button></form></td>{% endif %}</tr>
   {% endfor %}

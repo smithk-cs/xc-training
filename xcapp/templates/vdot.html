@@ -5,12 +5,10 @@
 {# The same column widths in every group's table, so the columns line up down the page. #}
 {% set cols %}<colgroup><col class="name"><col class="v">{% for z in zones %}<col class="pace">{% endfor %}</colgroup>{% endset %}
 <div class="form-row" style="justify-content:space-between">
-  <h1 style="margin:0">{{ team }} VDOT training groups</h1>
+  <div class="form-row title-row"><h1 style="margin:0">{{ team }} VDOT training groups</h1>
+    {% with base='/vdot', extra=('&edit=1' if edit else '') %}{% include "_team_switch.html" %}{% endwith %}</div>
   {% if user.role != 'trainer' %}{% if edit %}<span class="form-row"><a href="/vdot?team={{ team }}">Cancel</a><button type="submit" form="vdot-form">Save and finish</button></span>{% else %}<a class="button secondary" href="/vdot?team={{ team }}&edit=1">Edit VDOT</a>{% endif %}{% endif %}
 </div>
-<nav class="form-row team-switch" aria-label="Team" style="margin:12px 0">
-  {% for t in ('Boys', 'Girls') %}<a class="button{% if t != team %} secondary{% endif %}" href="/vdot?team={{ t }}{% if edit %}&edit=1{% endif %}"{% if t == team %} aria-current="page"{% endif %}>{{ t }}</a>{% endfor %}
-</nav>
 <p class="muted" style="max-width:80ch">VDOT comes from each athlete’s most recent race or time trial (1500 m to 10K), read on the team’s VDOT table, unless a coach has set it. Paces per mile, as a share of VDOT: {% for n, pct in zones %}{{ n|lower }} {{ (pct * 100)|round(1)|string|replace('.0', '') }}%{{ ', ' if not loop.last else '' }}{% endfor %}. Boys and girls each have their own group cutoffs and weekly mileage goals, set on the <a href="/groups">Groups</a> page.</p>
 {% if user.role != 'trainer' and not edit %}
 <details class="card" style="max-width:980px"><summary style="cursor:pointer; font-weight:600; color:var(--brand-red)">Paste a VDOT list</summary>
