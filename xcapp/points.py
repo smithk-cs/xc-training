@@ -31,6 +31,32 @@ WEEK_CAP = 1.10           # extra running counts up to 110% of the weekly target
 POINTS_SHARE = 0.8        # the rest of the score is days run
 DEFAULT_TARGET_DAYS, DEFAULT_MIN_MINUTES = 6, 30
 JUMP = 1.10               # flag weekly points more than 10% over the week before
+ON_PACE, NEAR_PACE = 90, 80   # % of the week's goal due so far: green from 90, amber from 80, red below
+
+
+def pace_status(pct: float | None) -> str:
+    """'good', 'warn' or 'bad' for a share of what's due so far; '' when there's nothing to compare with."""
+    if pct is None:
+        return ""
+    return "good" if pct >= ON_PACE else "warn" if pct >= NEAR_PACE else "bad"
+
+
+def keep_pace(week: dict, today: dt.date) -> None:
+    """Miles and points against the share of the week's goals due by each day (a seventh a day), for colouring:
+    on each day, the running total through that day; for the week, through today (or the whole week once past)."""
+    cum_m = cum_p = 0.0
+    week["miles_pct"] = week["points_pct"] = None
+    for i, d in enumerate(week["days"], 1):
+        cum_m += d["miles"]
+        cum_p += d["points"]
+        if d["date"] > today:
+            d["miles_pct"] = d["points_pct"] = None
+            continue
+        due_m = week["goal_miles"] * i / 7 if week["goal_miles"] else 0
+        due_p = (week["target"] or 0) * i / 7
+        d["miles_pct"] = 100 * cum_m / due_m if due_m else None
+        d["points_pct"] = 100 * cum_p / due_p if due_p else None
+        week["miles_pct"], week["points_pct"] = d["miles_pct"], d["points_pct"]
 
 
 # ---------- zones and one run's points ----------
@@ -156,7 +182,8 @@ def team_week(db: Session, monday: dt.date, gender: str | None = None, athletes:
     sunday = monday + dt.timedelta(days=6)
     days = [monday + dt.timedelta(days=i) for i in range(7)]
     target_days, min_minutes = settings_for(db)
-    ab = A.abilities(db, min(sunday, A.team_today()))
+    today = A.team_today()
+    ab = A.abilities(db, min(sunday, today))
     groups = {g.name: g for g in db.scalars(select(TrainingGroup)).all()}
     if athletes is None:
         q = select(Athlete).where(A.on_team())
@@ -184,6 +211,7 @@ def team_week(db: Session, monday: dt.date, gender: str | None = None, athletes:
                 for offset in (0, -7)]
         week, last = rows
         week["score"] = week_score(week["points"], week["target"] or 0, week["run_days"], target_days)
+        keep_pace(week, today)
         if last["points"] > 0 and week["points"] > JUMP * last["points"]:
             week["flags"].append(f"Points up {100 * (week['points'] / last['points'] - 1):.0f}% on last week")
         out.append({"a": a, "group": g, "group_name": group, "vdot": v, "target_days": target_days, **week,
@@ -226,11 +254,12 @@ def _athlete_week(a, v, g, days, mine, acts_by, pain_by, missed_by, min_minutes,
         miles += day_miles
         run_days += minutes >= min_minutes
         flags += [f"{d.strftime('%a')}: {f}" for f in day_flags]
-        pain = max((p.severity for p in pain_by.get((a.id, d), [])), default=None)
+        worst = max(pain_by.get((a.id, d), []), key=lambda p: p.severity, default=None)
+        pain, pain_id = (worst.severity, worst.id) if worst else (None, None)
         miss = (missed_by.get((a.id, d)) or [None])[0]
         cells.append({"date": d, "runs": runs, "miles": day_miles, "minutes": minutes, "points": earned, "planned": day_plan,
                       "workouts": planned, "hr": hr, "rpe": max((r.rpe for r in runs if r.rpe is not None), default=None),
-                      "pain": pain, "missed": miss, "flags": day_flags})
+                      "pain": pain, "pain_id": pain_id, "missed": miss, "flags": day_flags})
     target = None
     if v and goal_miles:  # without the group's weekly miles goal the target would be the workouts alone
         easy_pace = A.pace_at(v, A.EASY_PCT)

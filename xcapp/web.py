@@ -1241,6 +1241,13 @@ def create_app() -> FastAPI:
                            .where(PainReport.date >= A.team_today() - dt.timedelta(days=28)).order_by(PainReport.date.desc())).all()
         missed = db.scalars(select(MissedDay).options(selectinload(MissedDay.athlete))
                             .where(MissedDay.date >= A.team_today() - dt.timedelta(days=28)).order_by(MissedDay.date.desc())).all()
+        # A report opened from the Week page is shown even when it's older than four weeks.
+        for key, model, rows_ in (("pain", PainReport, pains), ("missed", MissedDay, missed)):
+            rid = str(request.query_params.get(key, ""))
+            extra = db.get(model, int(rid)) if rid.isdigit() else None
+            if extra is not None and extra not in rows_:
+                rows_.append(extra)
+                rows_.sort(key=lambda x: x.date, reverse=True)
         return render(request, "injuries.html", user, rows=rows, pains=pains, missed=missed, athletes=athletes_sorted(db),
                       types=INJURY_TYPES, areas=BODY_AREAS, today=A.team_today(), show_notes=user.role in ("admin", "trainer"))
 

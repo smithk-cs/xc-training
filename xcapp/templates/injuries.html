@@ -44,7 +44,7 @@
   <p class="small muted">An athlete’s injury report isn’t in the injury log until a trainer or coach adds it, so it doesn’t change injured weeks or the load ratio until then.</p>
   <table class="list"><thead><tr><th>Date</th><th>Athlete</th><th>Reason</th><th>Details</th><th>In the injury log?</th></tr></thead><tbody>
   {% for m in missed %}
-  <tr>
+  <tr id="missed-{{ m.id }}">
     <td>{{ m.date.strftime('%a %b %-d') }}</td><td>{{ m.athlete.name }}</td>
     <td>{% if m.reason == 'Injury' %}<span class="pill bad">Injury</span>{% else %}{{ m.reason }}{% endif %}</td>
     <td class="small">{% if m.reason == 'Injury' %}{{ m.body_area }}, {{ m.side|lower }}; pain {{ m.pain }}/10{% if m.started %}; started {{ m.started|lower }}{% endif %}{% if m.seen_by %}; seen by: {{ m.seen_by|lower }}{% endif %}{% if m.more_days %}; more days out: {{ m.more_days|lower }}{% endif %}{% endif %}
@@ -63,7 +63,7 @@
 <div class="card scroll">
   <h2>Pain reports from athletes, last 4 weeks</h2>
   <table class="list"><thead><tr><th>Date</th><th>Athlete</th><th>Where</th><th class="num">Pain (0-10)</th><th>Note</th></tr></thead><tbody>
-  {% for p in pains %}<tr><td>{{ p.date.strftime('%b %-d') }}</td><td>{{ p.athlete.name }}</td><td>{{ p.body_area }}</td><td class="num">{% if p.severity >= 4 %}<span class="pill bad">{{ p.severity }}</span>{% else %}{{ p.severity }}{% endif %}</td><td class="small">{% if p.saw_trainer %}<span class="pill good">Saw trainer</span> {% endif %}{{ p.note }}</td></tr>
+  {% for p in pains %}<tr id="pain-{{ p.id }}"><td>{{ p.date.strftime('%b %-d') }}</td><td>{{ p.athlete.name }}</td><td>{{ p.body_area }}</td><td class="num">{% if p.severity >= 4 %}<span class="pill bad">{{ p.severity }}</span>{% else %}{{ p.severity }}{% endif %}</td><td class="small">{% if p.saw_trainer %}<span class="pill good">Saw trainer</span> {% endif %}{{ p.note }}</td></tr>
   {% else %}<tr><td colspan="5" class="muted">No pain reports.</td></tr>{% endfor %}
   </tbody></table>
 </div>

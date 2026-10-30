@@ -375,7 +375,27 @@ table.mileage { table-layout: fixed; width: 100%; }
 table.mileage th:first-child { width: 34%; }
 table.mileage th:last-child { width: 7rem; }
 /* Week page: one row per athlete, the totals, then a cell per day. */
-.week-table th, .week-table td { vertical-align: top; }
+.week-table th, .week-table td { vertical-align: top; text-align: center; }
+.week-table th.who, .week-table td.who, .week-table tr.group-row td { text-align: left; }
+table.list.week-table td.num, table.list.week-table th.num { text-align: center; }
+/* A line before each day, and every other day shaded, so the seven days read as columns. */
+.week-table th.day, .week-table td.day { border-left: 2px solid var(--color-border-line); }
+.week-table td.day.d1, .week-table td.day.d3, .week-table td.day.d5,
+.week-table th.day.d1, .week-table th.day.d3, .week-table th.day.d5 { background: rgba(27, 27, 31, .045); }
+@media (prefers-color-scheme: dark) {
+  .week-table td.day.d1, .week-table td.day.d3, .week-table td.day.d5,
+  .week-table th.day.d1, .week-table th.day.d3, .week-table th.day.d5 { background: rgba(255, 255, 255, .05); }
+}
+/* On pace for the week's miles and points: green 90%+, amber 80-89%, red below. */
+.pace-good { color: #1E7B34; font-weight: 700; }
+.pace-warn { color: #B26A00; font-weight: 700; }
+.pace-bad { color: #D0191B; font-weight: 700; }
+td.pace-good { background: color-mix(in srgb, #1E7B34 10%, transparent); }
+td.pace-warn { background: color-mix(in srgb, #B26A00 12%, transparent); }
+td.pace-bad { background: color-mix(in srgb, #D0191B 10%, transparent); }
+.week-table a.tag { text-decoration: none; display: inline-block; }
+.week-table a.tag:hover, .week-table a.pill:hover { text-decoration: underline; }
+.week-table a.pill { text-decoration: none; }
 .week-table td.who { white-space: nowrap; font-weight: 600; position: sticky; left: 0; background: var(--color-panel); z-index: 1; }
 .week-table th.who { position: sticky; left: 0; background: var(--color-panel); z-index: 2; }
 .week-table td.day, .week-table th.day { min-width: 92px; font-size: 12.5px; line-height: 1.45; }
@@ -396,4 +416,9 @@ table.mileage th:last-child { width: 7rem; }
   .pace-grid th, .pace-grid td { padding-left: 3px; padding-right: 3px; }
   .pace-grid .long { display: none; }
   .pace-grid .short { display: inline; }
+}
+/* A report opened from a link (such as the Week page's Pain button) stands out. */
+tr:target td { background: color-mix(in srgb, var(--brand-gold) 22%, transparent); }
+@media (prefers-color-scheme: dark) {
+  .pace-good { color: #7BD88F; } .pace-warn { color: #F5B94A; } .pace-bad { color: #FF8A80; }
 }

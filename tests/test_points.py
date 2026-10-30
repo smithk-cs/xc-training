@@ -183,3 +183,46 @@ def test_experience_changes_the_miles_goal_and_target(session):
     assert pro["target"] - usual["target"] == pytest.approx(3 * easy_points_per_mile)
     goal = A.mileage_goal(session, a.id, usual["group_name"], MON, "Girls", 3)
     assert goal["goal"] == pytest.approx(33)
+
+
+def test_keep_pace_colours():
+    assert [P.pace_status(x) for x in (None, 120, 90, 89.9, 80, 79.9)] == ["", "good", "good", "warn", "warn", "bad"]
+    days = [{"date": MON + dt.timedelta(days=i), "miles": m, "points": p} for i, (m, p) in enumerate(
+        [(5, 10), (5, 10), (5, 10), (0, 0), (0, 0), (0, 0), (0, 0)])]
+    week = {"days": days, "goal_miles": 35, "target": 70}
+    P.keep_pace(week, MON + dt.timedelta(days=2))                       # Wednesday: 15 of the 15 miles due so far
+    assert [round(d["miles_pct"]) if d["miles_pct"] is not None else None for d in days] == [100, 100, 100, None, None, None, None]
+    assert week["miles_pct"] == pytest.approx(100) and week["points_pct"] == pytest.approx(100)
+    P.keep_pace(week, MON + dt.timedelta(days=4))                       # Friday, nothing more run: 15 of 25 due
+    assert week["miles_pct"] == pytest.approx(60) and P.pace_status(week["miles_pct"]) == "bad"
+    assert round(days[3]["miles_pct"]) == 75 and P.pace_status(days[3]["miles_pct"]) == "bad"
+
+
+def test_week_links_and_colours():
+    import re
+
+    from fastapi.testclient import TestClient
+
+    from xcapp.db import SessionLocal
+    from xcapp.models import MissedDay, PainReport, StaffUser
+    from xcapp.security import hash_password
+    db = SessionLocal()
+    db.add(StaffUser(username="coach1", role="coach", password_hash=hash_password("correct-horse-1")))
+    a = make_week(db, [(0, [(PACE["Easy"], 60)])], [TUESDAY], goal=30)
+    db.add(PainReport(athlete_id=a.id, date=MON, body_area="Knee", severity=5))
+    db.add(MissedDay(athlete_id=a.id, date=MON + dt.timedelta(days=2), reason="Injury", body_area="Foot", side="Left", pain=4))
+    db.commit()
+    pid = db.query(PainReport).one().id
+    mid = db.query(MissedDay).one().id
+    wid = db.query(PlannedWorkout).one().id
+    db.close()
+    from xcapp.web import create_app
+    c = TestClient(create_app(), follow_redirects=False)
+    csrf = re.search(r'name="csrf" value="([^"]+)"', c.get("/login").text).group(1)
+    c.post("/login", data={"csrf": csrf, "username": "coach1", "password": "correct-horse-1"})
+    page = c.get(f"/week?team=Girls&start={MON.isoformat()}").text
+    assert f'<a class="tag" href="/workouts?edit={wid}#plan"' in page
+    assert f'<a class="pill bad" href="/injuries?pain={pid}#pain-{pid}"' in page and f'href="/injuries?missed={mid}#missed-{mid}"' in page
+    assert 'class="day d2' in page and 'class="num pace-' in page and '<b class="pace-' in page
+    inj = c.get(f"/injuries?pain={pid}&missed={mid}").text                 # older than four weeks, still shown when linked
+    assert f'<tr id="pain-{pid}">' in inj and f'<tr id="missed-{mid}">' in inj
