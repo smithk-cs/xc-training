@@ -21,7 +21,7 @@
     <a href="/races" {% if p == '/races' %}aria-current="page"{% endif %}>Races</a>
     <a href="/courses" {% if p == '/courses' %}aria-current="page"{% endif %}>Courses</a>
     <a href="/registrations" {% if p.startswith('/registrations') %}aria-current="page"{% endif %}>Entries</a>
-    <a href="/results" {% if p == '/results' %}aria-current="page"{% endif %}>Results and goals</a>
+    <a href="/results" {% if p.startswith('/results') %}aria-current="page"{% endif %}>Goals</a>
     <a href="/workouts" {% if p == '/workouts' %}aria-current="page"{% endif %}>Workouts</a>
     <a href="/week" {% if p == '/week' %}aria-current="page"{% endif %}>Week</a>
     <a href="/vdot" {% if p == '/vdot' %}aria-current="page"{% endif %}>VDOT</a>

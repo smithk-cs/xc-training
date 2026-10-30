@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}All results · {{ team_name }}{% endblock %}
+{% block content %}
+<p><a href="/results">‹ Goals</a></p>
+<h1>All results</h1>
+<div class="card scroll">
+  {% with action='/results/all' %}{% include "_results_filter.html" %}{% endwith %}
+  <p class="small muted">{{ rows|length }} result{{ '' if rows|length == 1 else 's' }}{% if more %}, the {{ cap }} most recent shown; narrow the filters to see older ones{% endif %}.</p>
+  {% include "_results_table.html" %}
+</div>
+{% endblock %}

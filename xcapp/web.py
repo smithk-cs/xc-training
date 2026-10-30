@@ -980,13 +980,44 @@ def create_app() -> FastAPI:
         flash(request, f"Deleted {meet} ({len(rows)} results).")
         return back(races_url(d))
 
+    RESULT_KINDS = ("race", "time trial", "track")
+    RESULTS_LATEST, RESULTS_ALL_MAX = 10, 2000
+
+    def results_filtered(db: Session, q, limit: int) -> tuple[list, dict, bool]:
+        """Results newest first, filtered by team, athlete, event, season and type from the query string.
+        Returns (rows, the filters in use, whether there are more than `limit`)."""
+        f = {"gender": q.get("gender", ""), "athlete": q.get("athlete", ""), "event": q.get("event", ""),
+             "season": q.get("season", ""), "kind": q.get("kind", "")}
+        stmt = select(Result, Athlete).join(Athlete, Athlete.id == Result.athlete_id)
+        if f["gender"] in ("Boys", "Girls"):
+            stmt = stmt.where(Athlete.gender == f["gender"])
+        if f["athlete"].isdigit():
+            stmt = stmt.where(Athlete.id == int(f["athlete"]))
+        if f["event"]:
+            stmt = stmt.where(Result.event == f["event"])
+        if f["season"]:
+            stmt = stmt.where(Result.season == f["season"])
+        if f["kind"] in RESULT_KINDS:
+            stmt = stmt.where(Result.kind == f["kind"])
+        rows = db.execute(stmt.order_by(Result.date.desc(), Result.id.desc()).limit(limit + 1)).all()
+        return rows[:limit], {k: v for k, v in f.items() if v}, len(rows) > limit
+
+    def results_filter_options(db: Session) -> dict:
+        return {"athletes": athletes_sorted(db), "events": list(A.EVENTS), "kinds": RESULT_KINDS,
+                "seasons": [s for (s,) in db.execute(select(Result.season).distinct().order_by(Result.season.desc())).all()]}
+
     @app.get("/results", response_class=HTMLResponse)
     def results_page(request: Request, user=Depends(any_staff, scope="function"), db: Session = Depends(get_db, scope="function")):
-        rows = db.execute(select(Result, Athlete).join(Athlete, Athlete.id == Result.athlete_id)
-                          .order_by(Result.date.desc(), Result.id.desc()).limit(200)).all()
+        rows, used, more = results_filtered(db, request.query_params, RESULTS_LATEST)
         cur = A.current_xc_season(A.benchmark_rows(db)) or A.season_for(A.team_today())
-        return render(request, "results.html", user, rows=rows, athletes=athletes_sorted(db), season=cur,
-                      today=A.team_today().isoformat())
+        return render(request, "results.html", user, rows=rows, used=used, more=more, season=cur,
+                      today=A.team_today().isoformat(), **results_filter_options(db))
+
+    @app.get("/results/all", response_class=HTMLResponse)
+    def results_all(request: Request, user=Depends(any_staff, scope="function"), db: Session = Depends(get_db, scope="function")):
+        rows, used, more = results_filtered(db, request.query_params, RESULTS_ALL_MAX)
+        return render(request, "results_all.html", user, rows=rows, used=used, more=more, cap=RESULTS_ALL_MAX,
+                      **results_filter_options(db))
 
     @app.post("/results")
     async def add_result(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
@@ -1009,12 +1040,13 @@ def create_app() -> FastAPI:
 
     @app.post("/results/{result_id}/delete")
     async def delete_result(request: Request, result_id: int, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
-        await form_checked(request)
+        f = await form_checked(request)
         r = db.get(Result, result_id)
         if r:
             db.delete(r)
             flash(request, "Result deleted.")
-        return back("/results")
+        nxt = str(f.get("next", ""))
+        return back(nxt if nxt.startswith("/results") and "//" not in nxt else "/results")
 
     @app.post("/results/import")
     async def results_import(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):

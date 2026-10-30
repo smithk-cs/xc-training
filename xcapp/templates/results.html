@@ -1,26 +1,9 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>Results and goals</h1>
+<h1>Goals</h1>
 <p class="muted">Benchmarks are 1 mile, 1.5 mile, 2 mile and 5K. Track 1600 m and 3200 m times are converted to mile and 2-mile equivalents at the same pace. Cross country 5K times depend on the course, so record the course every time.</p>
 {% if user.role != 'trainer' %}
 <div class="grid">
-<div class="card">
-  <h2>Add a result</h2>
-  <form method="post" action="/results">
-    <input type="hidden" name="csrf" value="{{ csrf }}">
-    <div class="form-row">
-      <label>Athlete<select name="athlete_id" required>{% for a in athletes %}<option value="{{ a.id }}">{{ a.name }}</option>{% endfor %}</select></label>
-      <label>Event<select name="event">{% for e in EVENTS %}<option>{{ e }}</option>{% endfor %}<option value="1600m">1600 m (track)</option><option value="3200m">3200 m (track)</option></select></label>
-      <label>Time<input type="text" name="time" placeholder="16:42.3" required pattern="[0-9:.]+"></label>
-    </div>
-    <div class="form-row">
-      <label>Date<input type="date" name="date" value="{{ today }}" required></label>
-      <label>Course<input type="text" name="course" placeholder="Home course"></label>
-      <label>Type<select name="kind"><option>race</option><option>time trial</option><option>track</option></select></label>
-      <button type="submit">Save result</button>
-    </div>
-  </form>
-</div>
 <div class="card">
   <h2>Set a goal</h2>
   <form method="post" action="/goals">
@@ -44,13 +27,11 @@
 </div>
 </div>
 {% endif %}
-<div class="card scroll">
-  <h2>Latest results</h2>
-  <table class="list"><thead><tr><th>Date</th><th>Athlete</th><th>Event</th><th class="num">Time</th><th>Season</th><th>Course</th><th>Type</th><th></th></tr></thead><tbody>
-  {% for r, a in rows %}
-  <tr><td>{{ r.date.strftime('%b %-d, %Y') }}</td><td>{{ a.name }}</td><td>{{ r.event }}</td><td class="num">{{ fmt_time(r.time_s) }}</td><td>{{ r.season }}</td><td>{{ r.course }}{% if r.note %} <span class="muted small">({{ r.note }})</span>{% endif %}</td><td>{{ r.kind }}</td>
-  <td>{% if user.role != 'trainer' %}<form method="post" action="/results/{{ r.id }}/delete" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="link" type="submit">Delete</button></form>{% endif %}</td></tr>
-  {% else %}<tr><td colspan="8" class="muted">No results yet.</td></tr>{% endfor %}
-  </tbody></table>
+<div class="card scroll" id="latest">
+  <div class="form-row" style="justify-content:space-between; align-items:baseline"><h2 style="margin:0">Latest results</h2>
+    <a href="/results/all{{ '?' ~ (used|urlencode) if used else '' }}">All results{{ ' (filtered)' if used else '' }} ›</a></div>
+  {% with action='/results#latest' %}{% include "_results_filter.html" %}{% endwith %}
+  {% include "_results_table.html" %}
+  {% if more %}<p class="small muted">The {{ rows|length }} most recent. <a href="/results/all{{ '?' ~ (used|urlencode) if used else '' }}">See them all</a>.</p>{% endif %}
 </div>
 {% endblock %}
