@@ -160,7 +160,7 @@ class _Doc(FPDF):
 def branded_page(team: str, subtitle: str, logo: tuple[bytes, str] | None, center: bool = False) -> tuple[_Doc, float]:
     """A new letter-size PDF with the team's red and gold header band. Returns the document and the usable width.
     center: the team name and subtitle centered across the page instead of beside the logo."""
-    pdf = _Doc(team, f"{team} · prepared {dt.date.today():%b %-d, %Y}")
+    pdf = _Doc(team, f"{team} · prepared {A.team_today():%b %-d, %Y}")   # the team's date (Pacific), not the server's
     pdf.alias_nb_pages()
     pdf.add_page()
     w = pdf.w - 96

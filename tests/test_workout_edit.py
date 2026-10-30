@@ -42,9 +42,10 @@ def test_edit_workout():
     c, _ = login(app, "coach1")
     page = c.get(f"/workouts?edit={wid}").text
     assert "Edit workout" in page and 'value="6 x 1K"' in page and f'name="wid" value="{wid}"' in page and "Save changes" in page
-    listing = c.get("/workouts").text
+    listing = c.get("/workouts/all").text
     assert f'class="row-link" data-href="/workouts?edit={wid}#plan"' in listing and ">Edit</a>" not in listing
-    assert 'name="group_Varsity"' not in listing and 'name="group_Gold"' in listing      # ability groups only
+    form = c.get("/workouts").text
+    assert 'name="group_Varsity"' not in form and 'name="group_Gold"' in form            # ability groups only
     csrf = re.search(r'name="csrf" value="([^"]+)"', page).group(1)
     c.post("/workouts", data={"csrf": csrf, "wid": str(wid), "date": D2.isoformat(), "title": "5 x 1K tempo",
                               "rep_distance_m": "1000", "pace_event": "5K", "pace_factor": "1.07", "group_Gold": "on", "group_Varsity": "on"})
@@ -81,7 +82,7 @@ def test_older_single_pace_workouts_still_save():
     db.close()
     assert got == {"Tempo": 1.10, "Recovery": 1.35, "Long": 1.25, "Interval": 1.00, "Custom": 1.15}
     assert [A.pace_type(f) for f in (1.07, 1.1, 1.15)] == ["Threshold", "Tempo", "Other"]
-    page = c.get("/workouts").text
+    page = c.get("/workouts/all").text
     assert "Tempo (5K × 1.10)" in page and "Other (5K × 1.15)" in page
     wid = re.search(r'data-href="/workouts\?edit=(\d+)#plan"', page).group(1)
     edit = c.get(f"/workouts?edit={wid}").text
