@@ -92,3 +92,9 @@ def test_garmin_notification_address_is_on_the_sync_log_for_admins_only(app):
         c.post("/login", data={"csrf": csrf, "username": user, "password": "correct-horse-1"})
         assert ("/garmin/webhook/hooksecret" in c.get("/sync").text) is shown
         assert "/garmin/webhook/" not in c.get("/").text
+
+
+def test_pain_section_starts_collapsed(app):
+    page = TestClient(app).get("/a/tok-ava").text
+    assert '<details class="panel fold" id="pain">' in page and '<details class="panel fold" id="pain" open' not in page
+    assert '<summary><h2 id="p-h">Something hurt today?</h2></summary>' in page and 'action="/a/tok-ava/pain"' in page
