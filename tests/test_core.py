@@ -32,8 +32,11 @@ def test_time_and_event_helpers():
 
 def test_seasons_weeks_and_ratio():
     assert A.season_for(dt.date(2026, 8, 19)) == "2026 XC"
-    assert A.season_for(dt.date(2026, 12, 5)) == "2027 Track"
+    assert A.season_for(dt.date(2026, 12, 5)) == "2026 XC" and A.season_for(dt.date(2026, 12, 6)) == "2027 Track"   # first Saturday in December
     assert A.season_for(dt.date(2027, 3, 1)) == "2027 Track"
+    assert A.season_for(dt.date(2025, 12, 6)) == "2025 XC"                  # Nike Cross Nationals 2025
+    assert A.season_for(dt.date(2026, 8, 2)) == "2026 Track" and A.season_for(dt.date(2026, 8, 3)) == "2026 XC"   # first Monday in August
+    assert A.season_range(dt.date(2027, 3, 1)) == (dt.date(2026, 12, 6), dt.date(2027, 8, 1))
     assert A.week_starts(dt.date(2026, 10, 25), 3) == [dt.date(2026, 10, 5), dt.date(2026, 10, 12), dt.date(2026, 10, 19)]
     r = A.load_ratios([10, 10, 10, 10, 13, 20])
     assert r[:4] == [None] * 4 and r[4] == pytest.approx(1.3) and r[5] == pytest.approx(20 / 10.75)

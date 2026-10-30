@@ -1,6 +1,7 @@
 """Database engine and sessions. SQLite by default; set DATABASE_URL for Postgres."""
 from __future__ import annotations
 
+import datetime as dt
 import os
 from contextlib import contextmanager
 
@@ -106,6 +107,13 @@ def create_all():
             import json
             conn.execute(text("INSERT INTO app_settings (key, value) VALUES ('vdot_targets', :v)"),
                          {"v": json.dumps({str(k): list(v) for k, v in DEFAULT_TARGETS.items()})})
+        # Times saved under the old season dates (cross country Jul-Nov) move to the current ones (first Monday in August
+        # to the first Saturday in December), such as December championships from track back to cross country.
+        from .analysis import season_for
+        for rid, day, season in conn.execute(text("SELECT id, date, season FROM results")).all():
+            day = day if isinstance(day, dt.date) else dt.date.fromisoformat(str(day)[:10])
+            if season_for(day) != season:
+                conn.execute(text("UPDATE results SET season = :s WHERE id = :i"), {"s": season_for(day), "i": rid})
         # Races saved before they had team and division fields: read them from the race name (such as 'Boys JV').
         rows = conn.execute(text("SELECT id, name, gender, level FROM meet_divisions")).all()
         for rid, name, gender, level in rows:

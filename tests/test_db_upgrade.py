@@ -48,3 +48,20 @@ def test_girls_start_on_the_shared_weekly_goal():
     s.expire_all()
     assert s.query(TrainingGroup).filter_by(name="Gold").one().weekly_miles_girls == 28
     s.close()
+
+
+def test_saved_seasons_follow_the_season_dates():
+    import datetime as dt
+
+    from xcapp import db as D
+    from xcapp.models import Athlete, Result
+    s = D.SessionLocal()
+    a = Athlete(first_name="Ava", last_name="Doyle", gender="Girls", grade=12, group="Varsity", link_token="t-ava")
+    s.add(a)
+    s.flush()
+    s.add(Result(athlete_id=a.id, event="5K", time_s=1000, date=dt.date(2025, 12, 6), season="2026 Track", kind="race"))  # old dates
+    s.commit()
+    D.create_all()
+    s.expire_all()
+    assert s.query(Result).one().season == "2025 XC"
+    s.close()
