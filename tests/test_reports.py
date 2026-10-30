@@ -93,21 +93,27 @@ def test_season_overview(app):
     assert "No races recorded this season." in empty and "needs two races" in empty
 
 
-def test_roster_pdf_centered_except_names():
-    import io
+def test_roster_pdf_centered_except_names(monkeypatch):
     import types
 
-    import pdfplumber
+    import fpdf
 
     from xcapp import reports as RP
+    drawn = {}   # text -> how it was aligned
+    cell, multi_cell = fpdf.FPDF.cell, fpdf.FPDF.multi_cell
+
+    def record(orig):
+        def wrapped(self, w=None, h=None, text="", *args, **kw):
+            if str(text).strip():
+                drawn.setdefault(str(text).strip(), str(kw.get("align", "L")).upper()[:1])
+            return orig(self, w, h, text, *args, **kw)
+        return wrapped
+    monkeypatch.setattr(fpdf.FPDF, "cell", record(cell))
+    monkeypatch.setattr(fpdf.FPDF, "multi_cell", record(multi_cell))
     coach = types.SimpleNamespace(display_name="Keegan Smith", title="Head coach", phone="916-555-0100", email="coach@example.org")
-    data = RP.roster_pdf([{"name": "Ava Doyle", "grade": 11, "group": "Gold", "vdot": 60}], ["grade", "group", "vdot"],
-                         "Team roster", "2026 XC", "XC Training", None, [coach])
-    page = pdfplumber.open(io.BytesIO(data)).pages[0]
-    words = {w["text"]: w for w in page.extract_words()}
-    mid = lambda w: (w["x0"] + w["x1"]) / 2   # noqa: E731
-    centre = page.width / 2
-    for text in ("roster", "TRAINING"):                                        # title and header band
-        assert abs(mid(words[text]) - centre) < 60
-    assert words["Ava"]["x0"] < 100 and words["Keegan"]["x0"] < 60             # names stay left
-    assert words["coach"]["x0"] > 150 and words["Gold"]["x0"] > 250            # the rest is centered in its column
+    RP.roster_pdf([{"name": "Ava Doyle", "grade": 11, "group": "Gold", "vdot": 60}], ["grade", "group", "vdot"],
+                  "Team roster", "2026 XC", "XC Training", None, [coach])
+    assert drawn["Ava Doyle"] == "L" and drawn["Keegan Smith"] == "L" and drawn["ATHLETE"] == "L" and drawn["NAME"] == "L"
+    for text in ("XC TRAINING", "Official roster", "Team roster", "2026 XC", "Coaching staff", "GRADE", "11", "Gold", "60",
+                 "TITLE", "Head coach", "916-555-0100", "coach@example.org"):
+        assert drawn[text] == "C", text
