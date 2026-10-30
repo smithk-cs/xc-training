@@ -52,6 +52,8 @@ class ParsedActivity:
     laps: list[ParsedLap] = field(default_factory=list)
     # (seconds since start, heart rate or None)
     hr_samples: list[tuple[float, int]] = field(default_factory=list)
+    # (seconds since start, distance so far in meters): for the time spent in each pace zone
+    dist_samples: list[tuple[float, float]] = field(default_factory=list)
 
     @property
     def is_running(self) -> bool:
@@ -134,11 +136,14 @@ def parse_fit(data: bytes) -> ParsedActivity:
         max_hr = max(hrs) if hrs else None
 
     hr_samples: list[tuple[float, int]] = []
+    dist_samples: list[tuple[float, float]] = []
     for r in records:
         ts = _utc(r.get("timestamp"))
         hr = r.get("heart_rate")
         if ts is not None and hr:
             hr_samples.append(((ts - start).total_seconds(), int(hr)))
+        if ts is not None and r.get("distance") is not None:
+            dist_samples.append(((ts - start).total_seconds(), float(r["distance"])))
 
     laps: list[ParsedLap] = []
     for lap in laps_raw:
@@ -175,7 +180,7 @@ def parse_fit(data: bytes) -> ParsedActivity:
     return ParsedActivity(
         external_id=external_id, start=start, duration_s=duration, distance_m=distance, sport=sport,
         avg_hr=float(avg_hr) if avg_hr else None, max_hr=float(max_hr) if max_hr else None,
-        device=device, vo2_max=vo2, laps=laps, hr_samples=hr_samples,
+        device=device, vo2_max=vo2, laps=laps, hr_samples=hr_samples, dist_samples=dist_samples,
     )
 
 

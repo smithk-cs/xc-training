@@ -138,3 +138,13 @@ def test_assigned_workout_by_default(session, athlete):
     assert rematch_day(session, pw.date) == 1 and later.planned_workout_id == pw.id  # re-matching picks the longest
     pw.groups = "JV"
     assert rematch_day(session, pw.date) == 1 and later.planned_workout_id is None   # not this athlete's group
+
+
+def test_zone_seconds_saved_on_arrival(session, athlete):
+    import json
+    athlete.vdot_override = 60
+    session.flush()
+    act, _ = ingest(session, athlete, parse_fit(rep_workout(START, [(1000, 200, 180, 30)] * 4)), "upload")
+    zones = json.loads(act.zone_seconds)
+    assert act.zone_vdot == 60 and zones.get("Interval", 0) + zones.get("Repetition", 0) > 400   # 4 x 200 s reps
+    assert zones.get("Easy", 0) > 0 and sum(zones.values()) == pytest.approx(act.duration_s, rel=0.1)

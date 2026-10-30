@@ -203,6 +203,10 @@ class Activity(Base):
     workout_check_note: Mapped[str] = mapped_column(String(400), default="")
     workout_check_for: Mapped[int | None] = mapped_column(Integer, nullable=True)  # the workout it was checked against
     workout_checked_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)
+    # Seconds in each pace zone as JSON ({"Easy": 1800, "Threshold": 600, "walk": 40}), worked out when the run arrived
+    # with the VDOT the athlete had then (zone_vdot), so later VDOT changes don't move old points.
+    zone_seconds: Mapped[str] = mapped_column(Text, default="")
+    zone_vdot: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     athlete: Mapped[Athlete] = relationship(back_populates="activities")
     laps: Mapped[list["Lap"]] = relationship(back_populates="activity", cascade="all, delete-orphan", order_by="Lap.idx")
