@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}My paces · {{ team_name }}{% endblock %}
+{% block bodyclass %}athlete-page{% endblock %}
+{% block content %}
+{% with hero_title="My paces", hero_text=("Your times at each training intensity, from your VDOT of " ~ ability.vdot ~ (" (" ~ ability.group ~ " group)" if ability.group else "") ~ ".") if table else "", back_url="/a/" ~ token, back_label="My page" %}{% include "_hero.html" %}{% endwith %}
+<div class="stack">
+{% if table %}
+<section class="panel pace-panel">
+  <div class="scroll"><table class="list pace-grid">
+    <thead><tr><th><span class="long">Distance</span><span class="short" aria-hidden="true">m</span></th>{% for z, _ in zones %}<th class="num"><span class="long">{{ z }}</span><span class="short" aria-hidden="true">{{ z[:3] if z != 'Easy' else z }}</span></th>{% endfor %}</tr></thead>
+    <tbody>
+    {% for row in table %}<tr{% if row.meters is none %} class="per-mile"{% endif %}><th scope="row">{% if row.meters %}<span class="long">{{ '{:,} m'.format(row.meters) }}</span><span class="short">{{ row.meters }}</span>{% else %}<span class="long">Per mile</span><span class="short">/mi</span>{% endif %}</th>
+      {% for z, _ in zones %}{% set t = row.times[z] %}<td class="num">{% if row.meters is none %}{{ fmt_time(t)[:-2] }}{% elif t < 60 %}{{ '%.1f' % t }}{% else %}{{ fmt_time(t) }}{% endif %}</td>{% endfor %}</tr>{% endfor %}
+    </tbody>
+  </table></div>
+  <p class="small muted">Easy for warm-ups, recovery and most miles; moderate a steady effort; threshold comfortably hard (tempo); interval hard, near your 2-mile race pace; repetition fast and relaxed, about mile race pace, for short reps with full recovery. Your coaches’ workout targets come first.</p>
+</section>
+{% else %}
+<section class="panel"><p>Your paces appear here once you have a VDOT: from a race, or set by your coach.</p></section>
+{% endif %}
+</div>
+{% endblock %}

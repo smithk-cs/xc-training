@@ -1375,7 +1375,7 @@ def create_app() -> FastAPI:
                       my_points=PT.team_week(db, A.week_monday(today), athletes=[a])[0] if show_group else None, rates=PT.RATES,
                       notes=[n for n in db.scalars(select(Announcement).where(Announcement.start_date <= today, Announcement.end_date >= today)
                                                    .order_by(Announcement.start_date.desc(), Announcement.id.desc())).all()
-                             if n.for_athlete(a.gender, mine.get("group") or "")], my_paces=A.training_paces(mine.get("vdot")) if show_group else [],
+                             if n.for_athlete(a.gender, mine.get("group") or "")], paces_link=f"/a/{token}/paces" if show_group and mine.get("vdot") else None,
                       areas=BODY_AREAS, token=token, today=today.isoformat())
 
     @app.post("/a/{token}/connect")
@@ -2249,6 +2249,15 @@ def create_app() -> FastAPI:
         if act is None or act.athlete_id != a.id:
             raise HTTPException(404, "Run not found.")
         return act
+
+    @app.get("/a/{token}/paces", response_class=HTMLResponse)
+    def athlete_paces(request: Request, token: str, db: Session = Depends(get_db, scope="function")):
+        """The athlete's times for 100 m to 1600 m at each of the five training zones, from their VDOT."""
+        a = athlete_by_token(db, token)
+        mine = A.abilities(db, A.team_today()).get(a.id, {})
+        shown = A.get_setting(db, "show_group_to_athletes", "1") == "1"
+        return render(request, "athlete_paces.html", None, a=a, token=token, ability=mine if shown else {},
+                      table=A.pace_table(mine.get("vdot")) if shown else [], zones=A.PACE_ZONES)
 
     @app.get("/a/{token}/runs", response_class=HTMLResponse)
     def athlete_runs(request: Request, token: str, db: Session = Depends(get_db, scope="function")):

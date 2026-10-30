@@ -489,6 +489,18 @@ def training_paces(v: float | None) -> list[dict]:
     return out
 
 
+PACE_TABLE_DISTANCES = (100, 200, 300, 400, 800, 1600)   # meters
+
+
+def pace_table(v: float | None) -> list[dict]:
+    """Time for each distance at each training zone at VDOT v: [{"meters": 100, "times": {"Easy": 33.2, ...}}, ...]."""
+    if v is None:
+        return []
+    miles = {name: pace_at(v, pct) for name, pct in PACE_ZONES}
+    return [{"meters": m, "times": {z: s * m / METERS_PER_MILE for z, s in miles.items()}} for m in PACE_TABLE_DISTANCES] \
+        + [{"meters": None, "times": miles}]   # the last row: pace per mile
+
+
 def pace_at(v: float, pct: float) -> float:
     """Seconds per mile when running at `pct` of VDOT `v` (Daniels' oxygen-cost equation, solved for speed)."""
     target = v * pct
