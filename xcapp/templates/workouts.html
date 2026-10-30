@@ -1,7 +1,12 @@
 {% extends "base.html" %}
 {% block content %}
 <h1>Workouts</h1>
-<p class="muted" style="max-width:85ch">Plan a workout as parts: sets × reps × a distance (meters or miles) or a time (minutes) at a pace. Each athlete’s pace for every part comes from their VDOT (easy, long run, tempo, interval and repetition, as on the VDOT page), and they see their own times on their page for the next 7 days, from their current VDOT and from their goal. Runs synced that day with reps are matched to the workout automatically.</p>
+<p class="muted" style="max-width:85ch">Plan a workout as parts: sets × reps × a distance (meters or miles) or a time (minutes) at a pace. Each athlete’s pace for every part comes from their VDOT (easy, long run, tempo, interval and repetition, as on the VDOT page), and they see their own times on their page for the next 7 days, from their current VDOT and from their goal. A run synced that day is matched to its group’s workout automatically (the one with the most reps, then the longest), and the workout then comes off the athlete’s list. Each night the AI checks matched runs from athletes who agreed to AI analysis against the workout: done, partly or not done.</p>
+{% if user.role != 'trainer' and ai_ready %}
+<form method="post" action="/workouts/check" class="form-row"><input type="hidden" name="csrf" value="{{ csrf }}">
+  <button class="secondary" type="submit"{% if not pending_checks %} disabled{% endif %}>Check workouts with AI now</button>
+  <span class="small muted">{{ pending_checks }} run{{ '' if pending_checks == 1 else 's' }} from the past week waiting to be checked.</span></form>
+{% endif %}
 {% if user.role != 'trainer' %}
 <div class="card">
   <h2 id="plan">{% if edit %}Edit workout{% else %}Plan a workout{% endif %}</h2>
@@ -57,7 +62,7 @@
 </div>
 {% endif %}
 <div class="card scroll">
-  <table class="list"><thead><tr><th>Date</th><th>Workout</th><th>Parts</th><th>Groups</th><th class="num">Athletes matched</th><th></th></tr></thead><tbody>
+  <table class="list"><thead><tr><th>Date</th><th>Workout</th><th>Parts</th><th>Groups</th><th class="num">Athletes matched</th><th>AI check</th><th></th></tr></thead><tbody>
   {% for w in rows %}
   <tr{% if user.role != 'trainer' %} class="row-link" data-href="/workouts?edit={{ w.id }}#plan"{% endif %}><td>{{ w.date.strftime('%a %b %-d') }}</td><td>{% if user.role != 'trainer' %}<a href="/workouts?edit={{ w.id }}#plan">{{ w.title }}</a>{% else %}{{ w.title }}{% endif %}</td><td class="small">{% if w.part_list %}{% for p in w.part_list %}{{ part_label(p) }} {{ p.zone }}{% if p.rest %} ({{ p.rest }} rest){% endif %}{{ '<br>'|safe if not loop.last else '' }}{% endfor %}
     {% if previews.get(w.id) %}<details class="paces-preview"><summary>Paces by group</summary>
@@ -65,8 +70,9 @@
       {% for g in previews[w.id] %}<tr><td>{{ g.group.name }}</td><td>{{ g.range }}</td>{% for t in g.times %}<td class="num nowrap">{% if t %}{{ fmt_time(t[0])[:-2] if t[0] >= 600 or t[2] else fmt_time(t[0]) }}{% if t[1] - t[0] >= 0.5 %}–{{ fmt_time(t[1])[:-2] if t[1] >= 600 or t[2] else fmt_time(t[1]) }}{% endif %}{{ t[2] }}{% endif %}</td>{% endfor %}</tr>{% endfor %}
       </tbody></table><p class="small muted">Time per rep across each group’s VDOT range (pace per mile for parts run for a time).</p></details>{% endif %}
     {% else %}{{ w.distance_text }} reps · {{ pace_type(w.pace_factor) }} ({{ w.pace_event }} × {{ '%.2f' % w.pace_factor }}){% endif %}</td><td>{{ w.groups }}</td><td class="num">{{ counts.get(w.id, 0) }}</td>
+  <td class="small nowrap">{% set ck = checked.get(w.id, {}) %}{% for v in ('Done', 'Partly', 'Not done') %}{% if ck.get(v) %}{{ ck[v] }} {{ v|lower }}{{ '<br>'|safe }}{% endif %}{% endfor %}</td>
   <td>{% if user.role != 'trainer' %}<form method="post" action="/workouts/{{ w.id }}/delete" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="link" type="submit">Delete</button></form>{% endif %}</td></tr>
-  {% else %}<tr><td colspan="6" class="muted">No workouts planned yet.</td></tr>{% endfor %}
+  {% else %}<tr><td colspan="7" class="muted">No workouts planned yet.</td></tr>{% endfor %}
   </tbody></table>
   {% if user.role != 'trainer' %}<p class="small muted">Click a workout to edit it.</p>{% endif %}
 </div>

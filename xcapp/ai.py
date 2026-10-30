@@ -17,7 +17,7 @@ from . import analysis as A
 from .config import settings
 from .datasets import snapshot
 from .ingest import log
-from .models import AiRun, Insight
+from .models import Activity, AiRun, Athlete, Insight, utcnow
 
 PRIORITIES = ("High", "Medium", "Low")
 CATEGORIES = ("Injury risk", "Training adjustment", "Athlete check-in", "Heart rate", "Performance")
@@ -75,7 +75,7 @@ PRICES = {
     "claude-fable-5-1": (10.00, 50.00),
 }
 UNKNOWN_PRICE = (10.00, 50.00)  # a model not listed above is budgeted at the highest price, to stay safe
-BRIEFING_MAX_TOKENS, QUESTION_MAX_TOKENS = 16000, 8000
+BRIEFING_MAX_TOKENS, QUESTION_MAX_TOKENS, CHECK_MAX_TOKENS = 16000, 8000, 8000
 
 
 def price_of(model: str) -> tuple[float, float]:
@@ -374,5 +374,138 @@ def ask(db: Session, question: str, client=None, as_of: dt.date | None = None) -
     except Exception as exc:
         run.status = "failed"
         run.error = str(exc)[:1000]
+    db.flush()
+    return run
+
+
+# ---------- checking each run against its team workout ----------
+
+SYSTEM_WORKOUT_CHECK = """You check whether high school cross country runners did their assigned team workout, from their Garmin data.
+
+You receive one JSON object with a list of runs. Each run has an id such as W1, the assigned workout and the run's data.
+- workout.parts: what was assigned, in order: sets x reps x a distance (meters or miles) or a time (minutes), each at a
+  pace zone, with the runner's own target pace in seconds per mile when known. Older workouts give one rep distance and
+  a target pace instead.
+- run: total distance (meters), time (seconds) and average heart rate, and its laps in order: meters, seconds, pace
+  (seconds per mile), average heart rate, and rep=true when the lap looks like a hard rep between easier laps.
+  Laps may be auto-laps every mile when the runner didn't press the lap button.
+
+For each run decide:
+- "Done": the main part of the workout was run as assigned. Rep count and distances (or minutes) roughly match, and
+  paces are at or faster than target, or within about 5% slower. Warm-up and cool-down may be missing or differ.
+- "Partly": some of it was done: reps or distance clearly missing, the run cut short, or paces well off target.
+- "Not done": the run doesn't resemble the workout (for example an easy run on a repeats day).
+If the laps can't show the reps (auto-laps only), judge from total distance, time and pace, and say so.
+
+Rules: use only the numbers given. Don't diagnose or mention health. Notes are for the coach: plain, factual, at most
+40 words, quoting the key numbers (such as "5 of 6 reps, average 3:22 per 1,000 m against 3:18 target").
+Reply with JSON only, no other text, in this exact shape:
+{"checks": [{"id": "W1", "verdict": "Done|Partly|Not done", "note": "..."}]}
+Give exactly one check for every run id."""
+
+VERDICTS = ("Done", "Partly", "Not done")
+CHECK_DAYS = 7      # runs from the past week that haven't been checked against their workout yet
+CHECK_BATCH = 40    # at most this many runs per request
+
+
+def pending_workout_checks(db: Session, as_of: dt.date | None = None) -> list[Activity]:
+    """Runs linked to a team workout, from athletes who agreed to AI analysis, not yet checked against that workout."""
+    as_of = as_of or A.team_today()
+    rows = db.scalars(select(Activity).join(Athlete, Athlete.id == Activity.athlete_id).where(
+        A.on_team(), Athlete.ai_consent_at.is_not(None), Activity.planned_workout_id.is_not(None),
+        Activity.local_date > as_of - dt.timedelta(days=CHECK_DAYS), Activity.local_date <= as_of)
+        .order_by(Activity.local_date, Activity.id)).all()
+    return [a for a in rows if a.workout_check_for != a.planned_workout_id][:CHECK_BATCH]
+
+
+def _workout_for_check(db: Session, act: Activity) -> dict:
+    """The assigned workout without its typed name or rest notes (free text is never sent), with the runner's targets."""
+    pw = act.planned
+    parts = pw.part_list
+    if parts:
+        key = ("abilities", pw.date)
+        if key not in db.info:
+            db.info[key] = A.abilities(db, pw.date)
+        v = db.info[key].get(act.athlete_id, {}).get("vdot")
+        out = []
+        for x in A.part_paces(parts, v):
+            p = x["part"]
+            out.append({"sets": p["sets"], "reps": p["reps"], **({"minutes": p["mins"]} if p.get("mins") else
+                        {"miles": p["mi"]} if p.get("mi") else {"meters": p["dist"]}), "zone": p["zone"],
+                        "target_pace_s_per_mile": round(x["pace"]["mile"]) if x["pace"] else None})
+        return {"parts": out}
+    target = A.target_pace(db, act.athlete_id, pw)
+    return {"rep_meters": round(pw.rep_distance_m), "reps": "as many as planned (not recorded)",
+            "target_pace_s_per_mile": round(target) if target else None}
+
+
+def _run_for_check(act: Activity) -> dict:
+    laps = [{"m": round(l.distance_m or 0), "s": round(l.timer_s or l.elapsed_s or 0),
+             "pace": round((l.timer_s or l.elapsed_s) / l.distance_m * A.METERS_PER_MILE) if l.distance_m and (l.timer_s or l.elapsed_s) else None,
+             "hr": round(l.avg_hr) if l.avg_hr else None, "rep": bool(l.is_rep)} for l in act.laps[:80]]
+    return {"meters": round(act.distance_m or 0), "seconds": round(act.duration_s or 0),
+            "avg_hr": round(act.avg_hr) if act.avg_hr else None, "laps": laps}
+
+
+def parse_checks(text: str, ids: list[str]) -> dict[str, tuple[str, str]]:
+    raw = re.sub(r"^```(?:json)?\s*|\s*```$", "", text.strip())
+    try:
+        body = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise AiError(f"The response was not valid JSON ({exc.msg}).") from exc
+    items = body.get("checks") if isinstance(body, dict) else None
+    if not isinstance(items, list):
+        raise AiError("The response had no list of checks.")
+    out = {}
+    for it in items:
+        if not isinstance(it, dict) or it.get("id") not in ids or it.get("id") in out:
+            raise AiError("A check named a run that wasn't sent, or one twice.")
+        note = str(it.get("note") or "").strip()
+        if it.get("verdict") not in VERDICTS:
+            raise AiError(f"Check {it['id']} has an unknown verdict.")
+        if not note or len(note) > 400:
+            raise AiError(f"Check {it['id']} has no note or one that is too long.")
+        out[it["id"]] = (it["verdict"], note)
+    if set(out) != set(ids):
+        raise AiError("The response skipped some runs.")
+    return out
+
+
+def check_workouts(db: Session, client=None, as_of: dt.date | None = None) -> AiRun | None:
+    """Ask Claude whether each pending run matches its team workout. None when there is nothing to check."""
+    acts = pending_workout_checks(db, as_of)
+    if not acts:
+        return None
+    run = AiRun(kind="workout_check", status="started", model=settings().anthropic_model)
+    db.add(run)
+    db.flush()
+    try:
+        client = client or make_client()
+        ids = [f"W{i}" for i in range(1, len(acts) + 1)]
+        payload = {"runs": [{"id": i, "workout": _workout_for_check(db, a), "run": _run_for_check(a)} for i, a in zip(ids, acts)]}
+        user = "DATA:\n" + json.dumps(payload, separators=(",", ":")) + "\n\nCheck each run against its workout."
+        last_err = None
+        for attempt in range(2):
+            prompt = user if last_err is None else user + f"\n\nYour previous reply was rejected: {last_err} Reply with valid JSON only."
+            try:
+                checks = parse_checks(_call(db, client, run, SYSTEM_WORKOUT_CHECK, prompt, CHECK_MAX_TOKENS), ids)
+                break
+            except AiError as exc:
+                if "budget" in str(exc) or "declined" in str(exc):
+                    raise
+                last_err = str(exc)
+        else:
+            raise AiError(f"Claude's reply could not be used: {last_err}")
+        now = utcnow()
+        for i, a in zip(ids, acts):
+            a.workout_check, a.workout_check_note = checks[i]
+            a.workout_check_for, a.workout_checked_at = a.planned_workout_id, now
+        run.status = "ok"
+        run.answer = f"Checked {len(acts)} run{'' if len(acts) == 1 else 's'} against their workouts."
+        log(db, "ai", run.answer)
+    except Exception as exc:
+        run.status = "failed"
+        run.error = str(exc)[:1000]
+        log(db, "ai", f"Workout check failed: {exc}", "error")
     db.flush()
     return run

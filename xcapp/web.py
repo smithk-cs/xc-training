@@ -922,12 +922,19 @@ def create_app() -> FastAPI:
         rows = db.scalars(select(PlannedWorkout).order_by(PlannedWorkout.date.desc())).all()
         counts = dict(db.execute(select(Activity.planned_workout_id, func.count(Activity.id))
                                  .where(Activity.planned_workout_id.is_not(None)).group_by(Activity.planned_workout_id)).all())
+        checked: dict[int, dict[str, int]] = {}   # per workout: how many runs the AI found Done, Partly, Not done
+        for wid, verdict, n in db.execute(select(Activity.planned_workout_id, Activity.workout_check, func.count(Activity.id))
+                                          .where(Activity.planned_workout_id.is_not(None), Activity.workout_check != "",
+                                                 Activity.workout_check_for == Activity.planned_workout_id)
+                                          .group_by(Activity.planned_workout_id, Activity.workout_check)).all():
+            checked.setdefault(wid, {})[verdict] = n
         ability_names = [g.name for g in db.scalars(select(TrainingGroup).order_by(TrainingGroup.position)).all()]
         edit = db.get(PlannedWorkout, int(request.query_params["edit"])) if request.query_params.get("edit", "").isdigit() else None
         edit_parts = edit.part_list if edit else []
         if edit and not edit_parts:  # an older single-rep workout opens as one part
             edit_parts = [{"sets": 1, "reps": 1, "dist": round(edit.rep_distance_m), "zone": A.OLD_TYPE_ZONE.get(A.pace_type(edit.pace_factor), "Interval"), "rest": ""}]
-        return render(request, "workouts.html", user, rows=rows, counts=counts, today=A.team_today().isoformat(),
+        return render(request, "workouts.html", user, rows=rows, counts=counts, checked=checked, today=A.team_today().isoformat(),
+                      ai_ready=settings().ai_configured, pending_checks=len(AI.pending_workout_checks(db)),
                       ability_names=ability_names, edit=edit, edit_parts=edit_parts, zones=list(A.WORKOUT_ZONES),
                       previews={w.id: A.group_part_paces(db, w.part_list) for w in rows[:30] if w.part_list},
                       part_label=A.part_label)
@@ -1105,6 +1112,17 @@ def create_app() -> FastAPI:
         flash(request, "New briefing ready." if run.status == "ok" else f"The briefing could not be made: {run.error}",
               "ok" if run.status == "ok" else "error")
         return back("/ai")
+
+    @app.post("/workouts/check")
+    async def workouts_check(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
+        await form_checked(request)
+        run = AI.check_workouts(db)
+        if run is None:
+            flash(request, "No runs waiting to be checked.")
+        else:
+            flash(request, run.answer if run.status == "ok" else f"The workout check could not be done: {run.error}",
+                  "ok" if run.status == "ok" else "error")
+        return back("/workouts")
 
     @app.post("/ai/ask")
     async def ai_ask(request: Request, user=Depends(any_staff, scope="function"), db: Session = Depends(get_db, scope="function")):

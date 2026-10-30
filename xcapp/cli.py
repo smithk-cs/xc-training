@@ -108,6 +108,8 @@ def nightly() -> dict:
         if settings().ai_configured:
             run = AI.generate_briefing(db)
             out["briefing"] = run.status if run.status == "ok" else f"failed: {run.error}"
+            check = AI.check_workouts(db)
+            out["workout_checks"] = "none to check" if check is None else check.answer if check.status == "ok" else f"failed: {check.error}"
         log(db, "nightly", f"Nightly job: {out}")
     return out
 

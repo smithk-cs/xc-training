@@ -194,6 +194,11 @@ class Activity(Base):
     feedback_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)
     run_type: Mapped[str] = mapped_column(String(20), default="")  # Easy | Long | Workout | Race | Recovery | Other; "" = not set
     workout_locked: Mapped[bool] = mapped_column(Boolean, default=False)  # workout chosen by hand; automatic matching leaves it
+    # The AI's check of this run against its team workout: Done | Partly | Not done ("" = not checked yet)
+    workout_check: Mapped[str] = mapped_column(String(12), default="")
+    workout_check_note: Mapped[str] = mapped_column(String(400), default="")
+    workout_check_for: Mapped[int | None] = mapped_column(Integer, nullable=True)  # the workout it was checked against
+    workout_checked_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)
 
     athlete: Mapped[Athlete] = relationship(back_populates="activities")
     laps: Mapped[list["Lap"]] = relationship(back_populates="activity", cascade="all, delete-orphan", order_by="Lap.idx")
