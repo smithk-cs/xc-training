@@ -105,3 +105,24 @@ def test_put_back_from_list_and_compact_roster(app):
     r = c.post(f"/athletes/{rafa}/status", data={"csrf": csrf, "action": "return", "next": "/athletes"})
     assert r.headers["location"] == "/athletes" and "is back on the roster" in c.get("/athletes").text
     assert 'class="list sortable compact centered"' in roster and '<details class="plink"><summary>Show</summary>' in roster
+
+
+def test_athletes_page_boys_girls_all():
+    import re
+    from fastapi.testclient import TestClient
+    from xcapp.db import SessionLocal
+    from xcapp.models import Athlete, StaffUser
+    from xcapp.security import hash_password
+    from xcapp.web import create_app
+    db = SessionLocal()
+    db.add(StaffUser(username="coachx", role="coach", password_hash=hash_password("correct-horse-1")))
+    db.add_all([Athlete(first_name="Ava", last_name="Doyle", gender="Girls", grade=11, group="Varsity", link_token="g1"),
+                Athlete(first_name="Theo", last_name="Marsh", gender="Boys", grade=11, group="Varsity", link_token="b1")])
+    db.commit()
+    db.close()
+    c = TestClient(create_app(), follow_redirects=False)
+    csrf = re.search(r'name="csrf" value="([^"]+)"', c.get("/login").text).group(1)
+    c.post("/login", data={"csrf": csrf, "username": "coachx", "password": "correct-horse-1"})
+    every, boys, girls = (c.get("/athletes" + q).text for q in ("", "?team=Boys", "?team=Girls"))
+    assert "Ava Doyle" in every and "Theo Marsh" in every and 'href="/athletes?team=All" aria-current="page"' in every
+    assert "Theo Marsh" in boys and "Ava Doyle" not in boys and "Ava Doyle" in girls and "Theo Marsh" not in girls

@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>Athletes</h1>
+<div class="form-row title-row" style="margin-bottom:12px"><h1 style="margin:0">Athletes</h1>
+  {% with base='/athletes', with_all=True %}{% include "_team_switch.html" %}{% endwith %}</div>
 <div class="card scroll">
 {% if dupes and user.role != 'trainer' %}
 <p class="notice" style="margin-bottom:10px"><span>Possibly the same athlete under two names:

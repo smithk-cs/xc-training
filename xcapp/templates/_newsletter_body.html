@@ -1,0 +1,37 @@
+{# One issue's sections for the web (the in-app view and the editor's preview). #}
+{% for s in sections %}{% set d = s.data %}
+<section class="nl-sec" id="nl-{{ s.key }}">
+  <h2>{{ s.title }}</h2>
+  {% if s.key == 'week_ahead' %}
+    <dl class="nl-days">{% for day in d.days %}<dt>{{ date.fromisoformat(day.date).strftime('%a %b %-d') }}</dt><dd>{% for i in day['items'] %}{% if i.kind == 'meet' %}<b>{{ i.text }}</b>{% else %}{{ i.text }}{% endif %}{{ '<br>'|safe if not loop.last }}{% endfor %}</dd>{% endfor %}</dl>
+  {% elif s.key == 'race_logistics' %}
+    {% for m in d.meets %}<p><b>{{ m.name }}</b>, {{ date.fromisoformat(m.date).strftime('%A, %b %-d') }}{% if m.location %} · {{ m.location }}{% endif %}{% if m.course %} · {{ m.course }}{% endif %}<br><span class="small muted">Forecast: pending</span></p>{% endfor %}
+  {% elif s.key == 'deadlines' %}
+    <ul>{% for x in d.deadlines %}<li><b>{{ x.title }}</b>: due {{ date.fromisoformat(x.due).strftime('%a, %b %-d') }}{% if x.notes %}. {{ x.notes }}{% endif %}</li>{% endfor %}</ul>
+  {% elif s.key == 'race_recap' %}
+    {% for r in d.races %}<div class="nl-race"><p><b>{{ r.meet }}</b> · {{ r.race }}{% if r.distance %} · {{ r.distance }}{% endif %}{% if r.course %}<br><span class="small muted">{{ r.course }}{% if r.conditions and r.conditions.temp_f %} · {{ r.conditions.temp_f|round|int }}°F{% endif %}{% if r.conditions and r.conditions.footing %} · {{ r.conditions.footing|lower }}{% endif %}</span>{% endif %}</p>
+      {% if r.team_place %}<p class="nl-big">Team {{ ordinal(r.team_place) }}{% if r.teams %} of {{ r.teams }}{% endif %}{% if r.team_points is not none %} · {{ '%g' % r.team_points }} points{% endif %}</p>{% endif %}
+      {% if r.finishers %}<table class="list compact"><thead><tr><th class="num">Place</th><th>Runner</th><th class="num">Time</th></tr></thead><tbody>{% for f in r.finishers %}<tr><td class="num">{{ f.place or '' }}</td><td>{{ f.name }}</td><td class="num">{{ fmt_time(f.time) }}</td></tr>{% endfor %}</tbody></table>{% endif %}</div>{% endfor %}
+  {% elif s.key == 'prs' %}
+    <ul>{% for p in d.prs %}<li><b>{{ p.name }}</b>: {{ p.distance }} in {{ fmt_time(p.time) }} at {{ p.meet }} <span class="small muted">(previous best {{ fmt_time(p.previous) }})</span></li>{% endfor %}</ul>
+  {% elif s.key == 'course_snapshot' %}
+    {% for c in d.courses %}<p><b>{{ c.meet }}</b>{% if c.course %} · {{ c.course }}{% endif %}{% if c.surface %} · {{ c.surface|lower }}{% endif %}{% if c.hill_tier %} · hills {{ c.hill_tier }} of 5{% endif %}<br>
+      {% if c.first_time %}<span class="small">First time here.</span>{% else %}{% for x in c.last_year if x.place %}<span class="small">Last year, {{ x.race }}: team {{ ordinal(x.place) }}{% if x.teams %} of {{ x.teams }}{% endif %}.</span><br>{% endfor %}{% endif %}
+      {% if c.notes %}<span class="small muted">{{ c.notes }}</span>{% endif %}{% if c.video_url %} <a class="small" href="{{ c.video_url }}">Course video</a>{% endif %}</p>{% endfor %}
+  {% elif s.key == 'team_numbers' %}
+    <div class="facts one-line"><div><span class="k">Miles</span><span class="big">{{ '{:,}'.format(d.miles) }}</span></div><div><span class="k">Points</span><span class="big">{{ '{:,}'.format(d.points) }}</span></div><div><span class="k">Days run</span><span class="big">{{ d.days_run }}</span></div></div>
+    <p class="small muted">Across {{ d.athletes }} athletes.</p>
+    {% if d.goal_miles %}<div class="miles-bar big" role="img" aria-label="{{ d.season_miles }} of {{ d.goal_miles }} miles"><span style="width:{{ [100 * d.season_miles / d.goal_miles, 100]|min|round }}%"></span></div><p class="small">{{ d.season }} so far: {{ '{:,}'.format(d.season_miles) }} of {{ '{:,.0f}'.format(d.goal_miles) }} miles.</p>{% endif %}
+  {% elif s.key == 'streaks_vdot' %}
+    {% if d.streaks %}<p><b>On a streak</b> <span class="small muted">(weeks in a row on target)</span>: {% for x in d.streaks %}{{ x.name }} ({{ x.weeks }}{{ '+' if x.weeks >= streak_max }}){{ ', ' if not loop.last }}{% endfor %}</p>{% endif %}
+    {% if d.vdot_ups %}<p><b>Moved up a fitness level</b>: {% for x in d.vdot_ups %}{{ x.name }}{% if x.vdot %} (VDOT {{ x.vdot }}){% endif %}{{ ', ' if not loop.last }}{% endfor %}</p>{% endif %}
+  {% elif s.key == 'spotlight' %}
+    <p class="nl-big">{{ d.athlete }}</p>
+  {% elif s.key == 'recovery_tip' %}
+    <p>{{ d.text }}</p>
+  {% elif s.key == 'photos' %}
+    <div class="nl-photos">{% for p in d.photos %}<figure><img src="{{ p.url }}" alt="{{ p.alt }}" loading="lazy">{% if p.caption %}<figcaption class="small">{{ p.caption }}</figcaption>{% endif %}</figure>{% endfor %}</div>
+  {% endif %}
+  {% if s.text %}<div class="nl-text">{{ s.text }}</div>{% endif %}
+</section>
+{% else %}<p class="muted">Nothing to show yet. Write a coach section or refresh the numbers.</p>{% endfor %}

@@ -25,8 +25,8 @@ class PhotoError(ValueError):
     pass
 
 
-def prepare(data: bytes) -> bytes:
-    """Any common image -> a JPEG no larger than SIZE on its longest side, without EXIF or other metadata."""
+def prepare(data: bytes, size: int = SIZE) -> bytes:
+    """Any common image -> a JPEG no larger than size (default SIZE) on its longest side, without EXIF or other metadata."""
     if not data or len(data) > MAX_PHOTO_BYTES:
         raise PhotoError("Photos must be smaller than 10 MB.")
     try:
@@ -35,7 +35,7 @@ def prepare(data: bytes) -> bytes:
     except (UnidentifiedImageError, OSError, Image.DecompressionBombError) as exc:
         raise PhotoError("That file is not a photo the app can read (use JPEG, PNG or WebP).") from exc
     img = ImageOps.exif_transpose(img).convert("RGB")
-    img.thumbnail((SIZE, SIZE))
+    img.thumbnail((size, size))
     out = io.BytesIO()
     img.save(out, "JPEG", quality=85, optimize=True)
     return out.getvalue()

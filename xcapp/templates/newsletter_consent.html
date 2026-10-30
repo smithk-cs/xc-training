@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Newsletter consent · {{ team_name }}{% endblock %}
+{% block content %}
+<p><a href="/newsletter">‹ Newsletter</a></p>
+<h1>Name and photo consent</h1>
+<p class="muted" style="max-width:88ch">Athletes are minors, so the newsletter shows a name, race times, photo or spotlight only when it’s ticked here. Unticked means not shown; team totals still count everyone. A numeric VDOT is off unless ticked (“moved up a fitness level” is shown without it). Changes apply the next time an issue is shown, but issues already sent can’t be recalled. Every change is recorded in the Sync log.</p>
+{% if user.role != 'trainer' %}
+<div class="card">
+  <h2>School media release</h2>
+  <p class="small">If the school’s media release covers the team, turn on name, photo and spotlight for everyone at once, then untick anyone who opted out.</p>
+  <form method="post" action="/newsletter-consent" class="form-row" onsubmit="return confirm('Turn on name, photo and spotlight for every athlete on the roster?')">
+    <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="everyone" value="release">
+    <label style="flex:1">Basis<input type="text" name="basis" maxlength="100" value="school media release" required></label>
+    <button type="submit">Turn on for everyone</button>
+  </form>
+</div>{% endif %}
+<form method="post" action="/newsletter-consent">
+<input type="hidden" name="csrf" value="{{ csrf }}">
+<div class="card scroll"><table class="list compact centered sortable"><thead><tr><th>Athlete</th><th>Name and times</th><th>Photo</th><th>Spotlight</th><th>Numeric VDOT</th><th>Recorded</th></tr></thead><tbody>
+{% for a in team %}<tr><td data-sort="{{ a.last_name }} {{ a.first_name }}"><a href="/athletes/{{ a.id }}">{{ a.name }}</a></td>
+  {% for k, v in (('name', a.show_name), ('photo', a.show_photo), ('spotlight', a.show_spotlight), ('vdot', a.show_vdot)) %}
+  <td data-sort="{{ 1 if v else 0 }}"><input type="checkbox" name="{{ k }}_{{ a.id }}" value="1"{% if v %} checked{% endif %}{% if user.role == 'trainer' %} disabled{% endif %} aria-label="{{ k }} for {{ a.name }}"></td>{% endfor %}
+  <td class="small muted">{% if a.consent_at %}{{ a.consent_by }}, {{ (a.consent_at|local).strftime('%b %-d, %Y') }}{% else %}not yet{% endif %}</td></tr>
+{% else %}<tr><td colspan="6" class="muted">No athletes on the roster.</td></tr>{% endfor %}
+</tbody></table>
+{% if user.role != 'trainer' and team %}<div class="form-row" style="margin-top:10px"><label style="flex:1">Basis (optional)<input type="text" name="basis" maxlength="100" placeholder="e.g. parent email, Oct 30"></label><button type="submit">Save</button></div>{% endif %}
+</div>
+</form>
+{% endblock %}

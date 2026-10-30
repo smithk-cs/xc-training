@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}Week of {{ issue.week_start.strftime('%b %-d') }} · Newsletter{% endblock %}
+{% block content %}
+<p><a href="/newsletter">‹ All issues</a></p>
+<div class="form-row title-row" style="margin-bottom:6px"><h1 style="margin:0">Week of {{ issue.week_start.strftime('%B %-d, %Y') }}</h1>
+  <span class="pill{% if issue.status in ('approved', 'sent') %} good{% endif %}">{{ labels[issue.status] }}</span></div>
+<p class="small muted">Recaps {{ issue.week_start.strftime('%b %-d') }} to {{ (issue.week_start + timedelta(days=6)).strftime('%b %-d') }} and looks ahead to the next week.
+  {% if issue.generated_at %}Numbers drawn {{ (issue.generated_at|local).strftime('%a %b %-d, %-I:%M %p') }}.{% endif %}
+  {% if issue.approved_by %}Approved by {{ issue.approved_by }}, {{ (issue.approved_at|local).strftime('%b %-d %-I:%M %p') }}.{% endif %}
+  {% if issue.sent_at %}Sent by {{ issue.sent_by }}, {{ (issue.sent_at|local).strftime('%b %-d %-I:%M %p') }}.{% endif %}</p>
+
+<div class="card nl-actions">
+  <div class="form-row">
+    <a href="/newsletter/{{ issue.id }}/view">View</a>
+    <a href="/newsletter/{{ issue.id }}/issue.pdf">PDF</a>
+    <a href="/newsletter/{{ issue.id }}/email">Email version</a>
+    {% if editable %}
+    <form method="post" action="/newsletter/{{ issue.id }}/refresh" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><button type="submit" class="secondary" title="Re-draw the numbers from the latest data; your writing is kept">Refresh numbers</button></form>
+    {% if issue.status == 'draft' %}<form method="post" action="/newsletter/{{ issue.id }}/status" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="ready_for_review"><button type="submit" class="secondary">Ready for review</button></form>{% endif %}
+    {% if issue.status in ('draft', 'ready_for_review') %}<form method="post" action="/newsletter/{{ issue.id }}/status" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="approved"><button type="submit">Approve</button></form>{% endif %}
+    {% if issue.status == 'approved' %}
+      <form method="post" action="/newsletter/{{ issue.id }}/send" class="inline" onsubmit="return confirm('Email this issue to {{ recipients|length }} coach{{ '' if recipients|length == 1 else 'es' }} now? It can’t be changed after sending.')"><input type="hidden" name="csrf" value="{{ csrf }}"><button type="submit">Send to coaches ({{ recipients|length }})</button></form>
+      <form method="post" action="/newsletter/{{ issue.id }}/status" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="draft"><button type="submit" class="secondary">Back to draft</button></form>
+    {% endif %}
+    {% endif %}
+  </div>
+  {% if problems %}<p class="notice" style="margin-top:10px"><span>{% for p in problems %}{{ p }}{{ ' ' if not loop.last }}{% endfor %}</span></p>{% endif %}
+  {% if issue.status == 'sent' %}<p class="small muted" style="margin-top:8px">Sent issues are kept as they were sent. Put any correction in next week’s issue.</p>{% endif %}
+  {% if sends %}<p class="small muted">{% for x in sends %}Sent to {{ x.recipients }} ({{ x.recipient_group }}){% if x.failed %}, {{ x.failed }} failed{% endif %} by {{ x.sent_by }}, {{ (x.sent_at|local).strftime('%b %-d %-I:%M %p') }}. {% endfor %}</p>{% endif %}
+</div>
+
+<form method="post" action="/newsletter/{{ issue.id }}/save" id="nl-form">
+<input type="hidden" name="csrf" value="{{ csrf }}">
+{% for x in secs %}{% set sec, spec, data = x.sec, x.spec, x.data %}
+<div class="card nl-edit{% if not sec.enabled %} off{% endif %}" id="edit-{{ sec.key }}">
+  <div class="form-row" style="justify-content:space-between; align-items:center">
+    <h2 style="margin:0">{{ spec.title }}</h2>
+    <div class="form-row" style="gap:12px">
+      <label class="check small"><input type="checkbox" name="enabled_{{ sec.key }}" value="1"{% if sec.enabled %} checked{% endif %}{% if not editable %} disabled{% endif %}> Include</label>
+      <label class="small">Order <input type="number" name="position_{{ sec.key }}" value="{{ sec.position }}" min="0" max="50" style="width:4.5em"{% if not editable %} disabled{% endif %}></label>
+    </div>
+  </div>
+  <p class="small muted" style="margin:4px 0 8px">{{ spec.help }}
+    {% if spec.build %}{% if data %}<span class="pill good">Has this week’s numbers</span>{% else %}<span class="pill">Nothing this week{% if not spec.needs_coach_text %}: skipped unless you write something{% endif %}</span>{% endif %}{% endif %}</p>
+  {% set out = left_out(sec.key, data, people) %}
+  {% if out %}<p class="small muted">Left out for now (no name consent): {{ out|join(', ') }}. <a href="/newsletter-consent">Consent</a></p>{% endif %}
+  {% if sec.key == 'spotlight' %}
+    <label>Athlete <select name="spotlight_athlete"{% if not editable %} disabled{% endif %}><option value="">Choose…</option>
+      {% for a in team if a.show_spotlight and a.show_name %}<option value="{{ a.id }}"{% if sec.athlete_id == a.id %} selected{% endif %}>{{ a.name }}{% if data and data.suggested and data.suggested.athlete_id == a.id %} (whose turn it is){% endif %}</option>{% endfor %}</select></label>
+    {% if not team|selectattr('show_spotlight')|list %}<p class="small muted">Nobody has spotlight consent yet. <a href="/newsletter-consent">Consent</a></p>{% endif %}
+  {% endif %}
+  {% if sec.key == 'photos' %}<p class="small"><a href="#photos">Photos are added below ›</a></p>
+  {% else %}
+  <label>{{ 'Write this section' if spec.needs_coach_text else 'Add a note (optional)' }}
+    <textarea name="text_{{ sec.key }}" rows="{{ 4 if spec.needs_coach_text else 2 }}" maxlength="4000"{% if not editable %} readonly{% endif %}>{{ sec.coach_text }}</textarea></label>
+  {% set n = words(sec.coach_text) %}
+  {% if sec.key == 'coach_note' and n > 100 %}<p class="small muted">{{ n }} words: about 100 reads best.</p>{% endif %}
+  {% if sec.key == 'spotlight' and n > 60 %}<p class="small muted">{{ n }} words: about 60 reads best.</p>{% endif %}
+  {% endif %}
+</div>
+{% endfor %}
+{% if editable %}<div class="nl-savebar"><button type="submit">Save changes</button>{% if issue.status == 'approved' %} <span class="small muted">Saving a change sends it back to draft.</span>{% endif %}</div>{% endif %}
+</form>
+
+<div class="card" id="photos">
+  <h2>Photos</h2>
+  <p class="small muted">Every athlete in a photo must be tagged and have photo consent, or the photo stays out. Location and camera details are removed when it’s uploaded.</p>
+  {% for ph in issue.photos %}<div class="nl-photo-row"><img src="/newsletter/{{ issue.id }}/photos/{{ ph.id }}.jpg" alt="{{ ph.alt }}" width="120">
+    <div><b>{{ ph.caption or ph.alt }}</b><br><span class="small muted">Shows: {% for i in ph.tagged %}{{ people[i].name if i in people else '?' }}{% if i in people and not people[i].show_photo %} (no photo consent){% endif %}{{ ', ' if not loop.last }}{% else %}no athletes tagged{% endfor %}</span><br>
+      {% if photo_ok(ph) %}<span class="pill good">In the issue</span>{% else %}<span class="pill warn">Left out: needs photo consent</span>{% endif %}</div>
+    {% if editable %}<form method="post" action="/newsletter/{{ issue.id }}/photos/{{ ph.id }}/delete" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><button type="submit" class="link">Remove</button></form>{% endif %}</div>
+  {% endfor %}
+  {% if editable and issue.photos|length < max_photos %}
+  <form method="post" action="/newsletter/{{ issue.id }}/photos" enctype="multipart/form-data" class="nl-photo-form">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <div class="form-row">
+      <label>Photo<input type="file" name="photo" accept="image/jpeg,image/png,image/webp" required></label>
+      <label style="flex:1">Describe it (for readers who can’t see it)<input type="text" name="alt" maxlength="200" required placeholder="Varsity boys at the start line"></label>
+      <label style="flex:1">Caption (optional)<input type="text" name="caption" maxlength="200"></label>
+    </div>
+    <label>Athletes shown <span class="small muted">(hold Ctrl or ⌘ to pick several)</span>
+      <select name="athletes" multiple size="6">{% for a in team %}<option value="{{ a.id }}">{{ a.name }}{% if not a.show_photo %} (no photo consent){% endif %}</option>{% endfor %}</select></label>
+    <button type="submit" class="secondary">Add photo</button>
+  </form>{% endif %}
+</div>
+
+<div class="card newsletter" id="preview">
+  <h2 class="muted small" style="text-transform:uppercase; letter-spacing:.06em">Preview, as it will read</h2>
+  {% with sections=preview %}{% include "_newsletter_body.html" %}{% endwith %}
+</div>
+{% if editable and issue.status != 'sent' %}
+<form method="post" action="/newsletter/{{ issue.id }}/delete" onsubmit="return confirm('Delete this draft?')"><input type="hidden" name="csrf" value="{{ csrf }}"><button type="submit" class="link">Delete this draft</button></form>
+{% endif %}
+{% endblock %}

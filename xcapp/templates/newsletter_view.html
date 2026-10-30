@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Week of {{ issue.week_start.strftime('%b %-d') }} · Newsletter{% endblock %}
+{% block content %}
+<div class="form-row title-row" style="margin-bottom:8px"><a href="/newsletter/{{ issue.id }}">‹ Back to the issue</a>
+  <span class="pill{% if issue.status in ('approved', 'sent') %} good{% endif %}">{{ labels[issue.status] }}</span>
+  <a href="/newsletter/{{ issue.id }}/issue.pdf">PDF</a> <a href="/newsletter/{{ issue.id }}/email">Email version</a></div>
+<article class="card newsletter">
+  <header class="nl-head"><div class="nl-team">{{ team_name }}</div><h1>Weekly update</h1><div class="muted">Week of {{ issue.week_start.strftime('%B %-d, %Y') }}</div></header>
+  {% include "_newsletter_body.html" %}
+</article>
+{% endblock %}

@@ -58,6 +58,13 @@ class Athlete(Base):
     vdot_mark: Mapped[str] = mapped_column(String(10), default="")     # coach's mark on the VDOT page, such as *
     weekly_plan: Mapped[str] = mapped_column(String(20), default="")   # coach's weekly mileage plan, such as 7x8 or inj
     experience: Mapped[int] = mapped_column(Integer, default=2, server_default="2")  # 1 new to running, 2 usual, 3 experienced
+    # What the weekly newsletter may show about this athlete (minors: off until a coach records consent).
+    show_name: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")       # name, and race times with it
+    show_photo: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    show_spotlight: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    show_vdot: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")       # a numeric VDOT in shared views
+    consent_by: Mapped[str] = mapped_column(String(160), default="", server_default="")       # who recorded it, and on what basis
+    consent_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)
     ability_override: Mapped[str] = mapped_column(String(40), default="")  # coach-pinned ability group, "" = automatic
     ai_consent_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)  # explicit opt-in to AI analysis
     ai_consent_note: Mapped[str] = mapped_column(String(200), default="")
@@ -563,3 +570,95 @@ class SyncLog(Base):
     level: Mapped[str] = mapped_column(String(10), default="info")  # info | warn | error
     kind: Mapped[str] = mapped_column(String(30))
     message: Mapped[str] = mapped_column(Text)
+
+
+# ---------- weekly newsletter ----------
+
+class NewsletterIssue(Base):
+    """One weekly issue: drafted from the team's data, edited and approved by a coach, then sent by hand."""
+    __tablename__ = "newsletter_issues"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    week_start: Mapped[dt.date] = mapped_column(Date, unique=True, index=True)   # the Monday of the week it reports on
+    status: Mapped[str] = mapped_column(String(20), default="draft")           # draft | ready_for_review | approved | sent
+    template_version: Mapped[int] = mapped_column(Integer, default=1)
+    created_by: Mapped[str] = mapped_column(String(80), default="")
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
+    generated_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)  # when the numbers were last drawn
+    approved_by: Mapped[str] = mapped_column(String(80), default="")
+    approved_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)
+    sent_by: Mapped[str] = mapped_column(String(80), default="")
+    sent_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)
+    sections: Mapped[list["NewsletterSection"]] = relationship(cascade="all, delete-orphan", order_by="NewsletterSection.position")
+    photos: Mapped[list["NewsletterPhoto"]] = relationship(cascade="all, delete-orphan", order_by="NewsletterPhoto.id")
+
+
+class NewsletterSection(Base):
+    """One block of an issue. coach_text is the coach's writing; data_snapshot is the generated numbers, kept apart so
+    refreshing the numbers never wipes the coach's edits."""
+    __tablename__ = "newsletter_sections"
+    __table_args__ = (UniqueConstraint("issue_id", "key"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    issue_id: Mapped[int] = mapped_column(ForeignKey("newsletter_issues.id", ondelete="CASCADE"), index=True)
+    key: Mapped[str] = mapped_column(String(30))
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    position: Mapped[int] = mapped_column(Integer, default=0)
+    coach_text: Mapped[str] = mapped_column(Text, default="")
+    data_snapshot: Mapped[str] = mapped_column(Text, default="")   # JSON from the section's builder; "" when it had nothing
+    athlete_id: Mapped[int | None] = mapped_column(ForeignKey("athletes.id", ondelete="SET NULL"), nullable=True)  # spotlight
+
+
+class NewsletterPhoto(Base):
+    """A photo in an issue: stored without metadata, with alt text and the athletes shown (each needs photo consent)."""
+    __tablename__ = "newsletter_photos"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    issue_id: Mapped[int] = mapped_column(ForeignKey("newsletter_issues.id", ondelete="CASCADE"), index=True)
+    data: Mapped[bytes] = mapped_column(LargeBinary)
+    alt: Mapped[str] = mapped_column(String(200))
+    caption: Mapped[str] = mapped_column(String(200), default="")
+    athlete_ids: Mapped[str] = mapped_column(String(400), default="")   # comma list of the athletes shown
+    uploaded_by: Mapped[str] = mapped_column(String(80), default="")
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
+
+    @property
+    def tagged(self) -> list[int]:
+        return [int(x) for x in self.athlete_ids.split(",") if x.strip().isdigit()]
+
+
+class NewsletterSend(Base):
+    """Every send, by hand, after approval."""
+    __tablename__ = "newsletter_sends"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    issue_id: Mapped[int] = mapped_column(ForeignKey("newsletter_issues.id", ondelete="CASCADE"), index=True)
+    recipient_group: Mapped[str] = mapped_column(String(40))   # coaches (families later)
+    recipients: Mapped[int] = mapped_column(Integer, default=0)
+    failed: Mapped[int] = mapped_column(Integer, default=0)
+    sent_by: Mapped[str] = mapped_column(String(80), default="")
+    sent_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class NewsletterDeadline(Base):
+    """A date families need to know (forms, fees, orders), shown in issues from a set number of days before it."""
+    __tablename__ = "newsletter_deadlines"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    title: Mapped[str] = mapped_column(String(160))
+    due_date: Mapped[dt.date] = mapped_column(Date, index=True)
+    show_from_days: Mapped[int] = mapped_column(Integer, default=14)
+    notes: Mapped[str] = mapped_column(String(300), default="")
+
+
+class RecoveryTip(Base):
+    """A short, positive recovery tip. Only tips a coach or trainer has approved go into issues."""
+    __tablename__ = "recovery_tips"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    text: Mapped[str] = mapped_column(String(300))
+    category: Mapped[str] = mapped_column(String(30), default="General")   # Sleep | Hydration | Fueling | Recovery | General
+    approved_by: Mapped[str] = mapped_column(String(80), default="")
+    last_used: Mapped[dt.date | None] = mapped_column(Date, nullable=True)
+
+
+class Spotlight(Base):
+    """Who has been featured, so everyone gets a turn."""
+    __tablename__ = "newsletter_spotlights"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    athlete_id: Mapped[int] = mapped_column(ForeignKey("athletes.id", ondelete="CASCADE"), index=True)
+    issue_id: Mapped[int] = mapped_column(ForeignKey("newsletter_issues.id", ondelete="CASCADE"), index=True)

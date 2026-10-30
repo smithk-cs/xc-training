@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Recovery tips · {{ team_name }}{% endblock %}
+{% block content %}
+<p><a href="/newsletter">‹ Newsletter</a></p>
+<h1>Recovery tips</h1>
+<p class="muted" style="max-width:85ch">One approved tip goes in each issue, the least recently used first. Keep them short, positive and general: sleep, hydration, fueling and recovery. Tips never mention body weight, dieting or cutting food. Please have the athletic trainer or school nurse read the list once; a coach, admin or the trainer can approve each tip.</p>
+<div class="card">
+  <form method="post" action="/newsletter-tips" class="form-row">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label>Topic<select name="category">{% for c in categories %}<option>{{ c }}</option>{% endfor %}</select></label>
+    <label style="flex:1">Tip<input type="text" name="text" maxlength="300" required></label>
+    <button type="submit">Add</button>
+  </form>
+  {% if not rows %}<form method="post" action="/newsletter-tips" style="margin-top:10px"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="starter" value="1"><button type="submit" class="secondary">Add {{ 24 }} starter tips to review</button></form>{% endif %}
+</div>
+<div class="card"><table class="list compact"><thead><tr><th>Topic</th><th>Tip</th><th>Status</th><th>Last used</th><th></th></tr></thead><tbody>
+{% for t in rows %}<tr><td>{{ t.category }}</td><td>{{ t.text }}</td>
+  <td>{% if t.approved_by %}<span class="pill good">Approved</span> <span class="small muted">{{ t.approved_by }}</span>{% else %}<span class="pill">Needs review</span>{% endif %}</td>
+  <td class="small">{{ t.last_used.strftime('%b %-d') if t.last_used else '' }}</td>
+  <td class="nowrap"><form method="post" action="/newsletter-tips/{{ t.id }}" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}">
+    {% if t.approved_by %}<button type="submit" name="action" value="unapprove" class="link">Set aside</button>{% else %}<button type="submit" name="action" value="approve" class="link">Approve</button>{% endif %}
+    {% if user.role != 'trainer' %} · <button type="submit" name="action" value="delete" class="link">Delete</button>{% endif %}</form></td></tr>
+{% else %}<tr><td colspan="5" class="muted">No tips yet. Add your own, or start from the starter list and review it.</td></tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}

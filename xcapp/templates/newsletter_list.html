@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Newsletter · {{ team_name }}{% endblock %}
+{% block content %}
+<h1>Weekly newsletter</h1>
+<p class="muted" style="max-width:85ch">Each issue is drafted from the week’s data: the week ahead, race results, PRs, team numbers, streaks and more. Coaches write the personal parts, check the rest and approve it. Nothing is ever sent automatically. For now it goes to the coaching staff; a family list can come later.</p>
+{% if not settings.email_configured %}<p class="notice"><span><b>Email isn’t set up yet.</b> You can draft, approve, view and print issues; sending needs the email service key (see DEPLOY.md).</span></p>{% endif %}
+<div class="grid">
+  <div class="card">
+    <h2>Start an issue</h2>
+    {% if user.role != 'trainer' %}
+    <form method="post" action="/newsletter/new" class="form-row">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <label>Week it reports on<input type="date" name="week" value="{{ default_week.isoformat() }}" required></label>
+      <button type="submit">Start or open</button>
+    </form>
+    <p class="small muted">Any day in the week works. The issue recaps that Monday-to-Sunday week and looks ahead to the next one.</p>
+    {% else %}<p class="muted">Coaches start and edit issues. You can read them below.</p>{% endif %}
+  </div>
+  <div class="card">
+    <h2>Set up</h2>
+    <ul class="plain-list">
+      <li><a href="/newsletter-consent">Name and photo consent</a> <span class="small muted">· {{ consent_named }} of {{ team_size }} athletes can be named</span></li>
+      <li><a href="/newsletter-deadlines">Deadlines</a> <span class="small muted">· forms, fees, orders</span></li>
+      <li><a href="/newsletter-tips">Recovery tips</a> <span class="small muted">· {{ tips_approved }} approved</span></li>
+    </ul>
+    {% if user.role != 'trainer' %}
+    <form method="post" action="/newsletter/settings" class="form-row" style="margin-top:10px">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <label>Team miles goal for the season<input type="number" name="team_goal" min="0" step="1" value="{{ team_goal }}" placeholder="none" style="width:8em"></label>
+      <button type="submit" class="secondary">Save</button>
+    </form>{% endif %}
+  </div>
+</div>
+<div class="card">
+  <h2>Issues</h2>
+  <table class="list compact"><thead><tr><th>Week of</th><th>Status</th><th>Approved</th><th>Sent</th><th></th></tr></thead><tbody>
+  {% for i in issues %}<tr class="row-link" data-href="/newsletter/{{ i.id }}">
+    <td><a href="/newsletter/{{ i.id }}">{{ i.week_start.strftime('%b %-d, %Y') }}</a></td>
+    <td><span class="pill{% if i.status == 'sent' %} good{% elif i.status == 'approved' %} good{% endif %}">{{ labels[i.status] }}</span></td>
+    <td class="small">{% if i.approved_by %}{{ i.approved_by }}, {{ (i.approved_at|local).strftime('%b %-d') }}{% endif %}</td>
+    <td class="small">{% if i.sent_at %}{{ i.sent_by }}, {{ (i.sent_at|local).strftime('%b %-d') }}{% endif %}</td>
+    <td class="small"><a href="/newsletter/{{ i.id }}/view">View</a> · <a href="/newsletter/{{ i.id }}/issue.pdf">PDF</a></td></tr>
+  {% else %}<tr><td colspan="5" class="muted">No issues yet.</td></tr>{% endfor %}
+  </tbody></table>
+</div>
+{% endblock %}

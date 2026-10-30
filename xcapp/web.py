@@ -394,7 +394,8 @@ def create_app() -> FastAPI:
                         headers={"Content-Disposition": 'attachment; filename="athlete-links.csv"'})
 
     @app.get("/athletes", response_class=HTMLResponse)
-    def athletes_page(request: Request, user=Depends(any_staff, scope="function"), db: Session = Depends(get_db, scope="function")):
+    def athletes_page(request: Request, team: str = "All", user=Depends(any_staff, scope="function"), db: Session = Depends(get_db, scope="function")):
+        team = team if team in ("Boys", "Girls") else "All"
         today = A.team_today()
         CY.refresh(db, today)  # grades for this school year, and graduates moved to alumni (Garmin ends overnight)
         rows = db.scalars(select(Athlete).where(Athlete.active.is_(True)).options(selectinload(Athlete.garmin))
@@ -404,13 +405,16 @@ def create_app() -> FastAPI:
                             .order_by(Athlete.left_on.desc(), Athlete.last_name)).all()
         alumni = db.scalars(select(Athlete).where(Athlete.alumni.is_(True))
                             .order_by(Athlete.grad_year.desc(), Athlete.last_name, Athlete.first_name)).all()
+        dupes = MG.likely_duplicates(list(rows) + list(former))   # across the whole roster, whatever is shown
+        if team != "All":
+            rows, former, alumni = ([a for a in x if a.gender == team] for x in (rows, former, alumni))
         by_class: dict[int, list[Athlete]] = {}
         for a in alumni:
             by_class.setdefault(a.grad_year or 0, []).append(a)
         return render(request, "athletes.html", user, athletes=rows, ab=A.abilities(db, today), ranks=ranks,
                       photos=photo_versions(db), former=former, delete_by=lambda a: delete_by(a), alumni=by_class,
-                      n_alumni=len(alumni), confirm=CY.to_confirm(db, today), this_year=CY.school_year_end(today),
-                      dupes=MG.likely_duplicates(list(rows) + list(former)))
+                      n_alumni=len(alumni), confirm=[x for x in CY.to_confirm(db, today) if team == "All" or x["athlete"].gender == team],
+                      this_year=CY.school_year_end(today), dupes=dupes, team=team)
 
     @app.post("/athletes/class-years")
     async def athletes_class_years(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
@@ -1899,6 +1903,12 @@ def create_app() -> FastAPI:
         if file_logo:
             return logo_path.read_bytes(), LOGO_TYPES[logo_path.suffix.lower()]
         return None
+
+    from types import SimpleNamespace
+    from . import newsletter_web
+    newsletter_web.register(app, SimpleNamespace(render=render, flash=flash, back=back, form_checked=form_checked, any_staff=any_staff,
+                                                 coach_or_admin=coach_or_admin, get_db=get_db, logo_bytes=logo_bytes, settings=s,
+                                                 templates=templates))
 
     def meet_form(f, m: MeetEntry) -> None:
         name = str(f.get("name", "")).strip()[:120]

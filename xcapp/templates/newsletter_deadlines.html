@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Newsletter deadlines · {{ team_name }}{% endblock %}
+{% block content %}
+<p><a href="/newsletter">‹ Newsletter</a></p>
+<h1>Deadlines</h1>
+<p class="muted" style="max-width:80ch">Enter each one once. It appears in the “Coming up” section of every issue from the set number of days before it’s due, and drops off once the date passes.</p>
+{% if user.role != 'trainer' %}
+<div class="card"><form method="post" action="/newsletter-deadlines" class="form-row">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <label style="flex:2">What<input type="text" name="title" maxlength="160" required placeholder="Spirit pack order"></label>
+  <label>Due<input type="date" name="due" required></label>
+  <label>Show from (days before)<input type="number" name="show_from" value="14" min="1" max="120" style="width:6em"></label>
+  <label style="flex:2">Notes (optional)<input type="text" name="notes" maxlength="300" placeholder="Order online at …"></label>
+  <button type="submit">Add</button>
+</form></div>{% endif %}
+<div class="card"><table class="list compact"><thead><tr><th>What</th><th>Due</th><th>Shown from</th><th>Notes</th><th></th></tr></thead><tbody>
+{% for d in rows %}<tr{% if d.due_date < today %} class="muted"{% endif %}><td>{{ d.title }}</td><td>{{ d.due_date.strftime('%a %b %-d, %Y') }}</td>
+  <td>{{ (d.due_date - timedelta(days=d.show_from_days)).strftime('%b %-d') }}</td><td class="small">{{ d.notes }}</td>
+  <td>{% if user.role != 'trainer' %}<form method="post" action="/newsletter-deadlines/{{ d.id }}/delete" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><button type="submit" class="link">Remove</button></form>{% endif %}</td></tr>
+{% else %}<tr><td colspan="5" class="muted">No deadlines yet.</td></tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}

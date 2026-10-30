@@ -460,3 +460,26 @@ table.list.centered th, table.list.centered td, table.list.centered td.num, tabl
 table.list.centered th:first-child, table.list.centered td:first-child { text-align: left; }
 /* Folded Garmin and privacy panels: their status badges line up at the right, one above the other */
 details.garmin-fold > summary .pill { margin-left: auto; min-width: 8.5rem; justify-content: center; text-align: center; box-sizing: border-box; }
+/* Newsletter */
+.newsletter .nl-head { border-bottom: 4px solid var(--brand-gold); padding-bottom: 10px; margin-bottom: 6px; }
+.newsletter .nl-head .nl-team { font-family: var(--font-display); color: var(--brand-red); letter-spacing: .1em; text-transform: uppercase; font-weight: 700; font-size: 14px; }
+.newsletter .nl-head h1 { margin: 2px 0; }
+.nl-sec { padding: 12px 0; border-bottom: 1px solid var(--color-border-line); }
+.nl-sec:last-child { border-bottom: 0; }
+.nl-sec h2 { color: var(--brand-red); margin: 0 0 8px; font-size: 20px; }
+.nl-sec .nl-big { font-weight: 700; font-size: 17px; margin: 4px 0; }
+.nl-text { white-space: pre-line; margin-top: 6px; }
+.nl-days { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; margin: 0; }
+.nl-days dt { font-weight: 600; }
+.nl-days dd { margin: 0; }
+.nl-photos { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+.nl-photos figure { margin: 0; }
+.nl-photos img { width: 100%; height: auto; border-radius: 8px; display: block; }
+.nl-edit.off { opacity: .6; }
+.nl-edit textarea { width: 100%; box-sizing: border-box; }
+.nl-savebar { position: sticky; bottom: 0; background: var(--color-bg); padding: 10px 0; z-index: 3; }
+.nl-photo-row { display: flex; gap: 12px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--color-border-line); }
+.nl-photo-row img { border-radius: 6px; flex: none; }
+.nl-photo-form { margin-top: 12px; display: flex; flex-direction: column; gap: 10px; }
+ul.plain-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.nl-race table.list { width: auto; min-width: min(100%, 360px); }
