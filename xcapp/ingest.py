@@ -47,7 +47,7 @@ def _workout_rank(reps: int, distance_m: float | None) -> tuple[int, float]:
 def match_planned(db: Session, athlete: Athlete, day: dt.date) -> PlannedWorkout | None:
     groups = athlete_groups(db, athlete)
     for pw in db.scalars(select(PlannedWorkout).where(PlannedWorkout.date == day).order_by(PlannedWorkout.id)).all():
-        if pw.applies_to(*groups):
+        if pw.applies_to(*groups, gender=athlete.gender):
             return pw
     return None
 

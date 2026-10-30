@@ -179,7 +179,7 @@ def team_week(db: Session, monday: dt.date, gender: str | None = None, athletes:
         me = ab.get(a.id, {})
         v, group = me.get("vdot"), me.get("group") or ""
         g = groups.get(group)
-        mine = lambda d: [w for w in plans if w.date == d and w.applies_to(a.group, group)]  # noqa: E731
+        mine = lambda d: [w for w in plans if w.date == d and w.applies_to(a.group, group, gender=a.gender)]  # noqa: E731
         rows = [_athlete_week(a, v, g, days, mine, acts_by, pain_by, missed_by, min_minutes, offset)
                 for offset in (0, -7)]
         week, last = rows
