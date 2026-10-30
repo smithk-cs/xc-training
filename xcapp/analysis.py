@@ -563,6 +563,28 @@ def vdot_board(db: Session, as_of: dt.date, genders: tuple[str, ...] = ("Boys", 
     return out
 
 
+def dedupe_pain_reports(db: Session, athlete_id: int | None = None) -> int:
+    """Keep one pain report per athlete, day and body area: the most recent. It keeps the run it was linked to and a
+    'saw the trainer' tick from the reports it replaces. Returns how many were removed."""
+    q = select(PainReport).order_by(PainReport.created_at.desc(), PainReport.id.desc())
+    if athlete_id is not None:
+        q = q.where(PainReport.athlete_id == athlete_id)
+    kept: dict[tuple, PainReport] = {}
+    removed = 0
+    for p in db.scalars(q).all():
+        key = (p.athlete_id, p.date, p.body_area)
+        newest = kept.get(key)
+        if newest is None:
+            kept[key] = p
+            continue
+        newest.activity_id = newest.activity_id or p.activity_id
+        newest.saw_trainer = newest.saw_trainer or p.saw_trainer
+        db.delete(p)
+        removed += 1
+    db.flush()
+    return removed
+
+
 RESTING_HR_MIN, RESTING_HR_MAX = 30, 120
 RESTING_HR_FLAG = 5      # bpm: a week this far above the athlete's usual is worth a check-in (illness, fatigue, poor sleep)
 RESTING_HR_WINDOW = 35   # days looked at: the past week, and the four weeks before it as "usual"

@@ -1506,6 +1506,8 @@ def create_app() -> FastAPI:
                 raise ValueError("Pick where it hurts and how much (0 to 10).")
             db.add(PainReport(athlete_id=a.id, date=A.team_today(), body_area=area, severity=sev,
                               note=str(f.get("note", ""))[:300], saw_trainer=bool(f.get("saw_trainer"))))
+            db.flush()
+            A.dedupe_pain_reports(db, a.id)   # a second report for the same day and place replaces the first
             flash(request, "Thanks. Your coach will see this today." + (" Please also tell your coach or athletic trainer in person." if sev >= A.PAIN_FLAG else ""))
         except ValueError as exc:
             flash(request, str(exc), "error")
@@ -2416,6 +2418,8 @@ def create_app() -> FastAPI:
             p.date, p.body_area, p.severity, p.note = act.local_date, area, level, note
             p.saw_trainer = bool(f.get("saw_trainer"))
             db.add(p)
+            db.flush()
+            A.dedupe_pain_reports(db, a.id)
         msg = "Saved. Thanks for adding your effort."
         if level is not None and level >= A.PAIN_FLAG:
             msg += " That’s a lot of pain: please also tell your coach or athletic trainer in person."

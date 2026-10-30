@@ -217,7 +217,7 @@ def queue_backfill(db: Session, conn: GarminConnection, days: int, delay: dt.tim
 def _send_backfill(db: Session, job: GarminBackfill, http: httpx.Client) -> None:
     """Send one queued request to Garmin and record what happened."""
     conn = job.connection
-    span = f"{job.kind} {job.start_at:%b %-d}-{job.end_at:%b %-d}"
+    span = f"{job.kind} {analysis.local_time(job.start_at):%b %-d}-{analysis.local_time(job.end_at):%b %-d}"   # in Pacific time
     if conn is None or conn.status != "connected":
         job.status, job.last_result = "failed", "not connected to Garmin"
         return

@@ -105,6 +105,7 @@ def nightly() -> dict:
                 out["class_years"] = CY.refresh(db, A.team_today(), disconnect=lambda c: G.disconnect(db, c, http))
         else:
             out["class_years"] = CY.refresh(db, A.team_today())
+        out["duplicate_pain_reports_removed"] = A.dedupe_pain_reports(db)
         if settings().ai_configured:
             run = AI.generate_briefing(db)
             out["briefing"] = run.status if run.status == "ok" else f"failed: {run.error}"
