@@ -23,6 +23,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from . import ai as AI
 from . import analysis as A
+from . import points as PT
 from . import datasets as DS
 from . import garmin as G
 from . import merge as MG
@@ -1250,6 +1251,7 @@ def create_app() -> FastAPI:
                       rhr_cal=A.resting_hr_calendar(db, a.id, today), photo_v=photo_versions(db).get(a.id), meets=my_meets(db, a, today),
                       wins=A.achievements(db, a, today),
                       miles_goal=A.mileage_goal(db, a.id, mine.get("group") or "", today, a.gender) if show_group else None,
+                      my_points=PT.team_week(db, A.week_monday(today), athletes=[a])[0] if show_group else None, rates=PT.RATES,
                       notes=[n for n in db.scalars(select(Announcement).where(Announcement.start_date <= today, Announcement.end_date >= today)
                                                    .order_by(Announcement.start_date.desc(), Announcement.id.desc())).all()
                              if n.for_athlete(a.gender, mine.get("group") or "")], my_paces=A.training_paces(mine.get("vdot")) if show_group else [],
@@ -1986,6 +1988,38 @@ def create_app() -> FastAPI:
         flash(request, f"You’ll get a reminder email at {a.email} when something needs finishing." if a.email_reminders
               else "Reminder emails are off.")
         return back(f"/a/{token}#reminders")
+
+    @app.get("/week", response_class=HTMLResponse)
+    def week_page(request: Request, team: str = "", start: str = "", user=Depends(any_staff, scope="function"),
+                  db: Session = Depends(get_db, scope="function")):
+        """The team's week at a glance: each athlete's miles and points against their targets, then the seven days."""
+        team = pick_team(team)
+        today = A.team_today()
+        try:
+            monday = A.week_monday(dt.date.fromisoformat(start)) if start else A.week_monday(today)
+        except ValueError:
+            monday = A.week_monday(today)
+        rows = PT.team_week(db, monday, team)
+        order = {g.name: g.position for g in db.scalars(select(TrainingGroup)).all()}
+        rows.sort(key=lambda r: (order.get(r["group_name"], 99), -(r["vdot"] or 0), r["a"].last_name, r["a"].first_name))
+        target_days, min_minutes = PT.settings_for(db)
+        return render(request, "week.html", user, team=team, rows=rows, monday=monday, today=today,
+                      days=[monday + dt.timedelta(days=i) for i in range(7)], rates=PT.RATES,
+                      target_days=target_days, min_minutes=min_minutes)
+
+    @app.post("/week/settings")
+    async def week_settings(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
+        f = await form_checked(request)
+        try:
+            days, mins = int(f.get("target_days", "")), int(f.get("min_minutes", ""))
+            if not (1 <= days <= 7 and 5 <= mins <= 120):
+                raise ValueError
+            A.set_setting(db, "points_target_days", str(days))
+            A.set_setting(db, "points_min_minutes", str(mins))
+            flash(request, "Saved.")
+        except ValueError:
+            flash(request, "Target days run from 1 to 7, and the minimum run from 5 to 120 minutes.", "error")
+        return back(f"/week?team={pick_team(f.get('team'))}&start={f.get('start', '')}")
 
     @app.get("/vdot", response_class=HTMLResponse)
     def vdot_page(request: Request, edit: int = 0, team: str = "", user=Depends(any_staff, scope="function"),

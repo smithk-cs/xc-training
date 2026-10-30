@@ -383,6 +383,8 @@ def details_to_parsed(details: dict) -> ParsedActivity:
         (s for s in details.get("samples") or [] if s.get("startTimeInSeconds") is not None),
         key=lambda s: s["startTimeInSeconds"])
     p.hr_samples = [(float(s["startTimeInSeconds"] - t0), int(s["heartRate"])) for s in samples if s.get("heartRate")]
+    p.dist_samples = [(float(s["startTimeInSeconds"] - t0), float(s["totalDistanceInMeters"]))
+                      for s in samples if s.get("totalDistanceInMeters") is not None]
     lap_starts = sorted(int(l["startTimeInSeconds"]) for l in details.get("laps") or [] if l.get("startTimeInSeconds") is not None)
     if lap_starts and samples:
         end_t = t0 + int(p.duration_s or (samples[-1]["startTimeInSeconds"] - t0))

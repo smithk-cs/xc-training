@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}{{ team }} week · {{ team_name }}{% endblock %}
+{% block content %}
+<div class="form-row title-row" style="margin-bottom:12px"><h1 style="margin:0">{{ team }} week</h1>
+  {% with base='/week', extra='&start=' ~ monday.isoformat() %}{% include "_team_switch.html" %}{% endwith %}</div>
+<div class="form-row" style="align-items:center">
+  <a class="button secondary" href="/week?team={{ team }}&start={{ (monday - timedelta(days=7)).isoformat() }}" aria-label="Week before">‹</a>
+  <b>{{ monday.strftime('%b %-d') }} to {{ days[-1].strftime('%b %-d, %Y') }}</b>
+  <a class="button secondary" href="/week?team={{ team }}&start={{ (monday + timedelta(days=7)).isoformat() }}" aria-label="Week after">›</a>
+  {% if monday != now() - timedelta(days=now().weekday()) %}<a href="/week?team={{ team }}">This week</a>{% endif %}
+</div>
+<p class="muted" style="max-width:90ch">Every minute run earns points; harder minutes earn more ({% for z, r in rates.items() %}{{ z|lower }} {{ r }}{{ ', ' if not loop.last else '' }}{% endfor %} a minute). The target is the week’s team workouts plus the rest of the group’s weekly miles at easy pace. On a workout day, points stop at that day’s plan, so running faster than planned earns nothing extra; other days count running minutes as easy, up to 110% of the target. Score: 80% points, 20% days with at least {{ min_minutes }} minutes run (target {{ target_days }}).</p>
+
+<div class="card scroll" style="padding:0">
+<table class="list compact week-table">
+  <thead><tr><th class="who">Athlete</th><th class="num">Miles</th><th class="num">Points</th><th class="num">Score</th><th class="num">Days</th>
+    {% for d in days %}<th class="day{% if d == today %} today{% endif %}">{{ d.strftime('%a') }}<br><span class="small muted">{{ d.strftime('%b %-d') }}</span></th>{% endfor %}</tr></thead>
+  <tbody>
+  {% for r in rows %}{% set c = r.group.color if r.group else '' %}
+  {% if loop.first or r.group_name != rows[loop.index0 - 1].group_name %}
+  <tr class="group-row"><td colspan="12">{% if r.group_name %}<span class="pill" style="background:{{ c or '#FFFFF0' }}; color:{{ ink(c or '#FFFFF0') }}; border-color:rgba(0,0,0,.18)">{{ r.group_name }}</span>{% if r.goal_miles %} <span class="small muted">{{ '%g' % r.goal_miles }} mi a week</span>{% endif %}{% else %}<span class="small muted">No group yet (needs a VDOT)</span>{% endif %}</td></tr>
+  {% endif %}
+  <tr>
+    <td class="who"><a href="/athletes/{{ r.a.id }}">{{ r.a.name }}</a>{% if r.vdot %}<br><span class="small muted">VDOT {{ r.vdot }}</span>{% endif %}
+      {% if r.flags %}<details class="flags"><summary class="small">{{ r.flags|length }} flag{{ '' if r.flags|length == 1 else 's' }}</summary><ul class="small">{% for f in r.flags %}<li>{{ f }}</li>{% endfor %}</ul></details>{% endif %}</td>
+    <td class="num">{{ '%.1f' % r.miles }}{% if r.goal_miles %}<br><span class="small muted">of {{ '%g' % r.goal_miles }}</span>{% endif %}</td>
+    <td class="num">{{ '%.0f' % r.points }}{% if r.target %}<br><span class="small muted">of {{ '%.0f' % r.target }}</span>{% endif %}</td>
+    <td class="num">{% if r.score is not none %}<b>{{ '%.0f' % r.score }}%</b>{% else %}<span class="small muted" title="No target yet: needs a VDOT and a weekly miles goal for the group">–</span>{% endif %}</td>
+    <td class="num">{{ r.run_days }}<br><span class="small muted">of {{ r.target_days }}</span></td>
+    {% for d in r.days %}
+    <td class="day{% if d.date == today %} today{% endif %}{% if d.date > today %} future{% endif %}">
+      {% if d.runs %}<b>{{ '%.1f' % d.miles }} mi</b><br>{{ '%.0f' % d.points }}{% if d.planned is not none %}/{{ '%.0f' % d.planned }}{% endif %} pts
+        {% if d.hr %}<br><span class="muted">HR {{ d.hr|round|int }}</span>{% endif %}{% if d.rpe is not none %}<br><span class="muted">Effort {{ d.rpe }}</span>{% endif %}
+      {% elif d.planned is not none and d.date < today %}<span class="muted">Missed workout</span>
+      {% elif d.workouts %}<span class="muted">{{ '%.0f' % d.planned if d.planned is not none else '' }} pts planned</span>
+      {% endif %}
+      {% if d.workouts %}<br><span class="tag">{{ d.workouts[0].title }}</span>{% endif %}
+      {% if d.pain is not none %}<br><span class="pill bad">Pain {{ d.pain }}/10</span>{% endif %}
+      {% if d.missed %}<br><span class="pill warn">{{ d.missed.reason }}{% if d.missed.pain %} {{ d.missed.pain }}/10{% endif %}</span>{% endif %}
+      {% if d.flags %}<br><span class="pill warn" title="{{ d.flags|join('; ') }}">Flag</span>{% endif %}
+    </td>{% endfor %}
+  </tr>
+  {% else %}<tr><td colspan="12" class="muted">No {{ team|lower }} on the roster yet.</td></tr>{% endfor %}
+  </tbody>
+</table>
+</div>
+{% if rows and rows|selectattr('score', 'none')|list %}<p class="small muted">No score (–) means there is no target yet: the athlete needs a VDOT, and their group a weekly miles goal on the <a href="/groups?team={{ team }}">Groups</a> page.</p>{% endif %}
+<p class="small muted">Miles, points and heart rate come from synced runs; effort and pain from what the athlete reported. Flags are for the coach and don’t change the score: easy days run faster than easy pace, points up more than 10% on the week before, and treadmill runs whose watch pace may be off.</p>
+{% if user.role != 'trainer' %}
+<form method="post" action="/week/settings" class="card form-row" style="max-width:640px">
+  <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="team" value="{{ team }}"><input type="hidden" name="start" value="{{ monday.isoformat() }}">
+  <label>Target run days a week<input type="number" name="target_days" value="{{ target_days }}" min="1" max="7" style="width:5em"></label>
+  <label>Minimum minutes for a day to count<input type="number" name="min_minutes" value="{{ min_minutes }}" min="5" max="120" style="width:5em"></label>
+  <button type="submit">Save</button>
+</form>
+{% endif %}
+{% endblock %}

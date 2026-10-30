@@ -120,6 +120,18 @@
     <p class="small muted">Weeks run Monday to Sunday. Runs count once they sync or you upload them.</p>
   </section>
   {% endif %}
+  {% if my_points and my_points.target %}{% set mp = my_points %}{% set pct = [mp.points / mp.target, 1]|min %}
+  <section class="panel" aria-labelledby="pts-h">
+    <h2 id="pts-h">This week’s points</h2>
+    <div class="miles-bar big" role="img" aria-label="{{ '%.0f' % mp.points }} of {{ '%.0f' % mp.target }} points"><span style="width:{{ (100 * pct)|round }}%"{% if pct >= 1 %} class="met"{% endif %}></span></div>
+    <div class="facts">
+      <div><span class="k">Points</span><span class="big">{{ '%.0f' % mp.points }}</span><span class="small muted">of {{ '%.0f' % mp.target }} ({{ '%.0f' % (100 * pct) }}%)</span></div>
+      <div><span class="k">Days run</span><span class="big">{{ mp.run_days }}</span><span class="small muted">of {{ mp.target_days }}</span></div>
+      {% if mp.score is not none %}<div><span class="k">Score</span><span class="big">{{ '%.0f' % mp.score }}%</span><span class="small muted">80% points, 20% days</span></div>{% endif %}
+    </div>
+    <p class="small muted">Every minute you run earns points, and harder minutes earn more ({% for z, r in rates.items() %}{{ z|lower }} {{ r }}{{ ', ' if not loop.last else '' }}{% endfor %} a minute). Your target comes from the team’s plan for your group. Hit it and you’re at 100%. Run on pace, run on the days you’re scheduled, and the points take care of themselves.</p>
+  </section>
+  {% endif %}
   <section class="panel" aria-labelledby="wp-h">
     <h2 id="wp-h">Upcoming workouts</h2>
     {% if paces %}<p class="muted small">Your targets for the next 7 days, from your VDOT now and from your goal. Times are per rep; for parts run for a time, the pace to hold.</p>{% endif %}

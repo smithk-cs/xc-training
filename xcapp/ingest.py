@@ -89,6 +89,7 @@ def ingest(db: Session, athlete: Athlete, parsed: ParsedActivity, source: str) -
             hr_drop_60s=res.hr_drop_60s,
         ))
 
+    _save_zone_seconds(db, athlete, act, parsed)
     if act.workout_locked:
         db.flush()
         return act, outcome  # a coach or athlete chose this run's workout by hand
@@ -108,6 +109,23 @@ def ingest(db: Session, athlete: Athlete, parsed: ParsedActivity, source: str) -
                 act.planned_workout_id = pw.id
     db.flush()
     return act, outcome
+
+
+def _save_zone_seconds(db: Session, athlete: Athlete, act: Activity, parsed: ParsedActivity) -> None:
+    """Time in each pace zone, from the per-second distance when the file has it, else from the laps, at the VDOT the
+    athlete has on the day of the run. Kept with the run so points don't move when VDOT changes later."""
+    import json
+    from .analysis import abilities
+    from .points import segment_seconds, zone_seconds
+    key = ("abilities", act.local_date)
+    if key not in db.info:  # one team calculation per day, not one per run
+        db.info[key] = abilities(db, act.local_date)
+    v = db.info[key].get(athlete.id, {}).get("vdot")
+    if len(parsed.dist_samples) > 1:
+        zones = zone_seconds(parsed.dist_samples, v)
+    else:
+        zones = segment_seconds([(l.timer_s, l.distance_m) for l in parsed.laps] or [(parsed.duration_s, parsed.distance_m)], v)
+    act.zone_seconds, act.zone_vdot = json.dumps({z: round(s) for z, s in zones.items()}), v
 
 
 def rematch_day(db: Session, day: dt.date) -> int:

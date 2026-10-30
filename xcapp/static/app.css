@@ -374,3 +374,14 @@ td.ok { color: var(--color-ok); }
 table.mileage { table-layout: fixed; width: 100%; }
 table.mileage th:first-child { width: 34%; }
 table.mileage th:last-child { width: 7rem; }
+/* Week page: one row per athlete, the totals, then a cell per day. */
+.week-table th, .week-table td { vertical-align: top; }
+.week-table td.who { white-space: nowrap; font-weight: 600; position: sticky; left: 0; background: var(--color-panel); z-index: 1; }
+.week-table th.who { position: sticky; left: 0; background: var(--color-panel); z-index: 2; }
+.week-table td.day, .week-table th.day { min-width: 92px; font-size: 12.5px; line-height: 1.45; }
+.week-table td.day .tag { margin-top: 2px; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.week-table .today { background: color-mix(in srgb, var(--brand-gold) 12%, transparent); }
+.week-table td.future { opacity: .7; }
+.week-table tr.group-row td { background: var(--color-soft); padding-top: 6px; padding-bottom: 6px; }
+.week-table details.flags summary { cursor: pointer; color: var(--color-warn); font-weight: 600; }
+.week-table details.flags ul { margin: 4px 0 0; padding-left: 16px; font-weight: 400; white-space: normal; max-width: 240px; }
