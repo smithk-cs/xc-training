@@ -150,3 +150,39 @@ def test_zones_and_older_names():
         [{"sets": 1, "reps": 1, "dist": 8000, "zone": "Long run"}, {"sets": 1, "reps": 4, "mins": 5, "zone": "Tempo"}]))
     assert [p["zone"] for p in old.part_list] == ["Easy", "Threshold"]                # saved before the rename
     assert A.workout_summary(old.part_list) == "8,000 m Easy + 4 × 5 min Threshold"
+
+
+def test_team_notes_window_and_search(app):
+    from xcapp.models import Activity
+    c, csrf = login(app)
+    today = A.team_today()
+
+    def save(day, title, zone, note="", **team):
+        c.post("/workouts", data={"csrf": csrf, "date": day.isoformat(), "title": title, "p_sets": "1", "p_reps": "4", "p_dist": "400",
+                                  "p_unit": "m", "p_zone": zone, "p_rest": "60 s jog", "p_note": note,
+                                  **{f"team_{g}": "on" for g in team}})
+    save(today, "Girls hills", "Repetition", "On the grass loop", Girls=True)
+    save(today, "Everyone", "Interval", Boys=True, Girls=True)                     # both ticked: everyone
+    save(today - dt.timedelta(days=20), "Old threshold day", "Threshold")
+    c.get("/workouts")                                                               # shows (and clears) the "Saved" messages
+    db = SessionLocal()
+    w = {x.title: x for x in db.query(PlannedWorkout).all()}
+    assert (w["Girls hills"].gender, w["Everyone"].gender, w["Old threshold day"].gender) == ("Girls", "", "")
+    assert w["Girls hills"].part_list[0]["note"] == "On the grass loop" and "note" not in w["Everyone"].part_list[0]
+    db.close()
+
+    sam = TestClient(app).get("/a/t-sam").text                                      # Sam is a boy
+    assert "Girls hills" not in sam and "Today · Everyone" in sam
+
+    page = c.get("/workouts").text
+    assert "Workouts within 7 days of today" in page and "Girls hills" in page and "Old threshold day" not in page
+    assert "Girls only" in page and "– On the grass loop" in page and 'href="/workouts/all">All workouts</a>' in page
+    assert 'name="p_note"' in page and 'class="num nowrap p-points"' in page and 'id="ref-vdot"' in page
+    every = c.get("/workouts/all").text
+    assert "Old threshold day" in every and "Girls hills" in every
+    found = c.get("/workouts/all?q=grass+loop").text
+    assert "Girls hills" in found and "Everyone" not in found and "1 workout mentioning “grass loop”" in found
+    assert "Old threshold day" in c.get("/workouts/all?q=threshold").text and "Girls hills" not in c.get("/workouts/all?q=threshold").text
+    assert "No workouts mention “zzz”." in c.get("/workouts/all?q=zzz").text
+    edit = c.get(f"/workouts?edit={w['Girls hills'].id}").text
+    assert 'name="team_Girls" checked' in edit and 'name="team_Boys" checked' not in edit and 'value="On the grass loop"' in edit

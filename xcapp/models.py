@@ -143,6 +143,7 @@ class PlannedWorkout(Base):
     pace_event: Mapped[str] = mapped_column(String(20), default="5K")
     pace_factor: Mapped[float] = mapped_column(Float, default=1.0)
     groups: Mapped[str] = mapped_column(String(120), default="All")  # "All" or comma list
+    gender: Mapped[str] = mapped_column(String(10), default="", server_default="")  # Boys | Girls | "" for both
 
     @property
     def part_list(self) -> list[dict]:
@@ -169,7 +170,10 @@ class PlannedWorkout(Base):
     def distance_text(self) -> str:
         return f"{self.distance_value:g} mi" if self.in_miles else f"{int(self.distance_value):,} m"
 
-    def applies_to(self, *groups: str) -> bool:
+    def applies_to(self, *groups: str, gender: str = "") -> bool:
+        """For an athlete in any of these groups (and of this gender, when the workout is for boys or girls only)."""
+        if self.gender and gender and gender != self.gender:
+            return False
         g = [x.strip() for x in (self.groups or "All").split(",") if x.strip()]
         return not g or "All" in g or any(x in g for x in groups if x)
 

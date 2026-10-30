@@ -1129,9 +1129,39 @@ def create_app() -> FastAPI:
 
     # ---------- planned workouts ----------
 
+    WORKOUT_WINDOW = 7   # the Workouts page lists workouts this many days either side of today
+
+    def workout_gender(f) -> str:
+        """Boys or Girls when only one box is ticked; both or neither ticked is the whole team."""
+        picked = [g for g in ("Boys", "Girls") if f.get(f"team_{g}")]
+        return picked[0] if len(picked) == 1 else ""
+
+    def workout_search(rows: list[PlannedWorkout], q: str) -> list[PlannedWorkout]:
+        """Workouts whose name or parts (distances, zones, rest, notes) mention every word of q."""
+        words = q.lower().split()
+        def text(w):
+            parts = " ".join(f"{A.part_label(p)} {p.get('zone', '')} {p.get('rest', '')} {p.get('note', '')}" for p in w.part_list)
+            return f"{w.title} {parts} {w.distance_text if not w.part_list else ''}".lower()
+        return [w for w in rows if all(x in text(w) for x in words)]
+
     @app.get("/workouts", response_class=HTMLResponse)
     def workouts_page(request: Request, user=Depends(any_staff, scope="function"), db: Session = Depends(get_db, scope="function")):
-        rows = db.scalars(select(PlannedWorkout).order_by(PlannedWorkout.date.desc())).all()
+        return workouts_render(request, user, db, all_dates=False)
+
+    @app.get("/workouts/all", response_class=HTMLResponse)
+    def workouts_all(request: Request, user=Depends(any_staff, scope="function"), db: Session = Depends(get_db, scope="function")):
+        return workouts_render(request, user, db, all_dates=True)
+
+    def workouts_render(request: Request, user, db: Session, all_dates: bool):
+        today = A.team_today()
+        q = str(request.query_params.get("q", "")).strip()[:100]
+        stmt = select(PlannedWorkout).order_by(PlannedWorkout.date.desc())
+        if not all_dates:
+            stmt = stmt.where(PlannedWorkout.date >= today - dt.timedelta(days=WORKOUT_WINDOW),
+                              PlannedWorkout.date <= today + dt.timedelta(days=WORKOUT_WINDOW))
+        rows = db.scalars(stmt).all()
+        if q:
+            rows = workout_search(rows, q)
         counts = dict(db.execute(select(Activity.planned_workout_id, func.count(Activity.id))
                                  .where(Activity.planned_workout_id.is_not(None)).group_by(Activity.planned_workout_id)).all())
         checked: dict[int, dict[str, int]] = {}   # per workout: how many runs the AI found Done, Partly, Not done
@@ -1145,7 +1175,10 @@ def create_app() -> FastAPI:
         edit_parts = edit.part_list if edit else []
         if edit and not edit_parts:  # an older single-rep workout opens as one part
             edit_parts = [{"sets": 1, "reps": 1, "dist": round(edit.rep_distance_m), "zone": A.OLD_TYPE_ZONE.get(A.pace_type(edit.pace_factor), "Interval"), "rest": ""}]
-        return render(request, "workouts.html", user, rows=rows, counts=counts, checked=checked, today=A.team_today().isoformat(),
+        vdots = sorted(v for v in (x.get("vdot") for x in A.abilities(db, today).values()) if v)
+        return render(request, "workouts_all.html" if all_dates else "workouts.html", user, rows=rows, counts=counts, checked=checked,
+                      today=today.isoformat(), q=q, window=WORKOUT_WINDOW, rates=PT.RATES, zone_pcts=dict(A.PACE_ZONES),
+                      ref_vdot=vdots[len(vdots) // 2] if vdots else 50,
                       ai_ready=settings().ai_configured, pending_checks=len(AI.pending_workout_checks(db)),
                       ability_names=ability_names, edit=edit, edit_parts=edit_parts, zones=list(A.WORKOUT_ZONES),
                       previews={w.id: A.group_part_paces(db, w.part_list) for w in rows[:30] if w.part_list},
@@ -1175,6 +1208,7 @@ def create_app() -> FastAPI:
                 pw = PlannedWorkout()
                 db.add(pw)
             pw.date, pw.title, pw.rep_distance_m, pw.pace_event, pw.pace_factor, pw.groups = d, title, rep_m, event, factor, groups
+            pw.gender = workout_gender(f)
             pw.distance_unit = "m"
             db.flush()
             n = rematch_day(db, d) + (rematch_day(db, old_day) if old_day and old_day != d else 0)
@@ -1190,6 +1224,7 @@ def create_app() -> FastAPI:
             d = parse_date(f.get("date", ""))
             parts = []
             units = f.getlist("p_unit")
+            notes = f.getlist("p_note")
             for i, (sets, reps, dist, zone, rest) in enumerate(zip(f.getlist("p_sets"), f.getlist("p_reps"), f.getlist("p_dist"),
                                                                    f.getlist("p_zone"), f.getlist("p_rest"))):
                 if not str(dist).strip():
@@ -1199,6 +1234,9 @@ def create_app() -> FastAPI:
                 amount = float(dist)
                 n = int(amount) if amount.is_integer() else amount
                 p = {"sets": int(sets or 1), "reps": int(reps or 1), "zone": zone, "rest": str(rest).strip()[:60]}
+                note = str(notes[i]).strip()[:200] if i < len(notes) else ""
+                if note:
+                    p["note"] = note
                 if by_time:
                     p["mins"] = n
                 elif by_miles:  # kept in meters like any distance, and in miles for showing
@@ -1226,6 +1264,7 @@ def create_app() -> FastAPI:
                 db.add(pw)
             main = A.main_part(parts)
             pw.date, pw.title, pw.groups, pw.parts = d, title, groups, json.dumps(parts)
+            pw.gender = workout_gender(f)
             pw.rep_distance_m, pw.pace_event, pw.pace_factor, pw.distance_unit = float(main.get("dist", 0)), "5K", 1.0, "m"
             db.flush()
             n = rematch_day(db, d) + (rematch_day(db, old_day) if old_day and old_day != d else 0)
@@ -1254,6 +1293,13 @@ def create_app() -> FastAPI:
                            .where(PainReport.date >= A.team_today() - dt.timedelta(days=28)).order_by(PainReport.date.desc())).all()
         missed = db.scalars(select(MissedDay).options(selectinload(MissedDay.athlete))
                             .where(MissedDay.date >= A.team_today() - dt.timedelta(days=28)).order_by(MissedDay.date.desc())).all()
+        # A report opened from the Week page is shown even when it's older than four weeks.
+        for key, model, rows_ in (("pain", PainReport, pains), ("missed", MissedDay, missed)):
+            rid = str(request.query_params.get(key, ""))
+            extra = db.get(model, int(rid)) if rid.isdigit() else None
+            if extra is not None and extra not in rows_:
+                rows_.append(extra)
+                rows_.sort(key=lambda x: x.date, reverse=True)
         return render(request, "injuries.html", user, rows=rows, pains=pains, missed=missed, athletes=athletes_sorted(db),
                       types=INJURY_TYPES, areas=BODY_AREAS, today=A.team_today(), show_notes=user.role in ("admin", "trainer"))
 
@@ -1452,7 +1498,7 @@ def create_app() -> FastAPI:
                             .order_by(PlannedWorkout.date, PlannedWorkout.id)).all()
         done = set(db.scalars(select(Activity.planned_workout_id).where(  # workouts already run come off the list
             Activity.athlete_id == a.id, Activity.planned_workout_id.in_([w.id for w in coming]))).all())
-        paces = A.workout_paces(db, a, [w for w in coming if w.applies_to(a.group, mine.get("group") or "") and w.id not in done])
+        paces = A.workout_paces(db, a, [w for w in coming if w.applies_to(a.group, mine.get("group") or "", gender=a.gender) and w.id not in done])
         races = db.scalars(select(RaceResult).where(RaceResult.athlete_id == a.id)
                            .order_by(RaceResult.date.desc(), RaceResult.id.desc())).all()
         history = A.race_history(races)
@@ -1512,6 +1558,8 @@ def create_app() -> FastAPI:
                 raise ValueError("Pick where it hurts and how much (0 to 10).")
             db.add(PainReport(athlete_id=a.id, date=A.team_today(), body_area=area, severity=sev,
                               note=str(f.get("note", ""))[:300], saw_trainer=bool(f.get("saw_trainer"))))
+            db.flush()
+            A.dedupe_pain_reports(db, a.id)   # a second report for the same day and place replaces the first
             flash(request, "Thanks. Your coach will see this today." + (" Please also tell your coach or athletic trainer in person." if sev >= A.PAIN_FLAG else ""))
         except ValueError as exc:
             flash(request, str(exc), "error")
@@ -2422,6 +2470,8 @@ def create_app() -> FastAPI:
             p.date, p.body_area, p.severity, p.note = act.local_date, area, level, note
             p.saw_trainer = bool(f.get("saw_trainer"))
             db.add(p)
+            db.flush()
+            A.dedupe_pain_reports(db, a.id)
         msg = "Saved. Thanks for adding your effort."
         if level is not None and level >= A.PAIN_FLAG:
             msg += " That’s a lot of pain: please also tell your coach or athletic trainer in person."

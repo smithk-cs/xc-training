@@ -7,7 +7,8 @@
 <p class="muted" style="max-width:78ch">Each athlete goes in the highest group their VDOT reaches. VDOT is worked out from their most recent race or time trial in the look-back window (any distance from 1500 m to 10K), then read against the team’s 1600 targets below: a result counts as VDOT 60 if its 1600-equivalent time reaches the VDOT 60 target. The watch’s own VO2 max is shown on each run for interest but doesn’t set groups. Cross country courses vary, so coaches can set an athlete’s VDOT or pin them to a group on their athlete page or the <a href="/vdot">VDOT</a> page.</p>
 <form method="post" action="/groups">
   <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="team" value="{{ team }}">
-  <div class="card scroll">
+  <details class="card fold-card" id="groups-table"><summary><h2>Groups, cutoffs and weekly goals</h2></summary>
+  <div class="scroll">
   <table class="list">
     <thead><tr><th>Order</th><th>Group</th><th>Color</th><th class="num">VDOT from</th><th class="num">Weekly miles goal</th><th>1600 targets</th><th class="num">{{ team }} now</th>{% if user.role != 'trainer' %}<th>Remove</th>{% endif %}</tr></thead>
     <tbody>
@@ -37,13 +38,16 @@
     <label>Look back (days)<input type="number" name="lookback" value="{{ lookback }}" min="30" max="1500"></label>
     <label class="check"><input type="checkbox" name="show_athletes" {% if show_athletes %}checked{% endif %}> Show athletes their own group, VDOT and targets</label>
   </div>
+  {% if user.role != 'trainer' %}<button type="submit">Save groups and targets</button>{% endif %}
   </div>
-  <div class="card">
-    <h2>Target 800 and 1600 times by VDOT</h2>
+  </details>
+  <details class="card fold-card" id="targets"><summary><h2>Target 800 and 1600 times by VDOT</h2></summary>
+
     <p class="small muted">One line per VDOT: <code>VDOT,800,1600</code>. Athletes see the targets for their VDOT, and the 1600 column sets the VDOT scale. Add rows below 48 the same way.</p>
     <textarea name="targets" rows="12" style="font-family:ui-monospace,Menlo,monospace; max-width:22rem" {% if user.role == 'trainer' %}readonly{% endif %}>{{ table }}</textarea>
-  </div>
-  {% if user.role != 'trainer' %}<button type="submit">Save groups and targets</button>{% endif %}
+    {% if user.role != 'trainer' %}<div style="margin-top:10px"><button type="submit">Save groups and targets</button></div>{% endif %}
+  </details>
+
 </form>
 {% if mileage %}
 <div class="card scroll" id="mileage">

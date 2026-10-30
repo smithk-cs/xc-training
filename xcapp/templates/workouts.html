@@ -17,7 +17,7 @@
       <label>Date<input type="date" name="date" value="{{ edit.date.isoformat() if edit else today }}" required></label>
       <label style="flex:1">Name (optional)<input type="text" name="title" placeholder="Made from the parts if left empty" value="{{ edit.title if edit else '' }}" maxlength="120"></label>
     </div>
-    <table class="list compact parts"><thead><tr><th>Sets</th><th>Reps</th><th>Distance or time</th><th>Pace</th><th>Rest</th><th></th></tr></thead>
+    <table class="list compact parts"><thead><tr><th>Sets</th><th>Reps</th><th>Distance or time</th><th>Pace</th><th>Rest</th><th>Notes</th><th class="num">Points</th><th></th></tr></thead>
       <tbody id="parts">
       {% for p in (edit_parts or [{"sets": 1, "reps": 6, "dist": 1000, "zone": "Interval", "rest": "2 min jog"}]) %}
         <tr class="part"><td><input type="number" name="p_sets" min="1" max="10" value="{{ p.sets }}" required style="width:4em" aria-label="Sets"></td>
@@ -26,10 +26,15 @@
             <select name="p_unit" class="p-unit" aria-label="Meters, miles or minutes"><option value="m"{% if not p.mins and not p.mi %} selected{% endif %}>m</option><option value="mi"{% if p.mi %} selected{% endif %}>mi</option><option value="min"{% if p.mins %} selected{% endif %}>min</option></select></td>
           <td><select name="p_zone" aria-label="Pace">{% for z in zones %}<option{% if z == p.zone %} selected{% endif %}>{{ z }}</option>{% endfor %}</select></td>
           <td><input type="text" name="p_rest" maxlength="60" value="{{ p.rest }}" placeholder="90 s jog" style="width:9em" aria-label="Rest"></td>
+          <td><input type="text" name="p_note" maxlength="200" value="{{ p.note or '' }}" placeholder="On the grass loop" style="width:12em" aria-label="Notes"></td>
+          <td class="num nowrap p-points" aria-live="polite"></td>
           <td><button type="button" class="link remove-part" aria-label="Remove this part">Remove</button></td></tr>
       {% endfor %}
       </tbody>
+      <tfoot><tr><td colspan="6" class="num small">Total at VDOT <input type="number" id="ref-vdot" value="{{ ref_vdot }}" min="30" max="85" style="width:4.5em" aria-label="VDOT for the points"></td>
+        <td class="num nowrap"><b id="p-total"></b></td><td></td></tr></tfoot>
     </table>
+    <p class="small muted" style="margin:4px 0 0">Points: minutes × the zone’s rate ({% for z, r in rates.items() %}{{ z|lower }} {{ r }}{{ ', ' if not loop.last else '' }}{% endfor %} a minute). Timed parts are exact; distances turn into minutes at the VDOT above (the team’s middle VDOT to start), so faster runners earn a little less for the same distance.</p>
     <div class="form-row" style="margin:6px 0 10px"><button type="button" class="secondary" id="add-part">Add a part</button>
       <span class="small muted">For example 1 × 14 min Easy (warm-up), 2 sets × 4 × 400 m Interval, 1 × 5 mi Moderate, 4 × 5 min Threshold with “1 min easy” rest. Choose m, mi or min for each part. Zones from slowest: easy, moderate, threshold, interval, repetition (short, quick reps, faster than interval pace).</span></div>
     <script>(function () {
@@ -39,42 +44,67 @@
         if (rows.length >= 8) return;
         var row = rows[rows.length - 1].cloneNode(true);
         row.querySelector('[name=p_sets]').value = 1; row.querySelector('[name=p_rest]').value = '';
+        row.querySelector('[name=p_note]').value = '';
         body.appendChild(row);
+        points();
       });
+      // Points per part, as the coach types: minutes x the zone's points per minute.
+      var RATES = {{ rates|tojson }}, PCT = {{ zone_pcts|tojson }}, MILE = 1609.344;
+      function paceAt(v, pct) {   // seconds per mile at pct of VDOT v (Daniels' oxygen cost, solved for speed)
+        var a = 0.000104, b = 0.182258, c = -4.60 - v * pct;
+        return MILE / ((-b + Math.sqrt(b * b - 4 * a * c)) / (2 * a)) * 60;
+      }
+      function points() {
+        var v = parseFloat(document.getElementById('ref-vdot').value) || {{ ref_vdot }}, total = 0;
+        body.querySelectorAll('tr.part').forEach(function (row) {
+          var n = (parseFloat(row.querySelector('[name=p_sets]').value) || 0) * (parseFloat(row.querySelector('[name=p_reps]').value) || 0);
+          var amt = parseFloat(row.querySelector('[name=p_dist]').value) || 0, unit = row.querySelector('[name=p_unit]').value;
+          var zone = row.querySelector('[name=p_zone]').value, pace = paceAt(v, PCT[zone] || PCT.Easy);
+          var minutes = unit === 'min' ? amt * n : (unit === 'mi' ? amt : amt / MILE) * n * pace / 60;
+          var pts = minutes * (RATES[zone] || 0);
+          total += pts;
+          row.querySelector('.p-points').textContent = pts ? pts.toFixed(1) + ' pts' : '';
+        });
+        document.getElementById('p-total').textContent = total.toFixed(1) + ' pts';
+      }
+      body.addEventListener('input', points);
+      document.getElementById('ref-vdot').addEventListener('input', points);
+      points();
       body.addEventListener('change', function (e) {
         if (!e.target.classList.contains('p-unit')) return;
         var amt = e.target.closest('td').querySelector('[name=p_dist]');
         var u = {m: [100, 20000, 1, 1000], mi: [0.25, 20, 0.01, 3], min: [0.25, 180, 0.25, 5]}[e.target.value];
         amt.min = u[0]; amt.max = u[1]; amt.step = u[2]; amt.value = u[3];
+        points();
       });
       body.addEventListener('click', function (e) {
         if (!e.target.classList.contains('remove-part')) return;
         if (body.querySelectorAll('tr.part').length > 1) e.target.closest('tr').remove();
+        points();
       });
     })();</script>
     <div class="form-row">
       {% for g in ability_names %}<label class="check"><input type="checkbox" name="group_{{ g }}"{% if edit and g in edit.groups.split(',') %} checked{% endif %}> {{ g }}</label>{% endfor %}
       <span class="small muted">Leave all unticked for the whole team.</span>
+      <span style="border-left:1px solid var(--color-border-line); height:24px"></span>
+      {% for g in ('Boys', 'Girls') %}<label class="check"><input type="checkbox" name="team_{{ g }}"{% if edit and edit.gender == g %} checked{% endif %}> {{ g }}</label>{% endfor %}
+      <span class="small muted">Leave both unticked for boys and girls.</span>
       <button type="submit">{% if edit %}Save changes{% else %}Save workout{% endif %}</button>
       {% if edit %}<a href="/workouts">Cancel</a>{% endif %}
     </div>
   </form>
 </div>
 {% endif %}
-<div class="card scroll">
-  <table class="list"><thead><tr><th>Date</th><th>Workout</th><th>Parts</th><th>Groups</th><th class="num">Athletes matched</th><th>AI check</th><th></th></tr></thead><tbody>
-  {% for w in rows %}
-  <tr{% if user.role != 'trainer' %} class="row-link" data-href="/workouts?edit={{ w.id }}#plan"{% endif %}><td>{{ w.date.strftime('%a %b %-d') }}</td><td>{% if user.role != 'trainer' %}<a href="/workouts?edit={{ w.id }}#plan">{{ w.title }}</a>{% else %}{{ w.title }}{% endif %}</td><td class="small">{% if w.part_list %}{% for p in w.part_list %}{{ part_label(p) }} {{ p.zone }}{% if p.rest %} ({{ p.rest }} rest){% endif %}{{ '<br>'|safe if not loop.last else '' }}{% endfor %}
-    {% if previews.get(w.id) %}<details class="paces-preview"><summary>Paces by group</summary>
-      <table class="list compact"><thead><tr><th>Group</th><th>VDOT</th>{% for p in w.part_list %}<th class="num">{{ part_label(p) }}</th>{% endfor %}</tr></thead><tbody>
-      {% for g in previews[w.id] %}<tr><td>{{ g.group.name }}</td><td>{{ g.range }}</td>{% for t in g.times %}<td class="num nowrap">{% if t %}{{ fmt_time(t[0])[:-2] if t[0] >= 600 or t[2] else fmt_time(t[0]) }}{% if t[1] - t[0] >= 0.5 %}–{{ fmt_time(t[1])[:-2] if t[1] >= 600 or t[2] else fmt_time(t[1]) }}{% endif %}{{ t[2] }}{% endif %}</td>{% endfor %}</tr>{% endfor %}
-      </tbody></table><p class="small muted">Time per rep across each group’s VDOT range (pace per mile for parts run for a time).</p></details>{% endif %}
-    {% else %}{{ w.distance_text }} reps · {{ pace_type(w.pace_factor) }} ({{ w.pace_event }} × {{ '%.2f' % w.pace_factor }}){% endif %}</td><td>{{ w.groups }}</td><td class="num">{{ counts.get(w.id, 0) }}</td>
-  <td class="small nowrap">{% set ck = checked.get(w.id, {}) %}{% for v in ('Done', 'Partly', 'Not done') %}{% if ck.get(v) %}{{ ck[v] }} {{ v|lower }}{{ '<br>'|safe }}{% endif %}{% endfor %}</td>
-  <td>{% if user.role != 'trainer' %}<form method="post" action="/workouts/{{ w.id }}/delete" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="link" type="submit">Delete</button></form>{% endif %}</td></tr>
-  {% else %}<tr><td colspan="7" class="muted">No workouts planned yet.</td></tr>{% endfor %}
-  </tbody></table>
-  {% if user.role != 'trainer' %}<p class="small muted">Click a workout to edit it.</p>{% endif %}
+<div class="card scroll" id="list">
+  <div class="form-row" style="justify-content:space-between; align-items:center">
+    <h2 style="margin:0">Workouts within {{ window }} days of today</h2>
+    <form method="get" action="/workouts/all" class="form-row" style="margin:0" role="search">
+      <input type="search" name="q" placeholder="Search parts, such as 400 or threshold" aria-label="Search workouts" style="width:16rem">
+      <button type="submit" class="secondary">Search</button>
+      <a class="button secondary" href="/workouts/all">All workouts</a>
+    </form>
+  </div>
+  {% with all_dates=false %}{% include "_workouts_list.html" %}{% endwith %}
 </div>
 <script>
   document.querySelectorAll('tr.row-link').forEach(function (tr) {

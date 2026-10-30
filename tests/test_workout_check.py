@@ -99,4 +99,4 @@ def test_pages_show_the_check():
     page = c.get(f"/athletes/{ids[0]}/runs/{ids[1]}").text
     assert 'AI check against the workout' in page and '<span class="pill warn">Partly</span> 4 of 4 reps at target (Partly).' in page
     assert "hasn’t agreed to AI analysis" in c.get(f"/athletes/{ids[2]}/runs/{ids[3]}").text
-    assert "1 partly" in c.get("/workouts").text
+    assert "1 partly" in c.get("/workouts/all").text

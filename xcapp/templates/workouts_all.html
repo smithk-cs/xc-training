@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}All workouts · {{ team_name }}{% endblock %}
+{% block content %}
+<p><a href="/workouts">‹ Workouts</a></p>
+<h1>All workouts</h1>
+<div class="card scroll">
+  <form method="get" action="/workouts/all" class="form-row" role="search">
+    <label style="flex:1">Search the parts<input type="search" name="q" value="{{ q }}" placeholder="400, threshold, hills, grass loop…" style="width:100%"></label>
+    <button type="submit">Search</button>{% if q %}<a href="/workouts/all">Clear</a>{% endif %}
+  </form>
+  <p class="small muted">{% if q %}{{ rows|length }} workout{{ '' if rows|length == 1 else 's' }} mentioning “{{ q }}” in the name or parts (distances, paces, rest and notes).{% else %}Every workout, newest first. Search finds workouts with every word you type in the name or parts.{% endif %}</p>
+  {% with all_dates=true %}{% include "_workouts_list.html" %}{% endwith %}
+</div>
+<script>
+  document.querySelectorAll('tr.row-link').forEach(function (tr) {
+    tr.addEventListener('click', function (e) {
+      if (e.target.closest('a, button, form, input, details')) return;
+      location.href = tr.dataset.href;
+    });
+  });
+</script>
+{% endblock %}
