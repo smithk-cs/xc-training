@@ -431,7 +431,6 @@ tr:target td { background: color-mix(in srgb, var(--brand-gold) 22%, transparent
 .course-distances .dist-row { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
 .course-distances .dist-row > .small { width: 5.5rem; }
 .course-distances .chip span { height: 34px; padding: 0 12px; font-size: 14px; }
-.tag.usual { background: var(--brand-red); color: #FFFFFF; }
 
 /* athlete page: weekly miles and points on one line; folding panels with a status beside the title */
 .facts.one-line { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); }

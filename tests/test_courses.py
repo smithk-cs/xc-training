@@ -77,7 +77,7 @@ def test_courses_page_and_race_conditions():
     assert "should start with https://" in c.get("/courses").text
     c.post("/courses", data=base)
     page = c.get("/courses").text
-    assert "Added Gibson Ranch." in page and '<span class="tag usual">5K</span>' in page and '<span class="tag">2 mi</span>' in page and "12 s/mi" in page and "not added here yet" not in page
+    assert "Added Gibson Ranch." in page and '<span class="tag">5K</span>' in page and '<span class="tag">2 mi</span>' in page and "12 s/mi" in page and "not added here yet" not in page
     assert "Two loops" not in page                                                  # notes stay in the edit form, not the list
     form = c.get("/courses").text
     assert 'name="dist_2.25 mi"' in form and 'name="dist_1 mi"' not in form and 'name="dist_10K"' not in form and "Usual distance" not in form

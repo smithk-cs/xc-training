@@ -11,7 +11,7 @@
   {% for c in courses %}{% set tier = CS.hill_tier(c) %}
   <tr><td><b>{{ c.name }}</b>{% if c.map_url %} <a class="small" href="{{ c.map_url }}" target="_blank" rel="noopener">map</a>{% endif %}{% if c.video_url %} <a class="small" href="{{ c.video_url }}" target="_blank" rel="noopener">video</a>{% endif %}</td>
     <td class="small">{{ c.location }}</td>
-    <td class="num">{% if c.distances %}{% for d in c.distances.split(',') %}<span class="tag{% if d == CS.distance_label(c.distance_m) %} usual{% endif %}">{{ d }}</span> {% endfor %}{% else %}{{ CS.distance_label(c.distance_m) }}{% endif %}</td>
+    <td class="num">{% if c.distances %}{% for d in c.distances.split(',') %}<span class="tag">{{ d }}</span> {% endfor %}{% else %}{{ CS.distance_label(c.distance_m) }}{% endif %}</td>
     <td>{{ c.surface }}</td>
     <td class="num">{{ '%g ft' % c.elevation_gain_ft if c.elevation_gain_ft is not none else '' }}</td>
     <td class="num">{% if tier %}{{ tier }}{% if not c.hill_tier %} <span class="small muted">(from climb)</span>{% endif %}{% endif %}</td>
