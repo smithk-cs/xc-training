@@ -175,7 +175,7 @@ def test_team_notes_window_and_search(app):
     assert "Girls hills" not in sam and "Today · Everyone" in sam
 
     page = c.get("/workouts").text
-    assert "Workouts within 7 days of today" in page and "Girls hills" in page and "Old threshold day" not in page
+    assert "Entered workouts" in page and page.count('class="day-row"') >= 1 and "Girls hills" in page and "Old threshold day" not in page
     assert "Girls only" in page and "– On the grass loop" in page and 'href="/workouts/all">All workouts</a>' in page
     assert 'name="p_note"' in page and 'class="num nowrap p-points"' in page and 'id="ref-vdot"' in page
     every = c.get("/workouts/all").text

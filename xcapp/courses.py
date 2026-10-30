@@ -14,10 +14,21 @@ from __future__ import annotations
 from .models import Course, MeetConditions
 
 METERS_PER_MILE = 1609.344
-# Standard race distances, for the buttons on the Courses page: label -> meters.
-KM_DISTANCES = {f"{k}K": k * 1000.0 for k in (2, 3, 4, 5, 6, 8, 10)}
-MILE_DISTANCES = {f"{m:g} mi": m * METERS_PER_MILE for m in (1, 1.5, 2, 2.5, 3, 4)}
-DISTANCES = {**KM_DISTANCES, **MILE_DISTANCES}
+# Race distances offered as buttons on the Courses page: label -> meters.
+KM_DISTANCES = {f"{k}K": k * 1000.0 for k in (2, 3, 4, 5)}
+MILE_DISTANCES = {f"{m:g} mi": m * METERS_PER_MILE for m in (1.5, 2, 2.25, 2.5)}
+# Older choices, no longer offered but still read and named on courses saved with them.
+RETIRED = {**{f"{k}K": k * 1000.0 for k in (6, 8, 10)}, **{f"{m:g} mi": m * METERS_PER_MILE for m in (1, 3, 4)}}
+DISTANCES = {**KM_DISTANCES, **MILE_DISTANCES, **RETIRED}
+
+
+def main_distance(raced: list[str], current: float | None) -> float | None:
+    """The distance the total climb is measured over: the saved one while it's still ticked, else 5K, else the longest."""
+    if not raced:
+        return None
+    if current and distance_label(current) in raced:
+        return current
+    return DISTANCES["5K"] if "5K" in raced else max(DISTANCES[k] for k in raced)
 
 
 def distance_label(meters: float | None) -> str:

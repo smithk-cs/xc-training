@@ -483,3 +483,5 @@ details.garmin-fold > summary .pill { margin-left: auto; min-width: 8.5rem; just
 .nl-photo-form { margin-top: 12px; display: flex; flex-direction: column; gap: 10px; }
 ul.plain-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
 .nl-race table.list { width: auto; min-width: min(100%, 360px); }
+/* Workouts list: one header row per day, its workouts beneath */
+table.workouts-by-day tr.day-row th { background: var(--color-soft); color: var(--color-fg); font-size: 14px; padding-top: 8px; padding-bottom: 8px; }

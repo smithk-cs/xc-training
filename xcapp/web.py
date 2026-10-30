@@ -841,14 +841,10 @@ def create_app() -> FastAPI:
         if not c.name:
             raise ValueError("Give the course a name.")
         c.location = str(f.get("location", "")).strip()[:200]
-        usual = str(f.get("distance", ""))
-        if usual in CS.DISTANCES:
-            c.distance_m = CS.DISTANCES[usual]
-        elif usual != "keep":     # "keep": a non-standard distance saved before stays until another is picked
-            c.distance_m = None
         raced = [k for k in CS.DISTANCES if f.get(f"dist_{k}")]
-        if c.distance_m and CS.distance_label(c.distance_m) in CS.DISTANCES and CS.distance_label(c.distance_m) not in raced:
-            raced.append(CS.distance_label(c.distance_m))   # the usual distance is raced here too
+        nonstandard = c.distance_m and CS.distance_label(c.distance_m) not in CS.DISTANCES
+        if not nonstandard or raced:   # a non-standard distance saved before stays until distances are ticked
+            c.distance_m = CS.main_distance(raced, c.distance_m)
         c.distances = ",".join(k for k in CS.DISTANCES if k in raced)
         c.surface = str(f.get("surface", "")) if f.get("surface") in CS.SURFACES else "Firm grass"
         c.turns = str(f.get("turns", "")) if f.get("turns") in CS.TURNS else "Some"
