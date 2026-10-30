@@ -6,7 +6,7 @@
 {% elif not a.active %}<p class="notice"><span><b>{{ a.name }} has left the team</b>{% if a.left_on %} ({{ a.left_on.strftime('%b %-d, %Y') }}). Their data is kept until {{ (a.left_on + timedelta(days=settings.retention_days)).strftime('%b %-d, %Y') }}, when the privacy policy says to delete it{% endif %}.</span></p>{% endif %}
 {% if a.is_test %}<p class="notice"><span><b>Test athlete.</b> Left out of team numbers, the watch list, the VDOT page and the AI briefing.</span></p>{% endif %}
 <div class="coach-title">
-<h1 class="with-photo">{% if photo_v %}<img class="avatar big zoom" src="/athletes/{{ a.id }}/photo?v={{ photo_v }}" alt="Photo of {{ a.name }}" tabindex="0" role="button">{% endif %}{{ a.name }}</h1>
+<h1 class="with-photo">{% if photo_v %}<img class="avatar big zoom" src="/athletes/{{ a.id }}/photo?v={{ photo_v }}" alt="Photo of {{ a.name }}" tabindex="0" role="button">{% endif %}{{ a.name }}{% if a.is_captain %} <span class="pill good" style="vertical-align:middle">Captain</span>{% endif %}</h1>
 {% set g = ability %}
 <details class="group-pop">
   <summary class="group-btn"{% if g.group and g.color %} style="background:{{ g.color }}; color:{{ ink(g.color) }}"{% endif %}>{% if g.group %}{{ g.group }}{% if g.vdot %} · VDOT {{ g.vdot }}{% endif %}{{ arrows(gain) }}{% else %}Running group: not set{% endif %}</summary>
@@ -130,6 +130,11 @@
   <p class="small">Personal link: <code class="copy">{{ settings.base_url.rstrip('/') }}/a/{{ a.link_token }}</code></p>
   <form method="post" action="/athletes/{{ a.id }}/new-link" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="secondary" type="submit">Make a new link (the old one stops working)</button></form>
   <h3 style="margin-top:1.5em">Roster status</h3>
+  {% if user.role != 'trainer' %}<form method="post" action="/athletes/{{ a.id }}/captain" class="form-row">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label class="check"><input type="checkbox" name="captain" value="1"{% if a.is_captain %} checked{% endif %} onchange="this.form.submit()"> Team captain (can write for the newsletter’s Captains’ corner from their own page; a coach reads it first)</label>
+    <noscript><button type="submit" class="secondary">Save</button></noscript>
+  </form>{% endif %}
   <form method="post" action="/athletes/{{ a.id }}/status" class="form-row">
     <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="test">
     <label class="check"><input type="checkbox" name="is_test" value="1"{% if a.is_test %} checked{% endif %}> Test athlete (a staff test account: left out of team numbers, the watch list, the VDOT page and the AI briefing)</label>

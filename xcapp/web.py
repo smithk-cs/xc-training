@@ -41,7 +41,7 @@ from .fitfile import MAX_FITS_PER_UPLOAD, MAX_UPLOAD_BYTES, FitError, fit_files,
 from .imports import (GROUPS, ImportErrors, clean_email, clean_phone, import_goals, import_races, import_results, import_roster,
                       import_vdots, parse_date, parse_distance, set_goal, sync_benchmark)
 from .ingest import ingest, log, rematch_day
-from .models import (Activity, AiRun, AppSetting, Athlete, DeletionRequest, GarminConnection, Injury, MissedDay,
+from .models import (Activity, AiRun, AppSetting, Athlete, CaptainPost, DeletionRequest, GarminConnection, Injury, MissedDay,
                      OAuthState, PainReport, PlannedWorkout, RaceResult, RestingHeartRate, Result, StaffUser, AthletePhoto,
                      MeetEntry, MeetDivision, MeetResponse, DivisionAthlete, SyncLog, TrainingGroup, VdotChange, Announcement, utcnow,
                      Course, MeetConditions, RaceTeamResult)
@@ -1521,6 +1521,9 @@ def create_app() -> FastAPI:
                       rhr=A.resting_hr(db, a.id, today), rhr_range=(A.RESTING_HR_MIN, A.RESTING_HR_MAX),
                       rhr_cal=A.resting_hr_calendar(db, a.id, today), photo_v=photo_versions(db).get(a.id), meets=my_meets(db, a, today),
                       wins=A.achievements(db, a, today),
+                      captain_posts=db.scalars(select(CaptainPost).where(CaptainPost.athlete_id == a.id, CaptainPost.created_at >=
+                                                                         dt.datetime.now(dt.timezone.utc).replace(tzinfo=None) - dt.timedelta(days=14))
+                                               .order_by(CaptainPost.created_at.desc())).all() if a.is_captain else [],
                       miles_goal=A.mileage_goal(db, a.id, mine.get("group") or "", today, a.gender, a.experience) if show_group else None,
                       my_points=PT.team_week(db, A.week_monday(today), athletes=[a])[0] if show_group else None, rates=PT.RATES,
                       notes=[n for n in db.scalars(select(Announcement).where(Announcement.start_date <= today, Announcement.end_date >= today)
@@ -2718,6 +2721,10 @@ def create_app() -> FastAPI:
                              "pain": m.pain, "started": m.started or None, "seen_by": m.seen_by or None, "more_days": m.more_days or None,
                              "description": m.description or None}
                             for m in db.scalars(select(MissedDay).where(MissedDay.athlete_id == a.id).order_by(MissedDay.date)).all()],
+            "newsletter": {"name_shown": a.show_name, "photo_shown": a.show_photo, "spotlight": a.show_spotlight, "vdot_shown": a.show_vdot,
+                           "consent_recorded_by": a.consent_by or None, "captain": a.is_captain,
+                           "captain_notes": [{"week_of": c.week_start.isoformat(), "text": c.text, "status": c.status}
+                                             for c in db.scalars(select(CaptainPost).where(CaptainPost.athlete_id == a.id)).all()]},
             "not_included": "Athletic trainer notes on injuries are kept separately; ask the athletic trainer or coaches for a copy.",
         }
         fname = f"my-training-data-{A.team_today().isoformat()}.json"

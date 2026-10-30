@@ -13,11 +13,13 @@ from . import analysis as A
 from . import newsletter as NL
 from . import photos as P
 from .ingest import log
-from .models import (Athlete, NewsletterDeadline, NewsletterIssue, NewsletterPhoto, NewsletterSend, RecoveryTip, Spotlight,
+from .models import (Athlete, CaptainPost, NewsletterDeadline, NewsletterIssue, NewsletterPhoto, NewsletterSend, RecoveryTip, Spotlight,
                      StaffUser, utcnow)
 from .reminders import EmailError, send_email
 
 MAX_PHOTOS = 8
+CAPTAIN_POSTS_PER_WEEK = 3
+CAPTAIN_TEXT = 600   # characters
 PHOTO_SIZE = 1200   # pixels on the longest side
 
 STARTER_TIPS = [
@@ -119,7 +121,12 @@ def register(app, h: SimpleNamespace) -> None:
         secs = [{"sec": sec, "spec": NL.SPEC.get(sec.key), "data": json.loads(sec.data_snapshot) if sec.data_snapshot else None}
                 for sec in sorted(issue.sections, key=lambda x: x.position) if sec.key in NL.SPEC]
         sends = db.scalars(select(NewsletterSend).where(NewsletterSend.issue_id == issue.id).order_by(NewsletterSend.sent_at)).all()
-        return render(request, "newsletter_edit.html", user, issue=issue, secs=secs, labels=NL.STATUS_LABELS, people=people, team=team,
+        recap = next((x for x in issue.sections if x.key == "race_recap"), None)
+        ctx = NL.WeekCtx(db, issue.week_start, issue.id, {"race_recap": json.loads(recap.options)} if recap and recap.options else None)
+        captain_posts = db.scalars(select(CaptainPost).where(CaptainPost.week_start == issue.week_start).order_by(CaptainPost.created_at)).all()
+        import json
+        return render(request, "newsletter_edit.html", user, issue=issue, secs=secs, captain_posts=captain_posts,
+                      meet_choices=NL.recent_meets(db, issue.week_start + dt.timedelta(days=13)), picked=set(NL.recap_meets(ctx)), labels=NL.STATUS_LABELS, people=people, team=team,
                       problems=NL.problems(issue), preview=NL.rendered(db, issue, lambda p: f"/newsletter/{issue.id}/photos/{p.id}.jpg"),
                       sends=sends, photo_ok=lambda p: NL.photo_ok(p, people), ordinal=NL._ordinal,
                       recipients=[u for u in db.scalars(select(StaffUser).order_by(StaffUser.username)).all() if u.email],
@@ -150,6 +157,16 @@ def register(app, h: SimpleNamespace) -> None:
             if new != (sec.enabled, sec.coach_text or "", sec.position):
                 sec.enabled, sec.coach_text, sec.position = new
                 changed = True
+        redraw = False
+        if f.get("recap_form"):
+            import json
+            picks = sorted(str(x) for x in f.getlist("recap_meet"))
+            sec = next((x for x in issue.sections if x.key == "race_recap"), None)
+            if sec is not None and json.loads(sec.options or "{}").get("meets") != picks:
+                sec.options = json.dumps({"meets": picks})
+                changed = redraw = True
+        if redraw:
+            NL.refresh(db, issue)
         if changed:
             was = issue.status
             NL.back_to_draft(issue)
@@ -229,6 +246,27 @@ def register(app, h: SimpleNamespace) -> None:
         flash(request, f"Sent to {sent} coach{'' if sent == 1 else 'es'}." + (f" {failed} failed: {last_err}" if failed else ""),
               "error" if failed else "ok")
         return back(f"/newsletter/{iid}")
+
+    @app.post("/newsletter/{iid}/captain/{pid}")
+    async def newsletter_captain_post(request: Request, iid: int, pid: int, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
+        f = await form_checked(request)
+        issue = get_issue(db, iid)
+        cp = db.get(CaptainPost, pid)
+        if cp is None or issue.status == "sent":
+            return back(f"/newsletter/{iid}")
+        if f.get("action") == "use":
+            sec = next(x for x in issue.sections if x.key == "captains_corner")
+            a = cp.athlete
+            sign = a.name if a.show_name else "one of our captains"
+            sec.coach_text = ((sec.coach_text or "").rstrip() + ("\n\n" if sec.coach_text else "") + f"{cp.text.strip()} (from {sign})").strip()
+            sec.enabled = True
+            cp.status, cp.reviewed_by = "used", user.username
+            NL.back_to_draft(issue)
+            flash(request, "Added to Captains’ corner. Edit the wording there if you like.")
+        else:
+            cp.status, cp.reviewed_by = "set_aside", user.username
+            flash(request, "Set aside.")
+        return back(f"/newsletter/{iid}#edit-captains_corner")
 
     @app.post("/newsletter/{iid}/delete")
     async def newsletter_delete(request: Request, iid: int, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
@@ -398,6 +436,42 @@ def register(app, h: SimpleNamespace) -> None:
             db.delete(t)
             flash(request, "Tip deleted.")
         return back("/newsletter-tips")
+
+    # ---------- captains ----------
+
+    @app.post("/athletes/{aid}/captain")
+    async def athlete_captain(request: Request, aid: int, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
+        f = await form_checked(request)
+        a = db.get(Athlete, aid)
+        if a is None:
+            raise HTTPException(404, "Athlete not found.")
+        a.is_captain = f.get("captain") == "1"
+        log(db, "consent", f"{user.username} {'made' if a.is_captain else 'removed'} {a.name} {'a' if a.is_captain else 'as'} team captain.")
+        flash(request, f"{a.name} is {'now a team captain: they can write for the newsletter from their page' if a.is_captain else 'no longer a captain'}.")
+        return back(f"/athletes/{aid}")
+
+    @app.post("/a/{token}/captain-post")
+    async def captain_post(request: Request, token: str, db: Session = Depends(get_db, scope="function")):
+        f = await form_checked(request)
+        a = db.scalar(select(Athlete).where(Athlete.link_token == token))
+        if a is None or not a.is_captain or not a.active:
+            raise HTTPException(404, "Page not found.")
+        week = NL.default_week(A.team_today())
+        text = str(f.get("text", "")).strip()[:CAPTAIN_TEXT]
+        issue = db.scalar(select(NewsletterIssue).where(NewsletterIssue.week_start == week))
+        mine = db.query(CaptainPost).filter_by(athlete_id=a.id, week_start=week).count()
+        if not text:
+            flash(request, "Write something first.", "error")
+        elif NL.blocked_words(text):
+            flash(request, "The newsletter never mentions body weight or dieting. Please reword it.", "error")
+        elif mine >= CAPTAIN_POSTS_PER_WEEK:
+            flash(request, f"That’s {CAPTAIN_POSTS_PER_WEEK} for this week. Talk to a coach if you have more.", "error")
+        elif issue is not None and issue.status == "sent":
+            flash(request, "This week’s newsletter has already gone out. Send it next week.", "error")
+        else:
+            db.add(CaptainPost(athlete_id=a.id, week_start=week, text=text))
+            flash(request, "Sent to your coaches for this week’s newsletter. They’ll read it before it goes in.")
+        return back(f"/a/{token}#captain")
 
     # ---------- consent ----------
 

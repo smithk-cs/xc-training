@@ -22,15 +22,22 @@
         <td valign="top" style="{{ p }} padding:3px 0;">{% for i in day['items'] %}{% if i.kind == 'meet' %}<b>{{ i.text }}</b>{% else %}{{ i.text }}{% endif %}{% if not loop.last %}<br>{% endif %}{% endfor %}</td></tr>{% endfor %}</table>
     {% elif s.key == 'race_logistics' %}
       {% for m in d.meets %}<p style="{{ p }}"><b>{{ m.name }}</b>, {{ date.fromisoformat(m.date).strftime('%A, %b %-d') }}{% if m.location %} · {{ m.location }}{% endif %}<br><span style="{{ small }}">Forecast: {{ m.forecast or 'pending' }}</span></p>{% endfor %}
+    {% elif s.key == 'schedule' %}
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">{% for m in d.meets %}<tr>
+        <td valign="top" width="90" style="{{ p }} font-weight:bold; padding:3px 8px 3px 0;">{{ date.fromisoformat(m.date).strftime('%a %b %-d') }}</td>
+        <td valign="top" style="{{ p }} padding:3px 0;">{{ m.name }}{% if m.location %} · {{ m.location }}{% endif %}{% if m.start %} · {{ m.start }}{% endif %}</td></tr>{% endfor %}</table>
+    {% elif s.key == 'milestones' %}
+      {% for x in d.milestones %}<p style="{{ p }}"><b>{{ x.name }}</b> passed {{ x.miles }} miles for the {{ d.season }} season</p>{% endfor %}
     {% elif s.key == 'deadlines' %}
       {% for x in d.deadlines %}<p style="{{ p }}"><b>{{ x.title }}</b>: due {{ date.fromisoformat(x.due).strftime('%a, %b %-d') }}{% if x.notes %}. {{ x.notes }}{% endif %}</p>{% endfor %}
     {% elif s.key == 'race_recap' %}
       {% for r in d.races %}
         <p style="{{ p }}"><b>{{ r.meet }}</b> · {{ r.race }}{% if r.distance %} · {{ r.distance }}{% endif %}{% if r.course %}<br><span style="{{ small }}">{{ r.course }}{% if r.conditions and r.conditions.temp_f %} · {{ r.conditions.temp_f|round|int }}°F{% endif %}</span>{% endif %}</p>
         {% if r.team_place %}<p style="{{ p }} font-size:17px; font-weight:bold;">Team {{ ordinal(r.team_place) }}{% if r.teams %} of {{ r.teams }}{% endif %}{% if r.team_points is not none %} · {{ '%g' % r.team_points }} points{% endif %}</p>{% endif %}
+        {% if r.split is not none or r.prs or r.last_year %}<p style="{{ small }} margin:0 0 8px;">{% if r.split is not none %}1–5 split {{ fmt_time(r.split) }} · top-5 average {{ fmt_time(r.top5_avg) }}{% endif %}{% if r.prs %} · {{ r.prs }} PR{{ '' if r.prs == 1 else 's' }}{% endif %}{% if r.last_year and r.last_year.place %} · last year: {{ ordinal(r.last_year.place) }}{% if r.last_year.teams %} of {{ r.last_year.teams }}{% endif %}{% endif %}</p>{% endif %}
         {% if r.finishers %}<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:10px;">{% for f in r.finishers %}<tr>
           <td width="40" style="{{ p }} margin:0; padding:3px 0; color:{{ muted }};">{{ f.place or '' }}</td><td style="{{ p }} margin:0; padding:3px 0;">{{ f.name }}</td>
-          <td align="right" style="{{ p }} margin:0; padding:3px 0;">{{ fmt_time(f.time) }}</td></tr>{% endfor %}</table>{% endif %}
+          <td align="right" style="{{ p }} margin:0; padding:3px 0;">{{ fmt_time(f.time) }}{% if f.mark %} <b style="color:{{ red if f.mark == 'PR' else muted }};">{{ f.mark }}</b>{% endif %}</td></tr>{% endfor %}</table>{% endif %}
       {% endfor %}
     {% elif s.key == 'prs' %}
       {% for x in d.prs %}<p style="{{ p }}"><b>{{ x.name }}</b>: {{ x.distance }} in {{ fmt_time(x.time) }} at {{ x.meet }} <span style="{{ small }}">(previous best {{ fmt_time(x.previous) }})</span></p>{% endfor %}
@@ -41,7 +48,7 @@
         {% for label, val in (('Miles', '{:,}'.format(d.miles)), ('Points', '{:,}'.format(d.points)), ('Days run', d.days_run)) %}
         <td align="center" width="33%" style="padding:8px; background:#F7F4F0;"><div style="{{ small }} text-transform:uppercase; font-weight:bold;">{{ label }}</div><div style="font-family:Arial,Helvetica,sans-serif; font-size:24px; font-weight:bold; color:{{ ink }};">{{ val }}</div></td>{% if not loop.last %}<td width="6"></td>{% endif %}{% endfor %}
       </tr></table>
-      <p style="{{ small }} margin:6px 0 0;">Across {{ d.athletes }} athletes.{% if d.goal_miles %} {{ d.season }} so far: {{ '{:,}'.format(d.season_miles) }} of {{ '{:,.0f}'.format(d.goal_miles) }} miles.{% endif %}</p>
+      <p style="{{ small }} margin:6px 0 0;">Across {{ d.athletes }} athletes{% if d.runs %}: {{ d.runs }} runs logged and {{ d.workouts }} team workouts completed{% endif %}.{% if d.goal_miles %} {{ d.season }} so far: {{ '{:,}'.format(d.season_miles) }} of {{ '{:,.0f}'.format(d.goal_miles) }} miles.{% endif %}</p>
     {% elif s.key == 'streaks_vdot' %}
       {% if d.streaks %}<p style="{{ p }}"><b>On a streak</b> (weeks in a row on target): {% for x in d.streaks %}{{ x.name }} ({{ x.weeks }}{{ '+' if x.weeks >= streak_max }}){{ ', ' if not loop.last }}{% endfor %}</p>{% endif %}
       {% if d.vdot_ups %}<p style="{{ p }}"><b>Moved up a fitness level</b>: {% for x in d.vdot_ups %}{{ x.name }}{% if x.vdot %} (VDOT {{ x.vdot }}){% endif %}{{ ', ' if not loop.last }}{% endfor %}</p>{% endif %}

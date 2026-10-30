@@ -245,3 +245,68 @@ def test_spotlight_suggests_whose_turn_it_is(team):
     db.commit()
     assert NL.suggest_spotlight(db).id == ok          # Pat had a turn; Sam is next
     db.close()
+
+
+def test_recap_suggests_the_latest_race_and_coaches_pick_races(team):
+    app, (ok, shy) = team
+    c, csrf = login(app)
+    # The week after the race: no race that week, so the recap suggests the latest one in the two weeks before.
+    r = c.post("/newsletter/new", data={"csrf": csrf, "week": (MON + dt.timedelta(days=7)).isoformat()})
+    iid = int(r.headers["location"].rsplit("/", 1)[-1])
+    view = c.get(f"/newsletter/{iid}/view").text
+    assert "Hilltop Classic" in view and "Sam Lowry" in view and ">PR<" in view
+    assert "2 PRs" in view and "Pat Reed" not in view                                # counted for the team, not named (no consent)
+    edit = c.get(f"/newsletter/{iid}").text
+    assert 'value="' + (MON + dt.timedelta(days=5)).isoformat() + '|Hilltop Classic" checked' in edit
+    assert 'value="' + (MON - dt.timedelta(days=16)).isoformat() + '|Early Meet">' in edit   # offered, not ticked
+    early = (MON - dt.timedelta(days=16)).isoformat() + "|Early Meet"
+    included = {f"enabled_{s.key}": "1" for s in NL.SECTIONS}                       # as the form sends them
+    c.post(f"/newsletter/{iid}/save", data={"csrf": csrf, **included, "recap_form": "1", "recap_meet": [early]})
+    view = c.get(f"/newsletter/{iid}/view").text
+    assert "Early Meet" in view and "Hilltop Classic" not in view.split("Race recap")[1].split("Personal records")[0]
+
+
+def test_captains_write_from_their_page_and_coaches_choose(team):
+    app, (ok, shy) = team
+    c, csrf = login(app)
+    me = TestClient(app)
+    assert "Captains’ corner" not in me.get("/a/t1").text
+    assert me.post("/a/t1/captain-post", data={"csrf": "x", "text": "hi"}).status_code in (400, 404)
+    c.post(f"/athletes/{ok}/captain", data={"csrf": csrf, "captain": "1"})
+    page = me.get("/a/t1").text
+    assert "Captains’ corner" in page
+    mcsrf = re.search(r'name="csrf" value="([^"]+)"', page).group(1)
+    me.post("/a/t1/captain-post", data={"csrf": mcsrf, "text": "Big thanks to the parents who ran the water stop!"})
+    assert "never mentions body weight or dieting" in me.post("/a/t1/captain-post", data={"csrf": mcsrf, "text": "Watch your diet"}).text
+    week = NL.default_week(A.team_today())
+    iid = int(c.post("/newsletter/new", data={"csrf": csrf, "week": week.isoformat()}).headers["location"].rsplit("/", 1)[-1])
+    edit = c.get(f"/newsletter/{iid}").text
+    assert "Big thanks to the parents who ran the water stop!" in edit and "From Sam Lowry" in edit
+    from xcapp.models import CaptainPost
+    db = SessionLocal()
+    pid = db.query(CaptainPost).one().id
+    db.close()
+    c.post(f"/newsletter/{iid}/captain/{pid}", data={"csrf": csrf, "action": "use"})
+    view = c.get(f"/newsletter/{iid}/view").text
+    assert "Big thanks to the parents who ran the water stop! (from Sam Lowry)" in view
+    assert "in the newsletter" in me.get("/a/t1").text
+    assert "captain_notes" in me.get("/a/t1/my-data.json").text
+
+
+def test_schedule_milestones_and_team_totals(team):
+    from xcapp.models import Activity
+    app, (ok, shy) = team
+    db = SessionLocal()
+    s0, _ = A.season_range(MON)
+    db.add(Activity(athlete_id=ok, source="upload", external_id="old", start_utc=dt.datetime(s0.year, s0.month, s0.day, 15),
+                    local_date=s0, duration_s=3600 * 10, distance_m=95 * 1609.344, sport="running"))
+    db.add(Activity(athlete_id=ok, source="upload", external_id="new", start_utc=dt.datetime(MON.year, MON.month, MON.day, 15),
+                    local_date=MON, duration_s=3600, distance_m=8 * 1609.344, sport="running"))
+    db.add(MeetEntry(name="State Meet", date=MON + dt.timedelta(days=26), location="Woodward Park"))
+    db.commit()
+    issue = NL.create_issue(db, MON, "coach1")
+    secs = {s["key"]: s for s in NL.rendered(db, issue)}
+    assert secs["milestones"]["data"]["milestones"] == [{"athlete_id": ok, "name": "Sam Lowry", "miles": 100}]
+    assert [m["name"] for m in secs["schedule"]["data"]["meets"]] == ["League Finals", "State Meet"]
+    assert secs["team_numbers"]["data"]["runs"] == 1
+    db.close()

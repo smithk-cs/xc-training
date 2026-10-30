@@ -36,7 +36,9 @@ def distance_label(meters: float | None) -> str:
     if not meters:
         return ""
     return next((k for k, m in DISTANCES.items() if abs(m - meters) < 1), f"{meters / METERS_PER_MILE:.2f} mi")
-SURFACES = {"Track": 0, "Road": 0, "Firm grass": 5, "Soft grass or dirt": 10, "Trail": 12, "Sand or mud": 25}  # s/mile
+# s/mile. Starting values for coaches to tune (trail set by the coach); research: Voloshina & Ferris 2015 (uneven ground about
+# 5% more energy), Pinnington & Dawson 2001 (soft dry sand about 50% more than grass).
+SURFACES = {"Track": 0, "Road": 0, "Firm grass": 5, "Soft grass or dirt": 10, "Trail": 3, "Sand or mud": 25}
 TURNS = {"Few": 0, "Some": 2, "Many": 4}                                                                      # s/mile
 FOOTING = {"": 0, "Dry": 0, "Wet": 3, "Muddy": 10}                                                            # s/mile on the day
 # Hill tier from feet climbed per mile: up to 10 is 1 (flat), 25 is 2, 45 is 3, 70 is 4, more is 5 (very hilly).

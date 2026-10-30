@@ -49,6 +49,19 @@
       {% for a in team if a.show_spotlight and a.show_name %}<option value="{{ a.id }}"{% if sec.athlete_id == a.id %} selected{% endif %}>{{ a.name }}{% if data and data.suggested and data.suggested.athlete_id == a.id %} (whose turn it is){% endif %}</option>{% endfor %}</select></label>
     {% if not team|selectattr('show_spotlight')|list %}<p class="small muted">Nobody has spotlight consent yet. <a href="/newsletter-consent">Consent</a></p>{% endif %}
   {% endif %}
+  {% if sec.key == 'race_recap' %}
+    <input type="hidden" name="recap_form" value="1">
+    <fieldset class="pick"><legend class="small">Races in the recap</legend>
+      {% for d, mt in meet_choices %}<label class="check" style="display:block"><input type="checkbox" name="recap_meet" value="{{ d.isoformat() }}|{{ mt }}"{% if (d, mt) in picked %} checked{% endif %}{% if not editable %} disabled{% endif %}> {{ mt }} <span class="small muted">{{ d.strftime('%a %b %-d') }}</span></label>
+      {% else %}<p class="small muted">No races in the last 60 days. Import results on the Races page first.</p>{% endfor %}
+      <p class="small muted" style="margin:4px 0 0">Ticked races also feed Personal records. Saving re-draws the numbers.</p>
+    </fieldset>
+  {% endif %}
+  {% if sec.key == 'captains_corner' %}
+    {% for cp in captain_posts %}<div class="nl-post"><p style="margin:0">{{ cp.text }}</p><p class="small muted" style="margin:2px 0 6px">From {{ cp.athlete.name }}, {{ (cp.created_at|local).strftime('%a %b %-d') }}{% if cp.status == 'used' %} · <span class="pill good">Added</span>{% elif cp.status == 'set_aside' %} · set aside{% endif %}
+      {% if editable and cp.status == 'submitted' %}<button type="submit" form="cp-use-{{ cp.id }}" class="link">Add to the section</button> · <button type="submit" form="cp-skip-{{ cp.id }}" class="link">Set aside</button>{% endif %}</p></div>
+    {% else %}<p class="small muted">Nothing from the captains for this week yet. Mark captains on each athlete’s page; they write from their own page.</p>{% endfor %}
+  {% endif %}
   {% if sec.key == 'photos' %}<p class="small"><a href="#photos">Photos are added below ›</a></p>
   {% else %}
   <label>{{ 'Write this section' if spec.needs_coach_text else 'Add a note (optional)' }}
@@ -62,6 +75,10 @@
 {% if editable %}<div class="nl-savebar"><button type="submit">Save changes</button>{% if issue.status == 'approved' %} <span class="small muted">Saving a change sends it back to draft.</span>{% endif %}</div>{% endif %}
 </form>
 
+{% for cp in captain_posts if cp.status == 'submitted' %}
+<form method="post" action="/newsletter/{{ issue.id }}/captain/{{ cp.id }}" id="cp-use-{{ cp.id }}"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="use"></form>
+<form method="post" action="/newsletter/{{ issue.id }}/captain/{{ cp.id }}" id="cp-skip-{{ cp.id }}"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="set_aside"></form>
+{% endfor %}
 <div class="card" id="photos">
   <h2>Photos</h2>
   <p class="small muted">Every athlete in a photo must be tagged and have photo consent, or the photo stays out. Location and camera details are removed when it’s uploaded.</p>

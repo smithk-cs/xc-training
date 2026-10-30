@@ -284,6 +284,18 @@
   </section>
   {% endif %}
 
+  {% if a.is_captain %}
+  <details class="panel fold" id="captain"{% if captain_posts %} open{% endif %}>
+    <summary><h2 id="cap-h">Captains’ corner</h2><span class="pill good" style="margin-left:auto; margin-right:10px">Captain</span></summary>
+    <p class="small muted">Write something for this week’s team newsletter: a shout-out, what the team is working on, a reminder. Your coaches read it before it goes in, and may shorten it. Keep it positive, and about the team.</p>
+    <form method="post" action="/a/{{ token }}/captain-post" style="display:flex; flex-direction:column; gap:8px">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <textarea name="text" rows="4" maxlength="600" required aria-label="Your note for the newsletter"></textarea>
+      <button type="submit">Send to my coaches</button>
+    </form>
+    {% for cp in captain_posts %}<p class="small" style="margin:8px 0 0">“{{ cp.text|truncate(120) }}” <span class="muted">· {{ {'submitted': 'with your coaches', 'used': 'in the newsletter', 'set_aside': 'not used this week'}[cp.status] }}</span></p>{% endfor %}
+  </details>
+  {% endif %}
   <details class="panel fold" id="pain">
     <summary><h2 id="p-h">Something hurt today?</h2></summary>
     <form method="post" action="/a/{{ token }}/pain" style="display:flex; flex-direction:column; gap:14px">

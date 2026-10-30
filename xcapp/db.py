@@ -69,7 +69,7 @@ ADDED_COLUMNS = {
                  ("vdot_override", "INTEGER"), ("is_test", "BOOLEAN DEFAULT FALSE"), ("other_names", "VARCHAR(500) DEFAULT ''"), ("email", "VARCHAR(254) DEFAULT ''"), ("email_reminders", "BOOLEAN DEFAULT FALSE"), ("grad_year", "INTEGER"),
                  ("alumni", "BOOLEAN DEFAULT FALSE"), ("left_on", "DATE"), ("vdot_mark", "VARCHAR(10) DEFAULT ''"), ("weekly_plan", "VARCHAR(20) DEFAULT ''"),
                  ("experience", "INTEGER DEFAULT 2"), ("show_name", "BOOLEAN DEFAULT FALSE"), ("show_photo", "BOOLEAN DEFAULT FALSE"),
-                 ("show_spotlight", "BOOLEAN DEFAULT FALSE"), ("show_vdot", "BOOLEAN DEFAULT FALSE"), ("consent_by", "VARCHAR(160) DEFAULT ''"),
+                 ("show_spotlight", "BOOLEAN DEFAULT FALSE"), ("show_vdot", "BOOLEAN DEFAULT FALSE"), ("is_captain", "BOOLEAN DEFAULT FALSE"), ("consent_by", "VARCHAR(160) DEFAULT ''"),
                  ("consent_at", "TIMESTAMP")],
     "staff_users": [("email", "VARCHAR(254) DEFAULT ''"), ("full_name", "VARCHAR(120) DEFAULT ''"), ("title", "VARCHAR(80) DEFAULT ''"),
                     ("phone", "VARCHAR(30) DEFAULT ''"), ("on_entries", "BOOLEAN DEFAULT TRUE")],
@@ -80,6 +80,7 @@ ADDED_COLUMNS = {
     "race_results": [("points", "FLOAT")],
     "planned_workouts": [("distance_unit", "VARCHAR(2) DEFAULT 'm'"), ("parts", "TEXT DEFAULT ''"), ("gender", "VARCHAR(10) DEFAULT ''")],
     "training_groups": [("color", "VARCHAR(7) DEFAULT ''"), ("weekly_miles", "FLOAT DEFAULT 0"), ("weekly_miles_girls", "FLOAT")],
+    "newsletter_sections": [("options", "TEXT DEFAULT ''")],
     "pain_reports": [("activity_id", "INTEGER"), ("saw_trainer", "BOOLEAN DEFAULT FALSE")],
 }
 

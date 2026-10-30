@@ -30,7 +30,10 @@ COACH_NOTE_WORDS, SPOTLIGHT_WORDS = 100, 60   # suggested lengths; longer text g
 STREAK_PCT = 80          # a streak week: at least this % of the weekly points target
 STREAK_MIN_WEEKS = 3     # streaks are mentioned from this many weeks
 STREAK_LOOKBACK = 8      # weeks looked back for streaks
-RECAP_TOP = 10           # finishers listed per race
+RECAP_TOP = 25           # our runners listed per race
+RECAP_LOOKBACK = 14      # with no race in the issue's week, the recap suggests the latest race this many days before it
+SCHEDULE_DAYS = 35       # the season schedule looks this far ahead
+MILESTONES = (50, 100, 150, 200, 250, 300, 400, 500, 600, 750, 1000)   # season miles worth a mention
 EMAIL_WIDTH = 600
 
 # Body weight, food restriction and the like are never part of the newsletter (privacy.md, hard rule 2).
@@ -51,6 +54,7 @@ class WeekCtx:
     db: Session
     monday: dt.date            # the week the issue reports on
     issue_id: int | None = None
+    options: dict | None = None   # section key -> the coach's choices for it
 
     @property
     def sunday(self) -> dt.date:
@@ -117,10 +121,55 @@ def build_deadlines(c: WeekCtx) -> dict | None:
     return {"deadlines": shown} if shown else None
 
 
+def recent_meets(db: Session, until: dt.date, days: int = 60) -> list[tuple[dt.date, str]]:
+    """Meets our athletes raced in the `days` before `until`, newest first: the choices for the recap."""
+    rows = db.execute(select(RaceResult.date, RaceResult.meet).join(Athlete).where(
+        RaceResult.date <= until, RaceResult.date > until - dt.timedelta(days=days), Athlete.is_test.is_(False))
+        .group_by(RaceResult.date, RaceResult.meet).order_by(RaceResult.date.desc(), RaceResult.meet)).all()
+    return [(d, m) for d, m in rows]
+
+
+def meet_key(day: dt.date, meet: str) -> str:
+    return f"{day.isoformat()}|{meet}"
+
+
+def recap_meets(c: WeekCtx) -> list[tuple[dt.date, str]]:
+    """The races in the recap: the coach's picks, else the week's races, else the latest race in the two weeks before."""
+    chosen = ((c.options or {}).get("race_recap") or {}).get("meets")
+    if chosen is not None:
+        out = []
+        for k in chosen:
+            day, _, meet = k.partition("|")
+            try:
+                out.append((dt.date.fromisoformat(day), meet))
+            except ValueError:
+                continue
+        return sorted(out)
+    recent = recent_meets(c.db, c.sunday, 7 + RECAP_LOOKBACK)
+    week = [(d, m) for d, m in recent if d >= c.monday]
+    if week:
+        return sorted(week)
+    return [recent[0]] if recent else []
+
+
 def _week_races(c: WeekCtx) -> list[RaceResult]:
-    return c.db.scalars(select(RaceResult).join(Athlete).where(RaceResult.date >= c.monday, RaceResult.date <= c.sunday,
-                                                               Athlete.is_test.is_(False))
-                        .order_by(RaceResult.date, RaceResult.meet, RaceResult.race)).all()
+    picks = recap_meets(c)
+    if not picks:
+        return []
+    from sqlalchemy import or_, and_
+    return c.db.scalars(select(RaceResult).join(Athlete).where(
+        or_(*[and_(RaceResult.date == d, RaceResult.meet == m) for d, m in picks]), Athlete.is_test.is_(False))
+        .order_by(RaceResult.date, RaceResult.meet, RaceResult.race)).all()
+
+
+def _bests(db: Session, r: RaceResult) -> tuple[float | None, float | None]:
+    """The athlete's best before this race at the same distance (within 1%): ever, and this season."""
+    prior = [(t, d) for t, m, d in db.execute(select(RaceResult.time_s, RaceResult.distance_m, RaceResult.date).where(
+        RaceResult.athlete_id == r.athlete_id, RaceResult.date < r.date)).all() if abs(m - r.distance_m) <= r.distance_m * 0.01]
+    season = A.season_for(r.date)
+    ever = min((t for t, _ in prior), default=None)
+    this = min((t for t, d in prior if A.season_for(d) == season), default=None)
+    return ever, this
 
 
 def build_race_recap(c: WeekCtx) -> dict | None:
@@ -134,15 +183,28 @@ def build_race_recap(c: WeekCtx) -> dict | None:
     for (day, meet, race), rows in groups.items():
         team = c.db.scalar(select(RaceTeamResult).where(RaceTeamResult.meet == meet, RaceTeamResult.date == day, RaceTeamResult.race == race))
         cond = c.db.scalar(select(MeetConditions).where(MeetConditions.meet == meet, MeetConditions.date == day))
+        last = [t for t in c.db.scalars(select(RaceTeamResult).where(RaceTeamResult.date >= day - dt.timedelta(days=400),
+                                                                     RaceTeamResult.date <= day - dt.timedelta(days=300))).all()
+                if _same_meet(t.meet, meet) and t.race == race]
         rows.sort(key=lambda r: (r.place is None, r.place or 0, r.time_s))
+        runners = []
+        for r in rows[:RECAP_TOP]:
+            ever, this = _bests(c.db, r)
+            mark = "PR" if ever is not None and r.time_s < ever else "SB" if this is not None and r.time_s < this else ""
+            runners.append({**_name(r.athlete), "time": round(r.time_s, 1), "place": r.place, "mark": mark})
+        top5 = sorted(r.time_s for r in rows)[:5]
         out.append({
             "meet": meet, "date": day.isoformat(), "race": race, "course": rows[0].course or (cond.course.name if cond and cond.course else ""),
             "distance": rows[0].distance_label,
             "team_place": team.place if team else None, "teams": team.teams if team else None,
             "team_points": team.points if team else None,
-            "conditions": None if cond is None else {"temp_f": cond.temp_f, "footing": cond.footing, "wind_mph": cond.wind_mph},
-            "runners": len(rows),
-            "finishers": [{**_name(r.athlete), "time": round(r.time_s, 1), "place": r.place} for r in rows[:RECAP_TOP]],
+            "conditions": None if cond is None else {"temp_f": cond.temp_f, "dew_point_f": cond.dew_point_f, "footing": cond.footing,
+                                                     "wind_mph": cond.wind_mph},
+            "runners": len(rows), "prs": sum(1 for x in runners if x["mark"] == "PR"),
+            "split": round(top5[-1] - top5[0], 1) if len(top5) == 5 else None,
+            "top5_avg": round(sum(top5) / 5, 1) if len(top5) == 5 else None,
+            "last_year": {"place": last[0].place, "teams": last[0].teams, "points": last[0].points} if last else None,
+            "finishers": runners,
         })
     return {"races": out}
 
@@ -150,13 +212,33 @@ def build_race_recap(c: WeekCtx) -> dict | None:
 def build_prs(c: WeekCtx) -> dict | None:
     out = []
     for r in _week_races(c):
-        same = [t for t, m in c.db.execute(select(RaceResult.time_s, RaceResult.distance_m).where(
-            RaceResult.athlete_id == r.athlete_id, RaceResult.date < r.date)).all() if abs(m - r.distance_m) <= r.distance_m * 0.01]
-        if same and r.time_s < min(same):
-            out.append({**_name(r.athlete), "distance": r.distance_label, "time": round(r.time_s, 1), "previous": round(min(same), 1),
+        ever, _this = _bests(c.db, r)
+        if ever is not None and r.time_s < ever:
+            out.append({**_name(r.athlete), "distance": r.distance_label, "time": round(r.time_s, 1), "previous": round(ever, 1),
                         "meet": r.meet})
     out.sort(key=lambda x: x["name"].split()[-1] + " " + x["name"])
     return {"prs": out} if out else None
+
+
+def build_schedule(c: WeekCtx) -> dict | None:
+    meets = c.db.scalars(select(MeetEntry).where(MeetEntry.date >= c.next_monday,
+                                                 MeetEntry.date <= c.next_monday + dt.timedelta(days=SCHEDULE_DAYS))
+                         .order_by(MeetEntry.date)).all()
+    return {"meets": [{"date": m.date.isoformat(), "name": m.name, "location": m.location, "start": m.start_time} for m in meets]} if meets else None
+
+
+def build_milestones(c: WeekCtx) -> dict | None:
+    s0, _ = A.season_range(c.sunday)
+    out = []
+    for a in _team(c.db):
+        dist = c.db.execute(select(Activity.local_date, Activity.distance_m).where(
+            Activity.athlete_id == a.id, Activity.local_date >= s0, Activity.local_date <= c.sunday)).all()
+        before = sum(d or 0 for day, d in dist if day < c.monday) / A.METERS_PER_MILE
+        total = sum(d or 0 for _, d in dist) / A.METERS_PER_MILE
+        passed = [m for m in MILESTONES if before < m <= total]
+        if passed:
+            out.append({**_name(a), "miles": passed[-1]})
+    return {"milestones": out, "season": A.season_for(c.sunday)} if out else None   # alphabetical: never ranked
 
 
 def build_course_snapshot(c: WeekCtx) -> dict | None:
@@ -196,8 +278,10 @@ def build_team_numbers(c: WeekCtx) -> dict | None:
         dist = c.db.scalars(select(Activity.distance_m).where(Activity.athlete_id.in_(ids), Activity.local_date >= s0,
                                                               Activity.local_date <= c.sunday)).all()
         season_miles = round(sum(d or 0 for d in dist) / A.METERS_PER_MILE)
+    runs = sum(len(d["runs"]) for r in rows for d in r["days"])
+    workouts = sum(1 for r in rows for d in r["days"] for x in d["runs"] if x.planned_workout_id)
     # Totals only: no names here, ever (no rankings by miles or points).
-    return {"athletes": len(rows), "miles": round(sum(r["miles"] for r in rows)), "points": round(sum(r["points"] for r in rows)),
+    return {"runs": runs, "workouts": workouts, "athletes": len(rows), "miles": round(sum(r["miles"] for r in rows)), "points": round(sum(r["points"] for r in rows)),
             "days_run": sum(r["run_days"] for r in rows), "goal_miles": goal or None, "season_miles": season_miles,
             "season": A.season_for(c.sunday)}
 
@@ -279,15 +363,18 @@ SECTIONS = [
     SectionSpec("week_ahead", "The week ahead", build_week_ahead, help="From next week’s workouts and meets. Add anything else below."),
     SectionSpec("race_logistics", "Race-day details", build_race_logistics,
                 help="Add departure and return times, what to bring, and the forecast once it’s out."),
+    SectionSpec("schedule", "Season schedule", build_schedule, help=f"Meets in the {SCHEDULE_DAYS // 7} weeks after next week, from the Entries page."),
     SectionSpec("deadlines", "Coming up", build_deadlines, help="From the deadlines list (forms, fees, orders)."),
-    SectionSpec("race_recap", "Race recap", build_race_recap, help="Team place and score, and the top finishers with times."),
+    SectionSpec("race_recap", "Race recap", build_race_recap,
+                help="Pick the races below: team place and score, every runner with PRs and season bests, the 1–5 split, weather and last year’s result."),
     SectionSpec("prs", "Personal records", build_prs, help="New bests this week, with the previous best."),
     SectionSpec("course_snapshot", "Course preview", build_course_snapshot, help="For next week’s meets: the course and last year’s team result."),
     SectionSpec("team_numbers", "Team numbers", build_team_numbers, help="Team totals only, never names."),
     SectionSpec("streaks_vdot", "Streaks and fitness gains", build_streaks_vdot,
                 help=f"Alphabetical: {STREAK_MIN_WEEKS}+ weeks in a row at {STREAK_PCT}% of the points target, and anyone who moved up a fitness level."),
+    SectionSpec("milestones", "Season milestones", build_milestones, help="Athletes who passed 100, 200, 300… miles for the season this week. Alphabetical."),
     SectionSpec("spotlight", "Athlete spotlight", build_spotlight, True, f"A few lines, about {SPOTLIGHT_WORDS} words. The app suggests whose turn it is."),
-    SectionSpec("captains_corner", "Captains’ corner", None, True, "Text from the captains, after a coach has read it."),
+    SectionSpec("captains_corner", "Captains’ corner", None, True, "What captains send from their pages appears here; add what you want to use."),
     SectionSpec("recovery_tip", "Recovery tip", build_recovery_tip, help="Rotates through the approved tips."),
     SectionSpec("photos", "Photos", None, help="Only photos where every athlete shown has photo consent."),
     SectionSpec("thank_yous", "Thank you", None, True, "Volunteers, parents, sponsors."),
@@ -311,7 +398,13 @@ def refresh(db: Session, issue: NewsletterIssue) -> None:
     """Re-draw every section's numbers into a new snapshot. The coach's text is kept."""
     if issue.status == "sent":
         raise ValueError("A sent issue can’t change. Put any correction in next week’s issue.")
-    ctx = WeekCtx(db, issue.week_start, issue.id)
+    have = {s.key for s in issue.sections}
+    top = max((s.position for s in issue.sections), default=-1)
+    for spec in SECTIONS:   # sections added to the app after this issue was started
+        if spec.key not in have:
+            top += 1
+            issue.sections.append(NewsletterSection(key=spec.key, position=top, enabled=True))
+    ctx = WeekCtx(db, issue.week_start, issue.id, {s.key: json.loads(s.options) for s in issue.sections if s.options})
     for sec in issue.sections:
         spec = SPEC.get(sec.key)
         data = spec.build(ctx) if spec and spec.build else None
@@ -413,6 +506,9 @@ def _filter(key: str, data: dict, people: dict[int, Athlete]) -> dict | None:
         for r in data["races"]:
             races.append({**r, "finishers": _named(r["finishers"], people)})
         return {"races": races}
+    if key == "milestones":
+        ms = _named(data["milestones"], people)
+        return {**data, "milestones": ms} if ms else None
     if key == "prs":
         prs = _named(data["prs"], people)
         return {"prs": prs} if prs else None
@@ -455,6 +551,10 @@ def _text_lines(s: dict) -> list[str]:
                        + ". Forecast: " + (m.get("forecast") or "pending") + ".")
     elif k == "deadlines":
         out += [f"{x['title']}: due {dt.date.fromisoformat(x['due']):%a %b %-d}" + (f". {x['notes']}" if x["notes"] else "") for x in d.get("deadlines", [])]
+    elif k == "schedule":
+        out += [f"{dt.date.fromisoformat(m['date']):%a %b %-d}: {m['name']}" + (f", {m['location']}" if m["location"] else "") for m in d.get("meets", [])]
+    elif k == "milestones":
+        out.append(", ".join(f"{x['name']} ({x['miles']} miles)" for x in d.get("milestones", [])))
     elif k == "race_recap":
         for r in d.get("races", []):
             head = f"{r['meet']} · {r['race']}"
@@ -462,7 +562,9 @@ def _text_lines(s: dict) -> list[str]:
                 head += f": team {_ordinal(r['team_place'])}" + (f" of {r['teams']}" if r.get("teams") else "") + \
                         (f", {r['team_points']:g} points" if r.get("team_points") is not None else "")
             out.append(head)
-            out += [f"  {f['place'] or ''} {f['name']} {t(f['time'])}".replace("   ", " ") for f in r["finishers"]]
+            if r.get("split") is not None:
+                out.append(f"  1-5 split {t(r['split'])}, top-5 average {t(r['top5_avg'])}")
+            out += [f"  {f['place'] or ''} {f['name']} {t(f['time'])} {f.get('mark', '')}".replace("   ", " ").rstrip() for f in r["finishers"]]
     elif k == "prs":
         out += [f"{p['name']}: {p['distance']} in {t(p['time'])} at {p['meet']} (previous best {t(p['previous'])})" for p in d.get("prs", [])]
     elif k == "course_snapshot":
@@ -470,7 +572,8 @@ def _text_lines(s: dict) -> list[str]:
             out.append(f"{c['meet']}: " + ("first time here." if c["first_time"] else (c["course"] or "course on file") + "."))
             out += [f"  Last year {x['race']}: team {_ordinal(x['place'])}" for x in c["last_year"] if x.get("place")]
     elif k == "team_numbers":
-        out.append(f"{d['miles']:,} miles, {d['points']:,} points and {d['days_run']} days run across {d['athletes']} athletes.")
+        out.append(f"{d['miles']:,} miles, {d['points']:,} points and {d['days_run']} days run across {d['athletes']} athletes"
+                   + (f"; {d['runs']} runs logged and {d['workouts']} team workouts completed." if d.get("runs") else "."))
         if d.get("goal_miles"):
             out.append(f"Season so far: {d['season_miles']:,} of {d['goal_miles']:,.0f} miles.")
     elif k == "streaks_vdot":
@@ -538,5 +641,7 @@ def left_out(key: str, data: dict | None, people: dict[int, Athlete]) -> list[st
         rows = data["prs"]
     elif key == "streaks_vdot":
         rows = data["vdot_ups"] + data["streaks"]
+    elif key == "milestones":
+        rows = data["milestones"]
     names = {people[r["athlete_id"]].name for r in rows if r.get("athlete_id") in people and not people[r["athlete_id"]].show_name}
     return sorted(names)

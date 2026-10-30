@@ -63,6 +63,7 @@ class Athlete(Base):
     show_photo: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     show_spotlight: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     show_vdot: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")       # a numeric VDOT in shared views
+    is_captain: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")      # can write for the newsletter
     consent_by: Mapped[str] = mapped_column(String(160), default="", server_default="")       # who recorded it, and on what basis
     consent_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)
     ability_override: Mapped[str] = mapped_column(String(40), default="")  # coach-pinned ability group, "" = automatic
@@ -608,6 +609,7 @@ class NewsletterSection(Base):
     position: Mapped[int] = mapped_column(Integer, default=0)
     coach_text: Mapped[str] = mapped_column(Text, default="")
     data_snapshot: Mapped[str] = mapped_column(Text, default="")   # JSON from the section's builder; "" when it had nothing
+    options: Mapped[str] = mapped_column(Text, default="", server_default="")   # JSON choices, such as the races in the recap
     athlete_id: Mapped[int | None] = mapped_column(ForeignKey("athletes.id", ondelete="SET NULL"), nullable=True)  # spotlight
 
 
@@ -681,3 +683,16 @@ class MeetForecast(Base):
     wind_mph: Mapped[float | None] = mapped_column(Float, nullable=True)
     rain_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
     summary: Mapped[str] = mapped_column(String(60), default="")
+
+
+class CaptainPost(Base):
+    """Something a team captain wrote for the newsletter's Captains' corner. A coach reads it and uses it or sets it aside."""
+    __tablename__ = "captain_posts"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    athlete_id: Mapped[int] = mapped_column(ForeignKey("athletes.id", ondelete="CASCADE"), index=True)
+    week_start: Mapped[dt.date] = mapped_column(Date, index=True)     # the issue it's meant for
+    text: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(20), default="submitted")   # submitted | used | set_aside
+    reviewed_by: Mapped[str] = mapped_column(String(80), default="")
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
+    athlete: Mapped[Athlete] = relationship()
