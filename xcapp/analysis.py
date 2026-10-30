@@ -87,11 +87,20 @@ def fmt_time(seconds: float | None) -> str:
     return f"{m}:{t - m * 60:04.1f}"
 
 
+def xc_season_dates(year: int) -> tuple[dt.date, dt.date]:
+    """Cross country runs from the first Monday in August through the first Saturday in December (so December
+    championships such as Nike Cross Nationals count as cross country)."""
+    aug1, dec1 = dt.date(year, 8, 1), dt.date(year, 12, 1)
+    return aug1 + dt.timedelta(days=(0 - aug1.weekday()) % 7), dec1 + dt.timedelta(days=(5 - dec1.weekday()) % 7)
+
+
 def season_for(d: dt.date) -> str:
-    """Jul-Nov = cross country of that year; Dec-Jun = track of the spring year."""
-    if 7 <= d.month <= 11:
+    """'2026 XC' between the first Monday in August and the first Saturday in December; otherwise track, named for
+    the spring it leads up to ('2027 Track' from the Sunday after the XC season)."""
+    start, end = xc_season_dates(d.year)
+    if start <= d <= end:
         return f"{d.year} XC"
-    return f"{d.year + 1 if d.month == 12 else d.year} Track"
+    return f"{d.year + 1 if d > end else d.year} Track"
 
 
 def race_history(races) -> dict:
@@ -814,12 +823,12 @@ def weekly_load_rows(db: Session, as_of: dt.date, n_weeks: int = 21) -> list[dic
 
 
 def season_range(d: dt.date) -> tuple[dt.date, dt.date]:
-    """Jul 1 - Nov 30 for cross country; Dec 1 - Jun 30 for track."""
+    """The first and last day of d's season (see season_for)."""
     s = season_for(d)
     yr = int(s.split()[0])
     if s.endswith("XC"):
-        return dt.date(yr, 7, 1), dt.date(yr, 11, 30)
-    return dt.date(yr - 1, 12, 1), dt.date(yr, 6, 30)
+        return xc_season_dates(yr)
+    return xc_season_dates(yr - 1)[1] + dt.timedelta(days=1), xc_season_dates(yr)[0] - dt.timedelta(days=1)
 
 
 def athlete_series(db: Session, athlete: Athlete, as_of: dt.date) -> dict:

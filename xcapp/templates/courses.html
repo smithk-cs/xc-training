@@ -11,7 +11,7 @@
   {% for c in courses %}{% set tier = CS.hill_tier(c) %}
   <tr><td><b>{{ c.name }}</b>{% if c.map_url %} <a class="small" href="{{ c.map_url }}" target="_blank" rel="noopener">map</a>{% endif %}{% if c.video_url %} <a class="small" href="{{ c.video_url }}" target="_blank" rel="noopener">video</a>{% endif %}{% if c.notes %}<br><span class="small muted">{{ c.notes|truncate(90) }}</span>{% endif %}</td>
     <td class="small">{{ c.location }}</td>
-    <td class="num">{{ '%.2f mi' % (c.distance_m / 1609.344) if c.distance_m else '' }}</td>
+    <td class="num">{% if c.distances %}{% for d in c.distances.split(',') %}<span class="tag{% if d == CS.distance_label(c.distance_m) %} usual{% endif %}">{{ d }}</span> {% endfor %}{% else %}{{ CS.distance_label(c.distance_m) }}{% endif %}</td>
     <td>{{ c.surface }}</td>
     <td class="num">{{ '%g ft' % c.elevation_gain_ft if c.elevation_gain_ft is not none else '' }}</td>
     <td class="num">{% if tier %}{{ tier }}{% if not c.hill_tier %} <span class="small muted">(from climb)</span>{% endif %}{% endif %}</td>
@@ -34,8 +34,18 @@
     <div class="form-row">
       <label style="flex:1">Name<input type="text" name="name" value="{{ edit.name if edit else '' }}" maxlength="160" required list="course-names" placeholder="As it appears in race results"></label>
       <label style="flex:1">Location<input type="text" name="location" value="{{ edit.location if edit else '' }}" maxlength="200" placeholder="Park, city"></label>
-      <label>Distance (miles)<input type="number" name="distance_mi" value="{{ '%.2f' % (edit.distance_m / 1609.344) if edit and edit.distance_m else '' }}" step="0.01" min="0.5" max="15" style="width:7em"></label>
+      {% set cur = CS.distance_label(edit.distance_m) if edit else '' %}
+      <label>Usual distance<select name="distance"><option value="">Not set</option>
+        {% if cur and cur not in CS.DISTANCES %}<option value="keep" selected>{{ cur }} (as saved)</option>{% endif %}
+        <optgroup label="Kilometers">{% for k in CS.KM_DISTANCES %}<option{% if cur == k %} selected{% endif %}>{{ k }}</option>{% endfor %}</optgroup>
+        <optgroup label="Miles">{% for k in CS.MILE_DISTANCES %}<option{% if cur == k %} selected{% endif %}>{{ k }}</option>{% endfor %}</optgroup></select></label>
     </div>
+    {% set raced = (edit.distances.split(',') if edit and edit.distances else []) %}
+    <fieldset class="pick course-distances"><legend>Distances raced here</legend>
+      <div class="dist-row"><span class="small muted">Kilometers</span><div class="chips">{% for k in CS.KM_DISTANCES %}<label class="chip"><input type="checkbox" name="dist_{{ k }}"{% if k in raced %} checked{% endif %}><span>{{ k }}</span></label>{% endfor %}</div></div>
+      <div class="dist-row"><span class="small muted">Miles</span><div class="chips">{% for k in CS.MILE_DISTANCES %}<label class="chip"><input type="checkbox" name="dist_{{ k }}"{% if k in raced %} checked{% endif %}><span>{{ k }}</span></label>{% endfor %}</div></div>
+      <p class="small muted" style="margin:4px 0 0">Tick every distance run here (most courses have several). The usual distance is the one the total climb is measured over.</p>
+    </fieldset>
     <div class="form-row">
       <label>Surface<select name="surface">{% for s in CS.SURFACES %}<option{% if (edit.surface if edit else 'Firm grass') == s %} selected{% endif %}>{{ s }}</option>{% endfor %}</select></label>
       <label>Turns<select name="turns">{% for t in CS.TURNS %}<option{% if (edit.turns if edit else 'Some') == t %} selected{% endif %}>{{ t }}</option>{% endfor %}</select></label>

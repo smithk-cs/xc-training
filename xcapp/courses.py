@@ -14,6 +14,17 @@ from __future__ import annotations
 from .models import Course, MeetConditions
 
 METERS_PER_MILE = 1609.344
+# Standard race distances, for the buttons on the Courses page: label -> meters.
+KM_DISTANCES = {f"{k}K": k * 1000.0 for k in (2, 3, 4, 5, 6, 8, 10)}
+MILE_DISTANCES = {f"{m:g} mi": m * METERS_PER_MILE for m in (1, 1.5, 2, 2.5, 3, 4)}
+DISTANCES = {**KM_DISTANCES, **MILE_DISTANCES}
+
+
+def distance_label(meters: float | None) -> str:
+    """'5K' or '3 mi' for a standard distance, else '3.11 mi'."""
+    if not meters:
+        return ""
+    return next((k for k, m in DISTANCES.items() if abs(m - meters) < 1), f"{meters / METERS_PER_MILE:.2f} mi")
 SURFACES = {"Track": 0, "Road": 0, "Firm grass": 5, "Soft grass or dirt": 10, "Trail": 12, "Sand or mud": 25}  # s/mile
 TURNS = {"Few": 0, "Some": 2, "Many": 4}                                                                      # s/mile
 FOOTING = {"": 0, "Dry": 0, "Wet": 3, "Muddy": 10}                                                            # s/mile on the day

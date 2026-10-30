@@ -488,6 +488,7 @@ class Course(Base):
     name: Mapped[str] = mapped_column(String(160), unique=True)       # as it appears in race results, such as "Gibson Ranch"
     location: Mapped[str] = mapped_column(String(200), default="")
     distance_m: Mapped[float | None] = mapped_column(Float, nullable=True)        # the usual race distance here
+    distances: Mapped[str] = mapped_column(String(200), default="")               # every distance raced here, such as "2 mi,5K"
     surface: Mapped[str] = mapped_column(String(30), default="Firm grass")
     elevation_gain_ft: Mapped[float | None] = mapped_column(Float, nullable=True)  # total climb over that distance
     altitude_ft: Mapped[float | None] = mapped_column(Float, nullable=True)        # height above sea level

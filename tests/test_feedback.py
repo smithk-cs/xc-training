@@ -102,7 +102,7 @@ def test_series_scoping_and_content(setup):
     db.commit()
     db.close()
     s = c.get("/a/tok-ava/series.json").json()
-    assert s["athlete"] == "Ava Doyle" and s["today"] == "2026-10-25" and s["season"] == {"name": "2026 XC", "start": "2026-07-01", "end": "2026-11-30"}
+    assert s["athlete"] == "Ava Doyle" and s["today"] == "2026-10-25" and s["season"] == {"name": "2026 XC", "start": "2026-08-03", "end": "2026-12-05"}
     assert len(s["runs"]) == 1 and s["runs"][0]["workout"] == "3 reps" and s["runs"][0]["pace"] > 0
     assert s["results"][0]["pace"] == pytest.approx(1122.3 / 5000 * 1609.344, abs=0.1)
     assert c.get("/a/not-real/series.json").status_code == 404
