@@ -496,6 +496,19 @@ class Course(Base):
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
 
 
+class RaceTeamResult(Base):
+    """How the team did in one race at a meet (such as Boys Frosh/Soph): its place among the teams and its score."""
+    __tablename__ = "race_team_results"
+    __table_args__ = (UniqueConstraint("meet", "date", "race"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    meet: Mapped[str] = mapped_column(String(160))
+    date: Mapped[dt.date] = mapped_column(Date, index=True)
+    race: Mapped[str] = mapped_column(String(120), default="")
+    place: Mapped[int | None] = mapped_column(Integer, nullable=True)     # the team's place
+    teams: Mapped[int | None] = mapped_column(Integer, nullable=True)     # out of how many teams
+    points: Mapped[float | None] = mapped_column(Float, nullable=True)    # the team's score (lower is better in XC)
+
+
 class MeetConditions(Base):
     """Race-day conditions at a meet, entered after the event, for comparing times like for like."""
     __tablename__ = "meet_conditions"

@@ -71,6 +71,7 @@ ADDED_COLUMNS = {
     "staff_users": [("email", "VARCHAR(254) DEFAULT ''"), ("full_name", "VARCHAR(120) DEFAULT ''"), ("title", "VARCHAR(80) DEFAULT ''"),
                     ("phone", "VARCHAR(30) DEFAULT ''"), ("on_entries", "BOOLEAN DEFAULT TRUE")],
     "meet_entries": [("course_id", "INTEGER")],
+    "courses": [("video_url", "VARCHAR(500) DEFAULT ''")],
     "meet_divisions": [("gender", "VARCHAR(10) DEFAULT 'Boys'"), ("level", "VARCHAR(20) DEFAULT 'Varsity'"), ("max_entries", "INTEGER")],
     "race_results": [("points", "FLOAT")],
     "planned_workouts": [("distance_unit", "VARCHAR(2) DEFAULT 'm'"), ("parts", "TEXT DEFAULT ''")],

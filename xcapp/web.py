@@ -43,7 +43,7 @@ from .ingest import ingest, log, rematch_day
 from .models import (Activity, AiRun, AppSetting, Athlete, DeletionRequest, GarminConnection, Injury, MissedDay,
                      OAuthState, PainReport, PlannedWorkout, RaceResult, RestingHeartRate, Result, StaffUser, AthletePhoto,
                      MeetEntry, MeetDivision, MeetResponse, DivisionAthlete, SyncLog, TrainingGroup, VdotChange, Announcement, utcnow,
-                     Course, MeetConditions)
+                     Course, MeetConditions, RaceTeamResult)
 from .security import csrf_ok, csrf_token, hash_password, new_link_token, verify_password
 
 HERE = Path(__file__).parent
@@ -774,8 +774,18 @@ def create_app() -> FastAPI:
             c = cond.course if cond and cond.course else by_name.get((course or "").strip().lower())
             info[(d, meet)] = {"cond": cond, "course": c, "explain": CS.explain(c, cond),
                                "adjusted": {r.id: CS.adjusted_time(r.time_s, r.distance_m, c, cond) for rs in races.values() for r in rs}}
+        teams = {(t.date, t.meet, t.race): t for t in db.scalars(select(RaceTeamResult)).all()}
+        suggested = {}   # a team score from the runners' points, when the results have them: the top five scorers
+        for (d, meet, course), races in meets.items():
+            for (race, label, meters), rs in races.items():
+                pts = sorted(r.points for r in rs if r.points is not None)
+                if len(pts) >= 5:
+                    suggested[(d, meet, race)] = sum(pts[:5])
+        season_teams = sorted((t for t in teams.values() if season in ("all", A.season_for(t.date)) and (t.place or t.points is not None)),
+                              key=lambda t: (t.date, t.meet, t.race), reverse=True)
         return render(request, "races.html", user, meets=meets, seasons=seasons, season=season, counts=counts,
-                      info=info, courses=courses, footings=[f for f in CS.FOOTING if f])
+                      info=info, courses=courses, footings=[f for f in CS.FOOTING if f], teams=teams, suggested=suggested,
+                      season_teams=season_teams)
 
     @app.post("/races/conditions")
     async def races_conditions(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
@@ -932,6 +942,9 @@ def create_app() -> FastAPI:
         for r in rows:
             r.meet, r.date, r.course = name, new_date, str(f.get("course", "")).strip()[:160]
             sync_benchmark(db, r)
+        for model in (RaceTeamResult, MeetConditions):  # the meet's team results and race-day conditions move with it
+            for x in db.scalars(select(model).where(model.date == d, model.meet == meet)).all():
+                x.meet, x.date = name, new_date
         log(db, "admin", f"{user.username} edited {meet} ({d}) → {name} ({new_date}).")
         flash(request, f"Saved {name} ({len(rows)} results).")
         return back(races_url(new_date))
@@ -957,9 +970,45 @@ def create_app() -> FastAPI:
         for r in rows:
             r.race, r.distance_label, r.distance_m = race, label, meters
             sync_benchmark(db, r)
+        if race != old_race:
+            team = db.scalar(select(RaceTeamResult).where(RaceTeamResult.date == d, RaceTeamResult.meet == meet, RaceTeamResult.race == old_race))
+            if team is not None:
+                team.race = race
         log(db, "admin", f"{user.username} edited {meet} {old_race}: {old_m:g} m → {label}.")
         flash(request, f"Saved {race or 'the race'} at {label} ({len(rows)} results)." +
               (" These times now count toward VDOT." if rows and rows[0].result_id else ""))
+        return back(races_url(d))
+
+    @app.post("/races/team")
+    async def races_team(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
+        """The team's place and score in one race of a meet."""
+        f = await form_checked(request)
+        try:
+            d = dt.date.fromisoformat(str(f.get("date", "")))
+        except ValueError:
+            raise HTTPException(400, "Bad race.")
+        meet, race = str(f.get("meet", ""))[:160], str(f.get("race", ""))[:120]
+        row = db.scalar(select(RaceTeamResult).where(RaceTeamResult.meet == meet, RaceTeamResult.date == d, RaceTeamResult.race == race))
+        if row is None:
+            row = RaceTeamResult(meet=meet, date=d, race=race)
+            db.add(row)
+        try:
+            def num(key, cast, lo, hi):
+                raw = str(f.get(key, "")).strip()
+                v = cast(raw) if raw else None
+                if v is not None and not lo <= v <= hi:
+                    raise ValueError
+                return v
+            row.place, row.teams, row.points = num("place", int, 1, 500), num("teams", int, 1, 500), num("points", float, 0, 5000)
+            if row.place and row.teams and row.place > row.teams:
+                raise ValueError
+        except ValueError:
+            db.rollback()
+            flash(request, "Team place and number of teams are whole numbers (place no more than the number of teams); points a number.", "error")
+            return back(races_url(d))
+        if row.place is None and row.teams is None and row.points is None:
+            db.delete(row)
+        flash(request, f"Saved the team result for {race or 'the race'} at {meet}.")
         return back(races_url(d))
 
     @app.post("/races/delete")
@@ -977,6 +1026,9 @@ def create_app() -> FastAPI:
                 if res is not None:
                     db.delete(res)
             db.delete(r)
+        for model in (RaceTeamResult, MeetConditions):
+            for x in db.scalars(select(model).where(model.date == d, model.meet == meet)).all():
+                db.delete(x)
         flash(request, f"Deleted {meet} ({len(rows)} results).")
         return back(races_url(d))
 

@@ -397,3 +397,6 @@ table.mileage th:last-child { width: 7rem; }
   .pace-grid .long { display: none; }
   .pace-grid .short { display: inline; }
 }
+/* The team's place and score beside a race's name on the Races page. */
+.team-result { font-family: var(--font-body, inherit); font-weight: 500; color: var(--color-fg-muted); margin-left: 6px; }
+.team-result b { color: var(--color-fg); }
