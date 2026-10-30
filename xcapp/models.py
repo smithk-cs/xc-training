@@ -336,8 +336,10 @@ class MeetEntry(Base):
     director_email: Mapped[str] = mapped_column(String(254), default="")
     notes: Mapped[str] = mapped_column(Text, default="")
     course_id: Mapped[int | None] = mapped_column(ForeignKey("courses.id", ondelete="SET NULL"), nullable=True)
+    start_time: Mapped[str] = mapped_column(String(5), default="", server_default="")   # first race, "HH:MM", for the forecast
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
     course: Mapped["Course | None"] = relationship()
+    forecast: Mapped["MeetForecast | None"] = relationship(cascade="all, delete-orphan", uselist=False)
     divisions: Mapped[list["MeetDivision"]] = relationship(back_populates="meet", cascade="all, delete-orphan",
                                                            order_by="MeetDivision.position")
     responses: Mapped[list["MeetResponse"]] = relationship(cascade="all, delete-orphan")
@@ -504,6 +506,8 @@ class Course(Base):
     adjust_s_per_mile: Mapped[float | None] = mapped_column(Float, nullable=True)  # coach's own course adjustment, if set
     map_url: Mapped[str] = mapped_column(String(500), default="")
     video_url: Mapped[str] = mapped_column(String(500), default="")   # a YouTube video of the course, for athletes
+    latitude: Mapped[float | None] = mapped_column(Float, nullable=True)    # where it is, for the weather
+    longitude: Mapped[float | None] = mapped_column(Float, nullable=True)
     notes: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
 
@@ -662,3 +666,18 @@ class Spotlight(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     athlete_id: Mapped[int] = mapped_column(ForeignKey("athletes.id", ondelete="CASCADE"), index=True)
     issue_id: Mapped[int] = mapped_column(ForeignKey("newsletter_issues.id", ondelete="CASCADE"), index=True)
+
+
+class MeetForecast(Base):
+    """The latest weather forecast for a meet at its start time (from Open-Meteo), refreshed nightly and on request."""
+    __tablename__ = "meet_forecasts"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    meet_id: Mapped[int] = mapped_column(ForeignKey("meet_entries.id", ondelete="CASCADE"), unique=True)
+    fetched_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
+    at: Mapped[str] = mapped_column(String(16), default="")         # local time forecast, "2026-10-31T09:00"
+    temp_f: Mapped[float | None] = mapped_column(Float, nullable=True)
+    dew_point_f: Mapped[float | None] = mapped_column(Float, nullable=True)
+    humidity_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
+    wind_mph: Mapped[float | None] = mapped_column(Float, nullable=True)
+    rain_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
+    summary: Mapped[str] = mapped_column(String(60), default="")

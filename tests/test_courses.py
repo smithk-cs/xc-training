@@ -176,3 +176,12 @@ def test_main_distance_and_retired_choices():
     assert C.main_distance(["2 mi", "5K"], None) == 5000 and C.main_distance(["2 mi", "2.5 mi"], None) == C.DISTANCES["2.5 mi"]
     assert C.main_distance(["2 mi", "5K"], C.DISTANCES["2 mi"]) == C.DISTANCES["2 mi"]       # the saved one, while still ticked
     assert C.main_distance([], 5000) is None and C.distance_label(C.DISTANCES["3 mi"]) == "3 mi"   # older labels still read
+
+
+def test_course_breakdown_flags_missing_hills():
+    from xcapp import courses as C
+    from xcapp.models import Course
+    flat_by_default = Course(name="Foresthill", surface="Firm grass", turns="Few", distance_m=5000)
+    assert C.course_seconds(flat_by_default) == 5 and C.breakdown(flat_by_default)[0] == ("hills not set", 0)
+    hilly = Course(name="Foresthill", surface="Firm grass", turns="Few", distance_m=5000, elevation_gain_ft=400)   # 129 ft/mile
+    assert C.breakdown(hilly)[0] == ("hills (tier 5)", 28) and C.course_seconds(hilly) == 33

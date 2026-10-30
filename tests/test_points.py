@@ -187,15 +187,21 @@ def test_experience_changes_the_miles_goal_and_target(session):
 
 def test_keep_pace_colours():
     assert [P.pace_status(x) for x in (None, 120, 90, 89.9, 80, 79.9)] == ["", "good", "good", "warn", "warn", "bad"]
-    days = [{"date": MON + dt.timedelta(days=i), "miles": m, "points": p} for i, (m, p) in enumerate(
-        [(5, 10), (5, 10), (5, 10), (0, 0), (0, 0), (0, 0), (0, 0)])]
-    week = {"days": days, "goal_miles": 35, "target": 70}
-    P.keep_pace(week, MON + dt.timedelta(days=2))                       # Wednesday: 15 of the 15 miles due so far
-    assert [round(d["miles_pct"]) if d["miles_pct"] is not None else None for d in days] == [100, 100, 100, None, None, None, None]
-    assert week["miles_pct"] == pytest.approx(100) and week["points_pct"] == pytest.approx(100)
-    P.keep_pace(week, MON + dt.timedelta(days=4))                       # Friday, nothing more run: 15 of 25 due
-    assert week["miles_pct"] == pytest.approx(60) and P.pace_status(week["miles_pct"]) == "bad"
-    assert round(days[3]["miles_pct"]) == 75 and P.pace_status(days[3]["miles_pct"]) == "bad"
+    days = [{"date": MON + dt.timedelta(days=i), "miles": m, "points": p, "planned": pl, "plan_miles": pm} for i, (m, p, pl, pm) in enumerate(
+        [(0, 0, None, None), (6, 12, None, None), (5, 20, 20, 5), (0, 0, None, None), (0, 0, None, None), (0, 0, None, None), (0, 0, None, None)])]
+    week = {"days": days, "goal_miles": 36, "target": 72}
+    P.keep_pace(week, MON + dt.timedelta(days=2))
+    # Each day on its own: Tuesday 6 of 6 mi (36 / 6) and 12 of 12 pts; Wednesday's workout 5 of 5 planned mi and 20 of 20
+    # planned points. A missed Monday no longer turns the days after it red.
+    assert [round(d["miles_pct"]) if d["miles_pct"] is not None else None for d in days] == [None, 100, 100, None, None, None, None]
+    assert [round(d["points_pct"]) if d["points_pct"] is not None else None for d in days] == [None, 100, 100, None, None, None, None]
+    assert days[2]["why_miles"] == "5.0 of 5.0 mi planned for the workout: 100%"
+    assert days[1]["why_points"] == "12 of 12 pts (weekly 72 ÷ 6 days): 100%"
+    # The week so far: 11 of 15.4 mi due by Wednesday (3/7 of 36)
+    assert round(week["miles_pct"]) == 71 and P.pace_status(week["miles_pct"]) == "bad"
+    assert week["why_miles"] == "11.0 of 15.4 mi due (3 of 7 days, through Wed, of 36): 71%"
+    P.keep_pace(week, MON + dt.timedelta(days=6))
+    assert week["why_points"].startswith("32 of 72 pts due (the whole week")
 
 
 def test_week_links_and_colours():

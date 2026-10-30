@@ -4,7 +4,9 @@
 <p><a href="/registrations">‹ Meet entries</a></p>
 <div class="form-row" style="justify-content:space-between; align-items:flex-end">
   <div><h1 style="margin:0">{{ m.name }}</h1>
-    <p class="muted" style="margin:4px 0 0">{{ m.date.strftime('%A, %B %-d, %Y') }}{% if m.location %} · {{ m.location }}{% endif %}</p></div>
+    <p class="muted" style="margin:4px 0 0">{{ m.date.strftime('%A, %B %-d, %Y') }}{% if m.start_time %}, {{ m.start_time }}{% endif %}{% if m.location %} · {{ m.location }}{% endif %}</p>
+    {% if m.date >= now() %}<p class="small" style="margin:4px 0 0">{% if m.forecast and m.forecast.temp_f is not none %}<b>Forecast:</b> {{ describe_weather(m.forecast) }} <span class="muted">(updated {{ (m.forecast.fetched_at|local).strftime('%a %-I:%M %p') }}, <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a>)</span>{% else %}<span class="muted">Forecast: pending{% if not (matched and matched.latitude is not none) %} (needs the course’s map location){% else %} (forecasts reach about two weeks ahead){% endif %}</span>{% endif %}
+      {% if user.role != 'trainer' %}<form method="post" action="/registrations/{{ m.id }}/forecast" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><button type="submit" class="link">Update forecast</button></form>{% endif %}</p>{% endif %}</div>
   <span class="form-row"><a class="button secondary" href="/registrations/{{ m.id }}/entries.pdf" target="_blank" rel="noopener">Open PDF</a>
     <a class="button" href="/registrations/{{ m.id }}/entries.pdf?download=1">Download PDF</a></span>
 </div>
@@ -131,6 +133,7 @@
         {% for c in courses %}<option value="{{ c.id }}"{% if m.course_id == c.id %} selected{% endif %}>{{ c.name }}{{ ' (video)' if c.video_url else '' }}</option>{% endfor %}</select></label>
     </div>
     <div class="form-row">
+      <label>First race starts<input type="time" name="start_time" value="{{ m.start_time }}" style="width:8em"></label>
       <label>Race director<input type="text" name="director_name" maxlength="120" value="{{ m.director_name }}"></label>
       <label>Race director’s email<input type="email" name="director_email" maxlength="254" value="{{ m.director_email }}"></label>
     </div>

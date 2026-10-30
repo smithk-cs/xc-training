@@ -17,7 +17,9 @@
     <td class="num">{% if tier %}{{ tier }}{% if not c.hill_tier %} <span class="small muted">(from climb)</span>{% endif %}{% endif %}</td>
     <td>{{ c.turns }}</td>
     <td class="num">{{ '{:,.0f} ft'.format(c.altitude_ft) if c.altitude_ft is not none else '' }}</td>
-    <td class="num nowrap">{{ '%g' % CS.course_seconds(c) }} s/mi{% if c.adjust_s_per_mile is not none %} <span class="small muted">(set)</span>{% endif %}{% if CS.altitude_pct(c.altitude_ft) %}<br><span class="small muted">+{{ '%.1f' % CS.altitude_pct(c.altitude_ft) }}% altitude</span>{% endif %}</td>
+    <td class="num nowrap" title="{% for k, v in CS.breakdown(c) %}{{ k }} {{ '%g' % v }}{{ ' + ' if not loop.last }}{% endfor %}">{{ '%g' % CS.course_seconds(c) }} s/mi{% if c.adjust_s_per_mile is not none %} <span class="small muted">(set)</span>{% endif %}
+      <br><span class="small muted">{% for k, v in CS.breakdown(c) %}{{ k }} {{ '%g' % v }}{{ ' + ' if not loop.last }}{% endfor %}</span>
+      {% if c.adjust_s_per_mile is none and not tier %}<br><span class="pill warn" title="With no total climb or hill tier, the hills count as flat (0 s/mile). Add the climb or pick a tier.">Hills not set: counted as flat</span>{% endif %}{% if CS.altitude_pct(c.altitude_ft) %}<br><span class="small muted">+{{ '%.1f' % CS.altitude_pct(c.altitude_ft) }}% altitude</span>{% endif %}</td>
     <td class="num">{{ raced.get(c.name.strip().lower(), 0) }}</td>
     {% if user.role != 'trainer' %}<td class="nowrap"><a href="/courses?edit={{ c.id }}#course-form">Edit</a></td>{% endif %}</tr>
   {% else %}<tr><td colspan="11" class="muted">No courses yet.</td></tr>{% endfor %}
@@ -27,6 +29,7 @@
 </div>
 
 {% if user.role != 'trainer' %}
+{% if edit and user.role != 'trainer' %}<form method="post" action="/courses/{{ edit.id }}/locate" id="locate-form"><input type="hidden" name="csrf" value="{{ csrf }}"></form>{% endif %}
 <div class="card" id="course-form" style="max-width:980px">
   <h2>{% if edit %}Edit {{ edit.name }}{% else %}Add a course{% endif %}</h2>
   <form method="post" action="/courses">
@@ -54,6 +57,13 @@
       <label>Course adjustment (s/mile)<input type="number" name="adjust_s_per_mile" value="{{ '%g' % edit.adjust_s_per_mile if edit and edit.adjust_s_per_mile is not none else '' }}" step="1" min="-30" max="120" placeholder="worked out" style="width:8em"></label>
       <label style="flex:1">Map link<input type="url" name="map_url" value="{{ edit.map_url if edit else '' }}" maxlength="500" placeholder="https://www.strava.com/routes/..."></label>
       <label style="flex:1">Course video (YouTube)<input type="url" name="video_url" value="{{ edit.video_url if edit else '' }}" maxlength="500" placeholder="https://youtu.be/..."></label>
+    </div>
+    <div class="form-row" style="align-items:flex-end">
+      <label>Latitude<input type="number" name="latitude" step="0.00001" min="-90" max="90" value="{{ '%g' % edit.latitude if edit and edit.latitude is not none else '' }}" style="width:9em" placeholder="38.71234"></label>
+      <label>Longitude<input type="number" name="longitude" step="0.00001" min="-180" max="180" value="{{ '%g' % edit.longitude if edit and edit.longitude is not none else '' }}" style="width:9em" placeholder="-121.43210"></label>
+      {% if edit %}<button type="submit" form="locate-form" class="secondary">Find on map</button>
+      {% if edit.latitude is not none %}<a class="small" href="https://www.openstreetmap.org/?mlat={{ edit.latitude }}&mlon={{ edit.longitude }}#map=15/{{ edit.latitude }}/{{ edit.longitude }}" target="_blank" rel="noopener">Check on the map</a>{% endif %}{% endif %}
+      <span class="small muted" style="flex:1">The map location gives each meet here a weather forecast and fills in race-day weather. “Find on map” looks up the Location above; or paste the numbers from Google Maps (right-click the spot).</span>
     </div>
     <label>Notes<textarea name="notes" rows="3" style="width:100%" maxlength="4000" placeholder="Where the hills are, where the course gets muddy, the start box, parking">{{ edit.notes if edit else '' }}</textarea></label>
     <div class="form-row" style="margin-top:8px"><button type="submit">{% if edit %}Save course{% else %}Add course{% endif %}</button>{% if edit %}<a href="/courses">Cancel</a>{% endif %}</div>

@@ -484,3 +484,6 @@ ul.plain-list { list-style: none; padding: 0; margin: 0; display: flex; flex-dir
 .nl-race table.list { width: auto; min-width: min(100%, 360px); }
 /* Workouts list: one header row per day, its workouts beneath */
 table.workouts-by-day tr.day-row th { background: var(--color-soft); color: var(--color-fg); font-size: 14px; padding-top: 8px; padding-bottom: 8px; }
+/* Week page: the reason behind each colour, shown when "Show why" is ticked */
+.week-table .why { display: none; }
+.week-table.show-why .why { display: block; font-size: 11px; line-height: 1.3; font-weight: 400; color: var(--color-fg-muted); white-space: normal; max-width: 150px; margin: 2px auto 4px; }

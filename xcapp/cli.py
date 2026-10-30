@@ -106,6 +106,8 @@ def nightly() -> dict:
         else:
             out["class_years"] = CY.refresh(db, A.team_today())
         out["duplicate_pain_reports_removed"] = A.dedupe_pain_reports(db)
+        from . import weather as WX
+        out["weather"] = WX.nightly(db)
         if settings().ai_configured:
             run = AI.generate_briefing(db)
             out["briefing"] = run.status if run.status == "ok" else f"failed: {run.error}"

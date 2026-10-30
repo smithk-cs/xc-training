@@ -19,6 +19,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from . import analysis as A
+from .weather import describe
 from .models import (Activity, Athlete, Course, MeetConditions, MeetEntry, MissedDay, NewsletterDeadline, NewsletterIssue,
                      NewsletterSection, PlannedWorkout, RaceResult, RaceTeamResult, RecoveryTip, Spotlight, VdotChange, utcnow)
 
@@ -104,8 +105,8 @@ def build_race_logistics(c: WeekCtx) -> dict | None:
     return {"meets": [{"name": m.name, "date": m.date.isoformat(), "location": m.location,
                        "course": m.course.name if m.course else "",
                        "divisions": [d.name for d in m.divisions],
-                       # No weather service yet: the coach adds the forecast in the section's text.
-                       "forecast": "pending"} for m in meets]}
+                       "start": m.start_time,
+                       "forecast": describe(m.forecast) if m.forecast else ""} for m in meets]}
 
 
 def build_deadlines(c: WeekCtx) -> dict | None:
@@ -451,7 +452,7 @@ def _text_lines(s: dict) -> list[str]:
     elif k == "race_logistics":
         for m in d.get("meets", []):
             out.append(f"{m['name']}, {dt.date.fromisoformat(m['date']):%a %b %-d}" + (f", {m['location']}" if m["location"] else "")
-                       + ". Forecast: pending.")
+                       + ". Forecast: " + (m.get("forecast") or "pending") + ".")
     elif k == "deadlines":
         out += [f"{x['title']}: due {dt.date.fromisoformat(x['due']):%a %b %-d}" + (f". {x['notes']}" if x["notes"] else "") for x in d.get("deadlines", [])]
     elif k == "race_recap":

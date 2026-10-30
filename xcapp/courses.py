@@ -69,6 +69,15 @@ def course_seconds(c: Course | None) -> float:
     return TIER_SECONDS.get(hill_tier(c) or 1, 0) + SURFACES.get(c.surface, 0) + TURNS.get(c.turns, 0)
 
 
+def breakdown(c: Course) -> list[tuple[str, float]]:
+    """What makes up the course's seconds per mile, for the Courses page: [('hills (tier 3)', 10), ('firm grass', 5), ...]."""
+    if c.adjust_s_per_mile is not None:
+        return [("set by a coach", c.adjust_s_per_mile)]
+    tier = hill_tier(c)
+    return [(f"hills (tier {tier})" if tier else "hills not set", TIER_SECONDS.get(tier or 1, 0)),
+            (c.surface.lower(), SURFACES.get(c.surface, 0)), (f"{c.turns.lower()} turns", TURNS.get(c.turns, 0))]
+
+
 def temp_pct(f: float | None) -> float:
     return max(0.0, f - TEMP_BASE_F) * TEMP_PCT_PER_F if f is not None else 0.0
 

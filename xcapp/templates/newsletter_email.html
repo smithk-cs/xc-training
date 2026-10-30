@@ -21,7 +21,7 @@
         <td valign="top" width="90" style="{{ p }} font-weight:bold; padding:3px 8px 3px 0;">{{ date.fromisoformat(day.date).strftime('%a %b %-d') }}</td>
         <td valign="top" style="{{ p }} padding:3px 0;">{% for i in day['items'] %}{% if i.kind == 'meet' %}<b>{{ i.text }}</b>{% else %}{{ i.text }}{% endif %}{% if not loop.last %}<br>{% endif %}{% endfor %}</td></tr>{% endfor %}</table>
     {% elif s.key == 'race_logistics' %}
-      {% for m in d.meets %}<p style="{{ p }}"><b>{{ m.name }}</b>, {{ date.fromisoformat(m.date).strftime('%A, %b %-d') }}{% if m.location %} · {{ m.location }}{% endif %}<br><span style="{{ small }}">Forecast: pending</span></p>{% endfor %}
+      {% for m in d.meets %}<p style="{{ p }}"><b>{{ m.name }}</b>, {{ date.fromisoformat(m.date).strftime('%A, %b %-d') }}{% if m.location %} · {{ m.location }}{% endif %}<br><span style="{{ small }}">Forecast: {{ m.forecast or 'pending' }}</span></p>{% endfor %}
     {% elif s.key == 'deadlines' %}
       {% for x in d.deadlines %}<p style="{{ p }}"><b>{{ x.title }}</b>: due {{ date.fromisoformat(x.due).strftime('%a, %b %-d') }}{% if x.notes %}. {{ x.notes }}{% endif %}</p>{% endfor %}
     {% elif s.key == 'race_recap' %}

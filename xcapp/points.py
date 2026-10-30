@@ -41,22 +41,47 @@ def pace_status(pct: float | None) -> str:
     return "good" if pct >= ON_PACE else "warn" if pct >= NEAR_PACE else "bad"
 
 
+RUN_DAYS = 6   # a day's share of the weekly goals: the goal over six running days (as on the athlete's miles chart)
+
+
+def _pct(done: float, due: float) -> float | None:
+    return 100 * done / due if due else None
+
+
 def keep_pace(week: dict, today: dt.date) -> None:
-    """Miles and points against the share of the week's goals due by each day (a seventh a day), for colouring:
-    on each day, the running total through that day; for the week, through today (or the whole week once past)."""
+    """Colours, each with the reason behind it ('why_miles', 'why_points'):
+    - each day judged on its own: miles against the day's planned workout miles (else the weekly goal over six
+      running days), and points against the day's planned points (else the weekly target over six);
+    - the week's totals against the share due by today (a seventh of the goals a day), or the whole goals once past."""
+    goal_m, target = week["goal_miles"] or 0, week["target"] or 0
     cum_m = cum_p = 0.0
     week["miles_pct"] = week["points_pct"] = None
+    week["why_miles"] = week["why_points"] = ""
     for i, d in enumerate(week["days"], 1):
         cum_m += d["miles"]
         cum_p += d["points"]
+        d["miles_pct"] = d["points_pct"] = None
+        d["why_miles"] = d["why_points"] = ""
         if d["date"] > today:
-            d["miles_pct"] = d["points_pct"] = None
             continue
-        due_m = week["goal_miles"] * i / 7 if week["goal_miles"] else 0
-        due_p = (week["target"] or 0) * i / 7
-        d["miles_pct"] = 100 * cum_m / due_m if due_m else None
-        d["points_pct"] = 100 * cum_p / due_p if due_p else None
-        week["miles_pct"], week["points_pct"] = d["miles_pct"], d["points_pct"]
+        if d["miles"] or d["points"]:
+            plan_m = d.get("plan_miles") or 0
+            due_m = plan_m or goal_m / RUN_DAYS
+            due_p = d["planned"] if d.get("planned") else target / RUN_DAYS
+            d["miles_pct"], d["points_pct"] = _pct(d["miles"], due_m), _pct(d["points"], due_p)
+            if d["miles_pct"] is not None:
+                d["why_miles"] = (f"{d['miles']:.1f} of {due_m:.1f} mi " + ("planned for the workout" if plan_m else
+                                  f"(weekly {goal_m:g} ÷ {RUN_DAYS} days)") + f": {d['miles_pct']:.0f}%")
+            if d["points_pct"] is not None:
+                d["why_points"] = (f"{d['points']:.0f} of {due_p:.0f} pts " + ("planned for the workout" if d.get("planned") else
+                                   f"(weekly {target:.0f} ÷ {RUN_DAYS} days)") + f": {d['points_pct']:.0f}%")
+        due_wm, due_wp = goal_m * i / 7, target * i / 7
+        week["miles_pct"], week["points_pct"] = _pct(cum_m, due_wm), _pct(cum_p, due_wp)
+        through = "the whole week" if i == 7 else f"{i} of 7 days, through {d['date']:%a}"
+        if week["miles_pct"] is not None:
+            week["why_miles"] = f"{cum_m:.1f} of {due_wm:.1f} mi due ({through}, of {goal_m:g}): {week['miles_pct']:.0f}%"
+        if week["points_pct"] is not None:
+            week["why_points"] = f"{cum_p:.0f} of {due_wp:.0f} pts due ({through}, of {target:.0f}): {week['points_pct']:.0f}%"
 
 
 # ---------- zones and one run's points ----------
@@ -226,10 +251,11 @@ def _athlete_week(a, v, g, days, mine, acts_by, pain_by, missed_by, min_minutes,
     for d0 in days:
         d = d0 + dt.timedelta(days=offset)
         planned = mine(d)
-        day_plan = None
+        day_plan = day_plan_miles = None
         if planned and v:
             plans = [workout_plan(w, v) for w in planned]
-            workout_miles += sum(m for m, _ in plans)
+            day_plan_miles = sum(m for m, _ in plans)
+            workout_miles += day_plan_miles
             day_plan = sum(p for _, p in plans)
             workout_pts += day_plan
         runs = [x for x in acts_by.get((a.id, d), []) if "run" in (x.sport or "running")]
@@ -257,7 +283,7 @@ def _athlete_week(a, v, g, days, mine, acts_by, pain_by, missed_by, min_minutes,
         worst = max(pain_by.get((a.id, d), []), key=lambda p: p.severity, default=None)
         pain, pain_id = (worst.severity, worst.id) if worst else (None, None)
         miss = (missed_by.get((a.id, d)) or [None])[0]
-        cells.append({"date": d, "runs": runs, "miles": day_miles, "minutes": minutes, "points": earned, "planned": day_plan,
+        cells.append({"date": d, "runs": runs, "miles": day_miles, "minutes": minutes, "points": earned, "planned": day_plan, "plan_miles": day_plan_miles,
                       "workouts": planned, "hr": hr, "rpe": max((r.rpe for r in runs if r.rpe is not None), default=None),
                       "pain": pain, "pain_id": pain_id, "missed": miss, "flags": day_flags})
     target = None

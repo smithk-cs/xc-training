@@ -153,6 +153,7 @@
     <div class="wpace">
       <div class="d">{{ m.name }}</div>
       <div class="small muted">{{ m.date.strftime('%a, %b %-d') }}{% if m.location %} · {{ m.location }}{% endif %}{% if x.race %} · You’re entered in {{ x.race.name }}{% if x.race.distance %} {{ x.race.distance }}{% endif %}{% endif %}</div>
+      {% if m.forecast and m.forecast.temp_f is not none %}<p class="small" style="margin:6px 0 0">🌤 <b>Forecast{% if m.start_time %} for {{ m.start_time }}{% endif %}:</b> {{ describe_weather(m.forecast) }}</p>{% endif %}
       {% if x.course and x.course.video_url %}<p style="margin:8px 0"><a class="button secondary" href="{{ x.course.video_url }}" target="_blank" rel="noopener">▶ Course video: {{ x.course.name }}</a></p>{% endif %}
       {% if r and r.status == 'attending' %}<p class="small"><span class="pill good">You’re confirmed</span></p>
       {% elif r %}<p class="small">{% if r.by == 'athlete' %}You told your coaches you won’t be there{% else %}Your coaches have you down as not attending{% endif %}: {{ r.reason }}</p>

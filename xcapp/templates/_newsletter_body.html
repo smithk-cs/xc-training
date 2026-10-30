@@ -5,7 +5,7 @@
   {% if s.key == 'week_ahead' %}
     <dl class="nl-days">{% for day in d.days %}<dt>{{ date.fromisoformat(day.date).strftime('%a %b %-d') }}</dt><dd>{% for i in day['items'] %}{% if i.kind == 'meet' %}<b>{{ i.text }}</b>{% else %}{{ i.text }}{% endif %}{{ '<br>'|safe if not loop.last }}{% endfor %}</dd>{% endfor %}</dl>
   {% elif s.key == 'race_logistics' %}
-    {% for m in d.meets %}<p><b>{{ m.name }}</b>, {{ date.fromisoformat(m.date).strftime('%A, %b %-d') }}{% if m.location %} · {{ m.location }}{% endif %}{% if m.course %} · {{ m.course }}{% endif %}<br><span class="small muted">Forecast: pending</span></p>{% endfor %}
+    {% for m in d.meets %}<p><b>{{ m.name }}</b>, {{ date.fromisoformat(m.date).strftime('%A, %b %-d') }}{% if m.location %} · {{ m.location }}{% endif %}{% if m.course %} · {{ m.course }}{% endif %}<br><span class="small muted">Forecast: {{ m.forecast or 'pending' }}</span></p>{% endfor %}
   {% elif s.key == 'deadlines' %}
     <ul>{% for x in d.deadlines %}<li><b>{{ x.title }}</b>: due {{ date.fromisoformat(x.due).strftime('%a, %b %-d') }}{% if x.notes %}. {{ x.notes }}{% endif %}</li>{% endfor %}</ul>
   {% elif s.key == 'race_recap' %}

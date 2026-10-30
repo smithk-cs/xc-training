@@ -33,6 +33,7 @@ from . import registration as REG
 from . import reports as RP
 from . import reminders as RM
 from . import garmin_csv as GCSV
+from . import weather as WX
 from . import classyear as CY
 from .config import settings
 from .db import SessionLocal, create_all
@@ -154,7 +155,7 @@ def create_app() -> FastAPI:
     # A fingerprint of the style sheet and scripts: links carry it (?v=...), so browsers load new ones after each deploy.
     import hashlib
     asset_v = hashlib.sha256(b"".join(f.read_bytes() for f in sorted((HERE / "static").glob("*.[cj]s*")))).hexdigest()[:10]
-    templates.env.globals.update(asset_v=asset_v, fmt_time=A.fmt_time, timedelta=dt.timedelta, now=A.team_today, EVENTS=list(A.EVENTS), GROUPS=GROUPS, team_name=s.team_name,
+    templates.env.globals.update(asset_v=asset_v, describe_weather=WX.describe, fmt_time=A.fmt_time, timedelta=dt.timedelta, now=A.team_today, EVENTS=list(A.EVENTS), GROUPS=GROUPS, team_name=s.team_name,
                                  has_logo=has_logo, FEELS=FEELS, EFFORT_WORDS=EFFORT_WORDS, RUN_TYPES=A.RUN_TYPES,
                                  MISSED_REASONS=A.MISSED_REASONS, SIDES=A.SIDES, STARTED=A.STARTED, SEEN_BY=A.SEEN_BY,
                                  MORE_DAYS=A.MORE_DAYS, missed_label=A.missed_label,
@@ -862,6 +863,8 @@ def create_app() -> FastAPI:
             raise ValueError("The video link should start with https:// (copy it from YouTube's Share button).")
         c.video_url = video
         c.notes = str(f.get("notes", "")).strip()[:4000]
+        c.latitude = num("latitude", -90, 90, "Latitude")
+        c.longitude = num("longitude", -180, 180, "Longitude")
 
     @app.get("/courses", response_class=HTMLResponse)
     def courses_page(request: Request, user=Depends(any_staff, scope="function"), db: Session = Depends(get_db, scope="function")):
@@ -1918,6 +1921,11 @@ def create_app() -> FastAPI:
         if "course_id" in f:  # the course, for the course video on athletes' pages
             cid = str(f.get("course_id", ""))
             m.course_id = int(cid) if cid.isdigit() else None
+        if "start_time" in f:  # the first race, for the forecast
+            t = str(f.get("start_time", "")).strip()[:5]
+            if t and not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", t):
+                raise ValueError("Start time looks like 09:30")
+            m.start_time = t
 
     @app.get("/registrations", response_class=HTMLResponse)
     def registrations(request: Request, user=Depends(any_staff, scope="function"), db: Session = Depends(get_db, scope="function")):
@@ -2004,6 +2012,54 @@ def create_app() -> FastAPI:
             flash(request, str(exc) + ("" if str(exc).endswith(".") else "."), "error")
         return back(f"/registrations/{mid}")
 
+    @app.post("/registrations/{mid}/forecast")
+    async def registration_forecast(request: Request, mid: int, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
+        await form_checked(request)
+        m = get_meet(db, mid)
+        c = meet_course(db, m)
+        try:
+            if c is None or c.latitude is None:
+                raise WX.WeatherError("Choose the meet’s course, and give the course a map location on the Courses page (Find on map).")
+            with WX.make_client() as http:
+                ok = WX.refresh_forecast(db, http, m, A.team_today())
+            flash(request, f"Forecast updated: {WX.describe(m.forecast)}." if ok else
+                  f"No forecast yet: forecasts reach {WX.FORECAST_DAYS} days ahead.", "ok" if ok else "error")
+        except WX.WeatherError as exc:
+            flash(request, str(exc), "error")
+        return back(f"/registrations/{mid}")
+
+    @app.post("/weather/update")
+    async def weather_update(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
+        """Forecasts for upcoming meets and race-day conditions for recent races, now rather than tonight."""
+        f = await form_checked(request)
+        out = WX.nightly(db)
+        if out.get("error"):
+            flash(request, out["error"], "error")
+        else:
+            flash(request, f"Weather updated: {out['forecasts']} forecast{'' if out['forecasts'] == 1 else 's'} and "
+                           f"{out['race_conditions']} race{'' if out['race_conditions'] == 1 else 's'} filled in.")
+        nxt = str(f.get("next", "/races"))
+        return back(nxt if nxt.startswith("/") and not nxt.startswith("//") else "/races")
+
+    @app.post("/courses/{cid}/locate")
+    async def course_locate(request: Request, cid: int, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
+        await form_checked(request)
+        c = db.get(Course, cid)
+        if c is None:
+            raise HTTPException(404, "Course not found.")
+        try:
+            with WX.make_client() as http:
+                hit = WX.geocode(http, c.location or c.name)
+            if hit is None:
+                flash(request, f"Couldn’t find “{c.location or c.name}” on the map. Try a town in Location, or paste the "
+                               "latitude and longitude from Google Maps (right-click the spot).", "error")
+            else:
+                c.latitude, c.longitude = round(hit[0], 5), round(hit[1], 5)
+                flash(request, f"Found {hit[2]} ({c.latitude}, {c.longitude}). Check it on the map link and adjust if needed.")
+        except WX.WeatherError as exc:
+            flash(request, str(exc), "error")
+        return back(f"/courses?edit={cid}#course-form")
+
     @app.post("/registrations/{mid}/delete")
     async def registration_delete(request: Request, mid: int, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
         await form_checked(request)
@@ -2067,13 +2123,7 @@ def create_app() -> FastAPI:
               + f" athlete{'' if len(chosen) == 1 else 's'}." + (" Some were already in another race and were left there." if taken else ""))
         return back(f"/registrations/{mid}#div-{d.id}")
 
-    def meet_course(db: Session, m: MeetEntry) -> Course | None:
-        """The meet's course: the one chosen for it, else a course whose name is in the meet's location or name."""
-        if m.course is not None:
-            return m.course
-        where = f"{m.location} {m.name}".lower()
-        return next((c for c in db.scalars(select(Course).order_by(func.length(Course.name).desc())).all()
-                     if c.name.strip().lower() in where), None)
+    meet_course = WX.course_for
 
     def my_meets(db: Session, a: Athlete, today: dt.date) -> list[dict]:
         """Upcoming meets for an athlete's page: their race if entered, their answer, and whether they can still answer."""

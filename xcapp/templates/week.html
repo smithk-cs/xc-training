@@ -12,6 +12,7 @@
 </div>
 <p class="muted" style="max-width:90ch">Every minute run earns points; harder minutes earn more ({% for z, r in rates.items() %}{{ z|lower }} {{ r }}{{ ', ' if not loop.last else '' }}{% endfor %} a minute). The target is the week’s team workouts plus the rest of the group’s weekly miles at easy pace. On a workout day, points stop at that day’s plan, so running faster than planned earns nothing extra; other days count running minutes as easy, up to 110% of the target. Score: 80% points, 20% days with at least {{ min_minutes }} minutes run (target {{ target_days }}).</p>
 
+<label class="check" style="margin:0 0 8px"><input type="checkbox" id="show-why" onchange="document.querySelector('.week-table').classList.toggle('show-why', this.checked)"> Show why each number is green, amber or red</label>
 <div class="card scroll" style="padding:0">
 <table class="list compact week-table">
   <thead><tr><th class="who">Athlete</th><th class="num">Miles</th><th class="num">Points</th><th class="num">Score</th><th class="num">Days</th>
@@ -25,13 +26,13 @@
   <tr>
     <td class="who"><a href="/athletes/{{ r.a.id }}">{{ r.a.name }}</a>{% if r.vdot or r.a.experience in (1, 3) %}<br><span class="small muted">{% if r.vdot %}VDOT {{ r.vdot }}{% endif %}{% if r.a.experience == 1 %} · new runner −10%{% elif r.a.experience == 3 %} · experienced +10%{% endif %}</span>{% endif %}
       {% if r.flags %}<details class="flags"><summary class="small">{{ r.flags|length }} flag{{ '' if r.flags|length == 1 else 's' }}</summary><ul class="small">{% for f in r.flags %}<li>{{ f }}</li>{% endfor %}</ul></details>{% endif %}</td>
-    <td class="num pace-{{ pace(r.miles_pct) }}">{{ '%.1f' % r.miles }}{% if r.goal_miles %}<br><span class="small muted">of {{ '%g' % r.goal_miles }}</span>{% endif %}</td>
-    <td class="num pace-{{ pace(r.points_pct) }}">{{ '%.0f' % r.points }}{% if r.target %}<br><span class="small muted">of {{ '%.0f' % r.target }}</span>{% endif %}</td>
+    <td class="num pace-{{ pace(r.miles_pct) }}" title="{{ r.why_miles }}">{{ '%.1f' % r.miles }}{% if r.goal_miles %}<br><span class="small muted">of {{ '%g' % r.goal_miles }}</span>{% endif %}{% if r.why_miles %}<span class="why">{{ r.why_miles }}</span>{% endif %}</td>
+    <td class="num pace-{{ pace(r.points_pct) }}" title="{{ r.why_points }}">{{ '%.0f' % r.points }}{% if r.target %}<br><span class="small muted">of {{ '%.0f' % r.target }}</span>{% endif %}{% if r.why_points %}<span class="why">{{ r.why_points }}</span>{% endif %}</td>
     <td class="num">{% if r.score is not none %}<b>{{ '%.0f' % r.score }}%</b>{% else %}<span class="small muted" title="No target yet: needs a VDOT and a weekly miles goal for the group">–</span>{% endif %}</td>
     <td class="num">{{ r.run_days }}<br><span class="small muted">of {{ r.target_days }}</span></td>
     {% for d in r.days %}
     <td class="day d{{ loop.index0 }}{% if d.date == today %} today{% endif %}{% if d.date > today %} future{% endif %}">
-      {% if d.runs %}<b class="pace-{{ pace(d.miles_pct) }}">{{ '%.1f' % d.miles }} mi</b><br><span class="pace-{{ pace(d.points_pct) }}">{{ '%.0f' % d.points }}{% if d.planned is not none %}/{{ '%.0f' % d.planned }}{% endif %} pts</span>
+      {% if d.runs %}<b class="pace-{{ pace(d.miles_pct) }}" title="{{ d.why_miles }}">{{ '%.1f' % d.miles }} mi</b>{% if d.why_miles %}<span class="why">{{ d.why_miles }}</span>{% endif %}<br><span class="pace-{{ pace(d.points_pct) }}" title="{{ d.why_points }}">{{ '%.0f' % d.points }}{% if d.planned is not none %}/{{ '%.0f' % d.planned }}{% endif %} pts</span>{% if d.why_points %}<span class="why">{{ d.why_points }}</span>{% endif %}
         {% if d.hr %}<br><span class="muted">HR {{ d.hr|round|int }}</span>{% endif %}{% if d.rpe is not none %}<br><span class="muted">Effort {{ d.rpe }}</span>{% endif %}
       {% elif d.planned is not none and d.date < today %}<span class="muted">Missed workout</span>
       {% elif d.workouts %}<span class="muted">{{ '%.0f' % d.planned if d.planned is not none else '' }} pts planned</span>
@@ -46,7 +47,7 @@
 </table>
 </div>
 {% if rows and rows|selectattr('score', 'none')|list %}<p class="small muted">No score (–) means there is no target yet: the athlete needs a VDOT, and their group a weekly miles goal on the <a href="/groups?team={{ team }}">Groups</a> page.</p>{% endif %}
-<p class="small muted">Colors keep pace with the week: miles and points against the share of the weekly goals due so far (a seventh a day). <span class="pace-good">Green</span> 90% or more, <span class="pace-warn">amber</span> 80 to 89%, <span class="pace-bad">red</span> below 80%. In each day, the running totals from Monday through that day, so a short or missed day early in the week keeps later days red until the week catches up; in the Miles and Points columns, through today. Each group’s team workouts are on its group row.</p>
+<p class="small muted"><span class="pace-good">Green</span> 90% or more, <span class="pace-warn">amber</span> 80 to 89%, <span class="pace-bad">red</span> below 80%. Each day is judged on its own: miles against the day’s planned workout miles (on other days, the weekly miles goal ÷ 6 running days), and points against the day’s planned points (on other days, the weekly target ÷ 6). The Miles and Points columns are the week so far against the share due by today (a seventh of the weekly goals a day). Tick “Show why” or point at a number to see the sums. Each group’s team workouts are on its group row.</p>
 <p class="small muted">Miles, points and heart rate come from synced runs; effort and pain from what the athlete reported. Flags are for the coach and don’t change the score: easy days run faster than easy pace, points up more than 10% on the week before, and treadmill runs whose watch pace may be off.</p>
 {% if user.role != 'trainer' %}
 <form method="post" action="/week/settings" class="card form-row" style="max-width:640px">
