@@ -106,10 +106,10 @@ def test_parts_in_miles(app):
     c, csrf = login(app)
     day = (A.team_today() + dt.timedelta(days=1)).isoformat()
     form = {"csrf": csrf, "date": day, "title": "", "p_sets": ["1", "1"], "p_reps": ["1", "3"],
-            "p_dist": ["5", "1.5"], "p_unit": ["mi", "mi"], "p_zone": ["Marathon", "Threshold"], "p_rest": ["", "2 min jog"]}
+            "p_dist": ["5", "1.5"], "p_unit": ["mi", "mi"], "p_zone": ["Moderate", "Threshold"], "p_rest": ["", "2 min jog"]}
     c.post("/workouts", data=form)
     page = c.get("/workouts").text
-    assert "Saved 5 mi Marathon + 3 × 1.5 mi Threshold." in page
+    assert "Saved 5 mi Moderate + 3 × 1.5 mi Threshold." in page
     db = SessionLocal()
     w = db.query(PlannedWorkout).one()
     assert json.loads(w.parts)[1] == {"sets": 1, "reps": 3, "zone": "Threshold", "rest": "2 min jog", "dist": 2414, "mi": 1.5}
@@ -144,7 +144,7 @@ def test_workout_leaves_the_athlete_page_once_run(app):
 
 
 def test_zones_and_older_names():
-    assert [n for n, _ in A.PACE_ZONES] == ["Easy", "Marathon", "Threshold", "Interval", "Repetition"]
+    assert [n for n, _ in A.PACE_ZONES] == ["Easy", "Moderate", "Threshold", "Interval", "Repetition"]
     assert [A.pace_at(60, p) for _, p in A.PACE_ZONES] == sorted((A.pace_at(60, p) for _, p in A.PACE_ZONES), reverse=True)  # slowest first
     old = PlannedWorkout(date=dt.date(2026, 10, 1), title="x", rep_distance_m=0, parts=json.dumps(
         [{"sets": 1, "reps": 1, "dist": 8000, "zone": "Long run"}, {"sets": 1, "reps": 4, "mins": 5, "zone": "Tempo"}]))

@@ -381,14 +381,14 @@ def abilities(db: Session, as_of: dt.date) -> dict[int, dict]:
 
 # Training zones (Daniels' E, M, T, I and R), each a share of VDOT, slowest first.
 EASY_PCT, THRESHOLD_PCT = 0.67, 0.88   # easy and threshold (tempo) running, as on the team's sheet
-MARATHON_PCT = 0.82    # Daniels' marathon (M) pace
+MODERATE_PCT = 0.82    # moderate: Daniels' marathon (M) pace
 INTERVAL_PCT = 0.975   # near VO2max (Daniels' I pace)
 REP_PCT = 1.07         # Daniels' repetition (R) pace: short, fast reps, about mile race pace
-PACE_ZONES = [("Easy", EASY_PCT), ("Marathon", MARATHON_PCT), ("Threshold", THRESHOLD_PCT), ("Interval", INTERVAL_PCT),
+PACE_ZONES = [("Easy", EASY_PCT), ("Moderate", MODERATE_PCT), ("Threshold", THRESHOLD_PCT), ("Interval", INTERVAL_PCT),
               ("Repetition", REP_PCT)]
 WORKOUT_ZONES = dict(PACE_ZONES)
 FAST_ZONES = ("Threshold", "Interval", "Repetition")   # paces also shown per 400 m
-RENAMED_ZONES = {"Tempo": "Threshold", "Long run": "Easy"}   # zone names used before Oct 2026, in saved workouts
+RENAMED_ZONES = {"Tempo": "Threshold", "Long run": "Easy", "Marathon": "Moderate"}   # zone names used before Oct 2026, in saved workouts
 OLD_TYPE_ZONE = {"Interval": "Interval", "Threshold": "Threshold", "Tempo": "Threshold", "Long": "Easy", "Recovery": "Easy"}
 
 
