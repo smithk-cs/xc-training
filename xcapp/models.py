@@ -146,10 +146,14 @@ class PlannedWorkout(Base):
     @property
     def part_list(self) -> list[dict]:
         import json
+        from .analysis import RENAMED_ZONES
         try:
-            return json.loads(self.parts) if self.parts else []
+            parts = json.loads(self.parts) if self.parts else []
         except ValueError:
             return []
+        for p in parts:  # workouts saved before the zones were renamed
+            p["zone"] = RENAMED_ZONES.get(p.get("zone"), p.get("zone"))
+        return parts
 
     @property
     def in_miles(self) -> bool:

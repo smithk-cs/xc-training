@@ -379,12 +379,17 @@ def abilities(db: Session, as_of: dt.date) -> dict[int, dict]:
     return out
 
 
-EASY_PCT, TEMPO_PCT = 0.67, 0.88   # share of VO2max for easy and tempo (threshold) running, as on the team's sheet
-LONG_PCT, INTERVAL_PCT = 0.64, 0.975   # long runs a touch slower than easy; intervals near VO2max (Daniels' I pace)
-PACE_ZONES = [("Easy", EASY_PCT), ("Long run", LONG_PCT), ("Tempo", TEMPO_PCT), ("Interval", INTERVAL_PCT)]
-REP_PCT = 1.07   # Daniels' repetition (R) pace: short, fast reps, about mile race pace
-WORKOUT_ZONES = dict(PACE_ZONES + [("Repetition", REP_PCT)])
-OLD_TYPE_ZONE = {"Interval": "Interval", "Threshold": "Tempo", "Tempo": "Tempo", "Long": "Long run", "Recovery": "Easy"}
+# Training zones (Daniels' E, M, T, I and R), each a share of VDOT, slowest first.
+EASY_PCT, THRESHOLD_PCT = 0.67, 0.88   # easy and threshold (tempo) running, as on the team's sheet
+MARATHON_PCT = 0.82    # Daniels' marathon (M) pace
+INTERVAL_PCT = 0.975   # near VO2max (Daniels' I pace)
+REP_PCT = 1.07         # Daniels' repetition (R) pace: short, fast reps, about mile race pace
+PACE_ZONES = [("Easy", EASY_PCT), ("Marathon", MARATHON_PCT), ("Threshold", THRESHOLD_PCT), ("Interval", INTERVAL_PCT),
+              ("Repetition", REP_PCT)]
+WORKOUT_ZONES = dict(PACE_ZONES)
+FAST_ZONES = ("Threshold", "Interval", "Repetition")   # paces also shown per 400 m
+RENAMED_ZONES = {"Tempo": "Threshold", "Long run": "Easy"}   # zone names used before Oct 2026, in saved workouts
+OLD_TYPE_ZONE = {"Interval": "Interval", "Threshold": "Threshold", "Tempo": "Threshold", "Long": "Easy", "Recovery": "Easy"}
 
 
 def minutes_text(mins: float) -> str:
@@ -407,7 +412,7 @@ def part_label(p: dict) -> str:
 
 
 def workout_summary(parts: list[dict]) -> str:
-    """A name for a workout from its parts: '2 × 4 × 400 m Interval + 1,600 m Tempo'."""
+    """A name for a workout from its parts: '2 × 4 × 400 m Interval + 1,600 m Threshold'."""
     return " + ".join(f"{part_label(p)} {p['zone']}" for p in parts)
 
 
@@ -427,11 +432,11 @@ def part_paces(parts: list[dict], v: float | None) -> list[dict]:
         if p.get("mins"):  # run for a time: how far that is at this pace
             out.append({"part": p, "label": part_label(p), "pace": {
                 "rep": None, "about": distance_text(p["mins"] * 60 / mile * METERS_PER_MILE), "mile": mile,
-                "lap": mile * 400 / METERS_PER_MILE if p["zone"] in ("Tempo", "Interval", "Repetition") else None}})
+                "lap": mile * 400 / METERS_PER_MILE if p["zone"] in FAST_ZONES else None}})
             continue
         out.append({"part": p, "label": part_label(p), "pace": {
             "rep": mile * p["dist"] / METERS_PER_MILE, "mile": mile,
-            "lap": mile * 400 / METERS_PER_MILE if p["dist"] > 400 and p["zone"] in ("Tempo", "Interval", "Repetition") else None}})
+            "lap": mile * 400 / METERS_PER_MILE if p["dist"] > 400 and p["zone"] in FAST_ZONES else None}})
     return out
 
 
@@ -474,13 +479,13 @@ def goal_vdot(db: Session, athlete_id: int, on: dt.date) -> int | None:
 
 
 def training_paces(v: float | None) -> list[dict]:
-    """Per-mile paces for each kind of run at VDOT v; intervals also per 400 m."""
+    """Per-mile paces for each kind of run at VDOT v; interval and repetition also per 400 m."""
     if v is None:
         return []
     out = []
     for name, pct in PACE_ZONES:
         mile = pace_at(v, pct)
-        out.append({"name": name, "pct": pct, "mile": mile, "lap": mile * 400 / METERS_PER_MILE if name == "Interval" else None})
+        out.append({"name": name, "pct": pct, "mile": mile, "lap": mile * 400 / METERS_PER_MILE if name in ("Interval", "Repetition") else None})
     return out
 
 

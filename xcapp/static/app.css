@@ -91,6 +91,9 @@ button.secondary { background: transparent; color: var(--color-fg); border-color
 button.secondary:hover { background: var(--color-soft); color: var(--color-fg); }
 /* The Boys / Girls switch beside the Groups and VDOT titles: the team not shown is an outlined button. */
 .title-row { align-items: center; margin-bottom: 0; }
+/* Groups page: each group's badge in a fixed-width slot, so the name boxes line up in a column. */
+td.group-cell { white-space: nowrap; }
+td.group-cell .pill-slot { display: inline-block; width: 8.5rem; vertical-align: middle; }
 .team-switch { margin-bottom: 0; gap: 8px; }
 .team-switch a.button.secondary { background: transparent; color: var(--color-fg); border-color: var(--color-input-line); }
 .team-switch a.button.secondary:hover { background: var(--color-soft); color: var(--color-fg); }
@@ -248,10 +251,10 @@ details.meet > summary h2::before { content: "▸ "; color: var(--brand-red); }
 details.meet[open] > summary h2::before { content: "▾ "; }
 details.meet[open] > summary { margin-bottom: 10px; }
 .vdot-group td.pace { font-variant-numeric: tabular-nums; }
-.vdot-group { table-layout: fixed; min-width: 820px; }
-.vdot-group col.name { width: 22%; }
+.vdot-group { table-layout: fixed; min-width: 960px; }
+.vdot-group col.name { width: 21%; }
 .vdot-group col.v { width: 14%; }
-.vdot-group col.pace { width: 16%; }
+.vdot-group col.pace { width: 13%; }
 .avatar { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; vertical-align: middle; margin-right: 8px; display: inline-block; }
 .avatar.blank { display: inline-flex; align-items: center; justify-content: center; background: var(--color-bg); border: 1px solid var(--color-border-line); color: var(--color-fg-muted); font-size: 12px; font-weight: 700; }
 .avatar.big { width: 72px; height: 72px; margin-right: 14px; }
