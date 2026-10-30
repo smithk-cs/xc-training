@@ -175,8 +175,7 @@ def test_coach_button(session, monkeypatch, clock):
 
     c = login("coach1")
     page = c.get(f"/athletes/{ava.id}").text
-    assert "Load past runs" in page and 'value="90"' in page
-    assert "Load past runs" not in c.get(f"/athletes/{mat.id}").text  # not connected
+    assert "Load past runs" not in page and "garmin-backfill" not in page   # coaches' page no longer offers it
     csrf = re.search(r'name="csrf" value="([^"]+)"', page).group(1)
     r = c.post(f"/athletes/{ava.id}/garmin-backfill", data={"csrf": csrf, "days": "30"})
     assert r.status_code == 303 and backfills(mock) == []              # queued, not sent while the coach waits

@@ -113,3 +113,28 @@ def test_rematch_and_target_pace(session, athlete):
     session.add(Result(athlete_id=athlete.id, event="5K", time_s=1000.0, date=dt.date(2026, 10, 3), season="2026 XC"))
     session.flush()
     assert A.target_pace(session, athlete.id, pw) == pytest.approx(1000 / 5000 * 1609.344)
+
+
+def easy_run(start, miles, serial):
+    """A plain run with no reps: one lap per mile."""
+    return parse_fit(build_fit(start, [{"dist": 1609.344, "dur": 480, "hr": flat(150)} for _ in range(miles)], serial=serial))
+
+
+def test_assigned_workout_by_default(session, athlete):
+    from xcapp.models import Activity
+    pw = PlannedWorkout(date=dt.date(2026, 10, 20), title="Long run", rep_distance_m=8047, groups="Varsity")
+    session.add(pw)
+    session.flush()
+    short, _ = ingest(session, athlete, easy_run(START - dt.timedelta(hours=8), 2, 1), "upload")
+    assert short.planned_workout_id == pw.id                        # no reps, but it's the group's workout that day
+    long, _ = ingest(session, athlete, easy_run(START, 5, 2), "upload")
+    assert long.planned_workout_id == pw.id and short.planned_workout_id is None   # the longer run counts
+    long.planned_workout_id, long.workout_locked = None, True       # the athlete says the long run wasn't it
+    short.planned_workout_id, short.workout_locked = pw.id, True
+    session.flush()
+    later, _ = ingest(session, athlete, easy_run(START + dt.timedelta(hours=2), 6, 3), "upload")
+    assert later.planned_workout_id is None and short.planned_workout_id == pw.id   # a choice made by hand is kept
+    session.query(Activity).update({"workout_locked": False, "planned_workout_id": None})
+    assert rematch_day(session, pw.date) == 1 and later.planned_workout_id == pw.id  # re-matching picks the longest
+    pw.groups = "JV"
+    assert rematch_day(session, pw.date) == 1 and later.planned_workout_id is None   # not this athlete's group

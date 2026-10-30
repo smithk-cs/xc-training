@@ -1220,7 +1220,9 @@ def create_app() -> FastAPI:
         ability = mine if show_group else {}
         coming = db.scalars(select(PlannedWorkout).where(PlannedWorkout.date >= today, PlannedWorkout.date <= today + dt.timedelta(days=7))
                             .order_by(PlannedWorkout.date, PlannedWorkout.id)).all()
-        paces = A.workout_paces(db, a, [w for w in coming if w.applies_to(a.group, mine.get("group") or "")])
+        done = set(db.scalars(select(Activity.planned_workout_id).where(  # workouts already run come off the list
+            Activity.athlete_id == a.id, Activity.planned_workout_id.in_([w.id for w in coming]))).all())
+        paces = A.workout_paces(db, a, [w for w in coming if w.applies_to(a.group, mine.get("group") or "") and w.id not in done])
         races = db.scalars(select(RaceResult).where(RaceResult.athlete_id == a.id)
                            .order_by(RaceResult.date.desc(), RaceResult.id.desc())).all()
         history = A.race_history(races)

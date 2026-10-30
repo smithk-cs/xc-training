@@ -122,3 +122,22 @@ def test_parts_in_miles(app):
     assert 'step="0.01" value="1.5"' in page and '<option value="mi" selected>mi</option>' in page
     c.post("/workouts", data={**form, "wid": str(w.id), "p_dist": ["5", "30"]})
     assert "Check part 2: a distance in miles runs from 0.25 to 20 miles." in c.get("/workouts").text
+
+
+def test_workout_leaves_the_athlete_page_once_run(app):
+    from xcapp.models import Activity
+    c, csrf = login(app)
+    day = A.team_today()
+    c.post("/workouts", data={"csrf": csrf, "date": day.isoformat(), "title": "Tempo day", "p_sets": "1", "p_reps": "4",
+                              "p_dist": "1000", "p_unit": "m", "p_zone": "Tempo", "p_rest": ""})
+    upcoming = '<div class="d">Today · Tempo day</div>'
+    assert upcoming in TestClient(app).get("/a/t-sam").text
+    db = SessionLocal()
+    sam = db.query(Athlete).filter_by(first_name="Sam").one()
+    w = db.query(PlannedWorkout).one()
+    db.add(Activity(athlete_id=sam.id, source="garmin_file", external_id="run1", start_utc=dt.datetime(day.year, day.month, day.day, 23),
+                    local_date=day, duration_s=2400, distance_m=8000, sport="running", planned_workout_id=w.id))
+    db.commit()
+    db.close()
+    assert upcoming not in TestClient(app).get("/a/t-sam").text           # synced and linked: off Sam's upcoming list
+    assert upcoming in TestClient(app).get("/a/t-pat").text               # Pat hasn't run it yet
