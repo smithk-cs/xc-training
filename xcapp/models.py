@@ -474,6 +474,41 @@ class AiRun(Base):
     insights: Mapped[list[Insight]] = relationship(cascade="all, delete-orphan", order_by="Insight.position")
 
 
+class Course(Base):
+    """A cross country course: general information entered once, used to compare times run on different courses."""
+    __tablename__ = "courses"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(160), unique=True)       # as it appears in race results, such as "Gibson Ranch"
+    location: Mapped[str] = mapped_column(String(200), default="")
+    distance_m: Mapped[float | None] = mapped_column(Float, nullable=True)        # the usual race distance here
+    surface: Mapped[str] = mapped_column(String(30), default="Firm grass")
+    elevation_gain_ft: Mapped[float | None] = mapped_column(Float, nullable=True)  # total climb over that distance
+    altitude_ft: Mapped[float | None] = mapped_column(Float, nullable=True)        # height above sea level
+    turns: Mapped[str] = mapped_column(String(10), default="Some")                 # Few | Some | Many
+    hill_tier: Mapped[int | None] = mapped_column(Integer, nullable=True)          # 1 flat to 5 very hilly; empty = from the climb
+    adjust_s_per_mile: Mapped[float | None] = mapped_column(Float, nullable=True)  # coach's own course adjustment, if set
+    map_url: Mapped[str] = mapped_column(String(500), default="")
+    notes: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class MeetConditions(Base):
+    """Race-day conditions at a meet, entered after the event, for comparing times like for like."""
+    __tablename__ = "meet_conditions"
+    __table_args__ = (UniqueConstraint("meet", "date"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    meet: Mapped[str] = mapped_column(String(160))
+    date: Mapped[dt.date] = mapped_column(Date, index=True)
+    course_id: Mapped[int | None] = mapped_column(ForeignKey("courses.id", ondelete="SET NULL"), nullable=True)
+    temp_f: Mapped[float | None] = mapped_column(Float, nullable=True)
+    dew_point_f: Mapped[float | None] = mapped_column(Float, nullable=True)
+    humidity_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
+    wind_mph: Mapped[float | None] = mapped_column(Float, nullable=True)
+    footing: Mapped[str] = mapped_column(String(20), default="")    # Dry | Wet | Muddy
+    notes: Mapped[str] = mapped_column(Text, default="")
+    course: Mapped[Course | None] = relationship()
+
+
 class TrainingGroup(Base):
     """Ability groups (Bronze, Silver, Gold, ...) by minimum VDOT, separately for boys and girls."""
     __tablename__ = "training_groups"

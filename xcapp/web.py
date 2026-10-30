@@ -23,6 +23,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from . import ai as AI
 from . import analysis as A
+from . import courses as CS
 from . import points as PT
 from . import datasets as DS
 from . import garmin as G
@@ -41,7 +42,8 @@ from .imports import (GROUPS, ImportErrors, clean_email, clean_phone, import_goa
 from .ingest import ingest, log, rematch_day
 from .models import (Activity, AiRun, AppSetting, Athlete, DeletionRequest, GarminConnection, Injury, MissedDay,
                      OAuthState, PainReport, PlannedWorkout, RaceResult, RestingHeartRate, Result, StaffUser, AthletePhoto,
-                     MeetEntry, MeetDivision, MeetResponse, DivisionAthlete, SyncLog, TrainingGroup, VdotChange, Announcement, utcnow)
+                     MeetEntry, MeetDivision, MeetResponse, DivisionAthlete, SyncLog, TrainingGroup, VdotChange, Announcement, utcnow,
+                     Course, MeetConditions)
 from .security import csrf_ok, csrf_token, hash_password, new_link_token, verify_password
 
 HERE = Path(__file__).parent
@@ -761,7 +763,126 @@ def create_app() -> FastAPI:
             if season in ("all", A.season_for(r.date)):
                 meets.setdefault((r.date, r.meet, r.course), {}).setdefault((r.race, r.distance_label, r.distance_m), []).append(r)
         counts = {x: len({(r.date, r.meet) for r in rows if A.season_for(r.date) == x}) for x in seasons}
-        return render(request, "races.html", user, meets=meets, seasons=seasons, season=season, counts=counts)
+        courses = db.scalars(select(Course).order_by(Course.name)).all()
+        by_name = {c.name.strip().lower(): c for c in courses}
+        conds = {(c.meet, c.date): c for c in db.scalars(select(MeetConditions)).all()}
+        info = {}   # per meet: its conditions, its course (chosen, or matched by name) and adjusted times
+        for (d, meet, course), races in meets.items():
+            cond = conds.get((meet, d))
+            c = cond.course if cond and cond.course else by_name.get((course or "").strip().lower())
+            info[(d, meet)] = {"cond": cond, "course": c, "explain": CS.explain(c, cond),
+                               "adjusted": {r.id: CS.adjusted_time(r.time_s, r.distance_m, c, cond) for rs in races.values() for r in rs}}
+        return render(request, "races.html", user, meets=meets, seasons=seasons, season=season, counts=counts,
+                      info=info, courses=courses, footings=[f for f in CS.FOOTING if f])
+
+    @app.post("/races/conditions")
+    async def races_conditions(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
+        """Race-day conditions for a meet, entered after the event."""
+        f = await form_checked(request)
+        try:
+            d = dt.date.fromisoformat(str(f.get("date", "")))
+        except ValueError:
+            flash(request, "Check the date.", "error")
+            return back("/races")
+        meet = str(f.get("meet", ""))[:160]
+        cond = db.scalar(select(MeetConditions).where(MeetConditions.meet == meet, MeetConditions.date == d))
+        if cond is None:
+            cond = MeetConditions(meet=meet, date=d)
+            db.add(cond)
+        try:
+            for field, lo, hi, label in (("temp_f", -20, 120, "Temperature"), ("dew_point_f", -20, 90, "Dew point"),
+                                          ("humidity_pct", 0, 100, "Humidity"), ("wind_mph", 0, 60, "Wind")):
+                raw = str(f.get(field, "")).strip()
+                v = float(raw) if raw else None
+                if v is not None and not lo <= v <= hi:
+                    raise ValueError(f"{label} should be from {lo} to {hi}.")
+                setattr(cond, field, v)
+        except ValueError as exc:
+            db.rollback()
+            flash(request, str(exc) if "should be" in str(exc) else "Conditions are numbers, such as 72 for 72°F.", "error")
+            return back(races_url(d))
+        cid = str(f.get("course_id", ""))
+        cond.course_id = int(cid) if cid.isdigit() and db.get(Course, int(cid)) else None
+        cond.footing = str(f.get("footing", "")) if f.get("footing") in CS.FOOTING else ""
+        cond.notes = str(f.get("notes", "")).strip()[:1000]
+        flash(request, f"Saved the conditions for {meet}.")
+        return back(races_url(d))
+
+    # ---------- courses ----------
+
+    def course_fields(f, c: Course) -> None:
+        def num(key, lo, hi, label):
+            raw = str(f.get(key, "")).strip()
+            v = float(raw) if raw else None
+            if v is not None and not lo <= v <= hi:
+                raise ValueError(f"{label} should be from {lo:g} to {hi:g}.")
+            return v
+        c.name = str(f.get("name", "")).strip()[:160]
+        if not c.name:
+            raise ValueError("Give the course a name.")
+        c.location = str(f.get("location", "")).strip()[:200]
+        miles = num("distance_mi", 0.5, 15, "Distance")
+        c.distance_m = miles * CS.METERS_PER_MILE if miles else None
+        c.surface = str(f.get("surface", "")) if f.get("surface") in CS.SURFACES else "Firm grass"
+        c.turns = str(f.get("turns", "")) if f.get("turns") in CS.TURNS else "Some"
+        c.elevation_gain_ft = num("elevation_gain_ft", 0, 5000, "Climb")
+        c.altitude_ft = num("altitude_ft", -300, 12000, "Altitude")
+        tier = num("hill_tier", 1, 5, "Hill tier")
+        c.hill_tier = int(tier) if tier else None
+        c.adjust_s_per_mile = num("adjust_s_per_mile", -30, 120, "Course adjustment")
+        url = str(f.get("map_url", "")).strip()[:500]
+        if url and not url.startswith(("https://", "http://")):
+            raise ValueError("The map link should start with https://.")
+        c.map_url = url
+        c.notes = str(f.get("notes", "")).strip()[:4000]
+
+    @app.get("/courses", response_class=HTMLResponse)
+    def courses_page(request: Request, user=Depends(any_staff, scope="function"), db: Session = Depends(get_db, scope="function")):
+        courses = db.scalars(select(Course).order_by(Course.name)).all()
+        edit = db.get(Course, int(request.query_params["edit"])) if request.query_params.get("edit", "").isdigit() else None
+        raced = {}   # course name -> how many meets used it
+        for (course,) in db.execute(select(RaceResult.course).group_by(RaceResult.meet, RaceResult.date, RaceResult.course)).all():
+            if course:
+                raced[course.strip().lower()] = raced.get(course.strip().lower(), 0) + 1
+        known = {c.name.strip().lower() for c in courses}
+        missing = sorted({r for r in raced if r not in known})
+        names = {r.strip().lower(): r for (r,) in db.execute(select(RaceResult.course).distinct()).all() if r}
+        return render(request, "courses.html", user, courses=courses, edit=edit, CS=CS, raced=raced,
+                      missing=[names[m] for m in missing])
+
+    @app.post("/courses")
+    async def courses_save(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
+        f = await form_checked(request)
+        cid = str(f.get("cid", ""))
+        c = db.get(Course, int(cid)) if cid.isdigit() else None
+        new = c is None
+        if new:
+            c = Course()
+            db.add(c)
+        try:
+            course_fields(f, c)
+            with db.no_autoflush:  # don't write this course before looking for another with its name
+                clash = db.scalar(select(Course).where(func.lower(Course.name) == c.name.lower(), Course.id != (c.id or -1)))
+            if clash:
+                raise ValueError(f"There's already a course called {clash.name}.")
+            db.flush()
+        except ValueError as exc:
+            db.rollback()
+            flash(request, str(exc) if str(exc) and not str(exc).startswith("could not convert") else "Check the numbers.", "error")
+            return back(f"/courses?edit={cid}#course-form" if cid.isdigit() else "/courses#course-form")
+        flash(request, f"{'Added' if new else 'Saved'} {c.name}.")
+        return back("/courses")
+
+    @app.post("/courses/{cid}/delete")
+    async def courses_delete(request: Request, cid: int, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
+        await form_checked(request)
+        c = db.get(Course, cid)
+        if c is not None:
+            for cond in db.scalars(select(MeetConditions).where(MeetConditions.course_id == cid)).all():
+                cond.course_id = None
+            flash(request, f"Deleted {c.name}.")
+            db.delete(c)
+        return back("/courses")
 
     @app.post("/races/import")
     async def races_import(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):

@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Courses · {{ team_name }}{% endblock %}
+{% block content %}
+<h1>Courses</h1>
+<p class="muted" style="max-width:88ch">General information about each course, entered once. Race-day conditions (temperature, dew point, wind, footing) go on each meet on the <a href="/races">Races</a> page after the event. Together they turn each time into what it would be on a track at 55°F or cooler, at sea level, with a low dew point, so times on different courses and days compare like for like.</p>
+
+<div class="card scroll">
+<table class="list">
+  <thead><tr><th>Course</th><th>Location</th><th class="num">Distance</th><th>Surface</th><th class="num">Climb</th><th class="num">Hills</th><th>Turns</th><th class="num">Altitude</th><th class="num">Adds</th><th class="num">Meets</th>{% if user.role != 'trainer' %}<th></th>{% endif %}</tr></thead>
+  <tbody>
+  {% for c in courses %}{% set tier = CS.hill_tier(c) %}
+  <tr><td><b>{{ c.name }}</b>{% if c.map_url %} <a class="small" href="{{ c.map_url }}" target="_blank" rel="noopener">map</a>{% endif %}{% if c.notes %}<br><span class="small muted">{{ c.notes|truncate(90) }}</span>{% endif %}</td>
+    <td class="small">{{ c.location }}</td>
+    <td class="num">{{ '%.2f mi' % (c.distance_m / 1609.344) if c.distance_m else '' }}</td>
+    <td>{{ c.surface }}</td>
+    <td class="num">{{ '%g ft' % c.elevation_gain_ft if c.elevation_gain_ft is not none else '' }}</td>
+    <td class="num">{% if tier %}{{ tier }}{% if not c.hill_tier %} <span class="small muted">(from climb)</span>{% endif %}{% endif %}</td>
+    <td>{{ c.turns }}</td>
+    <td class="num">{{ '{:,.0f} ft'.format(c.altitude_ft) if c.altitude_ft is not none else '' }}</td>
+    <td class="num nowrap">{{ '%g' % CS.course_seconds(c) }} s/mi{% if c.adjust_s_per_mile is not none %} <span class="small muted">(set)</span>{% endif %}{% if CS.altitude_pct(c.altitude_ft) %}<br><span class="small muted">+{{ '%.1f' % CS.altitude_pct(c.altitude_ft) }}% altitude</span>{% endif %}</td>
+    <td class="num">{{ raced.get(c.name.strip().lower(), 0) }}</td>
+    {% if user.role != 'trainer' %}<td class="nowrap"><a href="/courses?edit={{ c.id }}#course-form">Edit</a></td>{% endif %}</tr>
+  {% else %}<tr><td colspan="11" class="muted">No courses yet.</td></tr>{% endfor %}
+  </tbody>
+</table>
+{% if missing %}<p class="small muted">Courses named in race results but not added here yet: {{ missing|join(', ') }}. Add one with the same name and its meets pick it up.</p>{% endif %}
+</div>
+
+{% if user.role != 'trainer' %}
+<div class="card" id="course-form" style="max-width:980px">
+  <h2>{% if edit %}Edit {{ edit.name }}{% else %}Add a course{% endif %}</h2>
+  <form method="post" action="/courses">
+    <input type="hidden" name="csrf" value="{{ csrf }}">{% if edit %}<input type="hidden" name="cid" value="{{ edit.id }}">{% endif %}
+    <div class="form-row">
+      <label style="flex:1">Name<input type="text" name="name" value="{{ edit.name if edit else '' }}" maxlength="160" required list="course-names" placeholder="As it appears in race results"></label>
+      <label style="flex:1">Location<input type="text" name="location" value="{{ edit.location if edit else '' }}" maxlength="200" placeholder="Park, city"></label>
+      <label>Distance (miles)<input type="number" name="distance_mi" value="{{ '%.2f' % (edit.distance_m / 1609.344) if edit and edit.distance_m else '' }}" step="0.01" min="0.5" max="15" style="width:7em"></label>
+    </div>
+    <div class="form-row">
+      <label>Surface<select name="surface">{% for s in CS.SURFACES %}<option{% if (edit.surface if edit else 'Firm grass') == s %} selected{% endif %}>{{ s }}</option>{% endfor %}</select></label>
+      <label>Turns<select name="turns">{% for t in CS.TURNS %}<option{% if (edit.turns if edit else 'Some') == t %} selected{% endif %}>{{ t }}</option>{% endfor %}</select></label>
+      <label>Total climb (ft)<input type="number" name="elevation_gain_ft" value="{{ '%g' % edit.elevation_gain_ft if edit and edit.elevation_gain_ft is not none else '' }}" min="0" max="5000" style="width:7em"></label>
+      <label>Altitude (ft above sea level)<input type="number" name="altitude_ft" value="{{ '%g' % edit.altitude_ft if edit and edit.altitude_ft is not none else '' }}" min="-300" max="12000" style="width:8em"></label>
+      <label>Hill tier<select name="hill_tier"><option value="">From the climb</option>{% for t in range(1, 6) %}<option value="{{ t }}"{% if edit and edit.hill_tier == t %} selected{% endif %}>{{ t }}{{ ' (flat)' if t == 1 else ' (very hilly)' if t == 5 else '' }}</option>{% endfor %}</select></label>
+    </div>
+    <div class="form-row">
+      <label>Course adjustment (s/mile)<input type="number" name="adjust_s_per_mile" value="{{ '%g' % edit.adjust_s_per_mile if edit and edit.adjust_s_per_mile is not none else '' }}" step="1" min="-30" max="120" placeholder="worked out" style="width:8em"></label>
+      <label style="flex:1">Map link<input type="url" name="map_url" value="{{ edit.map_url if edit else '' }}" maxlength="500" placeholder="https://www.strava.com/routes/..."></label>
+    </div>
+    <label>Notes<textarea name="notes" rows="3" style="width:100%" maxlength="4000" placeholder="Where the hills are, where the course gets muddy, the start box, parking">{{ edit.notes if edit else '' }}</textarea></label>
+    <div class="form-row" style="margin-top:8px"><button type="submit">{% if edit %}Save course{% else %}Add course{% endif %}</button>{% if edit %}<a href="/courses">Cancel</a>{% endif %}</div>
+  </form>
+  {% if missing %}<datalist id="course-names">{% for m in missing %}<option value="{{ m }}">{% endfor %}</datalist>{% endif %}
+  {% if edit %}
+  <form method="post" action="/courses/{{ edit.id }}/delete" class="form-row" style="margin-top:8px"><input type="hidden" name="csrf" value="{{ csrf }}">
+    <button class="danger" type="submit" onclick="return confirm('Delete {{ edit.name }}? Race results keep their course name.')">Delete course</button></form>
+  {% endif %}
+</div>
+{% endif %}
+
+<details class="card" style="max-width:980px"><summary style="cursor:pointer; font-weight:600">How times are adjusted</summary>
+  <p class="small">The adjusted pace is the race pace, slowed by the day’s conditions (a percentage), minus what the course adds (seconds per mile).</p>
+  <ul class="small">
+    <li><b>Temperature</b> (Daniels, table 6.2): none at {{ CS.TEMP_BASE_F }}°F or cooler, then about {{ CS.TEMP_PCT_PER_F }}% slower per °F. Built on marathons by fast runners, so a starting point for high school 5Ks.</li>
+    <li><b>Altitude</b> (Daniels, table 6.1, acclimatized runners): little below 1,000 ft; about {{ CS.ALTITUDE[1][1] }}% at 1,000 m (3,281 ft), {{ CS.ALTITUDE[2][1] }}% at 1,500 m, {{ CS.ALTITUDE[3][1] }}% at 2,000 m.</li>
+    <li><b>Dew point</b> (no figure in Daniels; a starting guess): {% for limit, pct in CS.DEW_TIERS %}{% if pct %}{{ pct }}% from {{ CS.DEW_TIERS[loop.index0 - 1][0] }}°F, {% endif %}{% endfor %}{{ CS.DEW_TOP }}% from {{ CS.DEW_TIERS[-1][0] }}°F.</li>
+    <li><b>Hills</b> (tier from feet climbed per mile: {% for limit, tier in CS.HILL_TIERS %}{{ tier }} up to {{ limit }}, {% endfor %}5 above): {% for t, s in CS.TIER_SECONDS.items() %}tier {{ t }} {{ s }} s{{ ', ' if not loop.last else '' }}{% endfor %} a mile.</li>
+    <li><b>Surface</b>: {% for s, v in CS.SURFACES.items() %}{{ s|lower }} {{ v }} s{{ ', ' if not loop.last else '' }}{% endfor %} a mile. <b>Turns</b>: {% for t, v in CS.TURNS.items() %}{{ t|lower }} {{ v }} s{{ ', ' if not loop.last else '' }}{% endfor %}. <b>Footing on the day</b>: {% for t, v in CS.FOOTING.items() if t %}{{ t|lower }} {{ v }} s{{ ', ' if not loop.last else '' }}{% endfor %}.</li>
+  </ul>
+  <p class="small muted">Hills, surface, turns, footing and dew point are placeholders without a validated source. Where you know better, set a course’s own adjustment, which replaces the hills, surface and turns figures.</p>
+</details>
+{% endblock %}
