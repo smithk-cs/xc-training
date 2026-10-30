@@ -157,8 +157,9 @@ class _Doc(FPDF):
         self.cell(0, 12, f"Page {self.page_no()} of {{nb}}", align="R")
 
 
-def branded_page(team: str, subtitle: str, logo: tuple[bytes, str] | None) -> tuple[_Doc, float]:
-    """A new letter-size PDF with the team's red and gold header band. Returns the document and the usable width."""
+def branded_page(team: str, subtitle: str, logo: tuple[bytes, str] | None, center: bool = False) -> tuple[_Doc, float]:
+    """A new letter-size PDF with the team's red and gold header band. Returns the document and the usable width.
+    center: the team name and subtitle centered across the page instead of beside the logo."""
     pdf = _Doc(team, f"{team} · prepared {dt.date.today():%b %-d, %Y}")
     pdf.alias_nb_pages()
     pdf.add_page()
@@ -174,17 +175,21 @@ def branded_page(team: str, subtitle: str, logo: tuple[bytes, str] | None) -> tu
             x = 120
         except Exception:  # an unreadable logo just leaves the header without it
             x = 48
+    if center:
+        x = 48
+    align = "C" if center else "L"
     pdf.set_xy(x, 22)
     pdf.set_text_color(255, 255, 255)
     pdf.set_font("Barlow", size=26)
-    pdf.cell(w - (x - 48), 30, team.upper())
+    pdf.cell(w - (x - 48), 30, team.upper(), align=align)
     pdf.set_xy(x, 52)
     pdf.set_font("InterSemi", size=12)
-    pdf.cell(w - (x - 48), 18, subtitle)
+    pdf.cell(w - (x - 48), 18, subtitle, align=align)
     return pdf, w
 
 
-def staff_table(pdf: _Doc, w: float, staff: list) -> None:
+def staff_table(pdf: _Doc, w: float, staff: list, center: bool = False) -> None:
+    """The coaching staff's contacts. center: everything but the names centered."""
     if not staff:
         return
     if pdf.get_y() > pdf.h - 60 - 22 * (len(staff) + 2):
@@ -192,20 +197,21 @@ def staff_table(pdf: _Doc, w: float, staff: list) -> None:
     pdf.ln(12)
     pdf.set_font("Barlow", size=13)
     pdf.set_text_color(*RED)
-    pdf.cell(w, 18, "Coaching staff", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(w, 18, "Coaching staff", align="C" if center else "L", new_x="LMARGIN", new_y="NEXT")
     cols = [(0.30, "Name"), (0.24, "Title"), (0.18, "Cell"), (0.28, "Email")]
     pdf.set_font("InterSemi", size=9)
     pdf.set_fill_color(*INK)
     pdf.set_text_color(255, 255, 255)
-    for frac, label in cols:
-        pdf.cell(w * frac, 18, label.upper(), fill=True)
+    aligns = ["L"] + ["C" if center else "L"] * 3   # names stay left
+    for (frac, label), align in zip(cols, aligns):
+        pdf.cell(w * frac, 18, label.upper(), fill=True, align=align)
     pdf.ln(18)
     pdf.set_font("Inter", size=10)
     pdf.set_text_color(*INK)
     pdf.set_draw_color(*LINE)
     for u in staff:
-        for (frac, _), v in zip(cols, (u.display_name, u.title, u.phone, u.email)):
-            pdf.cell(w * frac, 20, v or "", border="B")
+        for (frac, _), v, align in zip(cols, (u.display_name, u.title, u.phone, u.email), aligns):
+            pdf.cell(w * frac, 20, v or "", border="B", align=align)
         pdf.ln(20)
 
 

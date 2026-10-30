@@ -91,3 +91,23 @@ def test_season_overview(app):
     assert re.search(r'<span class="k">Miles</span><span class="v">(\d+(\.\d)?)</span>', page).group(1) == "136.7"
     empty = c.get(f"/reports/athlete/{pat}?season={SEASON}").text
     assert "No races recorded this season." in empty and "needs two races" in empty
+
+
+def test_roster_pdf_centered_except_names():
+    import io
+    import types
+
+    import pdfplumber
+
+    from xcapp import reports as RP
+    coach = types.SimpleNamespace(display_name="Keegan Smith", title="Head coach", phone="916-555-0100", email="coach@example.org")
+    data = RP.roster_pdf([{"name": "Ava Doyle", "grade": 11, "group": "Gold", "vdot": 60}], ["grade", "group", "vdot"],
+                         "Team roster", "2026 XC", "XC Training", None, [coach])
+    page = pdfplumber.open(io.BytesIO(data)).pages[0]
+    words = {w["text"]: w for w in page.extract_words()}
+    mid = lambda w: (w["x0"] + w["x1"]) / 2   # noqa: E731
+    centre = page.width / 2
+    for text in ("roster", "TRAINING"):                                        # title and header band
+        assert abs(mid(words[text]) - centre) < 60
+    assert words["Ava"]["x0"] < 100 and words["Keegan"]["x0"] < 60             # names stay left
+    assert words["coach"]["x0"] > 150 and words["Gold"]["x0"] > 250            # the rest is centered in its column
