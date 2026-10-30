@@ -432,3 +432,26 @@ tr:target td { background: color-mix(in srgb, var(--brand-gold) 22%, transparent
 .course-distances .dist-row > .small { width: 5.5rem; }
 .course-distances .chip span { height: 34px; padding: 0 12px; font-size: 14px; }
 .tag.usual { background: var(--brand-red); color: #FFFFFF; }
+
+/* athlete page: weekly miles and points on one line; folding panels with a status beside the title */
+.facts.one-line { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); }
+.facts.one-line > div { padding: 10px 8px; min-width: 0; }
+.facts.one-line .big { font-size: 24px; }
+.facts.one-line .k { font-size: 11px; letter-spacing: .04em; }
+details.panel.fold > summary h2 { margin: 0; }
+details.garmin-fold > summary { gap: 10px; }
+details.garmin-fold > summary h2 { margin-right: auto; }
+details.panel.fold > summary .rhr-sum { margin-left: auto; margin-right: 10px; }
+details.sub-fold > summary { list-style: none; cursor: pointer; min-height: 44px; display: flex; align-items: center; }
+details.sub-fold > summary::-webkit-details-marker { display: none; }
+details.sub-fold > summary h3::after { content: " ▸"; color: var(--brand-red); }
+details.sub-fold[open] > summary h3::after { content: " ▾"; }
+details.sub-fold[open] { display: flex; flex-direction: column; gap: 10px; }
+/* athlete page: a slimmer header so more of the page shows */
+.hero.compact { padding: 10px 16px 12px; gap: 6px; border-bottom-width: 4px; }
+.hero.compact .team img { height: 26px; }
+.hero.compact .team span { font-size: 12px; }
+.hero.compact h1 { font-size: 30px; }
+.hero.compact .hero-title { gap: 10px; }
+.hero.compact .hero-photo { width: 46px; height: 46px; border-width: 2px; }
+.hero.compact .group-btn { min-height: 30px; font-size: 14px; padding: 2px 12px; }

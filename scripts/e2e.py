@@ -142,13 +142,14 @@ try:
         res = json.loads(out.stdout or "{}") if out.returncode == 0 else {"errors": [out.stderr[-500:]]}
         json.dump(res, open(os.path.join(tmp, f"athlete_charts_{who}.json"), "w"), indent=1)
         combos = res.get("combos", [])
-        check(f"{who.title()} charts: all 24 chart/range combinations draw with no script errors or NaN",
-              res.get("data_state") == "1" and len(combos) == 24 and not res.get("errors") and res.get("bad_values") == []
+        n_combos = 20 if who == "athlete" else 24  # athletes' own page has no Benchmark times chart
+        check(f"{who.title()} charts: all {n_combos} chart/range combinations draw with no script errors or NaN",
+              res.get("data_state") == "1" and len(combos) == n_combos and not res.get("errors") and res.get("bad_values") == []
               and all((c_["svg"] or c_["empty"]) and c_["summary"] for c_ in combos), {k: res.get(k) for k in ("data_state", "errors", "bad_values")})
         get = lambda t, r_: next(c_ for c_ in combos if c_["type"] == t and c_["range"] == r_)
         check(f"{who.title()} charts show real data (miles, load ratio, effort, heart rate, pace, benchmarks, injury shading)",
               get("miles", "season")["marks"] > 10 and get("load", "season")["svg"] and get("effort", "month")["marks"] > 5
-              and get("hr", "season")["svg"] and get("pace", "month")["svg"] and get("results", "years")["marks"] >= 4
+              and get("hr", "season")["svg"] and get("pace", "month")["svg"] and (who == "athlete" or get("results", "years")["marks"] >= 4)
               and "Injured" in get("miles", "month")["legend"], [(c_["type"], c_["range"], c_["marks"], c_["empty"][:30]) for c_ in combos])
     runs_page = a.get(link + "/runs").text
     run_id = re.search(r'/runs/(\d+)"', runs_page).group(1)

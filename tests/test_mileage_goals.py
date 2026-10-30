@@ -49,7 +49,8 @@ def test_weekly_mileage_goals():
     assert 'name="miles_%d" value="35"' % ids[0] in page and 'name="miles_%d" value=""' % ids[1] in page
     assert "goal 35 mi · 0 of 1 there" in page and "10.0 / 35" in page and "40.0 ✓" in page
     me = TestClient(app).get("/a/t-sam").text
-    assert "This week’s miles" in me and "<span class=\"big\">10.0</span>" in me and "the Gold goal" in me and "25.0" in me
+    assert "This week’s miles" in me and "<span class=\"big\">10.0</span>" in me and "of 35 mi</span>" in me and "the Gold goal" not in me and "25.0" in me
+    assert "left after today" not in me and 'class="facts one-line"' in me
     db = SessionLocal()
     goal = A.mileage_goal(db, aid, "Gold", today)
     db.close()

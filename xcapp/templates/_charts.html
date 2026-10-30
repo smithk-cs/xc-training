@@ -8,7 +8,7 @@
         <option value="effort">Effort</option>
         <option value="hr">Heart rate</option>
         <option value="pace">Pace</option>
-        <option value="results">Benchmark times</option>
+        {% if not no_benchmarks %}<option value="results">Benchmark times</option>{% endif %}
       </select>
     </label>
     <label>Time range

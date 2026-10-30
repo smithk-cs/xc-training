@@ -7,13 +7,12 @@
 {% from '_icons.html' import badges %}
 {# Garmin: near the top until the athlete connects (connect night), then near the bottom, under their training. #}
 {# Resting heart rate: near the top until today's value is in, then below the training charts. #}
-{% macro rhr_panel(garmin_connected) %}
-  <section class="panel" id="rhr" aria-labelledby="rhr-h">
-    <h2 id="rhr-h">Resting heart rate</h2>
+{% macro rhr_panel(garmin_connected, folded=False) %}
+  <details class="panel fold" id="rhr"{% if not folded %} open{% endif %}>
+    <summary><h2 id="rhr-h">Resting heart rate</h2>{% if folded %}<span class="small muted rhr-sum">Today {{ rhr_cal.by_day.get(rhr_cal.today).bpm }} ✓</span>{% endif %}</summary>
     {% if rhr %}
     <div class="facts">
-      <div><span class="k">Latest</span><span class="big">{{ rhr.latest.bpm }}</span><span class="small muted">{{ 'Today' if rhr.latest.date.isoformat() == today else rhr.latest.date.strftime('%a, %b %-d') }} · {{ 'from Garmin' if rhr.latest.source == 'garmin' else 'you entered it' }}</span></div>
-      <div><span class="k">This week</span><span class="big">{{ '%.0f' % rhr.week if rhr.week is not none else '—' }}</span><span class="small muted">{{ 'average' if rhr.week is not none else 'needs 3 days' }}</span></div>
+      <div><span class="k">Latest</span><span class="big">{{ rhr.latest.bpm }}</span><span class="small muted">{{ 'Today' if rhr.latest.date.isoformat() == today else rhr.latest.date.strftime('%a, %b %-d') }} · {{ 'from Garmin' if rhr.latest.source == 'garmin' else 'you entered it' }}</span>{% if rhr.latest.date.isoformat() != today %}<a class="small rhr-today" href="#rhr-bpm">Enter today’s ›</a>{% endif %}</div>
       <div><span class="k">Your usual</span><span class="big">{{ '%.0f' % rhr.usual if rhr.usual is not none else '—' }}</span><span class="small muted">{{ 'the 4 weeks before' if rhr.usual is not none else 'needs a few weeks' }}</span></div>
     </div>
     {% if rhr.flag %}<p class="notice" style="margin-top:12px"><span>Your resting heart rate is {{ '%.0f' % rhr.up }} beats higher than usual this week. That can mean you’re getting sick, worn down or short on sleep. Tell your coach how you feel.</span></p>{% endif %}
@@ -56,16 +55,20 @@
           bpm.focus();
         });
       });
+      var go = document.querySelector('.rhr-today');
+      if (go) go.addEventListener('click', function (e) { e.preventDefault(); document.getElementById('rhr-bpm').focus(); });
     </script>
-  </section>
+  </details>
 {% endmacro %}
 
 {% macro garmin_panel() %}
-  <section class="panel" aria-labelledby="g-h">
-    <div class="panel-head">
+  {% set linked = a.garmin and a.garmin.status == 'connected' %}
+  {% if linked %}<details class="panel fold garmin-fold">
+    <summary>{% else %}<section class="panel" aria-labelledby="g-h">
+    <div class="panel-head">{% endif %}
       <h2 id="g-h"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="3"></rect><path d="M9 6l1-3h4l1 3M9 18l1 3h4l1-3M12 9.5V12l1.5 1.5"></path></svg>Garmin</h2>
       {% if a.garmin and a.garmin.status == 'connected' %}<span class="pill good">✓ Connected</span>{% elif a.garmin and a.garmin.status == 'error' %}<span class="pill bad">Needs reconnecting</span>{% else %}<span class="pill">Not connected</span>{% endif %}
-    </div>
+    {% if linked %}</summary>{% else %}</div>{% endif %}
     {% if a.garmin and a.garmin.status == 'connected' %}
       <p>New runs reach your coaches a few minutes after your watch syncs with the Garmin Connect app.</p>
       <dl class="facts">
@@ -99,41 +102,16 @@
     {% else %}
       <p class="muted">Automatic Garmin sync isn’t switched on yet. You can upload a .fit file below.</p>
     {% endif %}
-  </section>
+  {% if linked %}</details>{% else %}</section>{% endif %}
 {% endmacro %}
-{% with hero_title="Hi " ~ a.first_name, hero_text="This is your personal page for the team’s training system. Keep this link to yourself.", back_url=None, hero_group=(ability if show_group else none), hero_vo2=vo2, hero_photo=('/a/' ~ token ~ '/photo?v=' ~ photo_v if photo_v else none), hero_name=a.name, hero_paces_link=paces_link %}{% include "_hero.html" %}{% endwith %}
+{% with hero_title="Hi " ~ a.first_name, hero_text=None, hero_compact=True, back_url=None, hero_group=(ability if show_group else none), hero_vo2=vo2, hero_photo=('/a/' ~ token ~ '/photo?v=' ~ photo_v if photo_v else none), hero_name=a.name, hero_paces_link=paces_link %}{% include "_hero.html" %}{% endwith %}
 <div class="stack">
   {% for level, text in messages %}<div class="flash {{ level }}" role="status">{{ text }}</div>{% endfor %}
   {% for n in notes %}<section class="announcement" role="note" aria-label="Announcement">
     <div class="ann-title">{{ n.title }}</div>{% if n.body %}<div class="ann-body">{{ n.body }}</div>{% endif %}
   </section>{% endfor %}
-  {{ badges(wins) }}
-  {% if miles_goal %}{% set mg = miles_goal %}
-  <section class="panel" aria-labelledby="mg-h">
-    <h2 id="mg-h">This week’s miles</h2>
-    <div class="miles-bar big" role="img" aria-label="{{ '%.1f' % mg.done }} of {{ '%g' % mg.goal }} miles"><span style="width:{{ (100 * mg.pct)|round }}%"{% if mg.done >= mg.goal %} class="met"{% endif %}></span></div>
-    <div class="facts">
-      <div><span class="k">So far</span><span class="big">{{ '%.1f' % mg.done }}</span><span class="small muted">of {{ '%g' % mg.goal }} mi, the {{ mg.group }} goal</span></div>
-      <div><span class="k">{{ 'Goal met' if mg.done >= mg.goal else 'To go' }}</span><span class="big">{{ '✓' if mg.done >= mg.goal else '%.1f' % mg.left }}</span><span class="small muted">{% if mg.done >= mg.goal %}nice work{% elif mg.days_left %}{{ mg.days_left }} day{{ '' if mg.days_left == 1 else 's' }} left after today{% else %}last day of the week{% endif %}</span></div>
-      <div><span class="k">Last week</span><span class="big">{{ '%.1f' % mg.last }}</span><span class="small muted">mi{% if mg.last >= mg.goal %} · goal met{% endif %}</span></div>
-    </div>
-    <p class="small muted">Weeks run Monday to Sunday. Runs count once they sync or you upload them.</p>
-  </section>
-  {% endif %}
-  {% if my_points and my_points.target %}{% set mp = my_points %}{% set pct = [mp.points / mp.target, 1]|min %}
-  <section class="panel" aria-labelledby="pts-h">
-    <h2 id="pts-h">This week’s points</h2>
-    <div class="miles-bar big" role="img" aria-label="{{ '%.0f' % mp.points }} of {{ '%.0f' % mp.target }} points"><span style="width:{{ (100 * pct)|round }}%"{% if pct >= 1 %} class="met"{% endif %}></span></div>
-    <div class="facts">
-      <div><span class="k">Points</span><span class="big">{{ '%.0f' % mp.points }}</span><span class="small muted">of {{ '%.0f' % mp.target }} ({{ '%.0f' % (100 * pct) }}%)</span></div>
-      <div><span class="k">Days run</span><span class="big">{{ mp.run_days }}</span><span class="small muted">of {{ mp.target_days }}</span></div>
-      {% if mp.score is not none %}<div><span class="k">Score</span><span class="big">{{ '%.0f' % mp.score }}%</span><span class="small muted">80% points, 20% days</span></div>{% endif %}
-    </div>
-    <p class="small muted">Every minute you run earns points, and harder minutes earn more ({% for z, r in rates.items() %}{{ z|lower }} {{ r }}{{ ', ' if not loop.last else '' }}{% endfor %} a minute). Your target comes from the team’s plan for your group. Hit it and you’re at 100%. Run on pace, run on the days you’re scheduled, and the points take care of themselves.</p>
-  </section>
-  {% endif %}
-  <section class="panel" aria-labelledby="wp-h">
-    <h2 id="wp-h">Upcoming workouts</h2>
+  <details class="panel fold" id="workouts" open>
+    <summary><h2 id="wp-h">Upcoming workouts</h2></summary>
     {% if paces %}<p class="muted small">Your targets for the next 7 days, from your VDOT now and from your goal. Times are per rep; for parts run for a time, the pace to hold.</p>{% endif %}
     {% for x in paces %}{% set w = x.workout %}
     <div class="wpace">
@@ -166,7 +144,7 @@
     {% else %}
     <p class="muted">No workouts planned for the next 7 days yet. Your coaches add them here, with your target times.</p>
     {% endfor %}
-  </section>
+  </details>
   {% if meets %}
   <section class="panel" id="meets" aria-labelledby="mt-h">
     <h2 id="mt-h">Upcoming meets</h2>
@@ -195,6 +173,31 @@
     {% endfor %}
   </section>
   {% endif %}
+  {{ badges(wins) }}
+  {% if miles_goal %}{% set mg = miles_goal %}
+  <section class="panel" aria-labelledby="mg-h">
+    <h2 id="mg-h">This week’s miles</h2>
+    <div class="miles-bar big" role="img" aria-label="{{ '%.1f' % mg.done }} of {{ '%g' % mg.goal }} miles"><span style="width:{{ (100 * mg.pct)|round }}%"{% if mg.done >= mg.goal %} class="met"{% endif %}></span></div>
+    <div class="facts one-line">
+      <div><span class="k">So far</span><span class="big">{{ '%.1f' % mg.done }}</span><span class="small muted">of {{ '%g' % mg.goal }} mi</span></div>
+      <div><span class="k">{{ 'Goal met' if mg.done >= mg.goal else 'To go' }}</span><span class="big">{{ '✓' if mg.done >= mg.goal else '%.1f' % mg.left }}</span><span class="small muted">{% if mg.done >= mg.goal %}nice work{% elif mg.days_left %}{{ mg.days_left }} day{{ '' if mg.days_left == 1 else 's' }} left{% else %}last day of the week{% endif %}</span></div>
+      <div><span class="k">Last week</span><span class="big">{{ '%.1f' % mg.last }}</span><span class="small muted">mi{% if mg.last >= mg.goal %} · goal met{% endif %}</span></div>
+    </div>
+    <p class="small muted">Weeks run Monday to Sunday. Runs count once they sync or you upload them.</p>
+  </section>
+  {% endif %}
+  {% if my_points and my_points.target %}{% set mp = my_points %}{% set pct = [mp.points / mp.target, 1]|min %}
+  <section class="panel" aria-labelledby="pts-h">
+    <h2 id="pts-h">This week’s points</h2>
+    <div class="miles-bar big" role="img" aria-label="{{ '%.0f' % mp.points }} of {{ '%.0f' % mp.target }} points"><span style="width:{{ (100 * pct)|round }}%"{% if pct >= 1 %} class="met"{% endif %}></span></div>
+    <div class="facts one-line">
+      <div><span class="k">Points</span><span class="big">{{ '%.0f' % mp.points }}</span><span class="small muted">of {{ '%.0f' % mp.target }}</span></div>
+      <div><span class="k">Days run</span><span class="big">{{ mp.run_days }}</span><span class="small muted">of {{ mp.target_days }}</span></div>
+      {% if mp.score is not none %}<div><span class="k">Score</span><span class="big">{{ '%.0f' % mp.score }}%</span><span class="small muted">of target</span></div>{% endif %}
+    </div>
+    <p class="small muted">Every minute you run earns points, and harder minutes earn more ({% for z, r in rates.items() %}{{ z|lower }} {{ r }}{{ ', ' if not loop.last else '' }}{% endfor %} a minute). Your target comes from the team’s plan for your group. Hit it and you’re at 100%. Your score is 80% points and 20% days run. Run on pace, run on the days you’re scheduled, and the points take care of themselves.</p>
+  </section>
+  {% endif %}
   {% if need %}<p class="notice"><span>{{ need }} recent run{{ '' if need == 1 else 's' }} need{{ 's' if need == 1 else '' }} your effort rating.</span><a href="/a/{{ token }}/runs">Add effort ›</a></p>{% endif %}
 
   {% set garmin_connected = a.garmin and a.garmin.status == 'connected' %}
@@ -203,8 +206,8 @@
 
   {% if not rhr_done %}{{ rhr_panel(garmin_connected) }}{% endif %}
 
-  {% with chart_src="/a/" ~ token ~ "/series.json", chart_title="My training" %}{% include "_charts.html" %}{% endwith %}
-  {% if rhr_done %}{{ rhr_panel(garmin_connected) }}{% endif %}
+  {% with chart_src="/a/" ~ token ~ "/series.json", chart_title="My training", no_benchmarks=True %}{% include "_charts.html" %}{% endwith %}
+  {% if rhr_done %}{{ rhr_panel(garmin_connected, folded=True) }}{% endif %}
 
   <section class="panel" aria-labelledby="r-h">
     <div class="panel-head"><h2 id="r-h">Recent runs</h2><a href="/a/{{ token }}/runs">All runs ›</a></div>
@@ -309,9 +312,11 @@
   </details>
   {% if garmin_connected %}{{ garmin_panel() }}{% endif %}
 
-  <section class="panel" id="privacy" aria-labelledby="pv-h">
-    <h2 id="pv-h">Your data and privacy</h2>
-    <h3 id="reminders" style="margin:0; font-size:17px">Reminder emails</h3>
+  {# Folded once AI analysis is on; until then it opens at AI analysis, with reminder emails folded above it. #}
+  <details class="panel fold garmin-fold" id="privacy"{% if not a.ai_consent_at %} open{% endif %}>
+    <summary><h2 id="pv-h">Your data and privacy</h2>{% if a.ai_consent_at %}<span class="pill good">AI analysis ✓ On</span>{% endif %}</summary>
+    <details class="sub-fold"{% if a.ai_consent_at %} open{% endif %}>
+    <summary><h3 id="reminders" style="margin:0; font-size:17px">Reminder emails{% if a.email and a.email_reminders %} <span class="small muted" style="font-weight:400">· on</span>{% endif %}</h3></summary>
     {% if a.email %}
     <form method="post" action="/a/{{ token }}/reminders" class="form-row">
       <input type="hidden" name="csrf" value="{{ csrf }}">
@@ -320,6 +325,7 @@
     </form>
     <p class="small muted">Sent by Resend, an email service, which receives your first name, email address and the reminder. Untick to stop.</p>
     {% else %}<p class="small muted">Ask your coach to add your email address to get reminder emails.</p>{% endif %}
+    </details>
     <h3 style="margin:0; font-size:17px">AI analysis</h3>
     {% if a.ai_consent_at %}
       <p><span class="pill good">✓ On</span> since {{ (a.ai_consent_at|local).strftime('%b %-d, %Y') }}. Each night your training numbers (not your name, and nothing you write) go to Claude, an AI from Anthropic, to help your coaches spot patterns. Coaches make every decision.</p>
@@ -350,8 +356,8 @@
     {% else %}
       <form method="post" action="/a/{{ token }}/delete-request"><input type="hidden" name="csrf" value="{{ csrf }}"><button type="submit" class="link" style="min-height:44px">Ask to delete everything the app has about me</button></form>
     {% endif %}
-    <p class="muted small"><a href="/privacy">Privacy policy</a></p>
-  </section>
+    <p class="muted small">This page’s link is your sign-in: keep it to yourself. <a href="/privacy">Privacy policy</a></p>
+  </details>
   <p class="foot">Questions? Ask your coach. Lost this link? Your coach can send a new one. Go Big Red.</p>
 </div>
 {% endblock %}

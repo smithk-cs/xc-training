@@ -98,3 +98,71 @@ def test_pain_section_starts_collapsed(app):
     page = TestClient(app).get("/a/tok-ava").text
     assert '<details class="panel fold" id="pain">' in page and '<details class="panel fold" id="pain" open' not in page
     assert '<summary><h2 id="p-h">Something hurt today?</h2></summary>' in page and 'action="/a/tok-ava/pain"' in page
+
+
+def test_athlete_page_layout(app_client=None):
+    """Workouts then meets right under the announcements, both above the weekly numbers; resting heart rate folds once
+    today's value is in; no benchmark times in My training; Garmin folds once connected."""
+    import datetime as dt
+    from fastapi.testclient import TestClient
+    from xcapp import analysis as A
+    from xcapp.db import SessionLocal
+    from xcapp.models import Athlete, RestingHeartRate
+    from xcapp.web import create_app
+    db = SessionLocal()
+    a = Athlete(first_name="Ava", last_name="Doyle", gender="Girls", grade=11, group="Varsity", link_token="t-lay")
+    db.add(a)
+    db.flush()
+    db.add(RestingHeartRate(athlete_id=a.id, date=A.team_today() - dt.timedelta(days=1), bpm=48, source="athlete"))
+    db.commit()
+    aid = a.id
+    db.close()
+    c = TestClient(create_app())
+    page = c.get("/a/t-lay").text
+    assert page.index('id="wp-h"') < page.index('id="rhr-h"') < page.index('id="ac-h"')
+    assert '<details class="panel fold" id="workouts" open>' in page and '<details class="panel fold" id="rhr" open>' in page
+    assert "Enter today’s ›" in page and ">This week<" not in page
+    assert '<option value="results">' not in page and "<section class=\"panel\" aria-labelledby=\"g-h\">" in page
+    db = SessionLocal()
+    db.add(RestingHeartRate(athlete_id=aid, date=A.team_today(), bpm=47, source="athlete"))
+    db.commit()
+    db.close()
+    page = c.get("/a/t-lay").text
+    assert '<details class="panel fold" id="rhr">' in page and "Today 47 ✓" in page and "Enter today’s ›" not in page
+    assert page.index('id="ac-h"') < page.index('id="rhr-h"')
+
+
+def test_privacy_section_folds_once_ai_is_on():
+    import datetime as dt
+    from fastapi.testclient import TestClient
+    from xcapp.db import SessionLocal
+    from xcapp.models import Athlete
+    from xcapp.web import create_app
+    db = SessionLocal()
+    db.add(Athlete(first_name="Ava", last_name="Doyle", gender="Girls", grade=11, group="Varsity", link_token="t-pv", email="ava@example.org"))
+    db.commit()
+    db.close()
+    c = TestClient(create_app())
+    page = c.get("/a/t-pv").text
+    assert '<details class="panel fold garmin-fold" id="privacy" open>' in page and '<details class="sub-fold">' in page
+    assert "AI analysis ✓ On" not in page
+    db = SessionLocal()
+    db.query(Athlete).filter_by(link_token="t-pv").one().ai_consent_at = dt.datetime(2026, 10, 1)
+    db.commit()
+    db.close()
+    page = c.get("/a/t-pv").text
+    assert '<details class="panel fold garmin-fold" id="privacy">' in page and "AI analysis ✓ On" in page
+
+
+def test_compact_header_without_the_intro_sentence():
+    from fastapi.testclient import TestClient
+    from xcapp.db import SessionLocal
+    from xcapp.models import Athlete
+    from xcapp.web import create_app
+    db = SessionLocal()
+    db.add(Athlete(first_name="Ava", last_name="Doyle", gender="Girls", grade=11, group="Varsity", link_token="t-hd"))
+    db.commit()
+    db.close()
+    page = TestClient(create_app()).get("/a/t-hd").text
+    assert '<header class="hero compact">' in page and "This is your personal page" not in page
+    assert "This page’s link is your sign-in: keep it to yourself." in page

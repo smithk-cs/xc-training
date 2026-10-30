@@ -1,4 +1,4 @@
-<header class="hero">
+<header class="hero{% if hero_compact is defined and hero_compact %} compact{% endif %}">
   <div class="team">{% if has_logo() %}<img src="/branding/logo" alt="">{% endif %}<span>{{ team_name }}</span></div>
   {% if back_url %}<a class="back" href="{{ back_url }}">‹ {{ back_label }}</a>{% endif %}
   <div class="hero-title">

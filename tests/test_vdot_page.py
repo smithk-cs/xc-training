@@ -191,7 +191,7 @@ def test_boys_and_girls_pages(app):
     page = c.get("/groups?team=Girls").text
     assert "8.0 / 30" in page
     me = TestClient(web).get("/a/t-ava").text
-    assert "the Silver goal" in me and "22.0" in me                                     # 30 - 8 miles left
+    assert "of 30 mi</span>" in me and "22.0" in me                                    # 30 - 8 miles left
     db = SessionLocal()
     assert A.mileage_goal(db, ava_id, "Silver", A.team_today(), "Girls")["goal"] == 30
     assert A.mileage_goal(db, ava_id, "Silver", A.team_today(), "Boys")["goal"] == 40
