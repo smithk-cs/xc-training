@@ -2280,7 +2280,12 @@ def create_app() -> FastAPI:
         order = {g.name: g.position for g in db.scalars(select(TrainingGroup)).all()}
         rows.sort(key=lambda r: (order.get(r["group_name"], 99), -(r["vdot"] or 0), r["a"].last_name, r["a"].first_name))
         target_days, min_minutes = PT.settings_for(db)
-        return render(request, "week.html", user, team=team, rows=rows, monday=monday, today=today,
+        group_workouts: dict[str, list[list]] = {}  # each group's team workouts per day, shown once on its group row
+        for r in rows:
+            per_day = group_workouts.setdefault(r["group_name"], [[] for _ in range(7)])
+            for i, d in enumerate(r["days"]):
+                per_day[i] += [w for w in d["workouts"] if w not in per_day[i]]
+        return render(request, "week.html", user, team=team, rows=rows, monday=monday, today=today, group_workouts=group_workouts,
                       days=[monday + dt.timedelta(days=i) for i in range(7)], rates=PT.RATES,
                       target_days=target_days, min_minutes=min_minutes)
 

@@ -573,8 +573,9 @@ def vdot_board(db: Session, as_of: dt.date, genders: tuple[str, ...] = ("Boys", 
 
 
 def dedupe_pain_reports(db: Session, athlete_id: int | None = None) -> int:
-    """Keep one pain report per athlete, day and body area: the most recent. It keeps the run it was linked to and a
-    'saw the trainer' tick from the reports it replaces. Returns how many were removed."""
+    """Keep one pain report per athlete, day and body area: the most recent. It keeps the run it was linked to, a
+    'saw the trainer' tick, and each earlier report's score and note (such as 'Earlier 3/10: sore left side') from the
+    reports it replaces. Returns how many were removed."""
     q = select(PainReport).order_by(PainReport.created_at.desc(), PainReport.id.desc())
     if athlete_id is not None:
         q = q.where(PainReport.athlete_id == athlete_id)
@@ -588,6 +589,8 @@ def dedupe_pain_reports(db: Session, athlete_id: int | None = None) -> int:
             continue
         newest.activity_id = newest.activity_id or p.activity_id
         newest.saw_trainer = newest.saw_trainer or p.saw_trainer
+        earlier = f"Earlier {p.severity}/10" + (f": {p.note.strip()}" if (p.note or "").strip() else "")
+        newest.note = " · ".join(x for x in (earlier, (newest.note or "").strip()) if x)[:1000]  # oldest first
         db.delete(p)
         removed += 1
     db.flush()

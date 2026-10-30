@@ -377,7 +377,7 @@ table.mileage th:last-child { width: 7rem; }
 /* Week page: one row per athlete, the totals, then a cell per day. */
 .week-table th, .week-table td { vertical-align: top; text-align: center; }
 .week-table th.who, .week-table td.who, .week-table tr.group-row td { text-align: left; }
-table.list.week-table td.num, table.list.week-table th.num { text-align: center; }
+table.list.week-table td.num, table.list.week-table th.num, table.list.week-table th.day { text-align: center; }
 /* A line before each day, and every other day shaded, so the seven days read as columns. */
 .week-table th.day, .week-table td.day { border-left: 2px solid var(--color-border-line); }
 .week-table td.day.d1, .week-table td.day.d3, .week-table td.day.d5,
@@ -455,3 +455,6 @@ details.sub-fold[open] { display: flex; flex-direction: column; gap: 10px; }
 .hero.compact .hero-title { gap: 10px; }
 .hero.compact .hero-photo { width: 46px; height: 46px; border-width: 2px; }
 .hero.compact .group-btn { min-height: 30px; font-size: 14px; padding: 2px 12px; }
+/* Athletes page: everything centered except the athlete's name */
+table.list.centered th, table.list.centered td, table.list.centered td.num, table.list.centered th.num { text-align: center; }
+table.list.centered th:first-child, table.list.centered td:first-child { text-align: left; }

@@ -19,7 +19,8 @@
   <tbody>
   {% for r in rows %}{% set c = r.group.color if r.group else '' %}
   {% if loop.first or r.group_name != rows[loop.index0 - 1].group_name %}
-  <tr class="group-row"><td colspan="12">{% if r.group_name %}<span class="pill" style="background:{{ c or '#FFFFF0' }}; color:{{ ink(c or '#FFFFF0') }}; border-color:rgba(0,0,0,.18)">{{ r.group_name }}</span>{% if r.goal_miles %} <span class="small muted">{{ '%g' % r.goal_miles }} mi a week</span>{% endif %}{% else %}<span class="small muted">No group yet (needs a VDOT)</span>{% endif %}</td></tr>
+  <tr class="group-row"><td colspan="5">{% if r.group_name %}<span class="pill" style="background:{{ c or '#FFFFF0' }}; color:{{ ink(c or '#FFFFF0') }}; border-color:rgba(0,0,0,.18)">{{ r.group_name }}</span>{% if r.goal_miles %} <span class="small muted">{{ '%g' % r.goal_miles }} mi a week</span>{% endif %}{% else %}<span class="small muted">No group yet (needs a VDOT)</span>{% endif %}</td>
+    {% for ws in group_workouts.get(r.group_name, [[]] * 7) %}<td class="day d{{ loop.index0 }}">{% for w in ws %}<a class="tag" href="/workouts?edit={{ w.id }}#plan" title="Open {{ w.title }}">{{ w.title }}</a>{% endfor %}</td>{% endfor %}</tr>
   {% endif %}
   <tr>
     <td class="who"><a href="/athletes/{{ r.a.id }}">{{ r.a.name }}</a>{% if r.vdot or r.a.experience in (1, 3) %}<br><span class="small muted">{% if r.vdot %}VDOT {{ r.vdot }}{% endif %}{% if r.a.experience == 1 %} · new runner −10%{% elif r.a.experience == 3 %} · experienced +10%{% endif %}</span>{% endif %}
@@ -35,7 +36,6 @@
       {% elif d.planned is not none and d.date < today %}<span class="muted">Missed workout</span>
       {% elif d.workouts %}<span class="muted">{{ '%.0f' % d.planned if d.planned is not none else '' }} pts planned</span>
       {% endif %}
-      {% if d.workouts %}{% for w in d.workouts %}<br><a class="tag" href="/workouts?edit={{ w.id }}#plan" title="Open {{ w.title }}">{{ w.title }}</a>{% endfor %}{% endif %}
       {% if d.pain is not none %}<br><a class="pill bad" href="/injuries?pain={{ d.pain_id }}#pain-{{ d.pain_id }}" title="Open the pain report">Pain {{ d.pain }}/10</a>{% endif %}
       {% if d.missed %}<br>{% if d.missed.reason == 'Injury' %}<a class="pill warn" href="/injuries?missed={{ d.missed.id }}#missed-{{ d.missed.id }}" title="Open the injury report">{% else %}<span class="pill warn">{% endif %}{{ d.missed.reason }}{% if d.missed.pain %} {{ d.missed.pain }}/10{% endif %}{{ '</a>'|safe if d.missed.reason == 'Injury' else '</span>'|safe }}{% endif %}
       {% if d.flags %}<br><span class="pill warn" title="{{ d.flags|join('; ') }}">Flag</span>{% endif %}
@@ -46,7 +46,7 @@
 </table>
 </div>
 {% if rows and rows|selectattr('score', 'none')|list %}<p class="small muted">No score (–) means there is no target yet: the athlete needs a VDOT, and their group a weekly miles goal on the <a href="/groups?team={{ team }}">Groups</a> page.</p>{% endif %}
-<p class="small muted">Colors keep pace with the week: miles and points against the share of the weekly goals due so far (a seventh a day). <span class="pace-good">Green</span> 90% or more, <span class="pace-warn">amber</span> 80 to 89%, <span class="pace-bad">red</span> below 80%. In each day, the totals through that day; in the Miles and Points columns, through today.</p>
+<p class="small muted">Colors keep pace with the week: miles and points against the share of the weekly goals due so far (a seventh a day). <span class="pace-good">Green</span> 90% or more, <span class="pace-warn">amber</span> 80 to 89%, <span class="pace-bad">red</span> below 80%. In each day, the running totals from Monday through that day, so a short or missed day early in the week keeps later days red until the week catches up; in the Miles and Points columns, through today. Each group’s team workouts are on its group row.</p>
 <p class="small muted">Miles, points and heart rate come from synced runs; effort and pain from what the athlete reported. Flags are for the coach and don’t change the score: easy days run faster than easy pace, points up more than 10% on the week before, and treadmill runs whose watch pace may be off.</p>
 {% if user.role != 'trainer' %}
 <form method="post" action="/week/settings" class="card form-row" style="max-width:640px">

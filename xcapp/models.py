@@ -301,7 +301,7 @@ class PainReport(Base):
     date: Mapped[dt.date] = mapped_column(Date)
     body_area: Mapped[str] = mapped_column(String(60))
     severity: Mapped[int] = mapped_column(Integer)  # 0-10
-    note: Mapped[str] = mapped_column(String(300), default="")
+    note: Mapped[str] = mapped_column(String(1000), default="")  # athletes type up to 300; merged reports keep every note
     saw_trainer: Mapped[bool] = mapped_column(Boolean, default=False)  # the athlete says they've seen the athletic trainer
     activity_id: Mapped[int | None] = mapped_column(ForeignKey("activities.id", ondelete="SET NULL"), nullable=True)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)

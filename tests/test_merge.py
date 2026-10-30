@@ -104,4 +104,4 @@ def test_put_back_from_list_and_compact_roster(app):
     assert 'value="return"><input type="hidden" name="next" value="/athletes"><button class="secondary" type="submit">Put back on the roster' in roster
     r = c.post(f"/athletes/{rafa}/status", data={"csrf": csrf, "action": "return", "next": "/athletes"})
     assert r.headers["location"] == "/athletes" and "is back on the roster" in c.get("/athletes").text
-    assert 'class="list sortable compact"' in roster and '<details class="plink"><summary>Show</summary>' in roster
+    assert 'class="list sortable compact centered"' in roster and '<details class="plink"><summary>Show</summary>' in roster

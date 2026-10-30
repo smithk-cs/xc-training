@@ -93,6 +93,8 @@ def create_all():
             for name, ddl in cols:
                 if name not in have:
                     conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}"))
+        if eng.dialect.name == "postgresql":  # room for the notes of merged same-day pain reports (SQLite has no limit)
+            conn.execute(text("ALTER TABLE pain_reports ALTER COLUMN note TYPE VARCHAR(1000)"))
         # Groups saved when boys and girls shared one weekly mileage goal: the girls start on that same goal.
         conn.execute(text("UPDATE training_groups SET weekly_miles_girls = COALESCE(weekly_miles, 0) WHERE weekly_miles_girls IS NULL"))
         # Starting ability groups; coaches rename and re-set them on the Groups page.

@@ -6,7 +6,7 @@
 <p class="notice" style="margin-bottom:10px"><span>Possibly the same athlete under two names:
   {% for x, y in dupes %}<a href="/athletes/{{ x.id }}?merge={{ y.id }}#combine">{{ x.name }} and {{ y.name }}</a>{{ '; ' if not loop.last else '' }}{% endfor %}. Open one to combine them.</span></p>
 {% endif %}
-<table class="list sortable compact">
+<table class="list sortable compact centered">
   <thead><tr><th>Athlete</th><th>Grade</th><th>Class</th><th>Ability group</th><th class="num">VDOT</th><th>AI consent</th><th>Garmin</th><th>Last sync</th>{% if user.role != 'trainer' %}<th data-nosort>Link</th>{% endif %}</tr></thead>
   <tbody>
   {% for a in athletes %}
@@ -25,7 +25,7 @@
   <p class="small muted">These athletes’ grades came from older race results, so their class year is a suggestion from their latest race. Check each one and save; anyone whose class has graduated moves to Alumni with all their records kept.</p>
   <form method="post" action="/athletes/class-years">
     <input type="hidden" name="csrf" value="{{ csrf }}">
-    <table class="list compact"><thead><tr><th>Athlete</th><th>Grade on record</th><th>Latest race</th><th>Class of</th></tr></thead><tbody>
+    <table class="list compact centered"><thead><tr><th>Athlete</th><th>Grade on record</th><th>Latest race</th><th>Class of</th></tr></thead><tbody>
     {% for x in confirm %}<tr><td><a href="/athletes/{{ x.athlete.id }}">{{ x.athlete.name }}</a></td><td>{{ x.athlete.grade }}</td><td>{{ x.latest.strftime('%b %-d, %Y') }}</td>
       <td><input type="number" name="cls_{{ x.athlete.id }}" value="{{ x.suggested }}" min="1990" max="2100" style="width:6em" aria-label="Class year for {{ x.athlete.name }}">{% if x.suggested < this_year %} <span class="small muted">graduated</span>{% endif %}</td></tr>{% endfor %}
     </tbody></table>
@@ -44,7 +44,7 @@
 {% endif %}
 {% if former %}
 <details style="margin:12px 0"><summary class="small" style="cursor:pointer; font-weight:600; color:var(--brand-red)">Former athletes ({{ former|length }})</summary>
-  <table class="list" style="margin-top:8px"><thead><tr><th>Athlete</th><th>Grade</th><th>Left</th><th>Data kept until</th>{% if user.role != 'trainer' %}<th></th>{% endif %}</tr></thead><tbody>
+  <table class="list centered" style="margin-top:8px"><thead><tr><th>Athlete</th><th>Grade</th><th>Left</th><th>Data kept until</th>{% if user.role != 'trainer' %}<th></th>{% endif %}</tr></thead><tbody>
   {% for a in former %}<tr><td><a href="/athletes/{{ a.id }}">{{ a.name }}</a></td><td>{{ a.grade }}</td><td>{{ a.left_on.strftime('%b %-d, %Y') if a.left_on else '' }}</td><td>{{ delete_by(a).strftime('%b %-d, %Y') if a.left_on else '' }}</td>
     {% if user.role != 'trainer' %}<td><form method="post" action="/athletes/{{ a.id }}/status" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="return"><input type="hidden" name="next" value="/athletes"><button class="secondary" type="submit">Put back on the roster</button></form></td>{% endif %}</tr>{% endfor %}
   </tbody></table>
