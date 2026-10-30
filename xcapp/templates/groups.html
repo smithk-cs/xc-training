@@ -7,7 +7,7 @@
   <input type="hidden" name="csrf" value="{{ csrf }}">
   <div class="card scroll">
   <table class="list">
-    <thead><tr><th>Order</th><th>Group</th><th>Color</th><th class="num">Boys: VDOT from</th><th class="num">Girls: VDOT from</th><th class="num">Weekly miles goal</th><th>1600 targets</th><th class="num">Boys now</th><th class="num">Girls now</th>{% if user.role != 'trainer' %}<th>Remove</th>{% endif %}</tr></thead>
+    <thead><tr><th>Order</th><th>Group</th><th>Color</th><th class="num">Boys: VDOT from</th><th class="num">Girls: VDOT from</th><th class="num">Boys: weekly miles goal</th><th class="num">Girls: weekly miles goal</th><th>1600 targets</th><th class="num">Boys now</th><th class="num">Girls now</th>{% if user.role != 'trainer' %}<th>Remove</th>{% endif %}</tr></thead>
     <tbody>
     {% for g in groups %}
     <tr>
@@ -16,7 +16,8 @@
       <td><input type="text" name="color_{{ g.id }}" value="{{ g.color }}" maxlength="7" pattern="#[0-9A-Fa-f]{6}" placeholder="#B6D7A8" style="width:6.5rem" aria-label="{{ g.name }} color"></td>
       <td class="num"><input type="number" name="boys_{{ g.id }}" value="{{ g.min_vdot_boys|int }}" step="1" min="0" max="90" style="width:5rem" aria-label="{{ g.name }} boys cutoff"></td>
       <td class="num"><input type="number" name="girls_{{ g.id }}" value="{{ g.min_vdot_girls|int }}" step="1" min="0" max="90" style="width:5rem" aria-label="{{ g.name }} girls cutoff"></td>
-      <td class="num"><input type="number" name="miles_{{ g.id }}" value="{{ '%g' % g.weekly_miles if g.weekly_miles else '' }}" step="0.5" min="0" max="150" placeholder="none" style="width:5.5rem" aria-label="{{ g.name }} weekly miles goal"></td>
+      <td class="num"><input type="number" name="miles_{{ g.id }}" value="{{ '%g' % g.weekly_miles if g.weekly_miles else '' }}" step="0.5" min="0" max="150" placeholder="none" style="width:5.5rem" aria-label="{{ g.name }} boys weekly miles goal"></td>
+      <td class="num"><input type="number" name="miles_girls_{{ g.id }}" value="{{ '%g' % g.weekly_miles_girls if g.weekly_miles_girls else '' }}" step="0.5" min="0" max="150" placeholder="none" style="width:5.5rem" aria-label="{{ g.name }} girls weekly miles goal"></td>
       <td class="small">{% set r = ranges.get(g.id) %}{% if r %}{{ r[0] }}{% if r[1] != r[0] %} to {{ r[1] }}{% endif %} <span class="muted">(800 {{ r[2] }}{% if r[3] != r[2] %} to {{ r[3] }}{% endif %})</span>{% endif %}</td>
       <td class="num">{{ counts[(g.name, 'Boys')] }}</td><td class="num">{{ counts[(g.name, 'Girls')] }}</td>
       {% if user.role != 'trainer' %}<td><label class="check"><input type="checkbox" name="delete_{{ g.id }}"> Remove</label></td>{% endif %}
@@ -27,12 +28,13 @@
       <td></td><td><input type="text" name="new_name" maxlength="40" placeholder="Add a group" aria-label="New group name" style="width:9rem"></td><td></td>
       <td class="num"><input type="number" name="new_boys" step="1" min="0" max="90" style="width:5rem" aria-label="New group boys cutoff"></td>
       <td class="num"><input type="number" name="new_girls" step="1" min="0" max="90" style="width:5rem" aria-label="New group girls cutoff"></td>
-      <td class="num"><input type="number" name="new_miles" step="0.5" min="0" max="150" placeholder="none" style="width:5.5rem" aria-label="New group weekly miles goal"></td><td></td><td></td><td></td><td></td>
+      <td class="num"><input type="number" name="new_miles" step="0.5" min="0" max="150" placeholder="none" style="width:5.5rem" aria-label="New group boys weekly miles goal"></td>
+      <td class="num"><input type="number" name="new_miles_girls" step="0.5" min="0" max="150" placeholder="none" style="width:5.5rem" aria-label="New group girls weekly miles goal"></td><td></td><td></td><td></td><td></td>
     </tr>
     {% endif %}
     </tbody>
   </table>
-  <p class="small muted">{{ unrated }} athlete{{ '' if unrated == 1 else 's' }} without a result in the look-back window, so not in a group yet. A cutoff of 0 is the starting group. The 1600 target column shows the boys’ ranges. Weekly mileage goals count Monday to Sunday; leave one empty for no goal. Athletes see their group’s goal and this week’s progress on their page.</p>
+  <p class="small muted">{{ unrated }} athlete{{ '' if unrated == 1 else 's' }} without a result in the look-back window, so not in a group yet. A cutoff of 0 is the starting group. The 1600 target column shows the boys’ ranges. Boys and girls have their own weekly mileage goals, counted Monday to Sunday; leave one empty for no goal. Athletes see their group’s goal and this week’s progress on their page.</p>
   <div class="form-row">
     <label>Look back (days)<input type="number" name="lookback" value="{{ lookback }}" min="30" max="1500"></label>
     <label class="check"><input type="checkbox" name="show_athletes" {% if show_athletes %}checked{% endif %}> Show athletes their own group, VDOT and targets</label>
@@ -49,8 +51,8 @@
 <div class="card scroll" id="mileage">
   <h2>Weekly mileage: {{ week[0].strftime('%b %-d') }} to {{ week[1].strftime('%b %-d') }}</h2>
   <p class="small muted">Miles so far this week against each group’s goal ({{ days_left }} day{{ '' if days_left == 1 else 's' }} left after today), and last week’s total.</p>
-  {% for m in mileage %}{% set goal = m.group.weekly_miles %}
-  <h3 style="margin:14px 0 6px"><span class="pill" style="background:{{ m.group.color or '#FFFFF0' }}; color:{{ ink(m.group.color or '#FFFFF0') }}; border-color:rgba(0,0,0,.18)">{{ m.group.name }}</span> <span class="small muted" style="font-weight:400">goal {{ '%g' % goal }} mi · {{ m.athletes|selectattr('now', 'ge', goal)|list|length }} of {{ m.athletes|length }} there</span></h3>
+  {% for m in mileage %}{% set goal = m.goal %}
+  <h3 style="margin:14px 0 6px">{{ m.gender }} <span class="pill" style="background:{{ m.group.color or '#FFFFF0' }}; color:{{ ink(m.group.color or '#FFFFF0') }}; border-color:rgba(0,0,0,.18)">{{ m.group.name }}</span> <span class="small muted" style="font-weight:400">goal {{ '%g' % goal }} mi · {{ m.athletes|selectattr('now', 'ge', goal)|list|length }} of {{ m.athletes|length }} there</span></h3>
   <table class="list compact mileage"><thead><tr><th>Athlete</th><th>This week</th><th class="num">Last week</th></tr></thead><tbody>
   {% for r in m.athletes|sort(attribute='now', reverse=True) %}<tr>
     <td><a href="/athletes/{{ r.a.id }}">{{ r.a.name }}</a></td>

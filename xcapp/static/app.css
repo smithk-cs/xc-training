@@ -89,6 +89,9 @@ button, .button { background: var(--brand-red); color: #FFFFFF; border: 1px soli
 button:hover, .button:hover { background: var(--brand-red-dark); border-color: var(--brand-red-dark); color: #FFFFFF; }
 button.secondary { background: transparent; color: var(--color-fg); border-color: var(--color-input-line); }
 button.secondary:hover { background: var(--color-soft); color: var(--color-fg); }
+/* The VDOT page's Boys / Girls switch: the team not shown is an outlined button. */
+.team-switch a.button.secondary { background: transparent; color: var(--color-fg); border-color: var(--color-input-line); }
+.team-switch a.button.secondary:hover { background: var(--color-soft); color: var(--color-fg); }
 button.danger { background: transparent; color: var(--color-bad); border-color: var(--color-bad); }
 button.link { background: none; border: 0; padding: 0; min-height: 0; color: var(--color-fg-muted); text-decoration: underline; font-weight: 500; }
 button[disabled] { background: var(--color-border-line); border-color: var(--color-border-line); color: var(--color-fg-muted); cursor: not-allowed; }
@@ -243,6 +246,10 @@ details.meet > summary h2::before { content: "▸ "; color: var(--brand-red); }
 details.meet[open] > summary h2::before { content: "▾ "; }
 details.meet[open] > summary { margin-bottom: 10px; }
 .vdot-group td.pace { font-variant-numeric: tabular-nums; }
+.vdot-group { table-layout: fixed; min-width: 820px; }
+.vdot-group col.name { width: 22%; }
+.vdot-group col.v { width: 14%; }
+.vdot-group col.pace { width: 16%; }
 .avatar { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; vertical-align: middle; margin-right: 8px; display: inline-block; }
 .avatar.blank { display: inline-flex; align-items: center; justify-content: center; background: var(--color-bg); border: 1px solid var(--color-border-line); color: var(--color-fg-muted); font-size: 12px; font-weight: 700; }
 .avatar.big { width: 72px; height: 72px; margin-right: 14px; }

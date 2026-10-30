@@ -100,3 +100,25 @@ def test_parts_by_time(app):
     assert 'step="0.25" value="5"' in page and '<option value="min" selected>min</option>' in page
     c.post("/workouts", data={**form, "wid": str(w.id), "p_dist": ["14", "500", "1600"]})
     assert "Check part 2: a timed part runs from 0.25 to 180 minutes." in c.get("/workouts").text
+
+
+def test_parts_in_miles(app):
+    c, csrf = login(app)
+    day = (A.team_today() + dt.timedelta(days=1)).isoformat()
+    form = {"csrf": csrf, "date": day, "title": "", "p_sets": ["1", "1"], "p_reps": ["1", "3"],
+            "p_dist": ["5", "1.5"], "p_unit": ["mi", "mi"], "p_zone": ["Long run", "Tempo"], "p_rest": ["", "2 min jog"]}
+    c.post("/workouts", data=form)
+    page = c.get("/workouts").text
+    assert "Saved 5 mi Long run + 3 × 1.5 mi Tempo." in page
+    db = SessionLocal()
+    w = db.query(PlannedWorkout).one()
+    assert json.loads(w.parts)[1] == {"sets": 1, "reps": 3, "zone": "Tempo", "rest": "2 min jog", "dist": 2414, "mi": 1.5}
+    assert w.rep_distance_m == 2414                                                   # matched to synced reps in meters
+    db.close()
+    me = TestClient(app).get("/a/t-sam").text
+    tempo = A.pace_at(60, A.TEMPO_PCT)
+    assert "<b>3 × 1.5 mi</b> Tempo" in me and A.fmt_time(tempo * 2414 / A.METERS_PER_MILE)[:-2] in me   # time per 1.5 mi rep
+    page = c.get(f"/workouts?edit={w.id}").text
+    assert 'step="0.01" value="1.5"' in page and '<option value="mi" selected>mi</option>' in page
+    c.post("/workouts", data={**form, "wid": str(w.id), "p_dist": ["5", "30"]})
+    assert "Check part 2: a distance in miles runs from 0.25 to 20 miles." in c.get("/workouts").text

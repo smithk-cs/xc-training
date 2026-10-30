@@ -28,3 +28,23 @@ def test_older_database_gets_new_columns():
     from xcapp.models import TrainingGroup
     assert s.query(TrainingGroup).first().weekly_miles == 0
     s.close()
+
+
+def test_girls_start_on_the_shared_weekly_goal():
+    from xcapp import db as D
+    eng = D.engine()
+    with eng.begin() as conn:  # as the database was when boys and girls shared one weekly mileage goal
+        conn.execute(text("ALTER TABLE training_groups DROP COLUMN weekly_miles_girls"))
+        conn.execute(text("UPDATE training_groups SET weekly_miles = 35 WHERE name = 'Gold'"))
+    D.create_all()
+    s = D.SessionLocal()
+    from xcapp.models import TrainingGroup
+    gold = s.query(TrainingGroup).filter_by(name="Gold").one()
+    assert (gold.weekly_miles, gold.weekly_miles_girls) == (35, 35)
+    assert s.query(TrainingGroup).filter_by(name="Silver").one().weekly_miles_girls == 0
+    gold.weekly_miles_girls = 28           # a coach's own girls' goal is kept on the next start
+    s.commit()
+    D.create_all()
+    s.expire_all()
+    assert s.query(TrainingGroup).filter_by(name="Gold").one().weekly_miles_girls == 28
+    s.close()

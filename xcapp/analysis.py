@@ -174,15 +174,16 @@ def week_miles(db: Session, athlete_ids: list[int], monday: dt.date) -> dict[int
     return out
 
 
-def mileage_goal(db: Session, athlete_id: int, group: str, today: dt.date) -> dict | None:
-    """This week's miles against the athlete's group goal, or None when the group has no goal."""
+def mileage_goal(db: Session, athlete_id: int, group: str, today: dt.date, gender: str = "Boys") -> dict | None:
+    """This week's miles against the athlete's group goal for their gender, or None when there is no goal."""
     g = db.scalar(select(TrainingGroup).where(TrainingGroup.name == group)) if group else None
-    if g is None or not g.weekly_miles:
+    goal = g.miles_goal(gender) if g is not None else 0
+    if not goal:
         return None
     monday = week_monday(today)
     done = week_miles(db, [athlete_id], monday)[athlete_id]
     last = week_miles(db, [athlete_id], monday - dt.timedelta(days=7))[athlete_id]
-    return {"goal": g.weekly_miles, "done": done, "left": max(g.weekly_miles - done, 0), "pct": min(done / g.weekly_miles, 1),
+    return {"goal": goal, "done": done, "left": max(goal - done, 0), "pct": min(done / goal, 1),
             "days_left": 6 - today.weekday(), "last": last, "group": g.name}
 
 
@@ -389,8 +390,9 @@ def distance_text(m: float) -> str:
 
 
 def part_label(p: dict) -> str:
-    """'2 × 4 × 400 m', '6 × 1,000 m', '3,200 m', '4 × 5 min' (parts run for a time have 'mins' instead of 'dist')."""
-    dist = minutes_text(p["mins"]) if p.get("mins") else f"{p['dist']:,.0f} m"
+    """'2 × 4 × 400 m', '6 × 1,000 m', '1 × 5 mi', '4 × 5 min' (parts run for a time have 'mins' instead of 'dist';
+    parts set in miles keep 'mi' for showing, with 'dist' in meters)."""
+    dist = minutes_text(p["mins"]) if p.get("mins") else f"{p['mi']:g} mi" if p.get("mi") else f"{p['dist']:,.0f} m"
     reps = f"{p['reps']} × {dist}" if p["reps"] > 1 else dist
     return f"{p['sets']} × {reps}" if p["sets"] > 1 else reps
 
@@ -490,19 +492,19 @@ def weekly_plan_text(plan: str) -> str:
     return f"{m.group(1)}x{m.group(2)}={total:g}"
 
 
-def vdot_board(db: Session, as_of: dt.date) -> list[dict]:
+def vdot_board(db: Session, as_of: dt.date, genders: tuple[str, ...] = ("Boys", "Girls")) -> list[dict]:
     """The VDOT page: per gender with athletes, each group from fastest down with its VDOT range, easy and tempo pace
-    ranges, and its athletes by VDOT; then athletes with no VDOT yet."""
+    ranges, weekly mileage goal and its athletes by VDOT; then athletes with no VDOT yet."""
     ab = abilities(db, as_of)
     gains = vdot_gains(db, as_of)
     groups = db.scalars(select(TrainingGroup).order_by(TrainingGroup.position)).all()
     people = db.scalars(select(Athlete).where(on_team()).order_by(Athlete.last_name, Athlete.first_name)).all()
     out = []
-    for gender in ("Boys", "Girls"):
+    for gender in genders:
         mine = [a for a in people if a.gender == gender]
         if not mine:
             continue
-        key = (lambda g: g.min_vdot_girls) if gender == "Girls" else (lambda g: g.min_vdot_boys)
+        key = lambda g: g.min_vdot(gender)
         ordered = sorted(groups, key=key, reverse=True)
         sections = []
         for i, g in enumerate(ordered):
@@ -514,7 +516,7 @@ def vdot_board(db: Session, as_of: dt.date) -> list[dict]:
             top = hi if hi is not None else lo
             zones = [{"name": n, "fast": pace_at(top, pct), "slow": pace_at(max(lo, VDOT_MIN), pct)} for n, pct in PACE_ZONES]
             rng = (f"{hi} and below" if bottom else f"{lo}-{hi}" if hi is not None and hi > lo else f"{lo} +" if hi is None else str(lo))
-            sections.append({"group": g, "range": rng, "zones": zones,
+            sections.append({"group": g, "range": rng, "zones": zones, "miles": g.miles_goal(gender),
                              "single": hi is None or hi <= lo or bottom, "slower": bottom,
                              "rows": [{"a": a, **ab[a.id], "plan": weekly_plan_text(a.weekly_plan), "gain": gains.get(a.id),
                                        "paces": training_paces(ab[a.id]["vdot"])} for a in members]})

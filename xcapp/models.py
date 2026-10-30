@@ -470,7 +470,14 @@ class TrainingGroup(Base):
     min_vdot_boys: Mapped[float] = mapped_column(Float, default=0)
     min_vdot_girls: Mapped[float] = mapped_column(Float, default=0)
     color: Mapped[str] = mapped_column(String(7), default="")  # badge color, e.g. #B6D7A8
-    weekly_miles: Mapped[float] = mapped_column(Float, default=0, server_default="0")  # weekly mileage goal (Monday to Sunday); 0 = none
+    weekly_miles: Mapped[float] = mapped_column(Float, default=0, server_default="0")  # boys' weekly mileage goal (Monday to Sunday); 0 = none
+    weekly_miles_girls: Mapped[float] = mapped_column(Float, default=0, server_default="0")  # girls' weekly mileage goal; 0 = none
+
+    def min_vdot(self, gender: str) -> float:
+        return self.min_vdot_girls if gender == "Girls" else self.min_vdot_boys
+
+    def miles_goal(self, gender: str) -> float:
+        return (self.weekly_miles_girls if gender == "Girls" else self.weekly_miles) or 0
 
 
 class AppSetting(Base):
