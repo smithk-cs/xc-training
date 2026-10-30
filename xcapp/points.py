@@ -48,6 +48,24 @@ def _pct(done: float, due: float) -> float | None:
     return 100 * done / due if due else None
 
 
+def score_pace(week: dict, today: dt.date, target_days: int) -> None:
+    """Whether the athlete is on track for the week's score: the same 80/20 score, with points and days run measured
+    against what's due by today (a seventh of each a day). Once the week is over it is the score itself."""
+    week["score_pct"], week["why_score"] = None, ""
+    days = week["days"]
+    if not days or not week.get("target") or today < days[0]["date"]:
+        return
+    i = min(7, (today - days[0]["date"]).days + 1)
+    due_p, due_d = week["target"] * i / 7, target_days * i / 7
+    done_p = sum(d["points"] for d in days[:i])
+    run = week["run_days"]   # days run so far (later days have no runs yet)
+    pts, dys = min(done_p / due_p, 1.0), min(run / due_d, 1.0) if due_d else 1.0
+    week["score_pct"] = 100 * (POINTS_SHARE * pts + (1 - POINTS_SHARE) * dys)
+    through = "the whole week" if i == 7 else f"by {days[i - 1]['date']:%a}"
+    week["why_score"] = (f"On track for {week['score_pct']:.0f}%: points {done_p:.0f} of {due_p:.0f} due {through} ({100 * pts:.0f}%) "
+                         f"× 80% + days run {run} of {due_d:.1f} due ({100 * dys:.0f}%) × 20%")
+
+
 def keep_pace(week: dict, today: dt.date) -> None:
     """Colours, each with the reason behind it ('why_miles', 'why_points'):
     - each day judged on its own: miles against the day's planned workout miles (else the weekly goal over six
@@ -237,6 +255,7 @@ def team_week(db: Session, monday: dt.date, gender: str | None = None, athletes:
         week, last = rows
         week["score"] = week_score(week["points"], week["target"] or 0, week["run_days"], target_days)
         keep_pace(week, today)
+        score_pace(week, today, target_days)
         if last["points"] > 0 and week["points"] > JUMP * last["points"]:
             week["flags"].append(f"Points up {100 * (week['points'] / last['points'] - 1):.0f}% on last week")
         out.append({"a": a, "group": g, "group_name": group, "vdot": v, "target_days": target_days, **week,

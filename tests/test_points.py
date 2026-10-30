@@ -232,3 +232,16 @@ def test_week_links_and_colours():
     assert 'class="day d2' in page and 'class="num pace-' in page and '<b class="pace-' in page
     inj = c.get(f"/injuries?pain={pid}&missed={mid}").text                 # older than four weeks, still shown when linked
     assert f'<tr id="pain-{pid}">' in inj and f'<tr id="missed-{mid}">' in inj
+
+
+
+def test_score_on_track_colour():
+    days = [{"date": MON + dt.timedelta(days=i), "points": p} for i, p in enumerate([10, 10, 0, 0, 0, 0, 0])]
+    week = {"days": days, "target": 70, "run_days": 2}
+    P.score_pace(week, MON + dt.timedelta(days=1), 6)       # Tuesday: 20 of 20 points due, 2 of 1.7 days due
+    assert round(week["score_pct"]) == 100 and P.pace_status(week["score_pct"]) == "good"
+    P.score_pace(week, MON + dt.timedelta(days=3), 6)       # Thursday, nothing more: 20 of 40 points, 2 of 3.4 days
+    assert round(week["score_pct"]) == 52 and P.pace_status(week["score_pct"]) == "bad"
+    assert week["why_score"].startswith("On track for 52%: points 20 of 40 due by Thu (50%)")
+    P.score_pace(week, MON + dt.timedelta(days=9), 6)       # week over: the score itself (80% x 20/70 + 20% x 2/6)
+    assert week["score_pct"] == pytest.approx(100 * (0.8 * 20 / 70 + 0.2 * 2 / 6))
