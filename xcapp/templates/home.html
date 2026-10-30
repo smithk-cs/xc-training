@@ -21,7 +21,7 @@
 <div class="card" style="border-color:var(--color-bad)">
   <h2>Deletion requests</h2>
   <p class="small muted">Delete within 30 days: open the athlete, then “Delete permanently” (admins). That also completes the request.</p>
-  <ul>{% for d in deletions %}<li>{% if d.athlete_id %}<a href="/athletes/{{ d.athlete_id }}">{{ d.athlete_name }}</a>{% else %}{{ d.athlete_name }}{% endif %}, asked {{ d.created_at.strftime('%b %-d') }}</li>{% endfor %}</ul>
+  <ul>{% for d in deletions %}<li>{% if d.athlete_id %}<a href="/athletes/{{ d.athlete_id }}">{{ d.athlete_name }}</a>{% else %}{{ d.athlete_name }}{% endif %}, asked {{ (d.created_at|local).strftime('%b %-d') }}</li>{% endfor %}</ul>
 </div>
 {% endif %}
 {% macro note_form(n) %}
@@ -79,7 +79,7 @@
   <div class="card">
     <h2>AI briefing</h2>
     {% if last_ai %}
-      <p class="muted small">Last run {{ last_ai.created_at.strftime('%b %-d, %-I:%M %p') }} UTC: {{ 'ready' if last_ai.status == 'ok' else 'failed' }}.</p>
+      <p class="muted small">Last run {{ (last_ai.created_at|local).strftime('%b %-d, %-I:%M %p') }}: {{ 'ready' if last_ai.status == 'ok' else 'failed' }}.</p>
       {% if last_ai.status == 'failed' %}<p class="small">{{ last_ai.error }}</p>{% endif %}
     {% else %}<p class="muted">No briefing yet.</p>{% endif %}
     <p><a href="/ai">Read it or ask a question</a></p>

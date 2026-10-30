@@ -61,7 +61,8 @@ DEFAULT_TARGETS = {74: ("1:50", "4:06"), 73: ("1:51", "4:09"), 72: ("1:52", "4:1
 ADDED_COLUMNS = {
     "activities": [("rpe", "INTEGER"), ("feel", "VARCHAR(20) DEFAULT ''"), ("athlete_note", "VARCHAR(300) DEFAULT ''"),
                    ("feedback_at", "TIMESTAMP"), ("run_type", "VARCHAR(20) DEFAULT ''"), ("workout_locked", "BOOLEAN DEFAULT FALSE"),
-                   ("vo2_max", "FLOAT")],
+                   ("vo2_max", "FLOAT"), ("workout_check", "VARCHAR(12) DEFAULT ''"), ("workout_check_note", "VARCHAR(400) DEFAULT ''"),
+                   ("workout_check_for", "INTEGER"), ("workout_checked_at", "TIMESTAMP")],
     "athletes": [("ability_override", "VARCHAR(40) DEFAULT ''"), ("ai_consent_at", "TIMESTAMP"), ("ai_consent_note", "VARCHAR(200) DEFAULT ''"),
                  ("vdot_override", "INTEGER"), ("is_test", "BOOLEAN DEFAULT FALSE"), ("other_names", "VARCHAR(500) DEFAULT ''"), ("email", "VARCHAR(254) DEFAULT ''"), ("email_reminders", "BOOLEAN DEFAULT FALSE"), ("grad_year", "INTEGER"),
                  ("alumni", "BOOLEAN DEFAULT FALSE"), ("left_on", "DATE"), ("vdot_mark", "VARCHAR(10) DEFAULT ''"), ("weekly_plan", "VARCHAR(20) DEFAULT ''")],
@@ -70,7 +71,7 @@ ADDED_COLUMNS = {
     "meet_divisions": [("gender", "VARCHAR(10) DEFAULT 'Boys'"), ("level", "VARCHAR(20) DEFAULT 'Varsity'"), ("max_entries", "INTEGER")],
     "race_results": [("points", "FLOAT")],
     "planned_workouts": [("distance_unit", "VARCHAR(2) DEFAULT 'm'"), ("parts", "TEXT DEFAULT ''")],
-    "training_groups": [("color", "VARCHAR(7) DEFAULT ''"), ("weekly_miles", "FLOAT DEFAULT 0")],
+    "training_groups": [("color", "VARCHAR(7) DEFAULT ''"), ("weekly_miles", "FLOAT DEFAULT 0"), ("weekly_miles_girls", "FLOAT")],
     "pain_reports": [("activity_id", "INTEGER"), ("saw_trainer", "BOOLEAN DEFAULT FALSE")],
 }
 
@@ -87,6 +88,8 @@ def create_all():
             for name, ddl in cols:
                 if name not in have:
                     conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}"))
+        # Groups saved when boys and girls shared one weekly mileage goal: the girls start on that same goal.
+        conn.execute(text("UPDATE training_groups SET weekly_miles_girls = COALESCE(weekly_miles, 0) WHERE weekly_miles_girls IS NULL"))
         # Starting ability groups; coaches rename and re-set them on the Groups page.
         if not conn.execute(text("SELECT COUNT(*) FROM training_groups")).scalar():
             for pos, (name, boys, girls, color) in enumerate(DEFAULT_GROUPS):

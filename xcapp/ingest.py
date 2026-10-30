@@ -39,6 +39,11 @@ def athlete_groups(db: Session, athlete: Athlete) -> tuple[str, str]:
     return athlete.group, abilities(db, team_today()).get(athlete.id, {}).get("group", "")
 
 
+def _workout_rank(reps: int, distance_m: float | None) -> tuple[int, float]:
+    """Which of an athlete's runs that day is the team workout: the most reps, then the longest."""
+    return reps, distance_m or 0
+
+
 def match_planned(db: Session, athlete: Athlete, day: dt.date) -> PlannedWorkout | None:
     groups = athlete_groups(db, athlete)
     for pw in db.scalars(select(PlannedWorkout).where(PlannedWorkout.date == day).order_by(PlannedWorkout.id)).all():
@@ -88,14 +93,16 @@ def ingest(db: Session, athlete: Athlete, parsed: ParsedActivity, source: str) -
         db.flush()
         return act, outcome  # a coach or athlete chose this run's workout by hand
     act.planned_workout_id = None
-    if has_reps and parsed.is_running:
+    if parsed.is_running:
+        # A run on a day with a workout for the athlete's group is that workout by default, reps or not.
         pw = match_planned(db, athlete, act.local_date)
         if pw is not None:
-            # Only one activity per athlete counts as that day's workout: the one with the most reps.
+            # Only one activity per athlete counts as that day's workout: the most reps, then the longest.
             other = db.scalar(select(Activity).where(
                 Activity.athlete_id == athlete.id, Activity.planned_workout_id == pw.id, Activity.id != (act.id or -1)))
-            mine = sum(1 for a in analysis if a.is_rep)
-            if other is None or mine > sum(1 for l in other.laps if l.is_rep):
+            mine = _workout_rank(sum(1 for a in analysis if a.is_rep), act.distance_m)
+            if other is None or (not other.workout_locked  # a run chosen by hand keeps the workout
+                                 and mine > _workout_rank(sum(1 for l in other.laps if l.is_rep), other.distance_m)):
                 if other is not None:
                     other.planned_workout_id = None
                 act.planned_workout_id = pw.id
@@ -110,10 +117,10 @@ def rematch_day(db: Session, day: dt.date) -> int:
     best: dict[int, Activity] = {}
     acts = [a for a in acts if not a.workout_locked]
     for act in acts:
-        reps = sum(1 for l in act.laps if l.is_rep)
-        if reps and "run" in (act.sport or "running"):
+        if "run" in (act.sport or "running"):
             cur = best.get(act.athlete_id)
-            if cur is None or reps > sum(1 for l in cur.laps if l.is_rep):
+            rank = _workout_rank(sum(1 for l in act.laps if l.is_rep), act.distance_m)
+            if cur is None or rank > _workout_rank(sum(1 for l in cur.laps if l.is_rep), cur.distance_m):
                 best[act.athlete_id] = act
     for act in acts:
         pw = match_planned(db, act.athlete, day) if best.get(act.athlete_id) is act else None

@@ -1,0 +1,4 @@
+{# Boys / Girls buttons beside the title of the Groups and VDOT pages: `base` is the page, `extra` any other query to keep. #}
+<nav class="form-row team-switch" aria-label="Boys or girls">
+  {% for t in ('Boys', 'Girls') %}<a class="button{% if t != team %} secondary{% endif %}" href="{{ base }}?team={{ t }}{{ extra or '' }}"{% if t == team %} aria-current="page"{% endif %}>{{ t }}</a>{% endfor %}
+</nav>

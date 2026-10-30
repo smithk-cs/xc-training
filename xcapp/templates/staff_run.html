@@ -46,6 +46,14 @@
   </form>
   <p class="small muted">{% if act.workout_locked %}The workout was chosen by hand, so automatic matching leaves it alone.{% else %}Matched automatically. Choosing a workout here fixes it in place.{% endif %} Workouts within three days of the run are listed.</p>
   {% else %}<p>{{ run_type_of(act) }}{% if act.planned %}: {{ act.planned.title }}{% endif %}</p>{% endif %}
+  {% if act.planned %}
+  <h3 style="margin:14px 0 4px">AI check against the workout</h3>
+  {% if act.workout_check and act.workout_check_for == act.planned_workout_id %}
+  <p><span class="pill{% if act.workout_check == 'Done' %} good{% elif act.workout_check == 'Not done' %} bad{% else %} warn{% endif %}">{{ act.workout_check }}</span> {{ act.workout_check_note }}</p>
+  <p class="small muted">Checked {{ (act.workout_checked_at|local).strftime('%b %-d, %-I:%M %p') }} from the Garmin laps. A check, not a verdict: the athlete and coach know best.</p>
+  {% elif a.ai_consent_at %}<p class="small muted">Not checked yet. The AI checks each night, or from the Workouts page.</p>
+  {% else %}<p class="small muted">Not checked: this athlete hasn’t agreed to AI analysis.</p>{% endif %}
+  {% endif %}
 </div>
 </div>
 {% endblock %}

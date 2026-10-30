@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 
 from xcapp import analysis as A
 from xcapp.db import SessionLocal
-from xcapp.models import Athlete, RaceResult, Result, StaffUser
+from xcapp.models import Activity, Athlete, RaceResult, Result, StaffUser, TrainingGroup
 from xcapp.security import hash_password
 
 DAY = dt.date(2026, 10, 25)
@@ -85,11 +85,12 @@ def test_vdot_page_and_editing(app):
     for aid in (sam, theo, pat):
         data.update({f"vdot_{aid}": ""})
     data.update({f"vdot_{pat}": "55"})
-    assert c.post("/vdot", data=data).headers["location"] == "/vdot"
+    assert c.post("/vdot", data=data).headers["location"] == "/vdot?team=Boys"
     page = c.get("/vdot").text
     assert "Weekly plan" not in page and 'class="mark"' not in page
     assert "Set by coach" not in page and "No VDOT yet" not in page                   # Pat now has a VDOT of 55
-    assert "Oak Hills, 4,000 Meters 12:47.9 on Oct 17, 2026" in page                    # most recent race listed
+    assert "Oak Hills" not in page and "Most recent race" not in page                    # no meet names or race times
+    assert page.count('<colgroup><col class="name"><col class="v">') == page.count('<table class="vdot-group"')   # columns line up
     data[f"vdot_{theo}"] = "200"
     c.post("/vdot", data=data)
     assert "not changed for Theo Marsh" in c.get("/vdot?edit=1").text
@@ -107,3 +108,78 @@ def test_vdot_page_and_editing(app):
     assert "Edit VDOT" not in t.get("/vdot").text and 'name="vdot_' not in t.get("/vdot?edit=1").text
     tcsrf = re.search(r'name="csrf" value="([^"]+)"', t.get("/vdot").text).group(1)
     assert t.post("/vdot", data={"csrf": tcsrf}).status_code == 403
+
+
+def test_boys_and_girls_pages(app):
+    web, (sam, theo, pat) = app
+    db = SessionLocal()
+    ava = Athlete(first_name="Ava", last_name="Cole", gender="Girls", grade=10, group="Varsity", link_token="t-ava", vdot_override=60)
+    db.add(ava)
+    db.flush()
+    gold = db.query(TrainingGroup).filter_by(name="Gold").one()
+    silver = db.query(TrainingGroup).filter_by(name="Silver").one()
+    gold.weekly_miles, gold.weekly_miles_girls = 45, 0
+    silver.min_vdot_girls, silver.weekly_miles, silver.weekly_miles_girls = 56, 40, 32   # girls reach Silver from VDOT 56
+    db.query(TrainingGroup).filter_by(name="Bronze").one().min_vdot_girls = 52
+    monday = A.week_monday(A.team_today())
+    db.add(Activity(athlete_id=ava.id, source="upload", external_id="ava1", start_utc=dt.datetime(monday.year, monday.month, monday.day, 15),
+                    local_date=monday, duration_s=3000, distance_m=8 * 1609.344, sport="running"))
+    ava_id = ava.id
+    db.commit()
+    db.close()
+    c = login(web, "coach1")
+
+    boys = c.get("/vdot").text                                                         # boys by default
+    assert "Boys VDOT training groups" in boys and "Ava Cole" not in boys and "Sam Lowry" in boys
+    assert '<a class="button" href="/vdot?team=Boys" aria-current="page">Boys</a>' in boys
+    assert "Gold<br><span class=\"small\" style=\"font-weight:400\">45 mi a week</span>" in boys
+    assert "Silver<br><span class=\"small\" style=\"font-weight:400\">40 mi a week</span>" in boys
+
+    girls = c.get("/vdot?team=Girls").text
+    assert "Girls VDOT training groups" in girls and "Ava Cole" in girls and f'href="/athletes/{sam}"' not in girls
+    assert '<a class="button" href="/vdot?team=Girls" aria-current="page">Girls</a>' in girls
+    assert "<th>VDOT 56-67</th>" in girls and "32 mi a week" in girls and "45 mi a week" not in girls   # girls' cutoffs and goals
+    assert girls.index("Silver") < girls.index("Ava Cole") < girls.index("Bronze")
+
+    edit = c.get("/vdot?team=Girls&edit=1").text
+    assert f'name="vdot_{ava_id}"' in edit and f'name="vdot_{sam}"' not in edit and 'name="team" value="Girls"' in edit
+    csrf = re.search(r'name="csrf" value="([^"]+)"', edit).group(1)
+    assert c.post("/vdot", data={"csrf": csrf, "team": "Girls", f"vdot_{ava_id}": "58"}).headers["location"] == "/vdot?team=Girls"
+    girls = c.get("/vdot?team=Girls").text
+    assert "Ava Cole" in girls[girls.index("VDOT changes"):] and f"/athletes/{pat}" not in girls   # changes listed per team
+    assert c.post("/vdot/import", data={"csrf": csrf, "team": "Girls", "text": "Ava Cole\t59"}).headers["location"] == "/vdot?team=Girls"
+
+    # The Groups page keeps a weekly goal for each, and athletes see their own team's goal.
+    boys = c.get("/groups").text                                                       # boys by default
+    assert "Boys training groups" in boys and '<a class="button" href="/groups?team=Boys" aria-current="page">Boys</a>' in boys
+    assert f'name="miles_{silver.id}" value="40"' in boys and "miles_girls_" not in boys and "girls_" not in boys
+    page = c.get("/groups?team=Girls").text
+    assert "Girls training groups" in page and f'name="miles_girls_{silver.id}" value="32"' in page and f'name="girls_{silver.id}" value="56"' in page
+    assert f'name="miles_{silver.id}"' not in page and f'name="boys_{silver.id}"' not in page
+    assert "Girls weekly mileage" in page and "8.0 / 32" in page
+
+    # Saving the girls' page changes only the girls' numbers; a group added there starts the same for the boys.
+    db = SessionLocal()
+    groups = db.query(TrainingGroup).all()
+    form = {"csrf": csrf, "team": "Girls", "lookback": "365", "show_athletes": "on", "new_name": "Diamond", "new_girls": "64", "new_miles_girls": "50"}
+    for g in groups:
+        form.update({f"name_{g.id}": g.name, f"position_{g.id}": str(g.position), f"color_{g.id}": g.color,
+                     f"girls_{g.id}": str(int(g.min_vdot_girls)), f"miles_girls_{g.id}": "%g" % g.weekly_miles_girls if g.weekly_miles_girls else ""})
+    db.close()
+    form[f"girls_{silver.id}"], form[f"miles_girls_{silver.id}"] = "55", "30"
+    assert c.post("/groups", data=form).headers["location"] == "/groups?team=Girls"
+    db = SessionLocal()
+    s2 = db.get(TrainingGroup, silver.id)
+    assert (s2.min_vdot_boys, s2.weekly_miles, s2.min_vdot_girls, s2.weekly_miles_girls) == (62, 40, 55, 30)
+    d = db.query(TrainingGroup).filter_by(name="Diamond").one()
+    assert (d.min_vdot_boys, d.min_vdot_girls, d.weekly_miles, d.weekly_miles_girls) == (64, 64, 50, 50)
+    db.close()
+    page = c.get("/groups?team=Girls").text
+    assert "8.0 / 30" in page
+    me = TestClient(web).get("/a/t-ava").text
+    assert "the Silver goal" in me and "22.0" in me                                     # 30 - 8 miles left
+    db = SessionLocal()
+    assert A.mileage_goal(db, ava_id, "Silver", A.team_today(), "Girls")["goal"] == 30
+    assert A.mileage_goal(db, ava_id, "Silver", A.team_today(), "Boys")["goal"] == 40
+    assert A.mileage_goal(db, ava_id, "Gold", A.team_today(), "Girls") is None         # no girls' goal for Gold
+    db.close()

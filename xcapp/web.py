@@ -154,6 +154,7 @@ def create_app() -> FastAPI:
                                  MORE_DAYS=A.MORE_DAYS, missed_label=A.missed_label,
                                  run_type_of=A.run_type_of, ink=ink, fmt_gap=A.fmt_gap, PACE_TYPES=A.PACE_TYPES,
                                  pace_type=A.pace_type)
+    templates.env.filters["local"] = A.local_time   # stored UTC times are shown in the team's time zone
     limiter = _LoginLimiter()
     garmin_origin = "{0.scheme}://{0.netloc}".format(urlparse(s.garmin_authorize_url))
     dashboard_body = (HERE / "static" / "dashboard_body.html").read_text(encoding="utf-8")
@@ -921,12 +922,19 @@ def create_app() -> FastAPI:
         rows = db.scalars(select(PlannedWorkout).order_by(PlannedWorkout.date.desc())).all()
         counts = dict(db.execute(select(Activity.planned_workout_id, func.count(Activity.id))
                                  .where(Activity.planned_workout_id.is_not(None)).group_by(Activity.planned_workout_id)).all())
+        checked: dict[int, dict[str, int]] = {}   # per workout: how many runs the AI found Done, Partly, Not done
+        for wid, verdict, n in db.execute(select(Activity.planned_workout_id, Activity.workout_check, func.count(Activity.id))
+                                          .where(Activity.planned_workout_id.is_not(None), Activity.workout_check != "",
+                                                 Activity.workout_check_for == Activity.planned_workout_id)
+                                          .group_by(Activity.planned_workout_id, Activity.workout_check)).all():
+            checked.setdefault(wid, {})[verdict] = n
         ability_names = [g.name for g in db.scalars(select(TrainingGroup).order_by(TrainingGroup.position)).all()]
         edit = db.get(PlannedWorkout, int(request.query_params["edit"])) if request.query_params.get("edit", "").isdigit() else None
         edit_parts = edit.part_list if edit else []
         if edit and not edit_parts:  # an older single-rep workout opens as one part
             edit_parts = [{"sets": 1, "reps": 1, "dist": round(edit.rep_distance_m), "zone": A.OLD_TYPE_ZONE.get(A.pace_type(edit.pace_factor), "Interval"), "rest": ""}]
-        return render(request, "workouts.html", user, rows=rows, counts=counts, today=A.team_today().isoformat(),
+        return render(request, "workouts.html", user, rows=rows, counts=counts, checked=checked, today=A.team_today().isoformat(),
+                      ai_ready=settings().ai_configured, pending_checks=len(AI.pending_workout_checks(db)),
                       ability_names=ability_names, edit=edit, edit_parts=edit_parts, zones=list(A.WORKOUT_ZONES),
                       previews={w.id: A.group_part_paces(db, w.part_list) for w in rows[:30] if w.part_list},
                       part_label=A.part_label)
@@ -964,7 +972,7 @@ def create_app() -> FastAPI:
         return back("/workouts")
 
     def save_workout_parts(request: Request, db: Session, f) -> Response:
-        """Save a workout made of parts (sets x reps x distance at a VDOT pace)."""
+        """Save a workout made of parts (sets x reps x a distance in meters or miles, or a time, at a VDOT pace)."""
         import json
         try:
             d = parse_date(f.get("date", ""))
@@ -974,15 +982,24 @@ def create_app() -> FastAPI:
                                                                    f.getlist("p_zone"), f.getlist("p_rest"))):
                 if not str(dist).strip():
                     continue  # an empty row
-                by_time = i < len(units) and units[i] == "min"
+                unit = units[i] if i < len(units) else "m"
+                by_time, by_miles = unit == "min", unit == "mi"
                 amount = float(dist)
-                p = {"sets": int(sets or 1), "reps": int(reps or 1), "mins" if by_time else "dist": int(amount) if amount.is_integer() else amount,
-                     "zone": zone, "rest": str(rest).strip()[:60]}
+                n = int(amount) if amount.is_integer() else amount
+                p = {"sets": int(sets or 1), "reps": int(reps or 1), "zone": zone, "rest": str(rest).strip()[:60]}
+                if by_time:
+                    p["mins"] = n
+                elif by_miles:  # kept in meters like any distance, and in miles for showing
+                    p["dist"], p["mi"] = round(amount * A.METERS_PER_MILE), n
+                else:
+                    p["dist"] = n
                 if not (1 <= p["sets"] <= 10 and 1 <= p["reps"] <= 40 and zone in A.WORKOUT_ZONES):
                     raise ValueError(f"Check part {len(parts) + 1}: 1 to 10 sets, 1 to 40 reps, and a pace.")
                 if by_time and not (0.25 <= amount <= 180):
                     raise ValueError(f"Check part {len(parts) + 1}: a timed part runs from 0.25 to 180 minutes.")
-                if not by_time and not (100 <= amount <= 20000):
+                if by_miles and not (0.25 <= amount <= 20):
+                    raise ValueError(f"Check part {len(parts) + 1}: a distance in miles runs from 0.25 to 20 miles.")
+                if unit == "m" and not (100 <= amount <= 20000):
                     raise ValueError(f"Check part {len(parts) + 1}: a distance runs from 100 to 20,000 meters.")
                 parts.append(p)
             if not parts:
@@ -1095,6 +1112,17 @@ def create_app() -> FastAPI:
         flash(request, "New briefing ready." if run.status == "ok" else f"The briefing could not be made: {run.error}",
               "ok" if run.status == "ok" else "error")
         return back("/ai")
+
+    @app.post("/workouts/check")
+    async def workouts_check(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
+        await form_checked(request)
+        run = AI.check_workouts(db)
+        if run is None:
+            flash(request, "No runs waiting to be checked.")
+        else:
+            flash(request, run.answer if run.status == "ok" else f"The workout check could not be done: {run.error}",
+                  "ok" if run.status == "ok" else "error")
+        return back("/workouts")
 
     @app.post("/ai/ask")
     async def ai_ask(request: Request, user=Depends(any_staff, scope="function"), db: Session = Depends(get_db, scope="function")):
@@ -1210,7 +1238,9 @@ def create_app() -> FastAPI:
         ability = mine if show_group else {}
         coming = db.scalars(select(PlannedWorkout).where(PlannedWorkout.date >= today, PlannedWorkout.date <= today + dt.timedelta(days=7))
                             .order_by(PlannedWorkout.date, PlannedWorkout.id)).all()
-        paces = A.workout_paces(db, a, [w for w in coming if w.applies_to(a.group, mine.get("group") or "")])
+        done = set(db.scalars(select(Activity.planned_workout_id).where(  # workouts already run come off the list
+            Activity.athlete_id == a.id, Activity.planned_workout_id.in_([w.id for w in coming]))).all())
+        paces = A.workout_paces(db, a, [w for w in coming if w.applies_to(a.group, mine.get("group") or "") and w.id not in done])
         races = db.scalars(select(RaceResult).where(RaceResult.athlete_id == a.id)
                            .order_by(RaceResult.date.desc(), RaceResult.id.desc())).all()
         history = A.race_history(races)
@@ -1219,7 +1249,7 @@ def create_app() -> FastAPI:
                       rhr=A.resting_hr(db, a.id, today), rhr_range=(A.RESTING_HR_MIN, A.RESTING_HR_MAX),
                       rhr_cal=A.resting_hr_calendar(db, a.id, today), photo_v=photo_versions(db).get(a.id), meets=my_meets(db, a, today),
                       wins=A.achievements(db, a, today),
-                      miles_goal=A.mileage_goal(db, a.id, mine.get("group") or "", today) if show_group else None,
+                      miles_goal=A.mileage_goal(db, a.id, mine.get("group") or "", today, a.gender) if show_group else None,
                       notes=[n for n in db.scalars(select(Announcement).where(Announcement.start_date <= today, Announcement.end_date >= today)
                                                    .order_by(Announcement.start_date.desc(), Announcement.id.desc())).all()
                              if n.for_athlete(a.gender, mine.get("group") or "")], my_paces=A.training_paces(mine.get("vdot")) if show_group else [],
@@ -1410,8 +1440,14 @@ def create_app() -> FastAPI:
 
     # ---------- ability groups ----------
 
+    def pick_team(value) -> str:
+        """The Groups and VDOT pages show one team at a time: Boys (the default) or Girls."""
+        return "Girls" if str(value or "").strip().lower() == "girls" else "Boys"
+
     @app.get("/groups", response_class=HTMLResponse)
-    def groups_page(request: Request, user=Depends(any_staff, scope="function"), db: Session = Depends(get_db, scope="function")):
+    def groups_page(request: Request, team: str = "", user=Depends(any_staff, scope="function"),
+                    db: Session = Depends(get_db, scope="function")):
+        team = pick_team(team)
         groups = db.scalars(select(TrainingGroup).order_by(TrainingGroup.position)).all()
         ab = A.abilities(db, A.team_today())
         athletes = athletes_sorted(db)
@@ -1420,26 +1456,27 @@ def create_app() -> FastAPI:
             k = (ab.get(at.id, {}).get("group", ""), at.gender)
             if k in counts:
                 counts[k] += 1
-        unrated = sum(1 for at in athletes if not ab.get(at.id, {}).get("group"))
+        unrated = sum(1 for at in athletes if at.gender == team and not ab.get(at.id, {}).get("group"))
         today = A.team_today()
         monday = A.week_monday(today)
-        team = [at for at in athletes if not at.is_test]
-        now = A.week_miles(db, [at.id for at in team], monday)
-        last = A.week_miles(db, [at.id for at in team], monday - dt.timedelta(days=7))
-        mileage = [{"group": g, "athletes": [{"a": at, "now": now[at.id], "last": last[at.id]}
-                                             for at in team if ab.get(at.id, {}).get("group") == g.name]}
-                   for g in groups if g.weekly_miles]
+        runners = [at for at in athletes if not at.is_test]
+        now = A.week_miles(db, [at.id for at in runners], monday)
+        last = A.week_miles(db, [at.id for at in runners], monday - dt.timedelta(days=7))
+        mileage = [{"group": g, "goal": g.miles_goal(team),
+                    "athletes": [{"a": at, "now": now[at.id], "last": last[at.id]}
+                                 for at in runners if at.gender == team and ab.get(at.id, {}).get("group") == g.name]}
+                   for g in groups if g.miles_goal(team)]
         targets = A.vdot_targets(db)
         ranges = {}
-        cuts = sorted({g.min_vdot_boys for g in groups})
+        cuts = sorted({g.min_vdot(team) for g in groups})
         for g in groups:
-            above = [c for c in cuts if c > g.min_vdot_boys]
+            above = [c for c in cuts if c > g.min_vdot(team)]
             top = (min(above) - 1) if above else max(targets or {0: 0})
-            rows = [targets[v] for v in sorted(targets) if g.min_vdot_boys <= v <= top]
+            rows = [targets[v] for v in sorted(targets) if g.min_vdot(team) <= v <= top]
             if rows:
                 ranges[g.id] = (rows[0][1], rows[-1][1], rows[0][0], rows[-1][0])
         table = "\n".join(f"{v},{t8},{t16}" for v, (t8, t16) in sorted(targets.items(), reverse=True))
-        return render(request, "groups.html", user, groups=groups, counts=counts, unrated=unrated, ranges=ranges, table=table,
+        return render(request, "groups.html", user, team=team, groups=groups, counts=counts, unrated=unrated, ranges=ranges, table=table,
                       mileage=[m for m in mileage if m["athletes"]], week=(monday, monday + dt.timedelta(days=6)), days_left=6 - today.weekday(),
                       lookback=A.get_setting(db, "group_lookback_days", "365"),
                       show_athletes=A.get_setting(db, "show_group_to_athletes", "1") == "1")
@@ -1468,9 +1505,13 @@ def create_app() -> FastAPI:
                 if color and not re.fullmatch(r"#[0-9A-Fa-f]{6}", color):
                     raise ValueError("Colors look like #B6D7A8.")
                 g.color = color.upper()
-                miles = str(f.get(f"miles_{g.id}", "")).strip()
-                g.weekly_miles = float(miles) if miles else 0
-                if not 0 <= g.weekly_miles <= 150:
+                if f"miles_{g.id}" in f:  # each team's page sends only its own goals
+                    miles = str(f.get(f"miles_{g.id}", "")).strip()
+                    g.weekly_miles = float(miles) if miles else 0
+                if f"miles_girls_{g.id}" in f:
+                    miles = str(f.get(f"miles_girls_{g.id}", "")).strip()
+                    g.weekly_miles_girls = float(miles) if miles else 0
+                if not (0 <= g.weekly_miles <= 150 and 0 <= g.weekly_miles_girls <= 150):
                     raise ValueError("Weekly mileage goals run from 0 to 150 miles.")
                 if old != name:
                     for at in db.scalars(select(Athlete).where(Athlete.ability_override == old)).all():
@@ -1482,8 +1523,11 @@ def create_app() -> FastAPI:
             if new:
                 if new.lower() in seen:
                     raise ValueError("Each group needs its own name.")
-                db.add(TrainingGroup(name=new, position=len(groups), min_vdot_boys=float(f.get("new_boys") or 0),
-                                     min_vdot_girls=float(f.get("new_girls") or 0), weekly_miles=float(f.get("new_miles") or 0)))
+                # Added from one team's page: the other team starts on the same cutoff and goal.
+                boys, girls = f.get("new_boys") or f.get("new_girls"), f.get("new_girls") or f.get("new_boys")
+                miles, miles_girls = f.get("new_miles") or f.get("new_miles_girls"), f.get("new_miles_girls") or f.get("new_miles")
+                db.add(TrainingGroup(name=new, position=len(groups), min_vdot_boys=float(boys or 0), min_vdot_girls=float(girls or 0),
+                                     weekly_miles=float(miles or 0), weekly_miles_girls=float(miles_girls or 0)))
             if "targets" in f:
                 import json as _json
                 parsed = {}
@@ -1508,7 +1552,7 @@ def create_app() -> FastAPI:
             if not msg or msg.startswith(("could not convert", "invalid literal")):
                 msg = "Check the numbers: VDOT cutoffs are numbers like 52.5, and order is a whole number."
             flash(request, msg, "error")
-        return back("/groups")
+        return back(f"/groups?team={pick_team(f.get('team'))}")
 
     @app.get("/athletes/{athlete_id}/photo")
     def athlete_photo(athlete_id: int, user=Depends(any_staff, scope="function"), db: Session = Depends(get_db, scope="function")):
@@ -1944,10 +1988,14 @@ def create_app() -> FastAPI:
         return back(f"/a/{token}#reminders")
 
     @app.get("/vdot", response_class=HTMLResponse)
-    def vdot_page(request: Request, edit: int = 0, user=Depends(any_staff, scope="function"), db: Session = Depends(get_db, scope="function")):
+    def vdot_page(request: Request, edit: int = 0, team: str = "", user=Depends(any_staff, scope="function"),
+                  db: Session = Depends(get_db, scope="function")):
+        team = pick_team(team)
         changes = db.execute(select(VdotChange, Athlete).join(Athlete, Athlete.id == VdotChange.athlete_id)
-                             .where(VdotChange.date > A.team_today() - dt.timedelta(days=30)).order_by(VdotChange.at.desc())).all()
-        return render(request, "vdot.html", user, board=A.vdot_board(db, A.team_today()), edit=bool(edit) and user.role != "trainer",
+                             .where(VdotChange.date > A.team_today() - dt.timedelta(days=30), Athlete.gender == team)
+                             .order_by(VdotChange.at.desc())).all()
+        return render(request, "vdot.html", user, board=A.vdot_board(db, A.team_today(), (team,)), team=team,
+                      edit=bool(edit) and user.role != "trainer",
                       changes=changes, open_changes=request.query_params.get("changes") == "1",
                       zones=A.PACE_ZONES, vdot_limits=(A.VDOT_MIN, A.VDOT_MAX))
 
@@ -1970,7 +2018,8 @@ def create_app() -> FastAPI:
             flash(request, f"VDOT should be a whole number from {A.VDOT_MIN} to {A.VDOT_MAX}; not changed for " + ", ".join(bad) + ".", "error")
         else:
             flash(request, "Saved.")
-        return back("/vdot?edit=1" if bad else "/vdot")
+        team = pick_team(f.get("team"))
+        return back(f"/vdot?team={team}&edit=1" if bad else f"/vdot?team={team}")
 
     @app.post("/vdot/import")
     async def vdot_import(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
@@ -1986,7 +2035,7 @@ def create_app() -> FastAPI:
         if r["no_vdot"]:
             flash(request, "No VDOT on the line, so left as they were: " + ", ".join(r["no_vdot"]))
         log(db, "admin", f"{user.username} set {n} VDOTs from a pasted list.")
-        return back("/vdot")
+        return back(f"/vdot?team={pick_team(f.get('team'))}")
 
     @app.post("/athletes/{athlete_id}/vdot-history/{cid}/delete")
     async def vdot_change_delete(request: Request, athlete_id: int, cid: int, user=Depends(coach_or_admin, scope="function"),
@@ -2007,7 +2056,7 @@ def create_app() -> FastAPI:
         log(db, "admin", f"{user.username} removed a VDOT change for {a.name} ({c.previous} → {c.vdot} on {c.date}).")
         flash(request, msg)
         nxt = str(f.get("next", ""))
-        return back("/vdot?changes=1#changes" if nxt.startswith("/vdot") else f"/athletes/{a.id}#vdot-history")
+        return back(f"/vdot?team={pick_team(f.get('team'))}&changes=1#changes" if nxt.startswith("/vdot") else f"/athletes/{a.id}#vdot-history")
 
     @app.post("/athletes/{athlete_id}/vdot")
     async def athlete_vdot(request: Request, athlete_id: int, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):

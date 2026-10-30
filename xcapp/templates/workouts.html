@@ -1,7 +1,12 @@
 {% extends "base.html" %}
 {% block content %}
 <h1>Workouts</h1>
-<p class="muted" style="max-width:85ch">Plan a workout as parts: sets × reps × a distance (meters) or a time (minutes) at a pace. Each athlete’s pace for every part comes from their VDOT (easy, long run, tempo, interval and repetition, as on the VDOT page), and they see their own times on their page for the next 7 days, from their current VDOT and from their goal. Runs synced that day with reps are matched to the workout automatically.</p>
+<p class="muted" style="max-width:85ch">Plan a workout as parts: sets × reps × a distance (meters or miles) or a time (minutes) at a pace. Each athlete’s pace for every part comes from their VDOT (easy, long run, tempo, interval and repetition, as on the VDOT page), and they see their own times on their page for the next 7 days, from their current VDOT and from their goal. A run synced that day is matched to its group’s workout automatically (the one with the most reps, then the longest), and the workout then comes off the athlete’s list. Each night the AI checks matched runs from athletes who agreed to AI analysis against the workout: done, partly or not done.</p>
+{% if user.role != 'trainer' and ai_ready %}
+<form method="post" action="/workouts/check" class="form-row"><input type="hidden" name="csrf" value="{{ csrf }}">
+  <button class="secondary" type="submit"{% if not pending_checks %} disabled{% endif %}>Check workouts with AI now</button>
+  <span class="small muted">{{ pending_checks }} run{{ '' if pending_checks == 1 else 's' }} from the past week waiting to be checked.</span></form>
+{% endif %}
 {% if user.role != 'trainer' %}
 <div class="card">
   <h2 id="plan">{% if edit %}Edit workout{% else %}Plan a workout{% endif %}</h2>
@@ -17,8 +22,8 @@
       {% for p in (edit_parts or [{"sets": 1, "reps": 6, "dist": 1000, "zone": "Interval", "rest": "2 min jog"}]) %}
         <tr class="part"><td><input type="number" name="p_sets" min="1" max="10" value="{{ p.sets }}" required style="width:4em" aria-label="Sets"></td>
           <td><input type="number" name="p_reps" min="1" max="40" value="{{ p.reps }}" required style="width:4em" aria-label="Reps"></td>
-          <td class="nowrap"><input type="number" name="p_dist" min="{{ 0.25 if p.mins else 100 }}" max="{{ 180 if p.mins else 20000 }}" step="{{ 0.25 if p.mins else 1 }}" value="{{ p.mins or p.dist }}" required style="width:6em" aria-label="Distance or minutes">
-            <select name="p_unit" class="p-unit" aria-label="Meters or minutes"><option value="m"{% if not p.mins %} selected{% endif %}>m</option><option value="min"{% if p.mins %} selected{% endif %}>min</option></select></td>
+          <td class="nowrap"><input type="number" name="p_dist" min="{{ 0.25 if p.mins or p.mi else 100 }}" max="{{ 180 if p.mins else 20 if p.mi else 20000 }}" step="{{ 0.25 if p.mins else 0.01 if p.mi else 1 }}" value="{{ p.mins or p.mi or p.dist }}" required style="width:6em" aria-label="Distance or minutes">
+            <select name="p_unit" class="p-unit" aria-label="Meters, miles or minutes"><option value="m"{% if not p.mins and not p.mi %} selected{% endif %}>m</option><option value="mi"{% if p.mi %} selected{% endif %}>mi</option><option value="min"{% if p.mins %} selected{% endif %}>min</option></select></td>
           <td><select name="p_zone" aria-label="Pace">{% for z in zones %}<option{% if z == p.zone %} selected{% endif %}>{{ z }}</option>{% endfor %}</select></td>
           <td><input type="text" name="p_rest" maxlength="60" value="{{ p.rest }}" placeholder="90 s jog" style="width:9em" aria-label="Rest"></td>
           <td><button type="button" class="link remove-part" aria-label="Remove this part">Remove</button></td></tr>
@@ -26,7 +31,7 @@
       </tbody>
     </table>
     <div class="form-row" style="margin:6px 0 10px"><button type="button" class="secondary" id="add-part">Add a part</button>
-      <span class="small muted">For example 1 × 14 min Easy (warm-up), 2 sets × 4 × 400 m Interval, 4 × 5 min Tempo with “1 min easy” rest. Choose m or min for each part. Repetition is faster than interval pace, for short, quick reps.</span></div>
+      <span class="small muted">For example 1 × 14 min Easy (warm-up), 2 sets × 4 × 400 m Interval, 1 × 5 mi Long run, 4 × 5 min Tempo with “1 min easy” rest. Choose m, mi or min for each part. Repetition is faster than interval pace, for short, quick reps.</span></div>
     <script>(function () {
       var body = document.getElementById('parts');
       document.getElementById('add-part').addEventListener('click', function () {
@@ -38,9 +43,9 @@
       });
       body.addEventListener('change', function (e) {
         if (!e.target.classList.contains('p-unit')) return;
-        var amt = e.target.closest('td').querySelector('[name=p_dist]'), byTime = e.target.value === 'min';
-        amt.min = byTime ? 0.25 : 100; amt.max = byTime ? 180 : 20000; amt.step = byTime ? 0.25 : 1;
-        amt.value = byTime ? 5 : 1000;
+        var amt = e.target.closest('td').querySelector('[name=p_dist]');
+        var u = {m: [100, 20000, 1, 1000], mi: [0.25, 20, 0.01, 3], min: [0.25, 180, 0.25, 5]}[e.target.value];
+        amt.min = u[0]; amt.max = u[1]; amt.step = u[2]; amt.value = u[3];
       });
       body.addEventListener('click', function (e) {
         if (!e.target.classList.contains('remove-part')) return;
@@ -57,7 +62,7 @@
 </div>
 {% endif %}
 <div class="card scroll">
-  <table class="list"><thead><tr><th>Date</th><th>Workout</th><th>Parts</th><th>Groups</th><th class="num">Athletes matched</th><th></th></tr></thead><tbody>
+  <table class="list"><thead><tr><th>Date</th><th>Workout</th><th>Parts</th><th>Groups</th><th class="num">Athletes matched</th><th>AI check</th><th></th></tr></thead><tbody>
   {% for w in rows %}
   <tr{% if user.role != 'trainer' %} class="row-link" data-href="/workouts?edit={{ w.id }}#plan"{% endif %}><td>{{ w.date.strftime('%a %b %-d') }}</td><td>{% if user.role != 'trainer' %}<a href="/workouts?edit={{ w.id }}#plan">{{ w.title }}</a>{% else %}{{ w.title }}{% endif %}</td><td class="small">{% if w.part_list %}{% for p in w.part_list %}{{ part_label(p) }} {{ p.zone }}{% if p.rest %} ({{ p.rest }} rest){% endif %}{{ '<br>'|safe if not loop.last else '' }}{% endfor %}
     {% if previews.get(w.id) %}<details class="paces-preview"><summary>Paces by group</summary>
@@ -65,8 +70,9 @@
       {% for g in previews[w.id] %}<tr><td>{{ g.group.name }}</td><td>{{ g.range }}</td>{% for t in g.times %}<td class="num nowrap">{% if t %}{{ fmt_time(t[0])[:-2] if t[0] >= 600 or t[2] else fmt_time(t[0]) }}{% if t[1] - t[0] >= 0.5 %}–{{ fmt_time(t[1])[:-2] if t[1] >= 600 or t[2] else fmt_time(t[1]) }}{% endif %}{{ t[2] }}{% endif %}</td>{% endfor %}</tr>{% endfor %}
       </tbody></table><p class="small muted">Time per rep across each group’s VDOT range (pace per mile for parts run for a time).</p></details>{% endif %}
     {% else %}{{ w.distance_text }} reps · {{ pace_type(w.pace_factor) }} ({{ w.pace_event }} × {{ '%.2f' % w.pace_factor }}){% endif %}</td><td>{{ w.groups }}</td><td class="num">{{ counts.get(w.id, 0) }}</td>
+  <td class="small nowrap">{% set ck = checked.get(w.id, {}) %}{% for v in ('Done', 'Partly', 'Not done') %}{% if ck.get(v) %}{{ ck[v] }} {{ v|lower }}{{ '<br>'|safe }}{% endif %}{% endfor %}</td>
   <td>{% if user.role != 'trainer' %}<form method="post" action="/workouts/{{ w.id }}/delete" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="link" type="submit">Delete</button></form>{% endif %}</td></tr>
-  {% else %}<tr><td colspan="6" class="muted">No workouts planned yet.</td></tr>{% endfor %}
+  {% else %}<tr><td colspan="7" class="muted">No workouts planned yet.</td></tr>{% endfor %}
   </tbody></table>
   {% if user.role != 'trainer' %}<p class="small muted">Click a workout to edit it.</p>{% endif %}
 </div>
