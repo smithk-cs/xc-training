@@ -41,6 +41,8 @@
   <script>(function () {   // phones: the menu folds behind the Menu button
     var b = document.querySelector('.top .menu-btn'), top = b && b.closest('.top');
     if (!top) return;
+    var h = function () { document.documentElement.style.setProperty('--top-h', top.offsetHeight + 'px'); };   // for scroll-padding
+    h(); window.addEventListener('resize', h);
     top.classList.add('js-menu');
     b.addEventListener('click', function () {
       var open = top.classList.toggle('menu-open');

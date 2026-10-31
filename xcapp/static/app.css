@@ -510,3 +510,7 @@ table.workouts-by-day tr.day-row th { background: var(--color-soft); color: var(
 }
 .adj { color: var(--color-ok); font-weight: 600; }
 .runs .r .adj { display: block; }
+/* Coach pages: the top bar stays in view while scrolling; links to a spot on the page land below it */
+.top { position: sticky; top: 0; z-index: 50; }
+html { scroll-padding-top: calc(var(--top-h, 0px) + 8px); }
+@media (max-width: 760px) { .top.menu-open .top-menu { max-height: calc(100vh - 70px); overflow-y: auto; } }
