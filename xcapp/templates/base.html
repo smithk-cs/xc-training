@@ -13,6 +13,8 @@
 {% if user %}
 <header class="top">
   <a class="brand" href="/">{% if has_logo() %}<img src="/branding/logo" alt="">{% endif %}<span>{{ team_name }}</span></a>
+  <button type="button" class="menu-btn" aria-expanded="false" aria-controls="top-menu">Menu</button>
+  <div class="top-menu" id="top-menu">
   <nav aria-label="Main">
     {% set p = request.url.path %}
     <a href="/dashboard" {% if p == '/dashboard' %}aria-current="page"{% endif %}>Dashboard</a>
@@ -35,6 +37,17 @@
   </nav>
   <div class="top-user"><span class="who">{{ user.username }} ({{ user.role }})</span>
     <form method="post" action="/logout"><input type="hidden" name="csrf" value="{{ csrf }}"><button type="submit">Sign out</button></form></div>
+  </div>
+  <script>(function () {   // phones: the menu folds behind the Menu button
+    var b = document.querySelector('.top .menu-btn'), top = b && b.closest('.top');
+    if (!top) return;
+    top.classList.add('js-menu');
+    b.addEventListener('click', function () {
+      var open = top.classList.toggle('menu-open');
+      b.setAttribute('aria-expanded', open ? 'true' : 'false');
+      b.textContent = open ? 'Close' : 'Menu';
+    });
+  })();</script>
 </header>
 {% endif %}
 <main class="{% block mainclass %}{% endblock %}">

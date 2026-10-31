@@ -492,3 +492,19 @@ table.workouts-by-day tr.day-row th { background: var(--color-soft); color: var(
 .top .top-user { flex-basis: 100%; display: flex; justify-content: flex-end; align-items: center; gap: 12px; margin-top: -4px; }
 .top .top-user button { min-height: 30px; padding: 2px 12px; font-size: 13px; }
 @media (min-width: 1300px) { .top nav { justify-content: space-between; } }   /* spread out once the menu fits on one line */
+/* The menu wrapper is invisible to the layout on wide screens; on phones it folds behind the Menu button. */
+.top .top-menu { display: contents; }
+.top .menu-btn { display: none; }
+@media (max-width: 760px) {
+  .top { flex-wrap: nowrap; justify-content: space-between; padding: 8px 14px; gap: 10px; position: relative; }
+  .top .brand img { height: 32px; }
+  .top .brand span { font-size: 15px; letter-spacing: .05em; }
+  .top .menu-btn { display: inline-flex; flex: none; min-height: 36px; padding: 4px 14px; }
+  .top.js-menu .top-menu { display: none; }
+  .top.js-menu.menu-open { flex-wrap: wrap; }
+  .top.js-menu.menu-open .top-menu { display: block; flex-basis: 100%; padding: 6px 0 4px; }
+  .top .top-menu nav { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2px 12px; }
+  .top .top-menu nav a { padding: 8px 0; }
+  .top .top-user { margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255, 255, 255, .25); }
+  .top:not(.js-menu) .top-menu { display: block; flex-basis: 100%; }   /* without JavaScript the menu just shows */
+}
