@@ -110,3 +110,32 @@ def test_meet_and_course_pages(monkeypatch):
     cl.post(f"/registrations/{mid}/forecast", data={"csrf": csrf})
     assert "Forecast updated: 61°F, partly cloudy" in cl.get(f"/registrations/{mid}").text
     assert "Forecast for 11:00:</b> 61°F" in TestClient(app).get("/a/t1").text
+
+
+def test_meet_location_is_a_saved_course_or_a_place():
+    db = SessionLocal()
+    db.add(StaffUser(username="coach2", role="coach", password_hash=hash_password("correct-horse-1")))
+    c = Course(name="Gibson Ranch", location="Elverta")
+    db.add(c)
+    db.commit()
+    cid = c.id
+    db.close()
+    from xcapp.web import create_app
+    cl = TestClient(create_app(), follow_redirects=False)
+    csrf = re.search(r'name="csrf" value="([^"]+)"', cl.get("/login").text).group(1)
+    cl.post("/login", data={"csrf": csrf, "username": "coach2", "password": "correct-horse-1"})
+    page = cl.get("/registrations").text
+    csrf = re.search(r'name="csrf" value="([^"]+)"', page).group(1)
+    assert f'<option value="{cid}">Gibson Ranch · Elverta</option>' in page
+    day = (TODAY + dt.timedelta(days=9)).isoformat()
+    mid = int(cl.post("/registrations", data={"csrf": csrf, "name": "Gibson Invite", "date": day, "course_id": str(cid), "location": ""})
+              .headers["location"].rsplit("/", 1)[-1])
+    db = SessionLocal()
+    m = db.get(MeetEntry, mid)
+    assert (m.course_id, m.location) == (cid, "Elverta")
+    db.close()
+    cl.post(f"/registrations/{mid}", data={"csrf": csrf, "name": "Gibson Invite", "date": day, "course_id": "", "location": "Woodward Park, Fresno"})
+    db = SessionLocal()
+    m = db.get(MeetEntry, mid)
+    assert (m.course_id, m.location) == (None, "Woodward Park, Fresno")
+    db.close()

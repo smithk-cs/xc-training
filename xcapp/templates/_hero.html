@@ -10,7 +10,6 @@
       <div class="group-card">
         {% if g.group %}
         <b>Running group: {{ g.group }}</b>
-        {% if g.target_1600 %}<div class="facts"><div><span class="k">800 target</span><span class="big">{{ g.target_800 }}</span></div><div><span class="k">1600 target</span><span class="big">{{ g.target_1600 }}</span></div></div>{% endif %}
         {% if hero_paces_link is defined and hero_paces_link %}<a class="button secondary" href="{{ hero_paces_link }}">My paces: 100 m to 1600 m</a>{% endif %}
         <span class="small muted">{% if g.override %}Your coach placed you in this group.{% elif g.vdot_set %}Your coach set your VDOT.{% else %}From your most recent race{% if g.source %} ({{ g.source }}){% endif %}. It updates after each race.{% endif %}</span>
         {% else %}

@@ -21,7 +21,7 @@
     <div class="form-row">
       <label style="flex:1">Meet<input type="text" name="name" maxlength="120" required placeholder="Clovis Invitational"></label>
       <label>Date<input type="date" name="date" value="{{ today }}" required></label>
-      <label style="flex:1">Location<input type="text" name="location" maxlength="160" placeholder="Woodward Park, Fresno"></label>
+      {% with m=None %}{% include "_meet_location.html" %}{% endwith %}
     </div>
     <div class="form-row">
       <label>Race director<input type="text" name="director_name" maxlength="120"></label>

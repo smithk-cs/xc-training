@@ -188,3 +188,16 @@ def test_effort_reminder_is_at_the_top_and_assets_are_versioned():
     page = TestClient(create_app()).get("/a/t-ef").text
     assert page.index("Add effort ›") < page.index("Team dinner") < page.index('id="wp-h"')
     assert '/static/app.css?v=' in page and '/static/athlete-charts.js?v=' in page
+
+
+def test_vdot_popup_has_no_800_or_1600_targets():
+    from fastapi.testclient import TestClient
+    from xcapp.db import SessionLocal
+    from xcapp.models import Athlete
+    from xcapp.web import create_app
+    db = SessionLocal()
+    db.add(Athlete(first_name="Ava", last_name="Doyle", gender="Girls", grade=11, group="Varsity", link_token="t-vp", vdot_override=60))
+    db.commit()
+    db.close()
+    page = TestClient(create_app()).get("/a/t-vp").text
+    assert "group-pop" in page and "800 target" not in page and "1600 target" not in page

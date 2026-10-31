@@ -122,7 +122,7 @@ def test_athlete_sets_type_and_workout(web):
     me = c.get("/a/tok-ava").text
     assert '<summary class="group-btn" style="background:#7FDBCA; color:#1B1B1F">Aquamarine · VDOT 51</summary>' in me  # 19:30 girls' 5K
     assert "<b>Running group: Aquamarine</b>" in me
-    assert ">2:31<" in me and ">5:44<" in me                                   # the team sheet's targets for VDOT 51
+    assert ">2:31<" not in me and ">5:44<" not in me                           # 800 and 1600 targets are no longer shown to athletes
     r = c.post(f"/a/tok-ava/runs/{act_id}", data={"csrf": csrf, "rpe": "7", "pain_area": "None", "run_type": "Race", "workout": "none"})
     assert r.status_code == 303
     db = SessionLocal()

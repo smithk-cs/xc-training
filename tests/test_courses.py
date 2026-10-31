@@ -175,7 +175,8 @@ def test_main_distance_and_retired_choices():
     from xcapp import courses as C
     assert C.main_distance(["2 mi", "5K"], None) == 5000 and C.main_distance(["2 mi", "2.5 mi"], None) == C.DISTANCES["2.5 mi"]
     assert C.main_distance(["2 mi", "5K"], C.DISTANCES["2 mi"]) == C.DISTANCES["2 mi"]       # the saved one, while still ticked
-    assert C.main_distance([], 5000) is None and C.distance_label(C.DISTANCES["3 mi"]) == "3 mi"   # older labels still read
+    assert C.main_distance([], 5000) is None and C.distance_label(C.DISTANCES["4 mi"]) == "4 mi"   # older labels still read
+    assert "3 mi" in C.MILE_DISTANCES and "3 mi" not in C.RETIRED
 
 
 def test_course_breakdown_flags_missing_hills():

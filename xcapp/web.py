@@ -1912,7 +1912,7 @@ def create_app() -> FastAPI:
                                                  coach_or_admin=coach_or_admin, get_db=get_db, logo_bytes=logo_bytes, settings=s,
                                                  templates=templates))
 
-    def meet_form(f, m: MeetEntry) -> None:
+    def meet_form(db: Session, f, m: MeetEntry) -> None:
         name = str(f.get("name", "")).strip()[:120]
         if not name:
             raise ValueError("Give the meet a name.")
@@ -1921,9 +1921,12 @@ def create_app() -> FastAPI:
         m.director_name = str(f.get("director_name", "")).strip()[:120]
         m.director_email = clean_email(f.get("director_email", ""))
         m.notes = str(f.get("notes", "")).strip()[:2000]
-        if "course_id" in f:  # the course, for the course video on athletes' pages
+        if "course_id" in f:  # a saved course as the location (also for the course video and weather), else a place typed in
             cid = str(f.get("course_id", ""))
-            m.course_id = int(cid) if cid.isdigit() else None
+            course = db.get(Course, int(cid)) if cid.isdigit() else None
+            m.course_id = course.id if course else None
+            if course is not None:
+                m.location = course.location or course.name
         if "start_time" in f:  # the first race, for the forecast
             t = str(f.get("start_time", "")).strip()[:5]
             if t and not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", t):
@@ -1936,6 +1939,7 @@ def create_app() -> FastAPI:
         meets = db.scalars(select(MeetEntry).options(selectinload(MeetEntry.divisions).selectinload(MeetDivision.entries))
                            .order_by(MeetEntry.date)).all()
         return render(request, "registrations.html", user, upcoming=[m for m in meets if m.date >= today],
+                      courses=db.scalars(select(Course).order_by(Course.name)).all(),
                       past=[m for m in meets if m.date < today][::-1], today=today.isoformat())
 
     @app.post("/registrations")
@@ -1943,7 +1947,7 @@ def create_app() -> FastAPI:
         f = await form_checked(request)
         m = MeetEntry()
         try:
-            meet_form(f, m)
+            meet_form(db, f, m)
         except ValueError as exc:
             flash(request, str(exc) + ("" if str(exc).endswith(".") else "."), "error")
             return back("/registrations")
@@ -2008,7 +2012,7 @@ def create_app() -> FastAPI:
         f = await form_checked(request)
         m = get_meet(db, mid)
         try:
-            meet_form(f, m)
+            meet_form(db, f, m)
             flash(request, "Saved the meet details.")
         except ValueError as exc:
             db.rollback()

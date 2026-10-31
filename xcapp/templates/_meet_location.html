@@ -1,0 +1,14 @@
+{# Location for a meet: a saved course (which also sets the course for videos and weather), or another place typed in. #}
+{% set chosen = (m.course_id if m and m.course_id else '') %}
+<label style="flex:1">Location<select name="course_id" class="meet-course">
+  <option value=""{% if not chosen %} selected{% endif %}>Other place (type it below)</option>
+  {% for c in courses %}<option value="{{ c.id }}"{% if chosen == c.id %} selected{% endif %}>{{ c.name }}{% if c.location %} · {{ c.location }}{% endif %}{{ ' (video)' if c.video_url else '' }}</option>{% endfor %}
+</select></label>
+{% if m and not chosen and matched is defined and matched %}<span class="small muted" style="align-self:center">Course: {{ matched.name }} (matched by name). Pick it above to link it for good.</span>{% endif %}
+<label style="flex:1" class="meet-place"{% if chosen %} hidden{% endif %}>Place (not a saved course)<input type="text" name="location" maxlength="160" value="{{ m.location if m and not chosen else '' }}" placeholder="Woodward Park, Fresno"></label>
+<script>(function () {
+  document.querySelectorAll('select.meet-course').forEach(function (s) {
+    var place = s.closest('.form-row').querySelector('.meet-place');
+    s.addEventListener('change', function () { place.hidden = !!s.value; });
+  });
+})();</script>

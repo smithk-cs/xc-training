@@ -16,9 +16,9 @@ from .models import Course, MeetConditions
 METERS_PER_MILE = 1609.344
 # Race distances offered as buttons on the Courses page: label -> meters.
 KM_DISTANCES = {f"{k}K": k * 1000.0 for k in (2, 3, 4, 5)}
-MILE_DISTANCES = {f"{m:g} mi": m * METERS_PER_MILE for m in (1.5, 2, 2.25, 2.5)}
+MILE_DISTANCES = {f"{m:g} mi": m * METERS_PER_MILE for m in (1.5, 2, 2.25, 2.5, 3)}
 # Older choices, no longer offered but still read and named on courses saved with them.
-RETIRED = {**{f"{k}K": k * 1000.0 for k in (6, 8, 10)}, **{f"{m:g} mi": m * METERS_PER_MILE for m in (1, 3, 4)}}
+RETIRED = {**{f"{k}K": k * 1000.0 for k in (6, 8, 10)}, **{f"{m:g} mi": m * METERS_PER_MILE for m in (1, 4)}}
 DISTANCES = {**KM_DISTANCES, **MILE_DISTANCES, **RETIRED}
 
 

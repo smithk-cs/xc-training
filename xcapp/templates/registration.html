@@ -128,9 +128,7 @@
     <div class="form-row">
       <label style="flex:1">Meet<input type="text" name="name" maxlength="120" value="{{ m.name }}" required></label>
       <label>Date<input type="date" name="date" value="{{ m.date.isoformat() }}" required></label>
-      <label style="flex:1">Location<input type="text" name="location" maxlength="160" value="{{ m.location }}"></label>
-      <label>Course<select name="course_id"><option value="">{% if matched and not m.course_id %}{{ matched.name }} (matched by name){% else %}Not set{% endif %}</option>
-        {% for c in courses %}<option value="{{ c.id }}"{% if m.course_id == c.id %} selected{% endif %}>{{ c.name }}{{ ' (video)' if c.video_url else '' }}</option>{% endfor %}</select></label>
+      {% include "_meet_location.html" %}
     </div>
     <div class="form-row">
       <label>First race starts<input type="time" name="start_time" value="{{ m.start_time }}" style="width:8em"></label>
