@@ -28,7 +28,7 @@
   <section class="kpis">
     <div class="kpi"><span class="k">Races</span><span class="v">{{ st.races }}</span><span class="s">{% if st.prs %}{{ st.prs }} personal record{{ '' if st.prs == 1 else 's' }}{% else %}this season{% endif %}</span></div>
     <div class="kpi"><span class="k">Best 5K equivalent</span><span class="v">{{ fmt_time(st.best_eq)[:-2] if st.best_eq else '–' }}</span><span class="s">any distance, converted</span></div>
-    <div class="kpi accent"><span class="k">Improvement</span><span class="v">{% if st.improve is not none %}{{ '−' if st.improve >= 0 else '+' }}{{ fmt_time(st.improve|abs)[:-2] if st.improve|abs >= 60 else ('%.0f s' % (st.improve|abs)) }}{% else %}–{% endif %}</span><span class="s">{% if st.improve_pct is not none %}{{ '%.1f' % (st.improve_pct|abs) }}% {{ 'faster' if st.improve >= 0 else 'slower' }}, first to latest race{% else %}needs two races{% endif %}</span></div>
+    <div class="kpi accent"><span class="k">Improvement</span><span class="v">{% if st.improve is not none %}{{ '−' if st.improve >= 0 else '+' }}{{ fmt_secs(st.improve|abs) }}{% else %}–{% endif %}</span><span class="s">{% if st.improve_pct is not none %}{{ '%.1f' % (st.improve_pct|abs) }}% {{ 'faster' if st.improve >= 0 else 'slower' }}, first to latest race{% else %}needs two races{% endif %}</span></div>
     <div class="kpi"><span class="k">VDOT</span><span class="v">{{ st.vdot_last if st.vdot_last else '–' }}</span><span class="s">{% if st.vdot_first and st.vdot_first != st.vdot_last %}from {{ st.vdot_first }} in the first race{% else %}from races{% endif %}</span></div>
     <div class="kpi"><span class="k">Best place</span><span class="v">{{ st.best_place or '–' }}</span><span class="s">{% if st.avg_place %}average {{ '%.1f' % st.avg_place }}{% endif %}{% if st.avg_points %}{{ ' · ' if st.avg_place else '' }}{{ '%.1f' % st.avg_points }} team points{% endif %}</span></div>
     <div class="kpi"><span class="k">Miles</span><span class="v">{{ '%g' % st.miles }}</span><span class="s">{{ '%g' % st.avg_week }} a week · top week {{ '%g' % st.top_week }}</span></div>
@@ -67,7 +67,7 @@
   {% if o.paces %}
   <section class="ov-block">
     <h2>Training paces from VDOT {{ ab.vdot }}</h2>
-    <div class="kpis small-kpis">{% for z in o.paces %}<div class="kpi"><span class="k">{{ z.name }}</span><span class="v">{{ fmt_time(z.mile)[:-2] }}</span><span class="s">per mile{% if z.lap %} · {{ '%.0f' % z.lap }} s/400{% endif %}</span></div>{% endfor %}</div>
+    <div class="kpis small-kpis">{% for z in o.paces %}<div class="kpi"><span class="k">{{ z.name }}</span><span class="v">{{ fmt_time(z.mile)[:-2] }}</span><span class="s">per mile{% if z.lap %} · {{ fmt_secs(z.lap) }}/400{% endif %}</span></div>{% endfor %}</div>
   </section>
   {% endif %}
   <footer class="paper-foot">{{ team_name }} · {{ o.season }} · prepared {{ now().strftime('%b %-d, %Y') }}</footer>

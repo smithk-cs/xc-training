@@ -33,8 +33,8 @@
     <a href="/sync" {% if p == '/sync' %}aria-current="page"{% endif %}>Sync log</a>
     {% if user.role == 'admin' %}<a href="/staff" {% if p == '/staff' %}aria-current="page"{% endif %}>Staff</a>{% endif %}
   </nav>
-  <span class="who">{{ user.username }} ({{ user.role }})</span>
-  <form method="post" action="/logout"><input type="hidden" name="csrf" value="{{ csrf }}"><button type="submit">Sign out</button></form>
+  <div class="top-user"><span class="who">{{ user.username }} ({{ user.role }})</span>
+    <form method="post" action="/logout"><input type="hidden" name="csrf" value="{{ csrf }}"><button type="submit">Sign out</button></form></div>
 </header>
 {% endif %}
 <main class="{% block mainclass %}{% endblock %}">

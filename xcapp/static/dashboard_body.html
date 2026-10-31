@@ -278,6 +278,9 @@ button.xc-scope { cursor: pointer; text-decoration: underline; text-underline-of
 </div>
 
 <script>
+  // Seconds for people: '45.2 s' under a minute, '1:05.2' from a minute on.
+  const gapText = (x) => { const r = Math.round(x * 10) / 10; return r >= 60 ? Math.floor(r / 60) + ':' + (r % 60).toFixed(1).padStart(4, '0') : r.toFixed(1) + ' s'; };
+
 dash.calc('seasons', {
   inputs: ['benchmarks', 'goals'],
   title: 'Seasons compared',
@@ -300,7 +303,7 @@ dash.calc('progress', {
     const ss = seasons[0];
     if (!ss) return [];
     const fmt = (s) => { if (s == null) return ''; const t = Math.round(s * 10) / 10; const m = Math.floor(t / 60); return m + ':' + (t - m * 60).toFixed(1).padStart(4, '0'); };
-    const sgn = (s) => (s == null ? '' : (s > 0 ? '+' : s < 0 ? '−' : '±') + Math.abs(s).toFixed(1) + ' s');
+    const sgn = (s) => (s == null ? '' : (s > 0 ? '+' : s < 0 ? '−' : '±') + gapText(Math.abs(s)));
     const best = {};
     for (const b of benchmarks) {
       const k = b.athlete_id + '|' + b.event + '|' + b.season;
@@ -352,7 +355,7 @@ dash.calc('workout_summary', {
       return {
         athlete_id: s0.athlete_id, workout_id: s0.workout_id, athlete: s0.athlete, workout: s0.workout, date: s0.date,
         reps: reps.length, avg_pace: Math.round(pace * 10) / 10, avg_pace_t: fmt(pace), target_t: target == null ? '' : fmt(target),
-        off_target: off, off_target_t: off == null ? '' : (off > 0 ? '+' : off < 0 ? '−' : '±') + Math.abs(off).toFixed(1) + ' s',
+        off_target: off, off_target_t: off == null ? '' : (off > 0 ? '+' : off < 0 ? '−' : '±') + gapText(Math.abs(off)),
         avg_hr: hrs.length ? Math.round(mean(hrs)) : null, hr_rise: hrs.length > 1 ? hrs[hrs.length - 1] - hrs[0] : null, recovery: rec,
         flag: rec != null && rec < 25 ? 'Slow recovery' : '',
       };

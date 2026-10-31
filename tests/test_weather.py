@@ -158,3 +158,31 @@ def test_new_meet_takes_a_start_time():
     db = SessionLocal()
     assert db.get(MeetEntry, int(r.headers["location"].rsplit("/", 1)[-1])).start_time == "08:15"
     db.close()
+
+
+def test_results_import_fills_race_day_weather_by_meet_name_and_date(monkeypatch):
+    calls = []
+    monkeypatch.setattr(WX, "make_client", lambda: fake_service(calls))
+    db = SessionLocal()
+    db.add(StaffUser(username="coach4", role="coach", password_hash=hash_password("correct-horse-1")))
+    c = Course(name="Woodward Park", location="Fresno", latitude=36.86, longitude=-119.79)
+    db.add(c)
+    day = TODAY - dt.timedelta(days=90)                            # older than the nightly window
+    db.add(MeetEntry(name="Clovis Invitational", date=day, location="Fresno", course_id=None, start_time="08:00"))
+    db.add(Athlete(first_name="Sam", last_name="Lowry", gender="Boys", grade=12, group="Varsity", link_token="t1"))
+    db.commit()
+    db.close()
+    assert WX.entry_for(SessionLocal(), "Clovis Invitational 2026", day).name == "Clovis Invitational"
+    from xcapp.web import create_app
+    cl = TestClient(create_app(), follow_redirects=False)
+    csrf = re.search(r'name="csrf" value="([^"]+)"', cl.get("/login").text).group(1)
+    cl.post("/login", data={"csrf": csrf, "username": "coach4", "password": "correct-horse-1"})
+    csrf = re.search(r'name="csrf" value="([^"]+)"', cl.get("/races").text).group(1)
+    csv = ("date,meet,course,race,distance,athlete,time,place\n"
+           f"{day.isoformat()},Clovis Invitational 2026,Woodward Park,Boys Varsity,5K,Sam Lowry,16:40.0,12\n")
+    cl.post("/races/import", data={"csrf": csrf}, files={"file": ("r.csv", csv.encode(), "text/csv")})
+    assert "Race-day weather filled in for 1 race." in cl.get("/races?season=all").text
+    db = SessionLocal()
+    cond = db.query(MeetConditions).one()
+    assert cond.temp_f == 58 and cond.dew_point_f == 45 and "08:00" in cond.notes   # the meet's start time, by matching names
+    db.close()

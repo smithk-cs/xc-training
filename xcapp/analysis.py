@@ -87,6 +87,14 @@ def fmt_time(seconds: float | None) -> str:
     return f"{m}:{t - m * 60:04.1f}"
 
 
+def fmt_secs(seconds: float | None) -> str:
+    """A short time for people: '58 s' under a minute, '1:19' from a minute on."""
+    if seconds is None:
+        return ""
+    s = round(abs(seconds))
+    return f"{s // 60}:{s % 60:02d}" if s >= 60 else f"{s} s"
+
+
 def xc_season_dates(year: int) -> tuple[dt.date, dt.date]:
     """Cross country runs from the first Monday in August through the first Saturday in December (so December
     championships such as Nike Cross Nationals count as cross country)."""

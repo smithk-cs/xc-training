@@ -155,7 +155,7 @@ def create_app() -> FastAPI:
     # A fingerprint of the style sheet and scripts: links carry it (?v=...), so browsers load new ones after each deploy.
     import hashlib
     asset_v = hashlib.sha256(b"".join(f.read_bytes() for f in sorted((HERE / "static").glob("*.[cj]s*")))).hexdigest()[:10]
-    templates.env.globals.update(asset_v=asset_v, describe_weather=WX.describe, fmt_time=A.fmt_time, timedelta=dt.timedelta, now=A.team_today, EVENTS=list(A.EVENTS), GROUPS=GROUPS, team_name=s.team_name,
+    templates.env.globals.update(asset_v=asset_v, fmt_secs=A.fmt_secs, describe_weather=WX.describe, fmt_time=A.fmt_time, timedelta=dt.timedelta, now=A.team_today, EVENTS=list(A.EVENTS), GROUPS=GROUPS, team_name=s.team_name,
                                  has_logo=has_logo, FEELS=FEELS, EFFORT_WORDS=EFFORT_WORDS, RUN_TYPES=A.RUN_TYPES,
                                  MISSED_REASONS=A.MISSED_REASONS, SIDES=A.SIDES, STARTED=A.STARTED, SEEN_BY=A.SEEN_BY,
                                  MORE_DAYS=A.MORE_DAYS, missed_label=A.missed_label,
@@ -927,8 +927,10 @@ def create_app() -> FastAPI:
             return back("/races")
         try:
             n, added = import_races(db, raw.decode("utf-8-sig", errors="replace"), add_athletes=bool(f.get("add_athletes")))
+            db.flush()
             flash(request, f"Imported {n} race result{'' if n == 1 else 's'}"
-                  + (f" and added {added} athlete{'' if added == 1 else 's'} to the roster" if added else "") + ".")
+                  + (f" and added {added} athlete{'' if added == 1 else 's'} to the roster" if added else "") + "."
+                  + (WX.fill_now(db, days=WX.IMPORT_DAYS) if n else ""))
             if added:
                 log(db, "admin", f"{user.username} added {added} athlete{'' if added == 1 else 's'} from a race results import.")
         except ImportErrors as exc:
@@ -2013,7 +2015,9 @@ def create_app() -> FastAPI:
         m = get_meet(db, mid)
         try:
             meet_form(db, f, m)
-            flash(request, "Saved the meet details.")
+            db.flush()
+            note = WX.fill_now(db, days=WX.IMPORT_DAYS) if m.date < A.team_today() else ""
+            flash(request, "Saved the meet details." + note)
         except ValueError as exc:
             db.rollback()
             flash(request, str(exc) + ("" if str(exc).endswith(".") else "."), "error")
@@ -2039,7 +2043,7 @@ def create_app() -> FastAPI:
     async def weather_update(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
         """Forecasts for upcoming meets and race-day conditions for recent races, now rather than tonight."""
         f = await form_checked(request)
-        out = WX.nightly(db)
+        out = WX.nightly(db, days=WX.IMPORT_DAYS)
         if out.get("error"):
             flash(request, out["error"], "error")
         else:

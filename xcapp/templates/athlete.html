@@ -123,8 +123,8 @@
         <tbody>{% for now, goal in x.parts %}<tr>
           <td><b>{{ now.label }}</b> {{ now.part.zone }}{% if now.part.rest %}<br><span class="small muted">{{ now.part.rest }} rest</span>{% endif %}</td>
           {% for pc in ([now, goal] if x.vdot_goal else [now]) %}<td class="num">{% if pc.pace %}{% set q = pc.pace %}{% if q.rep is none %}<b>{{ fmt_time(q.mile)[:-2] }}/mi</b>
-            <br><span class="small muted">about {{ q.about }}{% if q.lap %} · {{ '%.0f' % q.lap }} s/400{% endif %}</span>{% else %}<b>{{ fmt_time(q.rep)[:-2] if q.rep >= 600 else fmt_time(q.rep) }}</b>
-            <br><span class="small muted">{{ fmt_time(q.mile)[:-2] }}/mi{% if q.lap %} · {{ '%.0f' % q.lap }} s/400{% endif %}</span>{% endif %}{% else %}<span class="small muted">–</span>{% endif %}</td>{% endfor %}
+            <br><span class="small muted">about {{ q.about }}{% if q.lap %} · {{ fmt_secs(q.lap) }}/400{% endif %}</span>{% else %}<b>{{ fmt_time(q.rep)[:-2] if q.rep >= 600 else fmt_time(q.rep) }}</b>
+            <br><span class="small muted">{{ fmt_time(q.mile)[:-2] }}/mi{% if q.lap %} · {{ fmt_secs(q.lap) }}/400{% endif %}</span>{% endif %}{% else %}<span class="small muted">–</span>{% endif %}</td>{% endfor %}
         </tr>{% endfor %}</tbody>
       </table></div>
       {% if not x.vdot_now %}<p class="small muted">Your times appear once you have a VDOT (from a race, or set by your coach).</p>{% endif %}

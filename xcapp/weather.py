@@ -18,7 +18,8 @@ ARCHIVE_URL = "https://archive-api.open-meteo.com/v1/archive"
 GEOCODE_URL = "https://geocoding-api.open-meteo.com/v1/search"
 FORECAST_DAYS = 15          # how far ahead forecasts reach
 RECENT_DAYS = 80            # past days the forecast service still covers; older days come from the archive
-FILL_DAYS = 30              # race-day conditions are filled in for races this recent
+FILL_DAYS = 30              # race-day conditions are filled in nightly for races this recent
+IMPORT_DAYS = 400           # ... and for older ones right after results are imported or a past meet is saved
 DEFAULT_HOUR = 9            # when a meet has no start time
 HOURLY = "temperature_2m,dew_point_2m,relative_humidity_2m,wind_speed_10m,precipitation_probability,weather_code"
 # WMO weather codes -> words
@@ -127,21 +128,50 @@ def refresh_forecasts(db: Session, http: httpx.Client, today: dt.date) -> int:
     return sum(refresh_forecast(db, http, m, today) for m in meets)
 
 
-def fill_conditions(db: Session, http: httpx.Client, today: dt.date) -> int:
-    """For recent races with results, fill in race-day temperature, dew point, humidity and wind from the weather at
-    the start time. Only empty fields are filled: anything a coach entered stays."""
+def _words(s: str) -> list[str]:
+    """A meet name without years and punctuation, for matching 'Clovis Invitational 2026' to 'Clovis Invitational'."""
+    import re
+    return re.sub(r"\b(19|20)\d\d\b|[^a-z0-9]+", " ", (s or "").lower()).split()
+
+
+def entry_for(db: Session, meet: str, day: dt.date) -> MeetEntry | None:
+    """The Entries-page meet that results belong to: same date, and the same name give or take a year or a word;
+    else the only meet that day."""
+    same_day = db.scalars(select(MeetEntry).where(MeetEntry.date == day)).all()
+    want = set(_words(meet))
+    for m in same_day:
+        have = set(_words(m.name))
+        if have == want or (have and want and (have <= want or want <= have)):
+            return m
+    return same_day[0] if len(same_day) == 1 else None
+
+
+def course_named(db: Session, *names: str) -> Course | None:
+    """A saved course whose name matches one of these, or is part of one ('Woodward Park' in 'Clovis at Woodward Park')."""
+    courses = db.scalars(select(Course).order_by(func.length(Course.name).desc())).all()
+    for name in (n for n in names if n):
+        low = name.strip().lower()
+        hit = next((c for c in courses if c.name.strip().lower() == low), None) or \
+            next((c for c in courses if c.name.strip().lower() in low), None)
+        if hit:
+            return hit
+    return None
+
+
+def fill_conditions(db: Session, http: httpx.Client, today: dt.date, days: int = FILL_DAYS) -> int:
+    """For races with results in the past `days`, fill in race-day temperature, dew point, humidity and wind from the
+    weather at the meet's start time (9:00 when unknown). Only empty fields are filled: anything a coach entered stays."""
     n = 0
-    since = today - dt.timedelta(days=FILL_DAYS)
+    since = today - dt.timedelta(days=days)
     raced = db.execute(select(RaceResult.meet, RaceResult.date, func.max(RaceResult.course)).where(
         RaceResult.date >= since, RaceResult.date < today).group_by(RaceResult.meet, RaceResult.date)).all()
     for meet, day, course_name in raced:
         cond = db.scalar(select(MeetConditions).where(MeetConditions.meet == meet, MeetConditions.date == day))
         if cond is not None and None not in (cond.temp_f, cond.dew_point_f, cond.wind_mph):
             continue
-        entry = db.scalar(select(MeetEntry).where(MeetEntry.date == day, MeetEntry.name == meet))
+        entry = entry_for(db, meet, day)
         course = (cond.course if cond and cond.course else None) or (course_for(db, entry) if entry else None) or \
-            (db.scalar(select(Course).where(func.lower(Course.name) == (course_name or "").strip().lower())) if course_name else None) or \
-            db.scalar(select(Course).where(func.lower(Course.name) == meet.strip().lower()))
+            course_named(db, course_name, meet)
         if course is None or course.latitude is None or course.longitude is None:
             continue
         hh, _mm = start_hour(entry)
@@ -151,6 +181,8 @@ def fill_conditions(db: Session, http: httpx.Client, today: dt.date) -> int:
         if cond is None:
             cond = MeetConditions(meet=meet, date=day, course_id=course.id)
             db.add(cond)
+        elif cond.course_id is None:
+            cond.course_id = course.id
         for field in ("temp_f", "dew_point_f", "humidity_pct", "wind_mph"):
             if getattr(cond, field) is None and w[field] is not None:
                 setattr(cond, field, w[field])
@@ -161,14 +193,28 @@ def fill_conditions(db: Session, http: httpx.Client, today: dt.date) -> int:
     return n
 
 
-def nightly(db: Session, http: httpx.Client | None = None) -> dict:
+def fill_now(db: Session, days: int = FILL_DAYS, http: httpx.Client | None = None) -> str:
+    """Fill race-day conditions straight away (after an import or a meet edit). Returns a short note; never raises."""
+    client = http or make_client()
+    try:
+        n = fill_conditions(db, client, A.team_today(), days)
+        return f" Race-day weather filled in for {n} race{'' if n == 1 else 's'}." if n else ""
+    except WeatherError as exc:
+        log(db, "weather", f"Race-day weather not filled in: {exc}", "error")
+        return " (Race-day weather couldn’t be fetched right now; it will be tried again tonight.)"
+    finally:
+        if http is None:
+            client.close()
+
+
+def nightly(db: Session, http: httpx.Client | None = None, days: int = FILL_DAYS) -> dict:
     """Forecasts for the next two weeks of meets, and conditions for recent races. Errors are logged, not raised."""
     today = A.team_today()
     client = http or make_client()
     out = {}
     try:
         out["forecasts"] = refresh_forecasts(db, client, today)
-        out["race_conditions"] = fill_conditions(db, client, today)
+        out["race_conditions"] = fill_conditions(db, client, today, days)
     except WeatherError as exc:
         out["error"] = str(exc)
         log(db, "weather", f"Weather update failed: {exc}", "error")
