@@ -49,7 +49,7 @@ def test_most_recent_race_sets_vdot(app):
     ab = A.abilities(db, DAY)
     assert A.vdot(5000, 902) > A.vdot(4000, 767.9)                       # the older 5K was the better race...
     assert ab[sam]["vdot"] == A.team_vdot(A.vdot(4000, 767.9), A.vdot_targets(db))   # ...but the latest race counts
-    assert ab[sam]["source"] == "Oak Hills, 4,000 Meters 12:47.9 on Oct 17, 2026" and ab[sam]["group"] == "Silver"
+    assert ab[sam]["source"] == "Oak Hills, 4K 12:47.9 on Oct 17, 2026" and ab[sam]["group"] == "Silver"
     assert ab[theo]["source"].startswith("5K 16:31.7") and ab[pat]["vdot"] is None
     db.get(Athlete, theo).vdot_override = 70                              # coach-set VDOT wins and moves the group
     db.flush()

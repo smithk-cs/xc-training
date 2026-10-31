@@ -65,7 +65,7 @@ def test_import_creates_athletes_and_counts_5ks_toward_vdot(staff):
     sam = db.query(Athlete).filter_by(first_name="Sam").one()
     rr = db.query(RaceResult).filter_by(athlete_id=sam.id).one()
     assert (rr.meet, rr.date, rr.race, rr.distance_m, rr.distance_label, rr.place, rr.time_s) == (
-        "Riverbend Invitational", dt.date(2026, 10, 24), "Boys Varsity Large School", 5000.0, "5,000 Meters", 6, 929.9)
+        "Riverbend Invitational", dt.date(2026, 10, 24), "Boys Varsity Large School", 5000.0, "5K", 6, 929.9)
     res = db.get(Result, rr.result_id)
     assert (res.event, res.time_s, res.kind, res.course) == ("5K", 929.9, "race", "Riverbend Park")
     june = db.query(Athlete).filter_by(first_name="June").one()
@@ -79,11 +79,11 @@ def test_import_creates_athletes_and_counts_5ks_toward_vdot(staff):
     db.close()
 
     page = c.get("/races").text
-    assert "Riverbend Invitational" in page and "Boys Varsity Large School · 5,000 Meters" in page and "Girls JV · 4,000 Meters" in page
+    assert "Riverbend Invitational" in page and "Boys Varsity Large School · 5K" in page and "Girls JV · 4K" in page
     assert "15:29.9" in page and "4:59" in page                                          # time and pace per mile
     assert "Riverbend Invitational" in c.get(f"/athletes/{sam.id}").text
     me = TestClient(staff).get(f"/a/{sam.link_token}").text
-    assert "My races" in me and "Boys Varsity Large School · 5,000 Meters" in me and "Place 6" in me
+    assert "My races" in me and "Boys Varsity Large School · 5K" in me and "Place 6" in me
 
 
 def test_unknown_athletes_and_bad_rows_are_refused(staff):
@@ -138,7 +138,7 @@ def test_race_history_by_year_and_comparisons(staff):
     assert marks[(2026, "Lakeside Open")] == (False, False)
     assert marks[(2025, "Riverbend Invitational")] == (False, True)     # best 5K that season
     assert marks[(2025, "Hilltop Classic")] == (True, True)             # only 4K: its own distance
-    assert [g["label"] for g in h["compare"]] == ["Riverbend Park · 5,000 Meters (2 races)", "Every 5,000 Meters race (3)"]
+    assert [g["label"] for g in h["compare"]] == ["Riverbend Park · 5K (2 races)", "Every 5K race (3)"]
     same_course = h["compare"][0]["rows"]
     assert [(x["r"].date.year, x["vs_prev"], x["vs_best"]) for x in same_course] == [(2025, None, 50.1), (2026, -50.1, 0.0)]
     assert [round(x["vs_prev"], 1) if x["vs_prev"] is not None else None for x in h["compare"][1]["rows"]] == [None, -34.5, -15.6]
@@ -147,7 +147,7 @@ def test_race_history_by_year_and_comparisons(staff):
     db.close()
 
     page = TestClient(staff).get(f"/a/{token}").text
-    assert '<select id="race-view"' in page and "Compare: Riverbend Park · 5,000 Meters (2 races)" in page
+    assert '<select id="race-view"' in page and "Compare: Riverbend Park · 5K (2 races)" in page
     assert '<h3 class="season">2026 XC <span class="small muted">2 races</span></h3>' in page
     assert '<span class="pill good">PR</span>' in page and '<span class="pill">SB</span>' in page
     assert 'class="num nowrap faster">−50.1 s</td>' in page and 'class="num nowrap">+15.6 s</td>' in page   # faster than last; gap to best
@@ -179,7 +179,7 @@ def test_editing_a_meet_and_a_race_distance(staff):
     assert "Saved Girls JV at 5,000 Meters (1 results). These times now count toward VDOT." in c.get("/races").text
     db = SessionLocal()
     june = db.query(RaceResult).filter_by(race="Girls JV").one()
-    assert (june.distance_m, june.distance_label) == (5000.0, "5,000 Meters") and db.get(Result, june.result_id).event == "5K"
+    assert (june.distance_m, june.distance_label) == (5000.0, "5K") and db.get(Result, june.result_id).event == "5K"
     db.close()
     # The boys' 5K was really 4K: the VDOT times go.
     c.post("/races/edit-race", data={"csrf": csrf, "date": "2026-10-24", "meet": "Riverbend Invitational", "race": "Boys Varsity Large School",
@@ -213,3 +213,11 @@ def test_season_tabs(staff):
     assert "Hilltop Classic" in older and "Lakeside Open" not in older
     both = c.get("/races?season=all").text
     assert "Hilltop Classic" in both and "Lakeside Open" in both
+
+
+def test_distances_show_in_k():
+    from xcapp.analysis import km_label, part_label
+    assert [km_label(l, m) for l, m in (("5,000 Meters", 5000), ("5000m", 5000), ("4,000 Meters", 4000), ("3 Miles", 4828.03),
+                                          ("1600m", 1600), ("3,200 Meters", 3200), ("2 mi", 3218.69))] == \
+        ["5K", "5K", "4K", "3 Miles", "1600m", "3,200 Meters", "2 mi"]
+    assert part_label({"sets": 1, "reps": 6, "dist": 1000}) == "6 × 1K" and part_label({"sets": 1, "reps": 4, "dist": 1600}) == "4 × 1,600 m"

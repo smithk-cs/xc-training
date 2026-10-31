@@ -106,6 +106,13 @@ def create_all():
             first, _, last = full.strip().rpartition(" ")
             conn.execute(text("UPDATE staff_users SET first_name = :f, last_name = :l WHERE id = :i"),
                          {"f": (first or last)[:60], "l": (last if first else "")[:60], "i": uid})
+        # Race distances saved in meters ('5,000 Meters') show in K ('5K').
+        from .analysis import km_label
+        for label, meters in conn.execute(text("SELECT DISTINCT distance_label, distance_m FROM race_results")).all():
+            new = km_label(label, meters)
+            if new != label:
+                conn.execute(text("UPDATE race_results SET distance_label = :n WHERE distance_label = :o AND distance_m = :m"),
+                             {"n": new, "o": label, "m": meters})
         # Groups saved when boys and girls shared one weekly mileage goal: the girls start on that same goal.
         conn.execute(text("UPDATE training_groups SET weekly_miles_girls = COALESCE(weekly_miles, 0) WHERE weekly_miles_girls IS NULL"))
         # Starting ability groups; coaches rename and re-set them on the Groups page.

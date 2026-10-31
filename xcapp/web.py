@@ -985,7 +985,7 @@ def create_app() -> FastAPI:
         rows = [r for r in db.scalars(select(RaceResult).where(RaceResult.date == d, RaceResult.meet == meet, RaceResult.race == old_race)).all()
                 if abs(r.distance_m - old_m) < 0.5]
         for r in rows:
-            r.race, r.distance_label, r.distance_m = race, label, meters
+            r.race, r.distance_label, r.distance_m = race, A.km_label(label, meters), meters
             sync_benchmark(db, r)
         if race != old_race:
             team = db.scalar(select(RaceTeamResult).where(RaceTeamResult.date == d, RaceTeamResult.meet == meet, RaceTeamResult.race == old_race))

@@ -13,7 +13,7 @@ import re
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from .analysis import EVENTS, normalize_event, parse_time, season_for
+from .analysis import EVENTS, km_label, normalize_event, parse_time, season_for
 from .models import Athlete, Goal, RaceResult, Result
 from .security import new_link_token
 
@@ -292,7 +292,7 @@ def import_races(db: Session, text: str, add_athletes: bool = False) -> tuple[in
                                                  RaceResult.race == race, RaceResult.time_s == t)):
             continue
         rr = RaceResult(athlete_id=a.id, meet=meet[:160], date=d, course=course, race=race, distance_m=meters,
-                        distance_label=label, time_s=t, place=place, points=points)
+                        distance_label=km_label(label, meters), time_s=t, place=place, points=points)
         event = benchmark_event(meters)
         if event:
             res = db.scalar(select(Result).where(Result.athlete_id == a.id, Result.event == event, Result.date == d,

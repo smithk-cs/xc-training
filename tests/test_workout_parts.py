@@ -149,7 +149,7 @@ def test_zones_and_older_names():
     old = PlannedWorkout(date=dt.date(2026, 10, 1), title="x", rep_distance_m=0, parts=json.dumps(
         [{"sets": 1, "reps": 1, "dist": 8000, "zone": "Long run"}, {"sets": 1, "reps": 4, "mins": 5, "zone": "Tempo"}]))
     assert [p["zone"] for p in old.part_list] == ["Easy", "Threshold"]                # saved before the rename
-    assert A.workout_summary(old.part_list) == "8,000 m Easy + 4 × 5 min Threshold"
+    assert A.workout_summary(old.part_list) == "8K Easy + 4 × 5 min Threshold"
 
 
 def test_team_notes_window_and_search(app):

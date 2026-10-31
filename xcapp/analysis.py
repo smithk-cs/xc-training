@@ -175,6 +175,16 @@ def race_marks(races) -> dict[int, str]:
     return out
 
 
+def km_label(label: str, meters: float) -> str:
+    """Race distances in K: '5,000 Meters' or '5000m' -> '5K' for whole kilometers; miles and track distances such as
+    1600 m are left as written."""
+    low = (label or "").lower()
+    if "mi" in low or not meters or meters < 1000:
+        return label
+    km = meters / 1000
+    return f"{round(km)}K" if abs(km - round(km)) < 0.001 else label
+
+
 def fmt_gap(seconds: float | None) -> str:
     """Change in time for people: '-39.0 s', '+1:05.2', 'same'."""
     if seconds is None:
@@ -452,9 +462,11 @@ def distance_text(m: float) -> str:
 
 
 def part_label(p: dict) -> str:
-    """'2 × 4 × 400 m', '6 × 1,000 m', '1 × 5 mi', '4 × 5 min' (parts run for a time have 'mins' instead of 'dist';
+    """'2 × 4 × 400 m', '6 × 1K', '1 × 5 mi', '4 × 5 min' (parts run for a time have 'mins' instead of 'dist';
     parts set in miles keep 'mi' for showing, with 'dist' in meters)."""
-    dist = minutes_text(p["mins"]) if p.get("mins") else f"{p['mi']:g} mi" if p.get("mi") else f"{p['dist']:,.0f} m"
+    km = (p.get("dist") or 0) / 1000
+    dist = (minutes_text(p["mins"]) if p.get("mins") else f"{p['mi']:g} mi" if p.get("mi")
+            else f"{km:.0f}K" if km >= 1 and km == int(km) else f"{p['dist']:,.0f} m")
     reps = f"{p['reps']} × {dist}" if p["reps"] > 1 else dist
     return f"{p['sets']} × {reps}" if p["sets"] > 1 else reps
 
