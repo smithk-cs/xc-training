@@ -1422,8 +1422,10 @@ def create_app() -> FastAPI:
                 raise ValueError("Pick a role.")
             if db.scalar(select(StaffUser).where(StaffUser.username == name)):
                 raise ValueError("That username is taken.")
-            db.add(StaffUser(username=name, role=f.get("role"), email=clean_email(f.get("email", "")),
-                             password_hash=hash_password(str(f.get("password", "")))))
+            u = StaffUser(username=name, role=f.get("role"), email=clean_email(f.get("email", "")),
+                          password_hash=hash_password(str(f.get("password", ""))))
+            u.set_name(str(f.get("first_name", "")), str(f.get("last_name", "")))
+            db.add(u)
             flash(request, f"Added {name}.")
         except ValueError as exc:
             flash(request, str(exc), "error")
@@ -1450,7 +1452,7 @@ def create_app() -> FastAPI:
             raise HTTPException(403, "You can only change your own details.")
         try:
             target.email, target.phone = clean_email(f.get("email", "")), clean_phone(f.get("phone", ""))
-            target.full_name = str(f.get("full_name", "")).strip()[:120]
+            target.set_name(str(f.get("first_name", "")), str(f.get("last_name", "")))
             target.title = str(f.get("title", "")).strip()[:80]
             target.on_entries = bool(f.get("on_entries"))
             flash(request, f"Saved {target.display_name}'s details.")

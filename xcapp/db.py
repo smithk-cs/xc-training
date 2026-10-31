@@ -71,7 +71,8 @@ ADDED_COLUMNS = {
                  ("experience", "INTEGER DEFAULT 2"), ("show_name", "BOOLEAN DEFAULT FALSE"), ("show_photo", "BOOLEAN DEFAULT FALSE"),
                  ("show_spotlight", "BOOLEAN DEFAULT FALSE"), ("show_vdot", "BOOLEAN DEFAULT FALSE"), ("is_captain", "BOOLEAN DEFAULT FALSE"), ("consent_by", "VARCHAR(160) DEFAULT ''"),
                  ("consent_at", "TIMESTAMP")],
-    "staff_users": [("email", "VARCHAR(254) DEFAULT ''"), ("full_name", "VARCHAR(120) DEFAULT ''"), ("title", "VARCHAR(80) DEFAULT ''"),
+    "staff_users": [("email", "VARCHAR(254) DEFAULT ''"), ("full_name", "VARCHAR(120) DEFAULT ''"), ("first_name", "VARCHAR(60) DEFAULT ''"),
+                    ("last_name", "VARCHAR(60) DEFAULT ''"), ("title", "VARCHAR(80) DEFAULT ''"),
                     ("phone", "VARCHAR(30) DEFAULT ''"), ("on_entries", "BOOLEAN DEFAULT TRUE")],
     "meet_entries": [("course_id", "INTEGER"), ("start_time", "VARCHAR(5) DEFAULT ''")],
     "courses": [("video_url", "VARCHAR(500) DEFAULT ''"), ("distances", "VARCHAR(200) DEFAULT ''"), ("latitude", "FLOAT"),
@@ -99,6 +100,12 @@ def create_all():
                     conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}"))
         if eng.dialect.name == "postgresql":  # room for the notes of merged same-day pain reports (SQLite has no limit)
             conn.execute(text("ALTER TABLE pain_reports ALTER COLUMN note TYPE VARCHAR(1000)"))
+        # Staff names saved as one "full name": split at the last space into first and last name (coaches can correct it).
+        for uid, full in conn.execute(text("SELECT id, full_name FROM staff_users WHERE full_name <> '' "
+                                           "AND COALESCE(first_name, '') = '' AND COALESCE(last_name, '') = ''")).all():
+            first, _, last = full.strip().rpartition(" ")
+            conn.execute(text("UPDATE staff_users SET first_name = :f, last_name = :l WHERE id = :i"),
+                         {"f": (first or last)[:60], "l": (last if first else "")[:60], "i": uid})
         # Groups saved when boys and girls shared one weekly mileage goal: the girls start on that same goal.
         conn.execute(text("UPDATE training_groups SET weekly_miles_girls = COALESCE(weekly_miles, 0) WHERE weekly_miles_girls IS NULL"))
         # Starting ability groups; coaches rename and re-set them on the Groups page.

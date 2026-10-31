@@ -25,7 +25,9 @@ class StaffUser(Base):
     password_hash: Mapped[str] = mapped_column(String(300))
     role: Mapped[str] = mapped_column(String(20))  # admin | coach | trainer
     email: Mapped[str] = mapped_column(String(254), default="")
-    full_name: Mapped[str] = mapped_column(String(120), default="")
+    full_name: Mapped[str] = mapped_column(String(120), default="")   # "First Last", kept from the two fields below
+    first_name: Mapped[str] = mapped_column(String(60), default="", server_default="")
+    last_name: Mapped[str] = mapped_column(String(60), default="", server_default="")
     title: Mapped[str] = mapped_column(String(80), default="")      # such as Head Coach
     phone: Mapped[str] = mapped_column(String(30), default="")      # cell phone, shown on meet entry sheets
     on_entries: Mapped[bool] = mapped_column(Boolean, default=True)  # listed as a contact on meet entry sheets
@@ -34,6 +36,10 @@ class StaffUser(Base):
     @property
     def display_name(self) -> str:
         return self.full_name or self.username
+
+    def set_name(self, first: str, last: str) -> None:
+        self.first_name, self.last_name = first.strip()[:60], last.strip()[:60]
+        self.full_name = " ".join(x for x in (self.first_name, self.last_name) if x)[:120]
 
 
 class Athlete(Base):
