@@ -96,6 +96,10 @@ def test_courses_page_and_race_conditions():
     assert fmt_time(adj) in races
     c.post("/races/conditions", data={"csrf": csrf, "date": "2026-10-24", "meet": "Flat SAC", "temp_f": "200"})
     assert "Temperature should be from -20 to 120." in c.get("/races?season=all").text
+    c.post("/races/conditions", data={"csrf": csrf, "date": "2026-10-24", "meet": "Flat SAC", "temp_f": "85", "pressure_inhg": "30.12"})
+    assert "pressure 30.12 inHg" in c.get("/races?season=all").text
+    c.post("/races/conditions", data={"csrf": csrf, "date": "2026-10-24", "meet": "Flat SAC", "pressure_inhg": "1013"})
+    assert "Pressure (inHg) should be from 25 to 32." in c.get("/races?season=all").text   # hPa typed by mistake
 
     db = SessionLocal()
     odd = Course(name="Odd Loop", distance_m=5100)

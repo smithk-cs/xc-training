@@ -813,7 +813,8 @@ def create_app() -> FastAPI:
             db.add(cond)
         try:
             for field, lo, hi, label in (("temp_f", -20, 120, "Temperature"), ("dew_point_f", -20, 90, "Dew point"),
-                                          ("humidity_pct", 0, 100, "Humidity"), ("wind_mph", 0, 60, "Wind")):
+                                          ("humidity_pct", 0, 100, "Humidity"), ("wind_mph", 0, 60, "Wind"),
+                                          ("pressure_inhg", 25, 32, "Pressure (inHg)")):
                 raw = str(f.get(field, "")).strip()
                 v = float(raw) if raw else None
                 if v is not None and not lo <= v <= hi:

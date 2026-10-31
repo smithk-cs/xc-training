@@ -26,7 +26,8 @@ def fake_service(calls):
         day = q["start_date"]
         times = [f"{day}T{h:02d}:00" for h in range(24)]
         hourly = {"time": times, "temperature_2m": [50 + h for h in range(24)], "dew_point_2m": [45.0] * 24,
-                  "relative_humidity_2m": [70.0] * 24, "wind_speed_10m": [6.0] * 24, "weather_code": [2] * 24}
+                  "relative_humidity_2m": [70.0] * 24, "wind_speed_10m": [6.0] * 24, "weather_code": [2] * 24,
+                  "pressure_msl": [1016.5] * 24}
         if "precipitation_probability" in q["hourly"]:
             hourly["precipitation_probability"] = [20] * 24
         return httpx.Response(200, json={"hourly": hourly})
@@ -57,9 +58,10 @@ def test_forecast_and_race_day_conditions():
     assert out == {"forecasts": 1, "race_conditions": 1}                           # 30 days out: too far ahead to forecast
     f = soon.forecast
     assert f.at.endswith("T10:00") and f.temp_f == 60 and f.rain_pct == 20 and f.summary == "Partly cloudy"
-    assert WX.describe(f) == "60°F, partly cloudy, 20% chance of rain, wind 6 mph, dew point 45°F"
+    assert WX.describe(f) == "60°F, partly cloudy, 20% chance of rain, wind 6 mph, dew point 45°F, pressure 30.02 inHg"
     cond = db.query(MeetConditions).one()
     assert cond.temp_f == 59 and cond.dew_point_f == 45 and cond.wind_mph == 12 and "Open-Meteo" in cond.notes   # 9 a.m. default
+    assert cond.pressure_inhg == 30.02                                             # 1016.5 hPa at sea level, as an altimeter setting
     assert all("latitude" in str(c.url) or c.url.host.startswith("geocoding") for c in calls)
     assert not any("Lowry" in str(c.url) for c in calls)                           # nothing about athletes leaves the app
     db.rollback()

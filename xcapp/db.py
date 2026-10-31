@@ -82,6 +82,8 @@ ADDED_COLUMNS = {
     "planned_workouts": [("distance_unit", "VARCHAR(2) DEFAULT 'm'"), ("parts", "TEXT DEFAULT ''"), ("gender", "VARCHAR(10) DEFAULT ''")],
     "training_groups": [("color", "VARCHAR(7) DEFAULT ''"), ("weekly_miles", "FLOAT DEFAULT 0"), ("weekly_miles_girls", "FLOAT")],
     "newsletter_sections": [("options", "TEXT DEFAULT ''")],
+    "meet_conditions": [("pressure_inhg", "FLOAT")],
+    "meet_forecasts": [("pressure_inhg", "FLOAT")],
     "pain_reports": [("activity_id", "INTEGER"), ("saw_trainer", "BOOLEAN DEFAULT FALSE")],
 }
 

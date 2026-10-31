@@ -21,7 +21,8 @@ RECENT_DAYS = 80            # past days the forecast service still covers; older
 FILL_DAYS = 30              # race-day conditions are filled in nightly for races this recent
 IMPORT_DAYS = 400           # ... and for older ones right after results are imported or a past meet is saved
 DEFAULT_HOUR = 9            # when a meet has no start time
-HOURLY = "temperature_2m,dew_point_2m,relative_humidity_2m,wind_speed_10m,precipitation_probability,weather_code"
+HOURLY = "temperature_2m,dew_point_2m,relative_humidity_2m,wind_speed_10m,pressure_msl,precipitation_probability,weather_code"
+HPA_TO_INHG = 0.0295300   # sea-level pressure in hPa -> inches of mercury, as airports report the altimeter setting
 # WMO weather codes -> words
 CODES = {0: "Clear", 1: "Mostly clear", 2: "Partly cloudy", 3: "Cloudy", 45: "Fog", 48: "Fog", 51: "Light drizzle",
          53: "Drizzle", 55: "Heavy drizzle", 61: "Light rain", 63: "Rain", 65: "Heavy rain", 66: "Freezing rain",
@@ -91,7 +92,9 @@ def at(http: httpx.Client, lat: float, lon: float, day: dt.date, hour: int, toda
         v = (hourly.get(name) or [None] * len(times))[i]
         return round(float(v), 1) if v is not None else None
     code = (hourly.get("weather_code") or [None] * len(times))[i]
-    return {"at": key, "temp_f": val("temperature_2m"), "dew_point_f": val("dew_point_2m"), "humidity_pct": val("relative_humidity_2m"),
+    msl = (hourly.get("pressure_msl") or [None] * len(times))[i]
+    return {"at": key, "pressure_inhg": round(float(msl) * HPA_TO_INHG, 2) if msl is not None else None,
+            "temp_f": val("temperature_2m"), "dew_point_f": val("dew_point_2m"), "humidity_pct": val("relative_humidity_2m"),
             "wind_mph": val("wind_speed_10m"), "rain_pct": val("precipitation_probability") if day >= today else None,
             "summary": CODES.get(int(code), "") if code is not None else ""}
 
@@ -118,8 +121,8 @@ def refresh_forecast(db: Session, http: httpx.Client, m: MeetEntry, today: dt.da
     if m.forecast is None:
         m.forecast = f
     f.fetched_at, f.at = utcnow(), w["at"]
-    f.temp_f, f.dew_point_f, f.humidity_pct, f.wind_mph, f.rain_pct, f.summary = (
-        w["temp_f"], w["dew_point_f"], w["humidity_pct"], w["wind_mph"], w["rain_pct"], w["summary"])
+    f.temp_f, f.dew_point_f, f.humidity_pct, f.wind_mph, f.rain_pct, f.summary, f.pressure_inhg = (
+        w["temp_f"], w["dew_point_f"], w["humidity_pct"], w["wind_mph"], w["rain_pct"], w["summary"], w["pressure_inhg"])
     return True
 
 
@@ -167,7 +170,7 @@ def fill_conditions(db: Session, http: httpx.Client, today: dt.date, days: int =
         RaceResult.date >= since, RaceResult.date < today).group_by(RaceResult.meet, RaceResult.date)).all()
     for meet, day, course_name in raced:
         cond = db.scalar(select(MeetConditions).where(MeetConditions.meet == meet, MeetConditions.date == day))
-        if cond is not None and None not in (cond.temp_f, cond.dew_point_f, cond.wind_mph):
+        if cond is not None and None not in (cond.temp_f, cond.dew_point_f, cond.wind_mph, cond.pressure_inhg):
             continue
         entry = entry_for(db, meet, day)
         course = (cond.course if cond and cond.course else None) or (course_for(db, entry) if entry else None) or \
@@ -183,7 +186,7 @@ def fill_conditions(db: Session, http: httpx.Client, today: dt.date, days: int =
             db.add(cond)
         elif cond.course_id is None:
             cond.course_id = course.id
-        for field in ("temp_f", "dew_point_f", "humidity_pct", "wind_mph"):
+        for field in ("temp_f", "dew_point_f", "humidity_pct", "wind_mph", "pressure_inhg"):
             if getattr(cond, field) is None and w[field] is not None:
                 setattr(cond, field, w[field])
         note = f"Weather at {hh:02d}:00 from Open-Meteo."
@@ -237,4 +240,6 @@ def describe(f) -> str:
         bits.append(f"wind {f.wind_mph:.0f} mph")
     if f.dew_point_f is not None:
         bits.append(f"dew point {f.dew_point_f:.0f}°F")
+    if getattr(f, "pressure_inhg", None) is not None:
+        bits.append(f"pressure {f.pressure_inhg:.2f} inHg")
     return ", ".join(bits)

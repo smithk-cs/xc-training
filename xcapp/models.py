@@ -544,6 +544,7 @@ class MeetConditions(Base):
     dew_point_f: Mapped[float | None] = mapped_column(Float, nullable=True)
     humidity_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
     wind_mph: Mapped[float | None] = mapped_column(Float, nullable=True)
+    pressure_inhg: Mapped[float | None] = mapped_column(Float, nullable=True)   # sea-level pressure, as an airport altimeter setting
     footing: Mapped[str] = mapped_column(String(20), default="")    # Dry | Wet | Muddy
     notes: Mapped[str] = mapped_column(Text, default="")
     course: Mapped[Course | None] = relationship()
@@ -688,6 +689,7 @@ class MeetForecast(Base):
     humidity_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
     wind_mph: Mapped[float | None] = mapped_column(Float, nullable=True)
     rain_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
+    pressure_inhg: Mapped[float | None] = mapped_column(Float, nullable=True)
     summary: Mapped[str] = mapped_column(String(60), default="")
 
 
