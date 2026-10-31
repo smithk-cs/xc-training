@@ -508,3 +508,5 @@ table.workouts-by-day tr.day-row th { background: var(--color-soft); color: var(
   .top .top-user { margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255, 255, 255, .25); }
   .top:not(.js-menu) .top-menu { display: block; flex-basis: 100%; }   /* without JavaScript the menu just shows */
 }
+.adj { color: var(--color-ok); font-weight: 600; }
+.runs .r .adj { display: block; }

@@ -252,6 +252,8 @@
         <li><div class="row">
           <span class="l"><span class="d">{{ r.meet }}</span><span class="small muted">{{ r.date.strftime('%b %-d') }} · {% if r.race %}{{ r.race }} · {% endif %}{{ r.distance_label }}</span></span>
           <span class="r"><span class="mi">{{ fmt_time(r.time_s) }}</span>
+            <span class="small muted">{{ fmt_time((r.time_s / (r.distance_m / 1609.344))|round)[:-2] }}/mi</span>
+            {% if adjusted.get(r.id) %}<span class="small adj" title="What this effort would be on a track at 55°F or cooler, at sea level, with a low dew point">Adj. {{ fmt_time(adjusted[r.id]) }}</span>{% endif %}
             <span class="small muted">{% if x.pr %}<span class="pill good">PR</span> {% elif x.sb %}<span class="pill">SB</span> {% endif %}{% if r.place %}Place {{ r.place }}{% endif %}</span></span>
         </div></li>
         {% endfor %}

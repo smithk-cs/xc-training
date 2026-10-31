@@ -124,3 +124,18 @@ def explain(course: Course | None, cond: MeetConditions | None) -> str:
     if s:
         bits.append(f"{s:g} s/mile for the course" + (" and footing" if cond and FOOTING.get(cond.footing, 0) else ""))
     return "; ".join(bits) or "no adjustment"
+
+
+def adjusted_times(db, races) -> dict[int, float | None]:
+    """Race result id -> its time on a track at 55°F or cooler, sea level and a low dew point, from that day's
+    conditions and the course (the one on the conditions, else the course named in the results)."""
+    from sqlalchemy import select
+    from .models import Course as _Course, MeetConditions as _Cond
+    by_name = {c.name.strip().lower(): c for c in db.scalars(select(_Course)).all()}
+    conds = {(c.meet, c.date): c for c in db.scalars(select(_Cond)).all()}
+    out = {}
+    for r in races:
+        cond = conds.get((r.meet, r.date))
+        course = cond.course if cond and cond.course else by_name.get((r.course or "").strip().lower())
+        out[r.id] = adjusted_time(r.time_s, r.distance_m, course, cond)
+    return out

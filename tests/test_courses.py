@@ -186,3 +186,38 @@ def test_course_breakdown_flags_missing_hills():
     assert C.course_seconds(flat_by_default) == 5 and C.breakdown(flat_by_default)[0] == ("hills not set", 0)
     hilly = Course(name="Foresthill", surface="Firm grass", turns="Few", distance_m=5000, elevation_gain_ft=400)   # 129 ft/mile
     assert C.breakdown(hilly)[0] == ("hills (tier 5)", 28) and C.course_seconds(hilly) == 33
+
+
+def test_race_times_show_pace_and_adjusted_time():
+    import datetime as dt
+    import re
+    from fastapi.testclient import TestClient
+    from xcapp.db import SessionLocal
+    from xcapp.models import Athlete, Course, MeetConditions, RaceResult, StaffUser
+    from xcapp.security import hash_password
+    from xcapp import courses as C
+    from xcapp.analysis import fmt_time
+    db = SessionLocal()
+    db.add(StaffUser(username="coach9", role="coach", password_hash=hash_password("correct-horse-1")))
+    a = Athlete(first_name="Sam", last_name="Lowry", gender="Boys", grade=12, group="Varsity", link_token="t-rt")
+    db.add(a)
+    course = Course(name="Gibson Ranch", surface="Firm grass", turns="Some", distance_m=5000)
+    db.add(course)
+    db.flush()
+    day = dt.date(2026, 10, 3)
+    db.add(RaceResult(athlete_id=a.id, date=day, meet="Gibson Invite", race="Boys Varsity", distance_m=5000, distance_label="5K",
+                      time_s=1000, course="Gibson Ranch"))
+    db.add(MeetConditions(meet="Gibson Invite", date=day, temp_f=75))
+    db.commit()
+    adj = C.adjusted_time(1000, 5000, course, db.query(MeetConditions).one())
+    aid = a.id
+    db.close()
+    from xcapp.web import create_app
+    app = create_app()
+    me = TestClient(app).get("/a/t-rt").text
+    assert "16:40.0" in me and "5:22/mi" in me and f"Adj. {fmt_time(adj)}" in me
+    c = TestClient(app, follow_redirects=False)
+    csrf = re.search(r'name="csrf" value="([^"]+)"', c.get("/login").text).group(1)
+    c.post("/login", data={"csrf": csrf, "username": "coach9", "password": "correct-horse-1"})
+    for page in (c.get(f"/athletes/{aid}").text, c.get("/races?season=all").text):
+        assert "<b>16:40.0</b>" in page and "5:22/mi" in page and f"Adj. {fmt_time(adj)}" in page

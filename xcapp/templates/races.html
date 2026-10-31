@@ -106,12 +106,11 @@ Flat SAC Invitational,2026-10-24,Gibson Ranch Regional Park,Boys Varsity Large S
     {% endif %}
   </div>
   <div class="scroll"><table class="list">
-    <thead><tr><th class="num">Place</th><th>Athlete</th><th class="num">Grade</th>{% set has_pts = rows|selectattr('points', 'ne', none)|list %}<th class="num">Time</th><th class="num">Pace / mile</th>{% if has_pts %}<th class="num">Points</th>{% endif %}{% if mi.course or cond %}<th class="num" title="On a track at 55°F or cooler, at sea level, with a low dew point">Adjusted</th>{% endif %}</tr></thead>
+    <thead><tr><th class="num">Place</th><th>Athlete</th><th class="num">Grade</th>{% set has_pts = rows|selectattr('points', 'ne', none)|list %}<th class="num" title="Time, pace per mile and, when the course or weather is known, the time adjusted to a track at 55°F or cooler at sea level">Time · pace · adjusted</th>{% if has_pts %}<th class="num">Points</th>{% endif %}</tr></thead>
     <tbody>
     {% for r in rows %}
       <tr><td class="num">{{ r.place or '' }}</td><td><a href="/athletes/{{ r.athlete_id }}">{{ r.athlete.name }}</a></td><td class="num">{{ r.athlete.grade }}</td>
-        <td class="num">{{ fmt_time(r.time_s) }}</td><td class="num">{{ fmt_time(r.time_s / (meters / 1609.344)) }}</td>{% if has_pts %}<td class="num">{{ '%g' % r.points if r.points is not none else '' }}</td>{% endif %}
-        {% if mi.course or cond %}{% set adj = mi.adjusted.get(r.id) %}<td class="num">{% if adj %}{{ fmt_time(adj) }}<br><span class="small muted">{{ fmt_time(adj / (meters / 1609.344)) }}/mi</span>{% endif %}</td>{% endif %}</tr>
+        <td class="num nowrap">{% set adj = mi.adjusted.get(r.id) %}{% include "_race_time.html" %}</td>{% if has_pts %}<td class="num">{{ '%g' % r.points if r.points is not none else '' }}</td>{% endif %}</tr>
     {% endfor %}
     </tbody>
   </table></div>

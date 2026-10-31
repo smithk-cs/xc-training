@@ -487,6 +487,7 @@ def create_app() -> FastAPI:
         group_names = [g.name for g in db.scalars(select(TrainingGroup).order_by(TrainingGroup.position)).all()]
         races = db.scalars(select(RaceResult).where(RaceResult.athlete_id == a.id).order_by(RaceResult.date.desc()).limit(30)).all()
         return render(request, "athlete_detail.html", user, a=a, experience_labels=A.EXPERIENCE_LABELS, acts=acts, results=results, run_pain=run_pain, races=races,
+                      adjusted=CS.adjusted_times(db, races),
                       ability=ability, group_names=group_names, missed=missed, vo2=A.latest_vo2(db, a.id),
                       goal_v=A.goal_vdot(db, a.id, A.team_today()),
                       rhr=A.resting_hr(db, a.id, A.team_today()), photo_v=photo_versions(db).get(a.id),
@@ -1520,7 +1521,7 @@ def create_app() -> FastAPI:
         races = db.scalars(select(RaceResult).where(RaceResult.athlete_id == a.id)
                            .order_by(RaceResult.date.desc(), RaceResult.id.desc())).all()
         history = A.race_history(races)
-        return render(request, "athlete.html", None, history=history, paces=paces, a=a, acts=acts, tiles=tiles, seasons=seasons, need=need, ability=ability,
+        return render(request, "athlete.html", None, history=history, adjusted=CS.adjusted_times(db, races), paces=paces, a=a, acts=acts, tiles=tiles, seasons=seasons, need=need, ability=ability,
                       show_group=show_group, open_delete=open_delete, races=races, vo2=A.latest_vo2(db, a.id),
                       rhr=A.resting_hr(db, a.id, today), rhr_range=(A.RESTING_HR_MIN, A.RESTING_HR_MAX),
                       rhr_cal=A.resting_hr_calendar(db, a.id, today), photo_v=photo_versions(db).get(a.id), meets=my_meets(db, a, today),
