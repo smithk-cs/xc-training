@@ -171,7 +171,7 @@ def test_course_video_on_athletes_upcoming_meets():
 
 def test_course_distances():
     assert C.distance_label(5000) == "5K" and C.distance_label(2 * 1609.344) == "2 mi" and C.distance_label(5100) == "3.17 mi"
-    assert list(C.KM_DISTANCES)[:3] == ["2K", "3K", "4K"] and "1.5 mi" in C.MILE_DISTANCES
+    assert list(C.KM_DISTANCES)[:4] == ["2K", "3K", "3.2K", "4K"] and "1.5 mi" in C.MILE_DISTANCES
 
 
 
@@ -225,3 +225,9 @@ def test_race_times_show_pace_and_adjusted_time():
     c.post("/login", data={"csrf": csrf, "username": "coach9", "password": "correct-horse-1"})
     for page in (c.get(f"/athletes/{aid}").text, c.get("/races?season=all").text):
         assert "<b>16:40.0</b>" in page and "5:22/mi" in page and f"Adj. {fmt_time(adj)}" in page
+
+
+def test_three_point_two_k_course_distance():
+    from xcapp import courses as C
+    assert list(C.KM_DISTANCES) == ["2K", "3K", "3.2K", "4K", "5K"]
+    assert C.distance_label(3200) == "3.2K" and C.main_distance(["3.2K", "3K"], None) == 3200   # the longest when 5K isn't raced
