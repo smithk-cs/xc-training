@@ -8,17 +8,17 @@
   {% for x, y in dupes %}<a href="/athletes/{{ x.id }}?merge={{ y.id }}#combine">{{ x.name }} and {{ y.name }}</a>{{ '; ' if not loop.last else '' }}{% endfor %}. Open one to combine them.</span></p>
 {% endif %}
 <table class="list sortable compact centered">
-  <thead><tr><th>Athlete</th><th>Grade</th><th>Class</th><th>Ability group</th><th class="num">VDOT</th><th>AI consent</th><th>Garmin</th><th>Last sync</th>{% if user.role != 'trainer' %}<th data-nosort>Link</th>{% endif %}</tr></thead>
+  <thead><tr><th>Athlete</th><th>Grade</th><th>Ability group</th><th class="num">VDOT</th><th>AI consent</th><th>Garmin</th><th>Last sync</th>{% if user.role != 'trainer' %}<th data-nosort>Link</th>{% endif %}</tr></thead>
   <tbody>
   {% for a in athletes %}
   <tr>
-    <td data-sort="{{ a.last_name }} {{ a.first_name }}" class="nowrap">{% if photos.get(a.id) %}<img class="avatar zoom" src="/athletes/{{ a.id }}/photo?v={{ photos[a.id] }}" alt="Photo of {{ a.name }}" loading="lazy" tabindex="0" role="button">{% else %}<span class="avatar blank" aria-hidden="true">{{ a.first_name[:1] }}{{ a.last_name[:1] }}</span>{% endif %}<a href="/athletes/{{ a.id }}">{{ a.name }}</a>{% if a.is_test %} <span class="pill">Test</span>{% endif %}</td><td>{{ a.grade }}</td><td>{{ a.grad_year or '' }}</td>
+    <td data-sort="{{ a.last_name }} {{ a.first_name }}" class="nowrap">{% if photos.get(a.id) %}<img class="avatar zoom" src="/athletes/{{ a.id }}/photo?v={{ photos[a.id] }}" alt="Photo of {{ a.name }}" loading="lazy" tabindex="0" role="button">{% else %}<span class="avatar blank" aria-hidden="true">{{ a.first_name[:1] }}{{ a.last_name[:1] }}</span>{% endif %}<a href="/athletes/{{ a.id }}">{{ a.name }}</a>{% if a.is_test %} <span class="pill">Test</span>{% endif %}</td><td>{{ a.grade }}</td>
     {% set ai = ab.get(a.id, {}) %}<td data-sort="{{ ranks.get(ai.group, '') }}">{% if ai.group %}<span class="pill" style="background:{{ ai.color or '#FFFFF0' }}; color:{{ ink(ai.color or '#FFFFF0') }}; border-color:rgba(0,0,0,.18)">{{ ai.group }}</span>{% endif %}{% if ai.override %} <span class="small muted">(pinned)</span>{% endif %}</td><td class="num">{{ ai.vdot or '' }}</td><td>{% if a.ai_consent_at %}<span class="pill good">Yes</span>{% else %}<span class="pill">No</span>{% endif %}</td>
     <td>{% if a.garmin and a.garmin.status == 'connected' %}<span class="pill good">Connected</span>{% elif a.garmin and a.garmin.status == 'error' %}<span class="pill bad">Needs reconnect</span>{% else %}<span class="pill">Not connected</span>{% endif %}</td>
     <td class="small" data-sort="{{ a.garmin.last_sync_at.isoformat() if a.garmin and a.garmin.last_sync_at else '' }}">{{ (a.garmin.last_sync_at|local).strftime('%b %-d %-I:%M %p') if a.garmin and a.garmin.last_sync_at else '' }}</td>
     {% if user.role != 'trainer' %}<td><details class="plink"><summary>Show</summary>{% set url = settings.base_url.rstrip('/') ~ '/a/' ~ a.link_token %}<code class="copy">{{ url }}</code> <button type="button" class="link copy-btn" data-copy="{{ url }}">Copy</button></details></td>{% endif %}
   </tr>
-  {% else %}<tr><td colspan="9" class="muted">No athletes yet. Add them below or import a roster file.</td></tr>{% endfor %}
+  {% else %}<tr><td colspan="8" class="muted">No athletes yet. Add them below or import a roster file.</td></tr>{% endfor %}
   </tbody>
 </table>
 {% if confirm and user.role != 'trainer' %}

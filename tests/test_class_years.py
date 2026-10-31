@@ -85,7 +85,7 @@ def test_pages(app):
     sam = db.query(Athlete).filter_by(first_name="Sam").one()
     assert sam.grad_year == CY.class_of(11, A.team_today())                  # filled in from the current grade
     db.close()
-    assert "Class years to confirm (1)" in page and f'name="cls_{ivy}"' in page and ">Class</th>" in page
+    assert "Class years to confirm (1)" in page and f'name="cls_{ivy}"' in page and ">Class</th>" not in page   # kept, but not shown in the roster
     csrf = re.search(r'name="csrf" value="([^"]+)"', page).group(1)
     c.post("/athletes/class-years", data={"csrf": csrf, f"cls_{ivy}": str(CY.school_year_end(A.team_today()) - 1)})
     page = c.get("/athletes").text
