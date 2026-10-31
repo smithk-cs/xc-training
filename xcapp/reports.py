@@ -112,16 +112,23 @@ def overview(db: Session, a: Athlete, season: str) -> dict:
     # PR: faster than every earlier time at that distance; SB: the best so far this season at that distance.
     best_ever = dict(_times(db, [a.id], None, start - dt.timedelta(days=1)).get(a.id, {}))
     best_season: dict[float, float] = {}
+    best_course: dict[tuple, float] = {}
+    for x in db.scalars(select(RaceResult).where(RaceResult.athlete_id == a.id, RaceResult.date < start)).all():
+        ck = ((x.course or x.meet or "").strip().lower(), REG._key(x.distance_m))
+        best_course[ck] = min(best_course.get(ck, math.inf), x.time_s)
     targets = A.vdot_targets(db)
     rows, prev_eq = [], None
     for r in races:
         k = REG._key(r.distance_m)
         eq = equivalent_5k(r.distance_m, r.time_s)
+        ck = ((r.course or r.meet or "").strip().lower(), k)
         pr, sb = r.time_s < best_ever.get(k, math.inf), r.time_s < best_season.get(k, math.inf)
+        cpr = not pr and ck in best_course and r.time_s < best_course[ck]   # faster than before on this course
         best_ever[k], best_season[k] = min(best_ever.get(k, math.inf), r.time_s), min(best_season.get(k, math.inf), r.time_s)
+        best_course[ck] = min(best_course.get(ck, math.inf), r.time_s)
         rows.append({"r": r, "label": REG.distance_label(r.distance_m), "pace": r.time_s / (r.distance_m / A.METERS_PER_MILE),
                      "eq": eq, "vdot": A.team_vdot(A.vdot(r.distance_m, r.time_s), targets),
-                     "vs_prev": None if prev_eq is None else eq - prev_eq, "pr": pr, "sb": sb})
+                     "vs_prev": None if prev_eq is None else eq - prev_eq, "pr": pr, "cpr": cpr, "sb": sb})
         prev_eq = eq
     acts = db.scalars(select(Activity).where(Activity.athlete_id == a.id, Activity.local_date >= start, Activity.local_date <= last)).all()
     runs = [x for x in acts if "run" in (x.sport or "running")]

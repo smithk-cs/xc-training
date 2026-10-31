@@ -56,7 +56,7 @@
     <div class="scroll"><table class="paper-table">
       <thead><tr><th>Date</th><th>Meet</th><th>Distance</th><th class="num">Time</th><th class="num">Pace /mi</th><th class="num">Place</th><th class="num">Points</th><th class="num">5K equiv.</th><th class="num">vs last</th><th class="num">VDOT</th></tr></thead>
       <tbody>{% for x in o.rows|reverse %}{% set r = x.r %}
-        <tr><td class="nowrap">{{ r.date.strftime('%b %-d') }}</td><td>{{ r.meet }}{% if x.pr %} <span class="pill good">PR</span>{% elif x.sb %} <span class="pill">SB</span>{% endif %}</td><td>{{ x.label }}</td>
+        <tr><td class="nowrap">{{ r.date.strftime('%b %-d') }}</td><td>{{ r.meet }}{% if x.pr %} <span class="pill good">PR</span>{% elif x.cpr %} <span class="pill good">Course PR</span>{% elif x.sb %} <span class="pill">SB</span>{% endif %}</td><td>{{ x.label }}</td>
           <td class="num">{{ fmt_time(r.time_s) }}</td><td class="num">{{ fmt_time(x.pace)[:-2] }}</td><td class="num">{{ r.place or '–' }}</td><td class="num">{{ '%g' % r.points if r.points is not none else '–' }}</td>
           <td class="num">{{ fmt_time(x.eq) }}</td><td class="num {{ 'faster' if x.vs_prev is not none and x.vs_prev < 0 else ('slower' if x.vs_prev else '') }}">{% if x.vs_prev is not none %}{{ '−' if x.vs_prev < 0 else '+' }}{{ '%.1f' % (x.vs_prev|abs) }} s{% else %}–{% endif %}</td><td class="num">{{ x.vdot }}</td></tr>
       {% endfor %}</tbody>

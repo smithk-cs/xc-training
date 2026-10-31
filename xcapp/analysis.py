@@ -117,24 +117,35 @@ def race_history(races) -> dict:
     Distances within 1% count as the same."""
     def dist_key(r):
         return round(r.distance_m / 50)  # 50 m buckets: "5,000 Meters" and "5K" match, 4K and 5K don't
+    def course_key(r):
+        return ((r.course or r.meet or "").strip().lower(), dist_key(r))
     best: dict[int, float] = {}
     season_best: dict[tuple[str, int], float] = {}
+    course_best: dict[tuple, float] = {}
+    course_runs: dict[tuple, int] = {}
     for r in races:
-        k, s = dist_key(r), season_for(r.date)
+        k, s, ck = dist_key(r), season_for(r.date), course_key(r)
         best[k] = min(best.get(k, r.time_s), r.time_s)
         season_best[(s, k)] = min(season_best.get((s, k), r.time_s), r.time_s)
+        course_best[ck] = min(course_best.get(ck, r.time_s), r.time_s)
+        course_runs[ck] = course_runs.get(ck, 0) + 1
     seasons: dict[str, list[dict]] = {}
     for r in races:
-        s, k = season_for(r.date), dist_key(r)
-        seasons.setdefault(s, []).append({"r": r, "pr": r.time_s == best[k], "sb": r.time_s == season_best[(s, k)]})
+        s, k, ck = season_for(r.date), dist_key(r), course_key(r)
+        pr = r.time_s == best[k]
+        # Course PR: the best on this course at this distance, once it has been raced there more than once
+        cpr = not pr and course_runs[ck] > 1 and r.time_s == course_best[ck]
+        seasons.setdefault(s, []).append({"r": r, "pr": pr, "cpr": cpr, "sb": r.time_s == season_best[(s, k)]})
 
-    def compare(rows, label):
+    def compare(rows, label, by_course=False):
         rows = sorted(rows, key=lambda r: (r.date, r.id or 0))
         top = min(r.time_s for r in rows)
         out, prev = [], None
         for r in rows:
+            fastest = r.time_s == top
+            pr = fastest and r.time_s == best[dist_key(r)]
             out.append({"r": r, "vs_prev": None if prev is None else round(r.time_s - prev, 2), "vs_best": round(r.time_s - top, 2),
-                        "pr": r.time_s == top})
+                        "pr": pr, "cpr": by_course and fastest and not pr, "top": fastest})
             prev = r.time_s
         return {"label": label, "rows": out}
 
@@ -148,11 +159,20 @@ def race_history(races) -> dict:
     for (_, _k), rows in sorted(by_course.items(), key=lambda kv: -max(r.date for r in kv[1]).toordinal()):
         if len(rows) >= 2:
             newest = max(rows, key=lambda r: r.date)  # labels as written most recently
-            groups.append(compare(rows, f"{(newest.course or newest.meet).strip()} · {newest.distance_label} ({len(rows)} races)"))
+            groups.append(compare(rows, f"{(newest.course or newest.meet).strip()} · {newest.distance_label} ({len(rows)} races)", by_course=True))
     for _k, rows in sorted(by_distance.items(), key=lambda kv: -len(kv[1])):
         if len(rows) >= 2:
             groups.append(compare(rows, f"Every {max(rows, key=lambda r: r.date).distance_label} race ({len(rows)})"))
     return {"seasons": list(seasons.items()), "compare": groups}
+
+
+def race_marks(races) -> dict[int, str]:
+    """Race result id -> 'PR', 'Course PR', 'SB' or '' (as on the athlete's My races)."""
+    out = {}
+    for _season, rows in race_history(races)["seasons"]:
+        for x in rows:
+            out[x["r"].id] = "PR" if x["pr"] else "Course PR" if x["cpr"] else "SB" if x["sb"] else ""
+    return out
 
 
 def fmt_gap(seconds: float | None) -> str:

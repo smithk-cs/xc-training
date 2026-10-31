@@ -487,7 +487,7 @@ def create_app() -> FastAPI:
         group_names = [g.name for g in db.scalars(select(TrainingGroup).order_by(TrainingGroup.position)).all()]
         races = db.scalars(select(RaceResult).where(RaceResult.athlete_id == a.id).order_by(RaceResult.date.desc()).limit(30)).all()
         return render(request, "athlete_detail.html", user, a=a, experience_labels=A.EXPERIENCE_LABELS, acts=acts, results=results, run_pain=run_pain, races=races,
-                      adjusted=CS.adjusted_times(db, races),
+                      adjusted=CS.adjusted_times(db, races), marks=A.race_marks(db.scalars(select(RaceResult).where(RaceResult.athlete_id == a.id)).all()),
                       ability=ability, group_names=group_names, missed=missed, vo2=A.latest_vo2(db, a.id),
                       goal_v=A.goal_vdot(db, a.id, A.team_today()),
                       rhr=A.resting_hr(db, a.id, A.team_today()), photo_v=photo_versions(db).get(a.id),

@@ -61,7 +61,7 @@
 <div class="card">
   <h2>Races</h2>
   <div class="scroll"><table class="list"><thead><tr><th>Date</th><th>Meet</th><th>Race</th><th>Distance</th><th class="num">Place</th><th class="num">Time</th></tr></thead><tbody>
-  {% for r in races %}<tr><td>{{ r.date.strftime('%b %-d, %Y') }}</td><td><a href="/races">{{ r.meet }}</a></td><td>{{ r.race }}</td><td>{{ r.distance_label }}</td><td class="num">{{ r.place or '' }}</td><td class="num nowrap">{% set adj = adjusted.get(r.id) %}{% include "_race_time.html" %}</td></tr>{% endfor %}
+  {% for r in races %}<tr><td>{{ r.date.strftime('%b %-d, %Y') }}</td><td><a href="/races">{{ r.meet }}</a></td><td>{{ r.race }}</td><td>{{ r.distance_label }}</td><td class="num">{{ r.place or '' }}</td><td class="num nowrap">{% set adj = adjusted.get(r.id) %}{% include "_race_time.html" %}{% if marks.get(r.id) %}<br><span class="pill{% if marks[r.id] != 'SB' %} good{% endif %}">{{ marks[r.id] }}</span>{% endif %}</td></tr>{% endfor %}
   </tbody></table></div>
 </div>
 {% endif %}

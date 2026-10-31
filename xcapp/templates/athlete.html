@@ -254,12 +254,12 @@
           <span class="r"><span class="mi">{{ fmt_time(r.time_s) }}</span>
             <span class="small muted">{{ fmt_time((r.time_s / (r.distance_m / 1609.344))|round)[:-2] }}/mi</span>
             {% if adjusted.get(r.id) %}<span class="small adj" title="What this effort would be on a track at 55°F or cooler, at sea level, with a low dew point">Adj. {{ fmt_time(adjusted[r.id]) }}</span>{% endif %}
-            <span class="small muted">{% if x.pr %}<span class="pill good">PR</span> {% elif x.sb %}<span class="pill">SB</span> {% endif %}{% if r.place %}Place {{ r.place }}{% endif %}</span></span>
+            <span class="small muted">{% if x.pr %}<span class="pill good">PR</span> {% elif x.cpr %}<span class="pill good">Course PR</span> {% elif x.sb %}<span class="pill">SB</span> {% endif %}{% if r.place %}Place {{ r.place }}{% endif %}</span></span>
         </div></li>
         {% endfor %}
       </ul>
       {% endfor %}
-      <p class="muted small">PR = your best ever at that distance. SB = your best that season.</p>
+      <p class="muted small">PR = your best ever at that distance, on any course. Course PR = your best on that course at that distance (from your second race there). SB = your best that season.</p>
     </div>
     {% for g in history.compare %}
     <div class="race-view" id="rv-{{ loop.index }}" hidden>
@@ -269,9 +269,9 @@
         <tbody>
         {% for x in g.rows %}{% set r = x.r %}
           <tr><td><span class="nowrap">{{ r.date.strftime("%b %-d, %Y") }}</span><br><span class="small muted">{{ r.meet }}</span></td>
-            <td class="num nowrap"><b>{{ fmt_time(r.time_s) }}</b>{% if x.pr %}<br><span class="pill good">PR</span>{% endif %}</td>
+            <td class="num nowrap"><b>{{ fmt_time(r.time_s) }}</b>{% if x.pr %}<br><span class="pill good">PR</span>{% elif x.cpr %}<br><span class="pill good">Course PR</span>{% endif %}</td>
             <td class="num nowrap{% if x.vs_prev is not none and x.vs_prev < -0.05 %} faster{% elif x.vs_prev is not none and x.vs_prev > 0.05 %} slower{% endif %}">{{ fmt_gap(x.vs_prev) }}</td>
-            <td class="num nowrap">{{ '' if x.pr else fmt_gap(x.vs_best) }}</td></tr>
+            <td class="num nowrap">{{ '' if x.top else fmt_gap(x.vs_best) }}</td></tr>
         {% endfor %}
         </tbody>
       </table></div>

@@ -201,3 +201,16 @@ def test_vdot_popup_has_no_800_or_1600_targets():
     db.close()
     page = TestClient(create_app()).get("/a/t-vp").text
     assert "group-pop" in page and "800 target" not in page and "1600 target" not in page
+
+
+def test_pr_by_distance_and_course_pr_by_course():
+    import datetime as dt
+    from xcapp import analysis as A
+    from xcapp.models import RaceResult
+    mk = lambda i, day, course, t: RaceResult(id=i, athlete_id=1, date=dt.date(2026, 9, day), meet=course, course=course,   # noqa: E731
+                                             race="Boys Varsity", distance_m=5000, distance_label="5K", time_s=t)
+    races = [mk(1, 1, "Gibson Ranch", 1000), mk(2, 8, "Hilltop", 990), mk(3, 15, "Gibson Ranch", 995), mk(4, 22, "Willow Hill", 1010)]
+    marks = A.race_marks(races)
+    assert marks[2] == "PR"                      # fastest 5K anywhere
+    assert marks[3] == "Course PR"               # faster than before at Gibson Ranch, not a 5K PR
+    assert marks[1] == "" and marks[4] == ""     # slower at Gibson; a first visit to Willow Hill is no course record

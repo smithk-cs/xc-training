@@ -162,14 +162,17 @@ def _week_races(c: WeekCtx) -> list[RaceResult]:
         .order_by(RaceResult.date, RaceResult.meet, RaceResult.race)).all()
 
 
-def _bests(db: Session, r: RaceResult) -> tuple[float | None, float | None]:
-    """The athlete's best before this race at the same distance (within 1%): ever, and this season."""
-    prior = [(t, d) for t, m, d in db.execute(select(RaceResult.time_s, RaceResult.distance_m, RaceResult.date).where(
+def _bests(db: Session, r: RaceResult) -> tuple[float | None, float | None, float | None]:
+    """The athlete's best before this race at the same distance (within 1%): ever, this season, and on this course."""
+    place = lambda x: (x or "").strip().lower()   # noqa: E731
+    prior = [(t, d, place(c or mt)) for t, m, d, c, mt in db.execute(select(
+        RaceResult.time_s, RaceResult.distance_m, RaceResult.date, RaceResult.course, RaceResult.meet).where(
         RaceResult.athlete_id == r.athlete_id, RaceResult.date < r.date)).all() if abs(m - r.distance_m) <= r.distance_m * 0.01]
-    season = A.season_for(r.date)
-    ever = min((t for t, _ in prior), default=None)
-    this = min((t for t, d in prior if A.season_for(d) == season), default=None)
-    return ever, this
+    season, here = A.season_for(r.date), place(r.course or r.meet)
+    ever = min((t for t, _, _ in prior), default=None)
+    this = min((t for t, d, _ in prior if A.season_for(d) == season), default=None)
+    course = min((t for t, _, c in prior if c == here), default=None)
+    return ever, this, course
 
 
 def build_race_recap(c: WeekCtx) -> dict | None:
@@ -189,8 +192,9 @@ def build_race_recap(c: WeekCtx) -> dict | None:
         rows.sort(key=lambda r: (r.place is None, r.place or 0, r.time_s))
         runners = []
         for r in rows[:RECAP_TOP]:
-            ever, this = _bests(c.db, r)
-            mark = "PR" if ever is not None and r.time_s < ever else "SB" if this is not None and r.time_s < this else ""
+            ever, this, course = _bests(c.db, r)
+            mark = ("PR" if ever is not None and r.time_s < ever else "Course PR" if course is not None and r.time_s < course
+                    else "SB" if this is not None and r.time_s < this else "")
             runners.append({**_name(r.athlete), "time": round(r.time_s, 1), "place": r.place, "mark": mark})
         top5 = sorted(r.time_s for r in rows)[:5]
         out.append({
@@ -212,7 +216,7 @@ def build_race_recap(c: WeekCtx) -> dict | None:
 def build_prs(c: WeekCtx) -> dict | None:
     out = []
     for r in _week_races(c):
-        ever, _this = _bests(c.db, r)
+        ever, _this, _course = _bests(c.db, r)
         if ever is not None and r.time_s < ever:
             out.append({**_name(r.athlete), "distance": r.distance_label, "time": round(r.time_s, 1), "previous": round(ever, 1),
                         "meet": r.meet})

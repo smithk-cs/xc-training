@@ -37,7 +37,7 @@
         {% if r.split is not none or r.prs or r.last_year %}<p style="{{ small }} margin:0 0 8px;">{% if r.split is not none %}1–5 split {{ fmt_time(r.split) }} · top-5 average {{ fmt_time(r.top5_avg) }}{% endif %}{% if r.prs %} · {{ r.prs }} PR{{ '' if r.prs == 1 else 's' }}{% endif %}{% if r.last_year and r.last_year.place %} · last year: {{ ordinal(r.last_year.place) }}{% if r.last_year.teams %} of {{ r.last_year.teams }}{% endif %}{% endif %}</p>{% endif %}
         {% if r.finishers %}<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:10px;">{% for f in r.finishers %}<tr>
           <td width="40" style="{{ p }} margin:0; padding:3px 0; color:{{ muted }};">{{ f.place or '' }}</td><td style="{{ p }} margin:0; padding:3px 0;">{{ f.name }}</td>
-          <td align="right" style="{{ p }} margin:0; padding:3px 0;">{{ fmt_time(f.time) }}{% if f.mark %} <b style="color:{{ red if f.mark == 'PR' else muted }};">{{ f.mark }}</b>{% endif %}</td></tr>{% endfor %}</table>{% endif %}
+          <td align="right" style="{{ p }} margin:0; padding:3px 0;">{{ fmt_time(f.time) }}{% if f.mark %} <b style="color:{{ red if f.mark != 'SB' else muted }};">{{ f.mark }}</b>{% endif %}</td></tr>{% endfor %}</table>{% endif %}
       {% endfor %}
     {% elif s.key == 'prs' %}
       {% for x in d.prs %}<p style="{{ p }}"><b>{{ x.name }}</b>: {{ x.distance }} in {{ fmt_time(x.time) }} at {{ x.meet }} <span style="{{ small }}">(previous best {{ fmt_time(x.previous) }})</span></p>{% endfor %}
