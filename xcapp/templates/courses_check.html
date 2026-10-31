@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}Course check · {{ team_name }}{% endblock %}
+{% block content %}
+{% macro pct(x) %}{% if x is none %}–{% else %}{{ '+' if x >= 0 else '−' }}{{ '%.1f' % (x|abs) }}%{% endif %}{% endmacro %}
+<p><a href="/courses">‹ Courses</a></p>
+<div class="form-row title-row" style="margin-bottom:6px"><h1 style="margin:0">How hard was each race?</h1>
+  <form method="get" action="/courses/check" class="inline"><label class="small">Season <select name="season" onchange="this.form.submit()">{% for s in seasons %}<option{% if s == season %} selected{% endif %}>{{ s }}</option>{% endfor %}</select></label></form></div>
+<p class="muted" style="max-width:92ch">Each runner’s track benchmark (their best VDOT from the meets ticked below) predicts what they’d run at any distance on a flat track at 55°F or cooler, at sea level. A race’s <b>difficulty</b> is how much slower than that our runners actually ran (the median, so one great or bad day doesn’t decide it). The app’s <b>estimate</b> is what its course and weather settings account for. The <b>gap</b> between them is what’s left unexplained: if it stays near zero across races, adjusted times line up with track fitness.</p>
+
+<details class="card fold-card"{% if not rep.benches %} open{% endif %}><summary><h2>Benchmark meets ({{ keys|length }} ticked, {{ rep.benches|length }} runners)</h2></summary>
+  {% if user.role != 'trainer' %}<form method="post" action="/courses/check/benchmarks">
+    <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="season" value="{{ season }}">
+    <p class="small muted">Tick the track meets to measure against (mile to 2 mile, such as the Grizzly 3200). Each runner’s best VDOT from these is their benchmark. Meets with “track”, 1600 or 3200 in the name are ticked to start.</p>
+    {% for c in choices %}<label class="check" style="display:block"><input type="checkbox" name="bench" value="{{ c.key }}"{% if c.key in keys %} checked{% endif %}> {{ c.label }} <span class="small muted">{{ c.date.strftime('%b %-d, %Y') }} · {{ c.event }} · {{ c.n }} runner{{ '' if c.n == 1 else 's' }}</span></label>
+    {% else %}<p class="muted">No mile to 2-mile results yet. Import track results on the Races page or the Goals page.</p>{% endfor %}
+    {% if choices %}<button type="submit" style="margin-top:8px">Save benchmark meets</button>{% endif %}
+  </form>{% endif %}
+</details>
+
+{% if not rep.benches %}<p class="notice"><span>No runners have a ticked benchmark yet, so there’s nothing to compare.</span></p>{% else %}
+<div class="card scroll">
+  <h2>Courses</h2>
+  <p class="small muted">The course seconds per mile that would make each runner’s adjusted time equal their benchmark prediction, after taking out that day’s heat, humidity and altitude. Middle half of runners in brackets. A new setting is suggested from {{ K.MIN_RESULTS }} results, blended with the current one until there are plenty (weight = results ÷ (results + {{ K.BLEND_K }})).</p>
+  <table class="list compact centered"><thead><tr><th>Course</th><th>Results</th><th>Measured</th><th>Current setting</th><th>Suggested</th><th></th></tr></thead><tbody>
+  {% for c in rep.courses %}<tr><td><b>{{ c.course.name }}</b></td><td>{{ c.n }} <span class="small muted">({{ c.races }} race{{ '' if c.races == 1 else 's' }})</span></td>
+    <td class="nowrap">{{ '%+.0f' % c.implied }} s/mi<br><span class="small muted">({{ '%+.0f' % c.q1 }} to {{ '%+.0f' % c.q3 }})</span></td>
+    <td>{{ '%g' % c.current }} s/mi</td>
+    <td>{% if c.suggested is not none %}<b>{{ c.suggested }} s/mi</b><br><span class="small muted">{{ '%.0f' % (100 * c.weight) }}% measured</span>{% else %}<span class="small muted">needs {{ K.MIN_RESULTS }} results</span>{% endif %}</td>
+    <td>{% if c.suggested is not none and c.suggested != c.current and user.role != 'trainer' %}<form method="post" action="/courses/{{ c.course.id }}/use-suggested" class="inline" onsubmit="return confirm('Set {{ c.course.name }} to {{ c.suggested }} s/mile? Adjusted times change everywhere.')"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="season" value="{{ season }}"><button type="submit" class="secondary">Use {{ c.suggested }}</button></form>{% endif %}</td></tr>
+  {% else %}<tr><td colspan="6" class="muted">No results on saved courses with a benchmarked runner this season.</td></tr>{% endfor %}
+  </tbody></table>
+</div>
+
+<div class="card scroll">
+  <h2>Races</h2>
+  <p class="small muted">Difficulty: how much slower than track fitness our runners ran (median; middle half in brackets). Estimate: what the app’s course and weather settings explain. A positive gap means the race was harder than the app thinks; negative, easier.</p>
+  <table class="list compact centered"><thead><tr><th>Race</th><th>Runners</th><th>Difficulty</th><th>App’s estimate</th><th>Gap</th><th>Weather and altitude</th></tr></thead><tbody>
+  {% for r in rep.races %}<tr><td><b>{{ r.meet }}</b><br><span class="small muted">{{ r.date.strftime('%b %-d') }} · {{ r.race }} · {{ r.distance }}{% if r.course %} · {{ r.course.name }}{% else %} · <i>no saved course</i>{% endif %}</span></td>
+    <td>{{ r.n }}{% if r.set_aside %} <span class="small muted">(+{{ r.set_aside }} set aside)</span>{% endif %}</td>
+    <td class="nowrap"><b>{{ pct(r.observed) }}</b><br><span class="small muted">({{ pct(r.q1) }} to {{ pct(r.q3) }})</span></td>
+    <td>{{ pct(r.model) }}</td>
+    <td class="{% if r.model is not none and (r.observed - r.model)|abs >= 3 %}pace-warn{% endif %}">{{ pct(r.observed - r.model) if r.model is not none else '–' }}</td>
+    <td>{{ pct(r.cond_pct) if r.cond_pct else '0%' }}</td></tr>
+  {% endfor %}
+  </tbody></table>
+</div>
+
+<details class="card fold-card"><summary><h2>Every runner ({{ rep.rows|length }} results)</h2></summary>
+  <p class="small muted">Runners race faster or slower than their benchmark on any day, and fitness changes between the benchmark and the race (days apart shown), which is why the course and race figures use the median. Results more than {{ K.OUTLIER_PCT|int }}% off are set aside.</p>
+  <div class="scroll"><table class="list compact centered sortable"><thead><tr><th>Athlete</th><th>Benchmark</th><th>Race</th><th>Time</th><th>Track prediction</th><th>Adjusted</th><th>Difficulty</th><th>Gap</th></tr></thead><tbody>
+  {% for x in rep.rows|sort(attribute='r.date', reverse=True) %}<tr{% if x.outlier %} class="muted"{% endif %}>
+    <td data-sort="{{ x.athlete.last_name }}">{{ x.athlete.name }}</td>
+    <td class="small">{{ fmt_time(x.bench.time) }} {{ x.bench.event }}<br><span class="muted">VDOT {{ '%.1f' % x.bench.vdot }}, {{ x.bench.label|truncate(24) }}</span></td>
+    <td class="small">{{ x.r.meet }}<br><span class="muted">{{ x.r.date.strftime('%b %-d') }} · {{ x.r.distance_label }} · {{ x.days|abs }} days {{ 'after' if x.days >= 0 else 'before' }}</span></td>
+    <td>{{ fmt_time(x.r.time_s) }}</td><td>{{ fmt_time(x.pred) }}</td><td>{{ fmt_time(x.adjusted) if x.adjusted else '–' }}</td>
+    <td data-sort="{{ x.observed }}">{{ pct(x.observed) }}</td><td data-sort="{{ x.gap if x.gap is not none else 0 }}">{{ pct(x.gap) }}{% if x.outlier %}<br><span class="small">set aside</span>{% endif %}</td></tr>
+  {% endfor %}
+  </tbody></table></div>
+</details>
+{% endif %}
+
+<div class="card">
+  <h2>How it works</h2>
+  <ul class="small">
+    <li><b>Benchmark to prediction:</b> Daniels and Gilbert’s oxygen-cost and endurance equations (the VDOT tables in <i>Daniels’ Running Formula</i>) turn a track time into a VDOT, and a VDOT into a predicted time at any distance, so a 3200 can be compared with a 5K or 3 miles.</li>
+    <li><b>Weather and altitude:</b> heat at about 0.15% per °F above 55°F and altitude from Daniels’ Tables 6.1 and 6.2; dew point tiers are the app’s starting values. Pressure is recorded for reference only.</li>
+    <li><b>Course:</b> the rest of the slowdown, in seconds per mile. Published lab studies put soft sand at about 50% more energy than grass and uneven ground at about 5% more than smooth, so measured values from your own runners are the better guide.</li>
+    <li><b>Variation:</b> medians, the middle-50% spread, results more than {{ K.OUTLIER_PCT|int }}% off set aside, at least {{ K.MIN_RESULTS }} results before suggesting a setting, and blending with the current setting. This is the same idea results-based course ratings use: compare many runners’ times on a course with what they run elsewhere.</li>
+  </ul>
+</div>
+{% endblock %}

@@ -128,14 +128,17 @@ def explain(course: Course | None, cond: MeetConditions | None) -> str:
 
 def adjusted_times(db, races) -> dict[int, float | None]:
     """Race result id -> its time on a track at 55°F or cooler, sea level and a low dew point, from that day's
-    conditions and the course (the one on the conditions, else the course named in the results)."""
+    conditions and its course (see weather.result_course)."""
     from sqlalchemy import select
-    from .models import Course as _Course, MeetConditions as _Cond
-    by_name = {c.name.strip().lower(): c for c in db.scalars(select(_Course)).all()}
+    from .models import MeetConditions as _Cond
+    from .weather import result_course
     conds = {(c.meet, c.date): c for c in db.scalars(select(_Cond)).all()}
+    found: dict[tuple, Course | None] = {}
     out = {}
     for r in races:
         cond = conds.get((r.meet, r.date))
-        course = cond.course if cond and cond.course else by_name.get((r.course or "").strip().lower())
-        out[r.id] = adjusted_time(r.time_s, r.distance_m, course, cond)
+        key = (r.meet, r.date, r.course)
+        if key not in found:
+            found[key] = result_course(db, r.meet, r.date, r.course, cond)
+        out[r.id] = adjusted_time(r.time_s, r.distance_m, found[key], cond)
     return out

@@ -161,6 +161,15 @@ def course_named(db: Session, *names: str) -> Course | None:
     return None
 
 
+def result_course(db: Session, meet: str, day: dt.date, course_name: str = "", cond: MeetConditions | None = None) -> Course | None:
+    """The course a race was run on: the one on its race-day conditions, else the course named in the results, else
+    the course of its meet on the Entries page, else a saved course named in the meet's name."""
+    if cond is not None and cond.course is not None:
+        return cond.course
+    entry = entry_for(db, meet, day)
+    return course_named(db, course_name) or (course_for(db, entry) if entry else None) or course_named(db, meet)
+
+
 def fill_conditions(db: Session, http: httpx.Client, today: dt.date, days: int = FILL_DAYS) -> int:
     """For races with results in the past `days`, fill in race-day temperature, dew point, humidity and wind from the
     weather at the meet's start time (9:00 when unknown). Only empty fields are filled: anything a coach entered stays."""
@@ -173,8 +182,7 @@ def fill_conditions(db: Session, http: httpx.Client, today: dt.date, days: int =
         if cond is not None and None not in (cond.temp_f, cond.dew_point_f, cond.wind_mph, cond.pressure_inhg):
             continue
         entry = entry_for(db, meet, day)
-        course = (cond.course if cond and cond.course else None) or (course_for(db, entry) if entry else None) or \
-            course_named(db, course_name, meet)
+        course = result_course(db, meet, day, course_name, cond)
         if course is None or course.latitude is None or course.longitude is None:
             continue
         hh, _mm = start_hour(entry)

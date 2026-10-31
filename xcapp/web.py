@@ -10,7 +10,7 @@ import threading
 import time
 from collections import defaultdict, deque
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response
@@ -776,12 +776,11 @@ def create_app() -> FastAPI:
                 meets.setdefault((r.date, r.meet, r.course), {}).setdefault((r.race, r.distance_label, r.distance_m), []).append(r)
         counts = {x: len({(r.date, r.meet) for r in rows if A.season_for(r.date) == x}) for x in seasons}
         courses = db.scalars(select(Course).order_by(Course.name)).all()
-        by_name = {c.name.strip().lower(): c for c in courses}
         conds = {(c.meet, c.date): c for c in db.scalars(select(MeetConditions)).all()}
         info = {}   # per meet: its conditions, its course (chosen, or matched by name) and adjusted times
         for (d, meet, course), races in meets.items():
             cond = conds.get((meet, d))
-            c = cond.course if cond and cond.course else by_name.get((course or "").strip().lower())
+            c = WX.result_course(db, meet, d, course or "", cond)
             info[(d, meet)] = {"cond": cond, "course": c, "explain": CS.explain(c, cond),
                                "adjusted": {r.id: CS.adjusted_time(r.time_s, r.distance_m, c, cond) for rs in races.values() for r in rs}}
         teams = {(t.date, t.meet, t.race): t for t in db.scalars(select(RaceTeamResult)).all()}
@@ -2055,6 +2054,42 @@ def create_app() -> FastAPI:
                            f"{out['race_conditions']} race{'' if out['race_conditions'] == 1 else 's'} filled in.")
         nxt = str(f.get("next", "/races"))
         return back(nxt if nxt.startswith("/") and not nxt.startswith("//") else "/races")
+
+    @app.get("/courses/check", response_class=HTMLResponse)
+    def courses_check(request: Request, user=Depends(any_staff, scope="function"), db: Session = Depends(get_db, scope="function")):
+        """How hard each race and course was against the runners' own track benchmarks, and suggested course settings."""
+        from . import calibration as K
+        seasons = sorted({A.season_for(d) for (d,) in db.execute(select(RaceResult.date).distinct()).all()}, reverse=True)
+        season = request.query_params.get("season") or next((x for x in seasons if x.endswith("XC")), A.season_for(A.team_today()))
+        keys = K.chosen(db)
+        rep = K.report(db, season, keys)
+        return render(request, "courses_check.html", user, rep=rep, seasons=seasons, season=season, choices=K.bench_choices(db),
+                      keys=set(keys), K=K)
+
+    @app.post("/courses/check/benchmarks")
+    async def courses_check_benchmarks(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
+        import json
+        from . import calibration as K
+        f = await form_checked(request)
+        A.set_setting(db, K.SETTING_KEY, json.dumps(sorted(str(x) for x in f.getlist("bench"))))
+        flash(request, "Benchmark meets saved.")
+        return back(f"/courses/check?season={quote(str(f.get('season', '')))}")
+
+    @app.post("/courses/{cid}/use-suggested")
+    async def course_use_suggested(request: Request, cid: int, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
+        from . import calibration as K
+        f = await form_checked(request)
+        c = db.get(Course, cid)
+        season = str(f.get("season", ""))
+        sug = next((x["suggested"] for x in K.report(db, season, K.chosen(db)).courses if x["course"].id == cid), None) if c else None
+        if c is None or sug is None:
+            flash(request, "There isn’t a suggestion for that course yet.", "error")
+        else:
+            old = CS.course_seconds(c)
+            c.adjust_s_per_mile = float(sug)
+            log(db, "courses", f"{user.username} set {c.name} to {sug:g} s/mile (was {old:g}) from the benchmark check, {season}.")
+            flash(request, f"{c.name} now adds {sug:g} s/mile (was {old:g}). Adjusted times update everywhere.")
+        return back(f"/courses/check?season={quote(season)}")
 
     @app.post("/courses/{cid}/locate")
     async def course_locate(request: Request, cid: int, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):

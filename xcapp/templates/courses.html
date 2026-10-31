@@ -1,7 +1,8 @@
 {% extends "base.html" %}
 {% block title %}Courses · {{ team_name }}{% endblock %}
 {% block content %}
-<h1>Courses</h1>
+<div class="form-row title-row" style="justify-content:space-between; margin-bottom:6px"><h1 style="margin:0">Courses</h1>
+  <a class="button secondary" href="/courses/check">How hard was each race? Check against track benchmarks</a></div>
 <p class="muted" style="max-width:88ch">General information about each course, entered once. Athletes see a Course video button on their upcoming meets when the meet’s course has a video. Race-day conditions (temperature, dew point, wind, footing) go on each meet on the <a href="/races">Races</a> page after the event. Together they turn each time into what it would be on a track at 55°F or cooler, at sea level, with a low dew point, so times on different courses and days compare like for like.</p>
 
 <div class="card scroll">
