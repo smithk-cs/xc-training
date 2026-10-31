@@ -21,6 +21,7 @@
     <div class="form-row">
       <label style="flex:1">Meet<input type="text" name="name" maxlength="120" required placeholder="Clovis Invitational"></label>
       <label>Date<input type="date" name="date" value="{{ today }}" required></label>
+      <label>First race starts (about)<input type="time" name="start_time" value="09:00" style="width:8em" title="For the weather forecast and race-day weather; change it any time on the meet’s page"></label>
       {% with m=None %}{% include "_meet_location.html" %}{% endwith %}
     </div>
     <div class="form-row">

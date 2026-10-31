@@ -139,3 +139,22 @@ def test_meet_location_is_a_saved_course_or_a_place():
     m = db.get(MeetEntry, mid)
     assert (m.course_id, m.location) == (None, "Woodward Park, Fresno")
     db.close()
+
+
+def test_new_meet_takes_a_start_time():
+    db = SessionLocal()
+    db.add(StaffUser(username="coach3", role="coach", password_hash=hash_password("correct-horse-1")))
+    db.commit()
+    db.close()
+    from xcapp.web import create_app
+    cl = TestClient(create_app(), follow_redirects=False)
+    csrf = re.search(r'name="csrf" value="([^"]+)"', cl.get("/login").text).group(1)
+    cl.post("/login", data={"csrf": csrf, "username": "coach3", "password": "correct-horse-1"})
+    page = cl.get("/registrations").text
+    assert 'name="start_time" value="09:00"' in page
+    csrf = re.search(r'name="csrf" value="([^"]+)"', page).group(1)
+    r = cl.post("/registrations", data={"csrf": csrf, "name": "Early Bird", "date": (TODAY + dt.timedelta(days=5)).isoformat(),
+                                        "course_id": "", "location": "Folsom", "start_time": "08:15"})
+    db = SessionLocal()
+    assert db.get(MeetEntry, int(r.headers["location"].rsplit("/", 1)[-1])).start_time == "08:15"
+    db.close()
