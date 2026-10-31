@@ -67,8 +67,7 @@
 </div>
 {% if user.role != 'trainer' %}
 <div class="grid">
-<div class="card">
-  <h2>Add an athlete</h2>
+<details class="card fold-card" id="add-athlete"><summary><h2>Add an athlete</h2></summary>
   <form method="post" action="/athletes">
     <input type="hidden" name="csrf" value="{{ csrf }}">
     <div class="form-row">
@@ -82,15 +81,14 @@
     </div>
     <button type="submit">Add athlete</button>
   </form>
-</div>
-<div class="card">
-  <h2>Import a roster</h2>
+</details>
+<details class="card fold-card" id="import-roster"><summary><h2>Import a roster</h2></summary>
   <p class="small muted">CSV with columns <code>name, gender, grade</code> and optionally <code>class, email, hr_max, hr_rest</code>. Names can be <code>First Last</code> or <code>Last, First</code>; grade can be 9–12 or Fr/So/Jr/Sr. Gender is Boys or Girls; class is the graduation year (otherwise worked out from the grade). Athletes already on the roster are updated, but only in the columns the file fills in.</p>
   <form method="post" action="/athletes/import" enctype="multipart/form-data">
     <input type="hidden" name="csrf" value="{{ csrf }}">
     <div class="form-row"><input type="file" name="file" accept=".csv,text/csv" required><button type="submit">Import</button></div>
   </form>
-</div>
+</details>
 </div>
 {% endif %}
 <script>
