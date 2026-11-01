@@ -724,3 +724,21 @@ class CalendarEvent(Base):
     skip_dates: Mapped[str] = mapped_column(Text, default="")            # cancelled days, "2026-11-26,2026-11-27"
     created_by: Mapped[str] = mapped_column(String(80), default="")
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class RaceWeather(Base):
+    """One race's start time and the weather at that time (from Open-Meteo), when races at a meet start at different
+    times. It takes the place of the meet's race-day temperature, humidity and wind for that race's adjusted times."""
+    __tablename__ = "race_weather"
+    __table_args__ = (UniqueConstraint("meet", "date", "race"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    meet: Mapped[str] = mapped_column(String(160))
+    date: Mapped[dt.date] = mapped_column(Date, index=True)
+    race: Mapped[str] = mapped_column(String(120), default="")
+    start_time: Mapped[str] = mapped_column(String(5), default="")      # "HH:MM"
+    temp_f: Mapped[float | None] = mapped_column(Float, nullable=True)
+    dew_point_f: Mapped[float | None] = mapped_column(Float, nullable=True)
+    humidity_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
+    wind_mph: Mapped[float | None] = mapped_column(Float, nullable=True)
+    pressure_inhg: Mapped[float | None] = mapped_column(Float, nullable=True)
+    fetched_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)

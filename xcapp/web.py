@@ -42,7 +42,7 @@ from .fitfile import MAX_FITS_PER_UPLOAD, MAX_UPLOAD_BYTES, FitError, fit_files,
 from .imports import (GROUPS, ImportErrors, clean_email, clean_phone, import_goals, import_races, import_results, import_roster,
                       import_vdots, parse_date, parse_distance, set_goal, sync_benchmark)
 from .ingest import ingest, log, rematch_day
-from .models import (Activity, AiRun, AppSetting, Athlete, CaptainPost, DeletionRequest, GarminConnection, Injury, MissedDay,
+from .models import (Activity, AiRun, AppSetting, Athlete, CaptainPost, RaceWeather, DeletionRequest, GarminConnection, Injury, MissedDay,
                      OAuthState, PainReport, PlannedWorkout, RaceResult, RestingHeartRate, Result, StaffUser, AthletePhoto,
                      MeetEntry, MeetDivision, MeetResponse, DivisionAthlete, SyncLog, TrainingGroup, VdotChange, Announcement, utcnow,
                      Course, MeetConditions, RaceTeamResult)
@@ -789,12 +789,14 @@ def create_app() -> FastAPI:
         counts = {x: len({(r.date, r.meet) for r in rows if A.season_for(r.date) == x}) for x in seasons}
         courses = db.scalars(select(Course).order_by(Course.name)).all()
         conds = {(c.meet, c.date): c for c in db.scalars(select(MeetConditions)).all()}
+        own = WX.race_weather(db)   # races with their own start time and weather
         info = {}   # per meet: its conditions, its course (chosen, or matched by name) and adjusted times
         for (d, meet, course), races in meets.items():
             cond = conds.get((meet, d))
             c = WX.result_course(db, meet, d, course or "", cond)
             info[(d, meet)] = {"cond": cond, "course": c, "explain": CS.explain(c, cond),
-                               "adjusted": {r.id: CS.adjusted_time(r.time_s, r.distance_m, c, cond) for rs in races.values() for r in rs}}
+                               "adjusted": {r.id: CS.adjusted_time(r.time_s, r.distance_m, c, WX.merged(cond, own.get((meet, d, r.race))))
+                                            for rs in races.values() for r in rs}}
         teams = {(t.date, t.meet, t.race): t for t in db.scalars(select(RaceTeamResult)).all()}
         suggested = {}   # a team score from the runners' points, when the results have them: the top five scorers
         for (d, meet, course), races in meets.items():
@@ -804,7 +806,7 @@ def create_app() -> FastAPI:
                     suggested[(d, meet, race)] = sum(pts[:5])
         season_teams = sorted((t for t in teams.values() if season in ("all", A.season_for(t.date)) and (t.place or t.points is not None)),
                               key=lambda t: (t.date, t.meet, t.race), reverse=True)
-        return render(request, "races.html", user, meets=meets, seasons=seasons, season=season, counts=counts,
+        return render(request, "races.html", user, own=own, meets=meets, seasons=seasons, season=season, counts=counts,
                       info=info, courses=courses, footings=[f for f in CS.FOOTING if f], teams=teams, suggested=suggested,
                       season_teams=season_teams)
 
@@ -999,13 +1001,36 @@ def create_app() -> FastAPI:
         for r in rows:
             r.race, r.distance_label, r.distance_m = race, A.km_label(label, meters), meters
             sync_benchmark(db, r)
+        # The race's start time: its own historical weather is looked up at that time
+        start = str(f.get("start_time", "")).strip()[:5]
+        if start and not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", start):
+            flash(request, "Start time looks like 13:20.", "error")
+            return back(races_url(d))
+        rw = db.scalar(select(RaceWeather).where(RaceWeather.meet == meet, RaceWeather.date == d, RaceWeather.race == old_race))
+        weather_note = ""
+        if start:
+            if rw is None:
+                rw = RaceWeather(meet=meet, date=d, race=race)
+                db.add(rw)
+            if rw.start_time != start or rw.race != race or rw.temp_f is None:
+                rw.race, rw.start_time = race, start
+                rw.temp_f = None
+                try:
+                    with WX.make_client() as http:
+                        got = WX.fill_race(db, http, rw, A.team_today(), rows[0].course if rows else "")
+                    weather_note = (f" Weather at {A.fmt_clock(start)}: {rw.temp_f:.0f}°F, dew point {rw.dew_point_f:.0f}°F." if got and rw.temp_f is not None
+                                    else " Its weather fills in once the course has a map location (Courses page).")
+                except WX.WeatherError:
+                    weather_note = " The weather couldn’t be fetched right now; it will be tried again tonight."
+        elif rw is not None:
+            db.delete(rw)
         if race != old_race:
             team = db.scalar(select(RaceTeamResult).where(RaceTeamResult.date == d, RaceTeamResult.meet == meet, RaceTeamResult.race == old_race))
             if team is not None:
                 team.race = race
         log(db, "admin", f"{user.username} edited {meet} {old_race}: {old_m:g} m → {label}.")
         flash(request, f"Saved {race or 'the race'} at {label} ({len(rows)} results)." +
-              (" These times now count toward VDOT." if rows and rows[0].result_id else ""))
+              (" These times now count toward VDOT." if rows and rows[0].result_id else "") + weather_note)
         return back(races_url(d))
 
     @app.post("/races/team")

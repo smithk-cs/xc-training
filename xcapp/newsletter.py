@@ -186,6 +186,10 @@ def build_race_recap(c: WeekCtx) -> dict | None:
     for (day, meet, race), rows in groups.items():
         team = c.db.scalar(select(RaceTeamResult).where(RaceTeamResult.meet == meet, RaceTeamResult.date == day, RaceTeamResult.race == race))
         cond = c.db.scalar(select(MeetConditions).where(MeetConditions.meet == meet, MeetConditions.date == day))
+        from .models import RaceWeather
+        from .weather import merged
+        own = c.db.scalar(select(RaceWeather).where(RaceWeather.meet == meet, RaceWeather.date == day, RaceWeather.race == race))
+        weather = merged(cond, own)   # the race's own weather at its start time, when it has one
         last = [t for t in c.db.scalars(select(RaceTeamResult).where(RaceTeamResult.date >= day - dt.timedelta(days=400),
                                                                      RaceTeamResult.date <= day - dt.timedelta(days=300))).all()
                 if _same_meet(t.meet, meet) and t.race == race]
@@ -202,8 +206,8 @@ def build_race_recap(c: WeekCtx) -> dict | None:
             "distance": rows[0].distance_label,
             "team_place": team.place if team else None, "teams": team.teams if team else None,
             "team_points": team.points if team else None,
-            "conditions": None if cond is None else {"temp_f": cond.temp_f, "dew_point_f": cond.dew_point_f, "footing": cond.footing,
-                                                     "wind_mph": cond.wind_mph},
+            "conditions": None if weather is None else {"temp_f": weather.temp_f, "dew_point_f": weather.dew_point_f,
+                                                        "footing": weather.footing, "wind_mph": weather.wind_mph},
             "runners": len(rows), "prs": sum(1 for x in runners if x["mark"] == "PR"),
             "split": round(top5[-1] - top5[0], 1) if len(top5) == 5 else None,
             "top5_avg": round(sum(top5) / 5, 1) if len(top5) == 5 else None,

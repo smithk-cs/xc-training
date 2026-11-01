@@ -131,8 +131,9 @@ def adjusted_times(db, races) -> dict[int, float | None]:
     conditions and its course (see weather.result_course)."""
     from sqlalchemy import select
     from .models import MeetConditions as _Cond
-    from .weather import result_course
+    from .weather import merged, race_weather, result_course
     conds = {(c.meet, c.date): c for c in db.scalars(select(_Cond)).all()}
+    own = race_weather(db)
     found: dict[tuple, Course | None] = {}
     out = {}
     for r in races:
@@ -140,5 +141,5 @@ def adjusted_times(db, races) -> dict[int, float | None]:
         key = (r.meet, r.date, r.course)
         if key not in found:
             found[key] = result_course(db, r.meet, r.date, r.course, cond)
-        out[r.id] = adjusted_time(r.time_s, r.distance_m, found[key], cond)
+        out[r.id] = adjusted_time(r.time_s, r.distance_m, found[key], merged(cond, own.get((r.meet, r.date, r.race))))
     return out

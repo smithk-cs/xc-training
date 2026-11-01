@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from . import analysis as A
 from .config import settings
 from .ingest import log
-from .models import Course, MeetConditions, MeetEntry, MeetForecast, RaceResult, utcnow
+from .models import Course, MeetConditions, MeetEntry, MeetForecast, RaceResult, RaceWeather, utcnow
 
 FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
 ARCHIVE_URL = "https://archive-api.open-meteo.com/v1/archive"
@@ -176,7 +176,7 @@ def fill_conditions(db: Session, http: httpx.Client, today: dt.date, days: int =
     n = 0
     since = today - dt.timedelta(days=days)
     raced = db.execute(select(RaceResult.meet, RaceResult.date, func.max(RaceResult.course)).where(
-        RaceResult.date >= since, RaceResult.date < today).group_by(RaceResult.meet, RaceResult.date)).all()
+        RaceResult.date >= since, RaceResult.date <= today).group_by(RaceResult.meet, RaceResult.date)).all()
     for meet, day, course_name in raced:
         cond = db.scalar(select(MeetConditions).where(MeetConditions.meet == meet, MeetConditions.date == day))
         if cond is not None and None not in (cond.temp_f, cond.dew_point_f, cond.wind_mph, cond.pressure_inhg):
@@ -201,7 +201,46 @@ def fill_conditions(db: Session, http: httpx.Client, today: dt.date, days: int =
         if note not in (cond.notes or ""):
             cond.notes = ((cond.notes or "") + " " + note).strip()
         n += 1
+    # races with their own start time
+    for rw in db.scalars(select(RaceWeather).where(RaceWeather.date >= since, RaceWeather.date <= today, RaceWeather.temp_f.is_(None),
+                                                   RaceWeather.start_time != "")).all():
+        name = db.scalar(select(RaceResult.course).where(RaceResult.meet == rw.meet, RaceResult.date == rw.date,
+                                                         RaceResult.race == rw.race).limit(1)) or ""
+        n += fill_race(db, http, rw, today, name)
     return n
+
+
+FIELDS = ("temp_f", "dew_point_f", "humidity_pct", "wind_mph", "pressure_inhg")
+
+
+def race_weather(db: Session) -> dict[tuple, RaceWeather]:
+    """(meet, date, race) -> that race's own start time and weather."""
+    return {(w.meet, w.date, w.race): w for w in db.scalars(select(RaceWeather)).all()}
+
+
+def merged(cond: MeetConditions | None, rw: RaceWeather | None):
+    """The conditions a race's adjusted times use: its own weather at its start time when known, with the meet's
+    footing and course; otherwise the meet's race-day conditions."""
+    if rw is None or rw.temp_f is None:
+        return cond
+    from types import SimpleNamespace
+    return SimpleNamespace(**{f: getattr(rw, f) for f in FIELDS}, footing=cond.footing if cond else "",
+                           course=cond.course if cond else None, notes=cond.notes if cond else "")
+
+
+def fill_race(db: Session, http: httpx.Client, rw: RaceWeather, today: dt.date, course_name: str = "") -> bool:
+    """Fetch the weather at one race's start time. False when its course has no map location or there's no data."""
+    cond = db.scalar(select(MeetConditions).where(MeetConditions.meet == rw.meet, MeetConditions.date == rw.date))
+    course = result_course(db, rw.meet, rw.date, course_name, cond)
+    if course is None or course.latitude is None or course.longitude is None or not rw.start_time:
+        return False
+    w = at(http, course.latitude, course.longitude, rw.date, int(rw.start_time.split(":")[0]), today)
+    if w is None:
+        return False
+    for f in FIELDS:
+        setattr(rw, f, w[f])
+    rw.fetched_at = utcnow()
+    return True
 
 
 def fill_now(db: Session, days: int = FILL_DAYS, http: httpx.Client | None = None) -> str:

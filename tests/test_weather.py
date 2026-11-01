@@ -3,6 +3,7 @@ import datetime as dt
 import re
 
 import httpx
+import pytest
 from fastapi.testclient import TestClient
 
 from xcapp import analysis as A
@@ -188,3 +189,48 @@ def test_results_import_fills_race_day_weather_by_meet_name_and_date(monkeypatch
     cond = db.query(MeetConditions).one()
     assert cond.temp_f == 58 and cond.dew_point_f == 45 and "08:00" in cond.notes   # the meet's start time, by matching names
     db.close()
+
+
+def test_each_race_gets_the_weather_at_its_own_start_time(monkeypatch):
+    from xcapp import courses as C
+    from xcapp.models import RaceWeather
+    calls = []
+    monkeypatch.setattr(WX, "make_client", lambda: fake_service(calls))    # temperature = 50 + the hour
+    db = SessionLocal()
+    db.add(StaffUser(username="coach5", role="coach", password_hash=hash_password("correct-horse-1")))
+    db.add(Course(name="William Jessup", location="Rocklin", latitude=38.82, longitude=-121.25))
+    for n in ("Matt Ogle", "Al Heck"):
+        f, l = n.split()
+        db.add(Athlete(first_name=f, last_name=l, gender="Boys", grade=12, group="Varsity", link_token=f"t-{l}"))
+    db.commit()
+    db.close()
+    day = TODAY - dt.timedelta(days=1)
+    from xcapp.web import create_app
+    cl = TestClient(create_app(), follow_redirects=False)
+    csrf = re.search(r'name="csrf" value="([^"]+)"', cl.get("/login").text).group(1)
+    cl.post("/login", data={"csrf": csrf, "username": "coach5", "password": "correct-horse-1"})
+    csrf = re.search(r'name="csrf" value="([^"]+)"', cl.get("/races").text).group(1)
+    csv = ("meet,date,course,race,distance,athlete,time,start_time\n"
+           f"SFL League Championships,{day},William Jessup,Boys Varsity,3 Miles,Matt Ogle,14:55.8,12:30\n"
+           f"SFL League Championships,{day},William Jessup,Boys JV,2 Miles,Al Heck,10:37.5,1:20 PM\n")
+    cl.post("/races/import", data={"csrf": csrf}, files={"file": ("r.csv", csv.encode(), "text/csv")})
+    page = cl.get("/races?season=all").text
+    assert "Started 12:30 PM: 62°F" in page and "Started 1:20 PM: 63°F" in page          # each race at its own hour
+    db = SessionLocal()
+    v = db.query(RaceWeather).filter_by(race="Boys Varsity").one()
+    assert (v.start_time, v.temp_f) == ("12:30", 62)
+    res = db.query(RaceResult).order_by(RaceResult.race).all()
+    adj = C.adjusted_times(db, res)
+    db.close()
+    jv, varsity = res                                                                  # Boys JV sorts first
+    hot = lambda t, f: t / (1 + (f - 55) * C.TEMP_PCT_PER_F / 100)                     # noqa: E731  (no course adjustment set)
+    course_s = lambda r: C.course_seconds(Course(name="x", surface="Firm grass", turns="Some")) * r.distance_m / 1609.344  # noqa: E731
+    assert adj[varsity.id] == pytest.approx(hot(varsity.time_s, 62) - course_s(varsity), abs=0.2)
+    assert adj[jv.id] == pytest.approx(hot(jv.time_s, 63) - course_s(jv), abs=0.2)
+    # Changing a race's start time in Edit race looks its weather up again
+    cl.post("/races/edit-race", data={"csrf": csrf, "date": day.isoformat(), "meet": "SFL League Championships", "race": "Boys JV",
+                                      "meters": str(jv.distance_m), "new_race": "Boys JV", "distance": "2 Miles", "start_time": "15:00"})
+    assert "Weather at 3:00 PM: 65°F" in cl.get("/races?season=all").text
+    cl.post("/races/edit-race", data={"csrf": csrf, "date": day.isoformat(), "meet": "SFL League Championships", "race": "Boys JV",
+                                      "meters": str(jv.distance_m), "new_race": "Boys JV", "distance": "2 Miles", "start_time": "3pm"})
+    assert "Start time looks like 13:20." in cl.get("/races?season=all").text

@@ -101,7 +101,8 @@ class Report:
 
 def report(db: Session, season: str, keys: list[str]) -> Report:
     benches = benchmarks(db, keys)
-    from .weather import result_course
+    from .weather import merged, race_weather, result_course
+    own = race_weather(db)
     found: dict[tuple, Course | None] = {}
     conds = {(c.meet, c.date): c for c in db.scalars(select(MeetConditions)).all()}
     athletes = {a.id: a for a in db.scalars(select(Athlete)).all()}
@@ -116,6 +117,7 @@ def report(db: Session, season: str, keys: list[str]) -> Report:
         if key not in found:
             found[key] = result_course(db, r.meet, r.date, r.course, cond)
         course = found[key]
+        cond = merged(cond, own.get((r.meet, r.date, r.race)))
         pred = predicted_time(b["vdot"], r.distance_m)
         miles = r.distance_m / A.METERS_PER_MILE
         adjusted = CS.adjusted_time(r.time_s, r.distance_m, course, cond)

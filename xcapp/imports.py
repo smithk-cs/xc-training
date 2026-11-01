@@ -14,7 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .analysis import EVENTS, km_label, normalize_event, parse_time, season_for
-from .models import Athlete, Goal, RaceResult, Result
+from .models import Athlete, Goal, RaceResult, RaceWeather, Result
 from .security import new_link_token
 
 GROUPS = ("Varsity", "JV", "Development")
@@ -235,6 +235,7 @@ def import_races(db: Session, text: str, add_athletes: bool = False) -> tuple[in
     Returns (results imported, athletes added)."""
     errors, todo, new = [], [], {}
     idx = _name_index(db)
+    starts: dict[tuple, str] = {}   # (meet, date, race) -> start time, from an optional start_time column
     for line, r in _rows(text):
         try:
             meet = (r.get("meet") or "").strip()
@@ -243,6 +244,13 @@ def import_races(db: Session, text: str, add_athletes: bool = False) -> tuple[in
             if not meet or not name:
                 raise ValueError("meet and athlete are required")
             d = parse_date(r.get("date", ""))
+            start = (r.get("start_time") or r.get("start") or "").strip()
+            if start:   # the race's start time, for its weather: 13:20 or 1:20 PM
+                m = re.fullmatch(r"(\d{1,2}):(\d\d)\s*([ap]\.?m\.?)?", start, re.I)
+                if not m or int(m.group(2)) > 59 or int(m.group(1)) > (12 if m.group(3) else 23):
+                    raise ValueError(f"start time '{start}' should look like 13:20 or 1:20 PM")
+                h = (int(m.group(1)) % 12 + (12 if m.group(3)[0].lower() == "p" else 0)) if m.group(3) else int(m.group(1))
+                starts[(meet[:160], d, race[:120])] = f"{h:02d}:{m.group(2)}"
             label = (r.get("distance") or "").strip()
             meters = parse_distance(label)
             t = parse_time(r.get("time", ""))
@@ -287,6 +295,12 @@ def import_races(db: Session, text: str, add_athletes: bool = False) -> tuple[in
         db.add(a)
     db.flush()
     n = 0
+    for (meet, d, race), start in starts.items():   # their weather is looked up straight after the import
+        rw = db.scalar(select(RaceWeather).where(RaceWeather.meet == meet, RaceWeather.date == d, RaceWeather.race == race))
+        if rw is None:
+            db.add(RaceWeather(meet=meet, date=d, race=race, start_time=start))
+        elif rw.start_time != start:
+            rw.start_time, rw.temp_f = start, None
     for a, meet, d, course, race, meters, label, t, place, points in todo:
         if db.scalar(select(RaceResult.id).where(RaceResult.athlete_id == a.id, RaceResult.date == d, RaceResult.meet == meet,
                                                  RaceResult.race == race, RaceResult.time_s == t)):
