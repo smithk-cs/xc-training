@@ -37,6 +37,7 @@ from . import weather as WX
 from . import team_calendar as TC
 from . import classyear as CY
 from . import data_check as DC
+from . import medals as MD
 from .config import settings
 from .db import SessionLocal, create_all
 from .fitfile import MAX_FITS_PER_UPLOAD, MAX_UPLOAD_BYTES, FitError, fit_files, parse_fit
@@ -1741,6 +1742,7 @@ def create_app() -> FastAPI:
                                                .order_by(CaptainPost.created_at.desc())).all() if a.is_captain else [],
                       miles_goal=A.mileage_goal(db, a.id, mine.get("group") or "", today, a.gender, a.experience) if show_group else None,
                       my_points=PT.team_week(db, A.week_monday(today), athletes=[a])[0] if show_group else None, rates=PT.RATES,
+                      medals=MD.summary(db, a, today) if show_group else None,
                       notes=[n for n in db.scalars(select(Announcement).where(Announcement.start_date <= today, Announcement.end_date >= today)
                                                    .order_by(Announcement.start_date.desc(), Announcement.id.desc())).all()
                              if n.for_athlete(a.gender, mine.get("group") or "")], paces_link=f"/a/{token}/paces" if show_group and mine.get("vdot") else None,
@@ -1795,6 +1797,16 @@ def create_app() -> FastAPI:
             flash(request, "Thanks. Your coach will see this today." + (" Please also tell your coach or athletic trainer in person." if sev >= A.PAIN_FLAG else ""))
         except ValueError as exc:
             flash(request, str(exc), "error")
+        return back(f"/a/{token}")
+
+    @app.post("/a/{token}/medal-note")
+    async def athlete_medal_note(request: Request, token: str, db: Session = Depends(get_db, scope="function")):
+        a = athlete_by_token(db, token)
+        f = await form_checked(request)
+        try:
+            MD.close_note(db, a, dt.date.fromisoformat(f.get("monday", "")))
+        except ValueError:
+            pass
         return back(f"/a/{token}")
 
     @app.post("/a/{token}/resting-hr")

@@ -107,9 +107,11 @@
     {% endif %}
   {% if linked %}</details>{% else %}</section>{% endif %}
 {% endmacro %}
-{% with hero_title="Hi " ~ a.first_name, hero_text=None, hero_compact=True, back_url=None, hero_group=(ability if show_group else none), hero_vo2=vo2, hero_photo=('/a/' ~ token ~ '/photo?v=' ~ photo_v if photo_v else none), hero_name=a.name, hero_paces_link=paces_link %}{% include "_hero.html" %}{% endwith %}
+{% with hero_title="Hi " ~ a.first_name, hero_text=None, hero_compact=True, back_url=None, hero_group=(ability if show_group else none), hero_vo2=vo2, hero_photo=('/a/' ~ token ~ '/photo?v=' ~ photo_v if photo_v else none), hero_name=a.name, hero_paces_link=paces_link, hero_medals=(medals.medals if medals else none) %}{% include "_hero.html" %}{% endwith %}
 <div class="stack">
   {% for level, text in messages %}<div class="flash {{ level }}" role="status">{{ text }}</div>{% endfor %}
+  {% if medals and medals.note %}<div class="notice medal-note" role="status"><span class="medal-icon" aria-hidden="true">{{ medals.note.icon }}</span><span>{{ medals.note.text }}</span>
+    <form method="post" action="/a/{{ token }}/medal-note"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="monday" value="{{ medals.note.monday.isoformat() }}"><button type="submit" class="close" aria-label="Close">×</button></form></div>{% endif %}
   {% if need %}<p class="notice"><span>{{ need }} recent run{{ '' if need == 1 else 's' }} need{{ 's' if need == 1 else '' }} your effort rating.</span><a href="/a/{{ token }}/runs">Add effort ›</a></p>{% endif %}
   {% set rhr_n = rhr_cal.missing|length %}{% if rhr_n %}<p class="notice rhr-reminder"><span>{{ rhr_n }} day{{ '' if rhr_n == 1 else 's' }} need{{ 's' if rhr_n == 1 else '' }} your resting heart rate.</span><a href="#rhr" onclick="var i=document.getElementById('rhr-bpm'); if (i) { setTimeout(function () { i.focus(); }, 300); }">Add it ›</a></p>{% endif %}
   {% for n in notes %}<section class="announcement" role="note" aria-label="Announcement">

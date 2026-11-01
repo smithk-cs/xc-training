@@ -1,5 +1,10 @@
 <header class="hero{% if hero_compact is defined and hero_compact %} compact{% endif %}">
-  <div class="team">{% if has_logo() %}<img src="/branding/logo" alt="">{% endif %}<span>{{ team_name }}</span></div>
+  <div class="team">{% if has_logo() %}<img src="/branding/logo" alt="">{% endif %}<span>{{ team_name }}</span>
+    {% if hero_medals is defined and hero_medals %}<div class="medals">{% for m in hero_medals %}
+      <details class="medal-pop">
+        <summary class="medal-btn" aria-label="{{ m.text }}" title="{{ m.text }}">{{ m.icon }}</summary>
+        <div class="medal-card">{{ m.icon }} {{ m.text }}</div>
+      </details>{% endfor %}</div>{% endif %}</div>
   {% if back_url %}<a class="back" href="{{ back_url }}">‹ {{ back_label }}</a>{% endif %}
   <div class="hero-title">
     {% if hero_photo is defined and hero_photo %}<img class="hero-photo zoom" src="{{ hero_photo }}" alt="Photo of {{ hero_name }}" tabindex="0" role="button">{% endif %}

@@ -153,6 +153,18 @@ span.dash-skeleton { color: transparent; }
 .consent input { width: 24px; height: 24px; margin: 0; flex: none; accent-color: var(--brand-red); }
 .notice { display: flex; gap: 10px; align-items: center; justify-content: space-between; background: var(--color-gold-tint); color: var(--color-gold-ink); border-radius: 12px; padding: 12px 14px; font-weight: 500; }
 .notice a { color: var(--color-gold-ink); font-weight: 700; white-space: nowrap; }
+.notice.medal-note { justify-content: flex-start; }
+.notice.medal-note .medal-icon { font-size: 28px; line-height: 1; }
+.notice.medal-note form { margin-left: auto; }
+.notice.medal-note .close { background: transparent; border: 0; color: var(--color-gold-ink); font-size: 22px; min-width: 44px; min-height: 44px; padding: 0; cursor: pointer; }
+.hero .medals { margin-left: auto; display: flex; gap: 2px; position: relative; }
+.hero .medal-pop { position: static; }
+.hero .medal-pop summary { list-style: none; cursor: pointer; }
+.hero .medal-pop summary::-webkit-details-marker { display: none; }
+.hero .medal-btn { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; font-size: 26px; line-height: 1; border-radius: 50%; }
+.hero .medal-btn:focus-visible { outline: 2px solid var(--brand-gold); }
+.hero .medal-pop[open] .medal-btn { background: rgba(255,255,255,.18); }
+.hero .medal-card { position: absolute; top: calc(100% + 6px); right: 0; z-index: 20; width: min(300px, calc(100vw - 32px)); box-sizing: border-box; background: var(--color-panel); color: var(--color-fg); border-radius: 14px; padding: 14px; box-shadow: 0 6px 20px rgba(0,0,0,.25); font-size: 15px; }
 .alert { background: var(--color-alert-bg); color: var(--color-alert-ink); border-radius: 12px; padding: 12px; font-size: 14px; }
 fieldset.pick { border: 0; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 fieldset.pick legend { font-size: 14px; font-weight: 600; color: var(--color-fg-muted); padding: 0; margin-bottom: 8px; }

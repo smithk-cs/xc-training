@@ -761,3 +761,20 @@ class PracticeForecast(Base):
     pressure_inhg: Mapped[float | None] = mapped_column(Float, nullable=True)
     summary: Mapped[str] = mapped_column(String(60), default="")
     fetched_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class WeekResult(Base):
+    """An athlete's finished Monday-to-Sunday week, saved so the athlete page doesn't work out the whole season on
+    every visit: the score, the miles against the goal, and the medal it earned (gold | silver | miles | "").
+    Recent weeks are worked out again each day, for runs that sync late."""
+    __tablename__ = "week_results"
+    __table_args__ = (UniqueConstraint("athlete_id", "monday"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    athlete_id: Mapped[int] = mapped_column(ForeignKey("athletes.id", ondelete="CASCADE"), index=True)
+    monday: Mapped[dt.date] = mapped_column(Date, index=True)
+    score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    miles: Mapped[float] = mapped_column(Float, default=0)
+    goal_miles: Mapped[float | None] = mapped_column(Float, nullable=True)
+    medal: Mapped[str] = mapped_column(String(10), default="")
+    computed_on: Mapped[dt.date] = mapped_column(Date)
+    note_closed: Mapped[bool] = mapped_column(Boolean, default=False)   # the athlete closed the Monday message
