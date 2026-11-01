@@ -38,6 +38,7 @@ from . import team_calendar as TC
 from . import classyear as CY
 from . import data_check as DC
 from . import medals as MD
+from . import seasons as SE
 from .config import settings
 from .db import SessionLocal, create_all
 from .fitfile import MAX_FITS_PER_UPLOAD, MAX_UPLOAD_BYTES, FitError, fit_files, parse_fit
@@ -2634,7 +2635,8 @@ def create_app() -> FastAPI:
                 per_day[i] += [w for w in d["workouts"] if w not in per_day[i]]
         return render(request, "week.html", user, team=team, rows=rows, monday=monday, today=today, group_workouts=group_workouts,
                       days=[monday + dt.timedelta(days=i) for i in range(7)], rates=PT.RATES,
-                      target_days=target_days, min_minutes=min_minutes, rest_day=rest_day, weekdays=PT.WEEKDAYS)
+                      target_days=target_days, min_minutes=min_minutes, rest_day=rest_day, weekdays=PT.WEEKDAYS,
+                      season=SE.period_for(monday))
 
     @app.post("/week/settings")
     async def week_settings(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):

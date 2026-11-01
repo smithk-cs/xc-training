@@ -30,8 +30,8 @@ def test_summary_saves_weeks_and_monday_note(session, athlete, monkeypatch):
     s = MD.summary(session, athlete, MONDAY)
     assert len(calls) == 12
     assert [(m["icon"], m["count"]) for m in s["medals"]] == [("🥇", 2), ("🥈", 1), ("👟", 1)]
-    assert s["medals"][0]["text"] == "Gold: you hit your weekly goal (90% or more) in 2 weeks of the 2026 XC season."
-    assert s["note"]["text"] == "Gold week! You scored 95% last week, your 2nd gold week this season. Keep it rolling!"
+    assert s["medals"][0]["text"] == "Gold: you hit your weekly goal (90% or more) in 2 weeks of 2026 Cross Country."
+    assert s["note"]["text"] == "Gold week! You scored 95% last week, your 2nd gold week of 2026 Cross Country. Keep it rolling!"
     calls.clear()
     MD.summary(session, athlete, MONDAY)
     assert calls == []                                         # saved: nothing worked out again the same day
@@ -53,7 +53,7 @@ def test_weeks_saved_before_the_rule_change_are_worked_out_again(session, athlet
 
 def test_silver_and_miles_notes(session, athlete, monkeypatch):
     monkeypatch.setattr(PT, "team_week", fake_week([]))
-    assert MD.summary(session, athlete, dt.date(2026, 10, 19))["note"]["text"].startswith("Silver week! You scored 85% last week, your 1st silver")
+    assert MD.summary(session, athlete, dt.date(2026, 10, 19))["note"]["text"].startswith("Silver week! You scored 85% last week, your 1st silver week of 2026 Cross Country")
     session.query(WeekResult).delete()
     note = MD.summary(session, athlete, dt.date(2026, 10, 12))["note"]
     assert note["icon"] == "👟" and note["text"].startswith("You ran all 30.0 of your 30 miles last week, your 1st full-mileage week")

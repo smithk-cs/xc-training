@@ -812,3 +812,16 @@ class SquadMember(Base):
     squad_id: Mapped[int] = mapped_column(ForeignKey("squads.id", ondelete="CASCADE"), index=True)
     athlete_id: Mapped[int] = mapped_column(ForeignKey("athletes.id", ondelete="CASCADE"), index=True)
     athlete: Mapped[Athlete] = relationship()
+
+
+class SeasonPeriod(Base):
+    """One part of a school year, with the dates the coaches chose: summer base, cross country, winter base, track.
+    school_year is the year it starts in August (2026 = the 2026-27 school year, whose summer base is summer 2026)."""
+    __tablename__ = "season_periods"
+    __table_args__ = (UniqueConstraint("school_year", "kind"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    school_year: Mapped[int] = mapped_column(Integer, index=True)
+    kind: Mapped[str] = mapped_column(String(10))       # summer | xc | winter | track
+    name: Mapped[str] = mapped_column(String(40))
+    start_date: Mapped[dt.date] = mapped_column(Date)
+    end_date: Mapped[dt.date] = mapped_column(Date)

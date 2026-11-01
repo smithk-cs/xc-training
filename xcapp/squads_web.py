@@ -11,6 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from . import analysis as A
+from . import seasons as SE
 from . import squads as SQ
 from .models import Athlete, SquadCompetition
 
@@ -31,7 +32,7 @@ def register(app, h: SimpleNamespace) -> None:
         if len(comps) >= 1 and "list" not in request.query_params:
             return back(f"/squads/{comps[0].id}")
         today = A.team_today()
-        return render(request, "squads.html", user, comps=comps, comp=None, monday=A.week_monday(today),
+        return render(request, "squads.html", user, comps=comps, comp=None, monday=A.week_monday(today), season=SE.period_for(today),
                       names=SQ.NAMES, max_squads=SQ.MAX_SQUADS)
 
     @app.post("/squads/new")
@@ -63,7 +64,7 @@ def register(app, h: SimpleNamespace) -> None:
         st = SQ.standings(db, comp, today)
         comps = db.scalars(select(SquadCompetition).order_by(SquadCompetition.start_date.desc(), SquadCompetition.id.desc())).all()
         ab = A.abilities(db, today)
-        return render(request, "squads.html", user, comps=comps, comp=comp, st=st, ab=ab, unassigned=SQ.unassigned(db, comp),
+        return render(request, "squads.html", user, comps=comps, comp=comp, st=st, ab=ab, unassigned=SQ.unassigned(db, comp), season=SE.period_for(today),
                       monday=A.week_monday(today), names=SQ.NAMES, max_squads=SQ.MAX_SQUADS, categories=SQ.CATEGORIES)
 
     @app.post("/squads/{cid}/move")

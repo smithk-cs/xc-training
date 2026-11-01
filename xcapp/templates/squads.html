@@ -36,11 +36,11 @@
   <p class="small muted">Picks every active athlete (not alumni or test accounts) and deals them into squads of equal size and strength by VDOT, compared within boys and within girls. Athletes without a VDOT count as average.</p>
   <form method="post" action="/squads/new" class="form-row">
     <input type="hidden" name="csrf" value="{{ csrf }}">
-    <label>Name<input name="name" value="{{ monday.year }} squads" maxlength="80"></label>
+    <label>Name<input name="name" value="{{ season.label }} squads" maxlength="80"></label>
     <label>Athletes<select name="gender"><option>All</option><option>Boys</option><option>Girls</option></select></label>
     <label>Squads<input type="number" name="squads" value="4" min="2" max="{{ max_squads }}" style="width:5em"></label>
     <label>Starts (week of)<input type="date" name="start" value="{{ monday.isoformat() }}"></label>
-    <label>Ends (optional)<input type="date" name="end"></label>
+    <label>Ends (optional)<input type="date" name="end" value="{{ season.end.isoformat() }}"></label>
     <button type="submit">Make squads</button>
   </form>
 </details>

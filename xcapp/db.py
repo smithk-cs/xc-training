@@ -33,6 +33,8 @@ def init_engine(url: str):
             cur.execute("PRAGMA foreign_keys=ON")
             cur.close()
     _Session = sessionmaker(bind=_engine, expire_on_commit=False, future=True)
+    from .seasons import forget
+    forget()   # season dates are read again from this database
     return _engine
 
 
@@ -133,6 +135,8 @@ def create_all():
         # Times saved under the old season dates (cross country Jul-Nov) move to the current ones (first Monday in August
         # to the first Saturday in December), such as December championships from track back to cross country.
         from .analysis import season_for
+        from .seasons import refresh
+        refresh(conn)   # the coaches' season dates, read through this connection
         for rid, day, season in conn.execute(text("SELECT id, date, season FROM results")).all():
             day = day if isinstance(day, dt.date) else dt.date.fromisoformat(str(day)[:10])
             if season_for(day) != season:

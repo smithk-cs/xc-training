@@ -68,4 +68,21 @@
   {% if items %}{{ day_list(items, True) }}{% else %}<p class="muted">Nothing on the calendar yet.</p>{% endif %}
 </div>
 <script>document.querySelectorAll('.copy-btn').forEach(function (b) { b.addEventListener('click', function () { navigator.clipboard.writeText(b.dataset.copy).then(function () { b.textContent = 'Copied'; }); }); });</script>
+<div class="card" id="seasons">
+  <h2>Seasons</h2>
+  <p class="small muted">Now: <b>{{ season_now.label }}</b> ({{ season_now.start.strftime('%b %-d') }} to {{ season_now.end.strftime('%b %-d, %Y') }}). The parts of the school year, for medals and weekly reports; the Cross Country dates also decide which races and results count as cross country. Until you save a year, it uses the usual dates.</p>
+  {% for parts in season_years %}{% set y = parts[0].school_year %}
+  <form method="post" action="/calendar/seasons" class="season-year">
+    <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="school_year" value="{{ y }}">
+    <h3>{{ y }}–{{ '%02d' % ((y + 1) % 100) }}{% if not parts|selectattr('saved')|list %} <span class="pill">usual dates</span>{% endif %}</h3>
+    {% set ro = ' disabled' if user.role == 'trainer' else '' %}
+    {% for p in parts %}<div class="season-part{% if p.label == season_now.label %} current{% endif %}">
+      <label class="season-name"><span>Season{% if p.label == season_now.label %} <span class="pill good">now</span>{% endif %}</span><input type="text" name="name_{{ p.kind }}" value="{{ p.name }}" maxlength="40"{{ ro }}></label>
+      <label>Starts<input type="date" name="start_{{ p.kind }}" value="{{ p.start.isoformat() }}"{{ ro }}></label>
+      <label>Ends<input type="date" name="end_{{ p.kind }}" value="{{ p.end.isoformat() }}"{{ ro }}></label>
+    </div>{% endfor %}
+    {% if user.role != 'trainer' %}<button type="submit">Save {{ y }}–{{ '%02d' % ((y + 1) % 100) }}</button>{% endif %}
+  </form>
+  {% endfor %}
+</div>
 {% endblock %}

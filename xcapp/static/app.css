@@ -554,3 +554,10 @@ table.parts tr.dragging { opacity: .45; }
 .squad-week + .squad-week { margin-top: var(--cds-gap-lg); }
 .squad-name { white-space: nowrap; }
 .squad-earlier > summary { cursor: pointer; font-weight: 600; color: var(--brand-red); margin-top: var(--cds-gap-lg); }
+.season-year + .season-year { margin-top: var(--cds-gap-lg); }
+.season-part { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr); gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--color-border-line); }
+.season-part label { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.season-part input { width: 100%; box-sizing: border-box; }
+.season-part.current .season-name input { font-weight: 700; }
+.season-year button { margin-top: 12px; }
+@media (max-width: 600px) { .season-part { grid-template-columns: 1fr 1fr; } .season-part .season-name { grid-column: 1 / -1; } }

@@ -10,9 +10,10 @@ from fastapi.responses import HTMLResponse, Response
 from sqlalchemy.orm import Session
 
 from . import analysis as A
+from . import seasons as SE
 from . import team_calendar as TC
 from .ingest import log
-from .models import CalendarEvent
+from .models import CalendarEvent, Result, SeasonPeriod
 
 TIME = re.compile(r"([01]\d|2[0-3]):[0-5]\d")
 
@@ -46,7 +47,48 @@ def register(app, h: SimpleNamespace) -> None:
                       practice_place=WX.practice_place(db), default_time=A.fmt_clock(WX.DEFAULT_PRACTICE_TIME),
                       links=links(s.base_url, TC.token(db)), kinds=TC.KINDS, weekdays=TC.WEEKDAYS, today=today, edit=edit,
                       series=sorted((e for e in db.query(CalendarEvent).all() if e.repeat_days and e.repeat_until and e.repeat_until >= today),
-                                    key=lambda e: e.date))
+                                    key=lambda e: e.date),
+                      season_years=[SE.year_periods(y) for y in (SE.school_year_of(today), SE.school_year_of(today) + 1)],
+                      season_now=SE.period_for(today))
+
+    @app.post("/calendar/seasons")
+    async def calendar_seasons(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
+        """Save one school year's four parts. They must run in order (summer, cross country, winter, track) without
+        overlapping; gaps are allowed."""
+        f = await form_checked(request)
+        try:
+            year = int(f.get("school_year", ""))
+            parts = []
+            for k in SE.KINDS:
+                name = str(f.get(f"name_{k}", "")).strip()[:40] or SE.NAMES[k]
+                start = dt.date.fromisoformat(str(f.get(f"start_{k}", "")))
+                end = dt.date.fromisoformat(str(f.get(f"end_{k}", "")))
+                if end < start:
+                    raise ValueError(f"{name} ends before it starts.")
+                parts.append((k, name, start, end))
+            for (_, n1, _, e1), (_, n2, s2, _) in zip(parts, parts[1:]):
+                if s2 <= e1:
+                    raise ValueError(f"{n2} starts before {n1} ends.")
+            prev = SE.period(year - 1, "track")
+            if parts[0][2] <= prev["end"] and prev["saved"]:
+                raise ValueError(f"{parts[0][1]} starts before last year's {prev['name']} ends ({prev['end']:%b %-d}).")
+        except ValueError as exc:
+            msg = str(exc)
+            flash(request, msg if msg.endswith(".") else "Check the dates.", "error")
+            return back("/calendar#seasons")
+        for k, name, start, end in parts:
+            row = db.query(SeasonPeriod).filter_by(school_year=year, kind=k).one_or_none() or SeasonPeriod(school_year=year, kind=k)
+            row.name, row.start_date, row.end_date = name, start, end
+            db.add(row)
+        db.flush()
+        SE.refresh(db)
+        moved = 0
+        from .analysis import season_for
+        for r in db.query(Result).all():   # results now on the other side of the cross country dates
+            if season_for(r.date) != r.season:
+                r.season, moved = season_for(r.date), moved + 1
+        flash(request, f"Saved the {year}–{str(year + 1)[2:]} seasons." + (f" {moved} result{'s' if moved != 1 else ''} moved season." if moved else ""))
+        return back("/calendar#seasons")
 
     def event_form(f, e: CalendarEvent) -> None:
         e.title = str(f.get("title", "")).strip()[:120]

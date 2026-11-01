@@ -105,10 +105,11 @@ def fmt_secs(seconds: float | None) -> str:
 
 
 def xc_season_dates(year: int) -> tuple[dt.date, dt.date]:
-    """Cross country runs from the first Monday in August through the first Saturday in December (so December
-    championships such as Nike Cross Nationals count as cross country)."""
-    aug1, dec1 = dt.date(year, 8, 1), dt.date(year, 12, 1)
-    return aug1 + dt.timedelta(days=(0 - aug1.weekday()) % 7), dec1 + dt.timedelta(days=(5 - dec1.weekday()) % 7)
+    """Cross country's dates that year: as the coaches set them on the Calendar page, else from the first Monday in
+    August through the first Saturday in December (so December championships such as Nike Cross Nationals count as
+    cross country)."""
+    from .seasons import xc_dates
+    return xc_dates(year)
 
 
 def season_for(d: dt.date) -> str:

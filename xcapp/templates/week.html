@@ -2,7 +2,7 @@
 {% block title %}{{ team }} week · {{ team_name }}{% endblock %}
 {% block content %}
 {% macro pace(pct) %}{% if pct is none %}none{% elif pct >= 90 %}good{% elif pct >= 80 %}warn{% else %}bad{% endif %}{% endmacro %}
-<div class="form-row title-row" style="margin-bottom:12px"><h1 style="margin:0">{{ team }} week</h1>
+<div class="form-row title-row" style="margin-bottom:12px"><h1 style="margin:0">{{ team }} week</h1> <a class="pill" href="/calendar#seasons" title="Seasons are set on the Calendar page">{{ season.label }}</a>
   {% with base='/week', extra='&start=' ~ monday.isoformat() %}{% include "_team_switch.html" %}{% endwith %}</div>
 <div class="form-row" style="align-items:center">
   <a class="button secondary" href="/week?team={{ team }}&start={{ (monday - timedelta(days=7)).isoformat() }}" aria-label="Week before">‹</a>

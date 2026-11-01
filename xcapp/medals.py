@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 
 from . import analysis as A
 from . import points as PT
+from . import seasons as S
 from .models import Athlete, WeekResult
 
 KINDS = ("gold", "silver", "miles")
@@ -37,9 +38,10 @@ def medal_for(score: float | None, miles: float, goal_miles: float | None) -> st
 
 
 def _weeks(today: dt.date) -> list[dt.date]:
-    """Mondays of this season's finished weeks."""
-    start = A.week_monday(A.season_range(today)[0])
+    """Mondays of the finished weeks in this part of the school year (see seasons), and in last week's part when the
+    year has just moved on. A week belongs to the part its Monday falls in."""
     this_monday = A.week_monday(today)
+    start = A.week_monday(min(S.period_for(today)["start"], S.period_for(this_monday - dt.timedelta(days=7))["start"]))
     out, m = [], start
     while m < this_monday:
         out.append(m)
@@ -86,20 +88,27 @@ def _s(n: int) -> str:
 
 def summary(db: Session, a: Athlete, today: dt.date) -> dict:
     """Medal counts and their explanations for the header, and Monday's message about last week."""
-    weeks = season_weeks(db, a, today)
+    every = season_weeks(db, a, today)
+    cur = S.period_for(today)
+
+    def within(p):
+        return [w for w in every if S.period_for(w.monday)["label"] == p["label"]]
+
+    weeks = within(cur)
     counts = {k: sum(1 for w in weeks if w.medal == k) for k in KINDS}
-    season = A.season_for(today)
+    season = cur["label"]
     text = {
-        "gold": f"Gold: you hit your weekly goal (90% or more) in {counts['gold']} week{_s(counts['gold'])} of the {season} season.",
-        "silver": f"Silver: you scored 80 to 89% of your weekly goal in {counts['silver']} week{_s(counts['silver'])} of the {season} season.",
-        "miles": f"Miles: you ran your full weekly miles in {counts['miles']} more week{_s(counts['miles'])} of the {season} season.",
+        "gold": f"Gold: you hit your weekly goal (90% or more) in {counts['gold']} week{_s(counts['gold'])} of {season}.",
+        "silver": f"Silver: you scored 80 to 89% of your weekly goal in {counts['silver']} week{_s(counts['silver'])} of {season}.",
+        "miles": f"Miles: you ran your full weekly miles in {counts['miles']} more week{_s(counts['miles'])} of {season}.",
     }
     medals = [{"kind": k, "icon": ICONS[k], "count": counts[k], "text": text[k]} for k in KINDS if counts[k]]
     note = None
-    last = weeks[-1] if weeks else None
+    last = every[-1] if every else None
     if today.weekday() == 0 and last is not None and last.monday == today - dt.timedelta(days=7) and last.medal and not last.note_closed:
-        n = counts[last.medal]
-        nth = f"your {_ordinal(n)} {last.medal if last.medal != 'miles' else 'full-mileage'} week this season"
+        lp = S.period_for(last.monday)
+        n = sum(1 for w in within(lp) if w.medal == last.medal)
+        nth = f"your {_ordinal(n)} {last.medal if last.medal != 'miles' else 'full-mileage'} week of {lp['label']}"
         if last.medal == "gold":
             msg = f"Gold week! You scored {last.score:.0f}% last week, {nth}. Keep it rolling!"
         elif last.medal == "silver":
