@@ -206,6 +206,27 @@ def fmt_gap(seconds: float | None) -> str:
     return f"{sign}{int(s // 60)}:{s % 60:04.1f}" if s >= 60 else f"{sign}{s:.1f} s"
 
 
+def youtube_url(raw: str) -> str:
+    """A YouTube link as typed or pasted, checked: https on youtube.com or youtu.be. Raises ValueError otherwise."""
+    from urllib.parse import urlparse
+    url = (raw or "").strip()
+    if not url:
+        return ""
+    if not url.startswith(("http://", "https://")):
+        url = "https://" + url
+    u = urlparse(url)
+    host = (u.hostname or "").lower()
+    if host not in ("youtu.be", "youtube.com", "www.youtube.com", "m.youtube.com") or len(url) > 300:
+        raise ValueError("Paste a YouTube link, such as https://youtu.be/abc123 or https://www.youtube.com/watch?v=abc123.")
+    return "https://" + host + u.path + (("?" + u.query) if u.query else "")
+
+
+def map_url(place: str) -> str:
+    """A Google Maps search for a place or address; on a phone it opens the Maps app."""
+    from urllib.parse import quote
+    return "https://www.google.com/maps/search/?api=1&query=" + quote(place or "")
+
+
 def team_today() -> dt.date:
     if settings().as_of_date:
         return dt.date.fromisoformat(settings().as_of_date)

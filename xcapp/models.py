@@ -530,6 +530,7 @@ class RaceTeamResult(Base):
     place: Mapped[int | None] = mapped_column(Integer, nullable=True)     # the team's place
     teams: Mapped[int | None] = mapped_column(Integer, nullable=True)     # out of how many teams
     points: Mapped[float | None] = mapped_column(Float, nullable=True)    # the team's score (lower is better in XC)
+    video_url: Mapped[str] = mapped_column(String(300), default="")       # a YouTube video of the race
 
 
 class MeetConditions(Base):

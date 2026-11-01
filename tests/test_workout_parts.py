@@ -54,7 +54,7 @@ def test_parts_workout(app):
     db.close()
     me = TestClient(app).get("/a/t-sam").text
     assert ">At VDOT 60</th>" in me and ">Goal VDOT " in me
-    assert "<b>2 × 4 × 400 m</b> Interval" in me and "<b>1:21.0</b>" in me                       # 400 at VDOT 60 interval pace
+    assert "<b>2 × 4 × 400 m</b> Interval" in me and "<b>1:21</b>" in me                       # 400 at VDOT 60 interval pace
     assert "5:26/mi" in me and "90 s jog rest" in me
     pat = TestClient(app).get("/a/t-pat").text
     assert "Your times appear once you have a VDOT" in pat

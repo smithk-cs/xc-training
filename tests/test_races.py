@@ -197,7 +197,20 @@ def test_editing_a_meet_and_a_race_distance(staff):
     assert {(r.meet, r.date, r.course) for r in db.query(RaceResult)} == {("Riverbend XC Classic", dt.date(2026, 10, 25), "Riverbend Park North")}
     res = db.query(Result).one()
     assert (res.date, res.course) == (dt.date(2026, 10, 25), "Riverbend Park North")
+    from xcapp.models import Course, MeetConditions
+    db.add(Course(name="Riverbend Park"))
+    db.commit()
+    cid = db.query(Course).one().id
     db.close()
+    page = c.get("/races?season=all").text
+    assert '<option value="Riverbend Park North" selected>Riverbend Park North (not on the Courses page)</option>' in page
+    assert '<option value="Riverbend Park">Riverbend Park</option>' in page
+    c.post("/races/edit-meet", data={"csrf": csrf, "date": "2026-10-25", "meet": "Riverbend XC Classic", "name": "Riverbend XC Classic",
+                                     "new_date": "2026-10-25", "course": "Riverbend Park"})
+    db = SessionLocal()
+    assert {r.course for r in db.query(RaceResult)} == {"Riverbend Park"} and db.query(MeetConditions).one().course_id == cid
+    db.close()
+    assert '<option value="Riverbend Park" selected>Riverbend Park</option>' in c.get("/races?season=all").text
     t = login(staff, "trainer1")
     assert "Edit race" not in t.get("/races").text
 

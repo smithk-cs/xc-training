@@ -285,7 +285,7 @@ def nightly(db: Session, http: httpx.Client | None = None, days: int = FILL_DAYS
     return out
 
 
-def describe(f) -> str:
+def describe(f, dew: bool = True) -> str:
     """'68°F, partly cloudy, 10% chance of rain, wind 6 mph, dew point 52°F'"""
     if f is None or f.temp_f is None:
         return ""
@@ -296,7 +296,7 @@ def describe(f) -> str:
         bits.append(f"{f.rain_pct:.0f}% chance of rain")
     if f.wind_mph is not None:
         bits.append(f"wind {f.wind_mph:.0f} mph")
-    if f.dew_point_f is not None:
+    if dew and f.dew_point_f is not None:
         bits.append(f"dew point {f.dew_point_f:.0f}°F")
     return ", ".join(bits)   # pressure is recorded for races already run, not shown in forecasts
 
@@ -356,7 +356,8 @@ def practice_forecast(db: Session, day: dt.date, team: str) -> dict | None:
     s = practice_slot(db, day, team)
     f = db.scalar(select(PracticeForecast).where(PracticeForecast.date == day, PracticeForecast.start_time == s["time"],
                                                  PracticeForecast.lat == round(s["lat"], 3), PracticeForecast.lon == round(s["lon"], 3)))
-    return {**s, "forecast": f, "text": describe(f)} if f is not None and f.temp_f is not None else None
+    return ({**s, "forecast": f, "text": describe(f), "athlete_text": describe(f, dew=False)}
+            if f is not None and f.temp_f is not None else None)
 
 
 def refresh_practice_forecasts(db: Session, http: httpx.Client, today: dt.date, only: dt.date | None = None) -> int:

@@ -50,7 +50,10 @@ Flat SAC Invitational,2026-10-24,Gibson Ranch Regional Park,Boys Varsity Large S
       <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="date" value="{{ date.isoformat() }}"><input type="hidden" name="meet" value="{{ meet }}">
       <label style="flex:1">Meet<input type="text" name="name" value="{{ meet }}" maxlength="160" required></label>
       <label>Date<input type="date" name="new_date" value="{{ date.isoformat() }}" required></label>
-      <label style="flex:1">Course<input type="text" name="course" value="{{ course or '' }}" maxlength="160"></label>
+      {% set saved_names = courses|map(attribute='name')|list %}
+      <label style="flex:1">Course<select name="course"><option value=""{{ ' selected' if not course }}>Not set</option>
+        {% for c in courses %}<option value="{{ c.name }}"{{ ' selected' if course == c.name }}>{{ c.name }}</option>{% endfor %}
+        {% if course and course not in saved_names %}<option value="{{ course }}" selected>{{ course }} (not on the Courses page)</option>{% endif %}</select></label>
       <button type="submit">Save meet</button>
     </form>
   </details>
@@ -83,7 +86,7 @@ Flat SAC Invitational,2026-10-24,Gibson Ranch Regional Park,Boys Varsity Large S
   {% endif %}
   {% for (race, label, meters), rows in races.items() %}{% set t = teams.get((date, meet, race)) %}{% set sug = suggested.get((date, meet, race)) %}
   <div class="form-row" style="justify-content:space-between; align-items:baseline">
-    <h3>{{ race or 'Race' }} · {{ label }}{% if t %} <span class="small team-result">Team: {{ team_line(t) }}</span>{% endif %}
+    <h3>{{ race or 'Race' }} · {{ label }}{% if t and (t.place or t.points is not none) %} <span class="small team-result">Team: {{ team_line(t) }}</span>{% endif %}{% if t and t.video_url %} <a class="small video-link" href="{{ t.video_url }}" target="_blank" rel="noopener">▶ Watch the race</a>{% endif %}
       {% set rw = own.get((meet, date, race)) %}{% if rw and rw.start_time %}<br><span class="small muted" style="font-weight:400">Started {{ fmt_clock(rw.start_time) }}{% if rw.temp_f is not none %}: {{ '%.0f' % rw.temp_f }}°F, dew point {{ '%.0f' % rw.dew_point_f }}°F{% if rw.wind_mph is not none %}, wind {{ '%.0f' % rw.wind_mph }} mph{% endif %}{% if rw.pressure_inhg is not none %}, {{ '%.2f' % rw.pressure_inhg }} inHg{% endif %} (used for this race’s adjusted times){% else %}: weather not filled in yet{% endif %}</span>{% endif %}</h3>
     {% if user.role != 'trainer' %}
     <details class="edit-box"><summary class="small">Edit race</summary>
@@ -97,25 +100,27 @@ Flat SAC Invitational,2026-10-24,Gibson Ranch Regional Park,Boys Varsity Large S
       </form>
       <p class="small muted">Changes this race for all {{ rows|length }} results. Times at 1 mile, 1.5 miles, 2 miles or 5K count toward VDOT.</p>
     </details>
-    <details class="edit-box"><summary class="small">Team place and points</summary>
+    <details class="edit-box"><summary class="small">Team place, points and video</summary>
       <form method="post" action="/races/team" class="form-row">
         <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="date" value="{{ date.isoformat() }}">
         <input type="hidden" name="meet" value="{{ meet }}"><input type="hidden" name="race" value="{{ race }}">
         <label>Team place<input type="number" name="place" value="{{ t.place if t and t.place else '' }}" min="1" max="500" style="width:5em"></label>
         <label>of how many teams<input type="number" name="teams" value="{{ t.teams if t and t.teams else '' }}" min="1" max="500" style="width:5em"></label>
         <label>Team points<input type="number" name="points" value="{{ '%g' % t.points if t and t.points is not none else ('%g' % sug if sug else '') }}" min="0" max="5000" step="any" style="width:6em"></label>
-        <button type="submit">Save team result</button>
+        <label style="flex:2">YouTube link<input type="url" name="video" value="{{ t.video_url if t else '' }}" maxlength="300" placeholder="https://youtu.be/..."></label>
+        <button type="submit">Save</button>
       </form>
       {% if sug and not (t and t.points is not none) %}<p class="small muted">Points filled in from the top five runners’ points in the results ({{ '%g' % sug }}). Change it if the meet scored differently.</p>{% endif %}
     </details>
     {% endif %}
   </div>
   <div class="scroll"><table class="list">
-    <thead><tr><th class="num">Place</th><th>Athlete</th><th class="num">Grade</th>{% set has_pts = rows|selectattr('points', 'ne', none)|list %}<th class="num" title="Time, pace per mile and, when the course or weather is known, the time adjusted to a track at 55°F or cooler at sea level">Time · pace · adjusted</th>{% if has_pts %}<th class="num">Points</th>{% endif %}</tr></thead>
+    <thead><tr><th class="num">Place</th><th>Athlete</th><th class="num">Grade</th>{% set has_pts = rows|selectattr('points', 'ne', none)|list %}<th class="num">Time · pace</th>{% if has_pts %}<th class="num">Points</th>{% endif %}{% set ns = namespace(adj=false) %}{% for r in rows %}{% if mi.adjusted.get(r.id) %}{% set ns.adj = true %}{% endif %}{% endfor %}{% set has_adj = ns.adj %}{% if has_adj %}<th class="num" title="What each effort would be on a track at 55°F or cooler, at sea level, with a low dew point">Adjusted · pace</th>{% endif %}</tr></thead>
     <tbody>
     {% for r in rows %}
       <tr><td class="num">{{ r.place or '' }}</td><td><a href="/athletes/{{ r.athlete_id }}">{{ r.athlete.name }}</a></td><td class="num">{{ r.athlete.grade }}</td>
-        <td class="num nowrap">{% set adj = mi.adjusted.get(r.id) %}{% include "_race_time.html" %}</td>{% if has_pts %}<td class="num">{{ '%g' % r.points if r.points is not none else '' }}</td>{% endif %}</tr>
+        {% set adj = mi.adjusted.get(r.id) %}{% set adj_apart = True %}<td class="num nowrap">{% include "_race_time.html" %}</td>{% if has_pts %}<td class="num">{{ '%g' % r.points if r.points is not none else '' }}</td>{% endif %}
+        {% if has_adj %}<td class="num nowrap adj-col">{% if adj %}<b class="adj">{{ fmt_time(adj) }}</b><br><span class="small muted">{{ fmt_time((adj / (r.distance_m / 1609.344))|round)[:-2] }}/mi</span>{% else %}<span class="muted">–</span>{% endif %}</td>{% endif %}</tr>
     {% endfor %}
     </tbody>
   </table></div>

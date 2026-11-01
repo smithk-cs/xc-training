@@ -27,7 +27,7 @@ def test_team_place_and_points():
     csrf = re.search(r'name="csrf" value="([^"]+)"', c.get("/login").text).group(1)
     c.post("/login", data={"csrf": csrf, "username": "coach1", "password": "correct-horse-1"})
     page = c.get("/races?season=all").text
-    assert "Team place and points" in page and "<th class=\"num\">Points</th>" in page
+    assert "Team place, points and video" in page and "<th class=\"num\">Points</th>" in page
     assert 'name="points" value="40"' in page and "top five runners’ points" in page        # 2 + 5 + 8 + 11 + 14 suggested
     csrf = re.search(r'name="csrf" value="([^"]+)"', page).group(1)
     base = {"csrf": csrf, "date": DAY.isoformat(), "meet": "Flat SAC", "race": "Boys Frosh/Soph"}
@@ -37,6 +37,13 @@ def test_team_place_and_points():
     page = c.get("/races?season=all").text
     assert "Team: <b>3rd</b> of 12 teams · <b>41</b> points" in page
     assert "Team results (1)" in page
+    c.post("/races/team", data={**base, "place": "3", "teams": "12", "points": "41", "video": "youtube.com/watch?v=abc123"})
+    page = c.get("/races?season=all").text
+    assert '<a class="small video-link" href="https://youtube.com/watch?v=abc123"' in page and "▶ Watch the race" in page
+    c.post("/races/team", data={**base, "place": "3", "teams": "12", "points": "41", "video": "https://evil.example/x"})
+    assert "Paste a YouTube link" in c.get("/races?season=all").text
+    me = TestClient(create_app()).get("/a/t0").text
+    assert 'href="https://youtube.com/watch?v=abc123"' in me and "▶ Watch" in me
     grid = page[page.index('class="list compact team-grid"'):]
     grid = grid[:grid.index("</table>")]
     assert [h for h in re.findall(r'<th class="num">([^<]+)</th>', grid)] == ["Varsity", "JV", "F/S", "Frosh", "Soph"]

@@ -119,7 +119,7 @@ def test_pages_entry_export_and_never_to_ai():
     page = c.get("/a/tok-ava").text
     assert 'id="rhr-h">Resting heart rate' in page and 'Resting heart rate for <b id="rhr-day">today</b>' in page
     assert page.index('id="rhr-h"') < page.index('id="ac-h"')                    # not entered yet: near the top
-    assert page.count('class="day garmin') == today.weekday() + 28 and page.count('class="day today"') == 1   # Garmin days colored; today empty
+    assert page.count('class="day garmin') == min(today.weekday() + 28, 33) and page.count('class="day today"') == 1   # Garmin days colored; today empty
     assert "beats higher than usual this week" in page and "daily resting heart rate" in page
     csrf = re.search(r'name="csrf" value="([^"]+)"', page).group(1)
     c.post("/a/tok-ava/resting-hr", data={"csrf": csrf, "bpm": "300"})

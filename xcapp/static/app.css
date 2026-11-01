@@ -565,3 +565,18 @@ table.parts tr.dragging { opacity: .45; }
 .scoring-form legend { padding: 0 6px; font-weight: 700; }
 .race-picks { display: flex; flex-direction: column; gap: 4px; max-height: 18em; overflow-y: auto; }
 .calendar-btn { align-self: center; display: inline-flex; align-items: center; gap: 6px; min-height: 44px; }
+#rhr > summary { gap: 10px; flex-wrap: nowrap; }
+#rhr > summary h2 { flex: 1 1 auto; min-width: 0; }
+.rhr-chips { display: flex; gap: 8px; margin-left: auto; margin-right: 8px; }
+.rhr-chip { display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 4.5em; padding: 4px 10px; border-radius: 10px; background: var(--color-bg); border: 1px solid var(--color-border-line); line-height: 1.15; }
+.rhr-chip .k { font-size: 11px; color: var(--color-muted, #6b6b6b); white-space: nowrap; }
+.rhr-chip b { font-family: var(--font-display); font-size: 22px; }
+.alerts { display: flex; flex-direction: column; gap: 8px; }
+.alerts > * { margin: 0; }
+#rhr-form label { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; flex-direction: row; }
+#rhr-form { align-items: center; }
+.map-link { color: inherit; text-decoration: underline; text-decoration-style: dotted; text-underline-offset: 2px; }
+.year-tabs { display: flex; gap: 6px; overflow-x: auto; margin: 4px 0 8px; padding-bottom: 2px; }
+.year-tab { flex: none; min-height: 40px; padding: 6px 14px; border-radius: 999px; border: 1px solid var(--color-border-line); background: var(--color-bg); color: inherit; font-weight: 600; cursor: pointer; }
+.year-tab[aria-selected="true"] { background: var(--brand-red); border-color: var(--brand-red); color: #fff; }
+.video-link { font-weight: 600; white-space: nowrap; }

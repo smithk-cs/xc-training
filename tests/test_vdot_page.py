@@ -110,8 +110,8 @@ def test_vdot_page_and_editing(app):
     for z, pct in A.PACE_ZONES:
         assert f"<th class=\"num\"><span class=\"long\">{z}</span>" in paces
     assert "<span class=\"long\">1,600 m</span>" in paces and "<span class=\"long\">300 m</span>" in paces
-    assert f"<td class=\"num\">{A.pace_at(v, A.REP_PCT) * 100 / A.METERS_PER_MILE:.1f}</td>" in paces          # 100 m at repetition
-    assert f"<td class=\"num\">{A.fmt_time(A.pace_at(v, A.EASY_PCT) * 1600 / A.METERS_PER_MILE)}</td>" in paces  # 1600 m easy
+    assert f"<td class=\"num\">{round(A.pace_at(v, A.REP_PCT) * 100 / A.METERS_PER_MILE)}</td>" in paces          # 100 m at repetition
+    assert f"<td class=\"num\">{A.fmt_secs(A.pace_at(v, A.EASY_PCT) * 1600 / A.METERS_PER_MILE)}</td>" in paces  # 1600 m easy
     db = SessionLocal()
     db.add(Athlete(first_name="New", last_name="Runner", gender="Boys", grade=9, group="JV", link_token="t-new"))
     db.commit()

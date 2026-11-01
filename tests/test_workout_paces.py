@@ -59,8 +59,8 @@ def test_athlete_page_section(app):
     assert "Today · 6 x 1K @ 5K pace" in page and "1,000 m reps · Interval (5K pace)" in page
     assert "Thu, Oct 29 · Tempo 3 x 1 mile" in page and "Threshold (5K pace × 1.07)" in page
     assert "Fri, Oct 30 · 8 x 400 @ mile pace" in page and "Estimated from your best 5K, 15:30.0" in page
-    assert '<span class="big">3:06.0</span>' in page and '<span class="big">3:00.0</span>' in page
-    assert "4:59.3/mi · 1:14.4/400" in page
+    assert '<span class="big">3:06</span>' in page and '<span class="big">3:00</span>' in page
+    assert "4:59/mi · 1:14/400" in page
     for not_shown in ("JV hills", "Yesterday&#39;s reps", "Next week&#39;s race prep"):  # other group, past, > 7 days
         assert not_shown not in page
 

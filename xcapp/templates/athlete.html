@@ -9,12 +9,11 @@
 {# Resting heart rate: near the top until today's value is in, then below the training charts. #}
 {% macro rhr_panel(garmin_connected, folded=False) %}
   <details class="panel fold" id="rhr"{% if not folded %} open{% endif %}>
-    <summary><h2 id="rhr-h">Resting heart rate</h2>{% if folded %}<span class="small muted rhr-sum">Today {{ rhr_cal.by_day.get(rhr_cal.today).bpm }} ✓</span>{% endif %}</summary>
+    <summary><h2 id="rhr-h">Resting heart rate</h2>{% if rhr %}<span class="rhr-chips">
+      <span class="rhr-chip" title="{{ 'from Garmin' if rhr.latest.source == 'garmin' else 'you entered it' }}"><span class="k">Latest · {{ 'Today' if rhr.latest.date.isoformat() == today else rhr.latest.date.strftime('%b %-d') }}</span><b>{{ rhr.latest.bpm }}</b></span>
+      <span class="rhr-chip" title="{{ 'Your average over the 4 weeks before this one' if rhr.usual is not none else 'Needs a few weeks of entries' }}"><span class="k">Your usual</span><b>{{ '%.0f' % rhr.usual if rhr.usual is not none else '—' }}</b></span>
+    </span>{% endif %}</summary>
     {% if rhr %}
-    <div class="facts">
-      <div><span class="k">Latest</span><span class="big">{{ rhr.latest.bpm }}</span><span class="small muted">{{ 'Today' if rhr.latest.date.isoformat() == today else rhr.latest.date.strftime('%a, %b %-d') }} · {{ 'from Garmin' if rhr.latest.source == 'garmin' else 'you entered it' }}</span>{% if rhr.latest.date.isoformat() != today %}<a class="small rhr-today" href="#rhr-bpm">Enter today’s ›</a>{% endif %}</div>
-      <div><span class="k">Your usual</span><span class="big">{{ '%.0f' % rhr.usual if rhr.usual is not none else '—' }}</span><span class="small muted">{{ 'the 4 weeks before' if rhr.usual is not none else 'needs a few weeks' }}</span></div>
-    </div>
     {% if rhr.flag %}<p class="notice" style="margin-top:12px"><span>Your resting heart rate is {{ '%.0f' % rhr.up }} beats higher than usual this week. That can mean you’re getting sick, worn down or short on sleep. Tell your coach how you feel.</span></p>{% endif %}
     {% else %}
     <p class="muted small">{% if garmin_connected %}Your Garmin sends this each day. You can also enter it yourself.{% else %}Your resting heart rate each morning helps your coaches spot when you’re getting sick or worn down.{% endif %}</p>
@@ -109,11 +108,14 @@
 {% endmacro %}
 {% with hero_title="Hi " ~ a.first_name, hero_text=None, hero_compact=True, back_url=None, hero_group=(ability if show_group else none), hero_vo2=vo2, hero_photo=('/a/' ~ token ~ '/photo?v=' ~ photo_v if photo_v else none), hero_name=a.name, hero_paces_link=paces_link, hero_medals=(medals.medals if medals else none) %}{% include "_hero.html" %}{% endwith %}
 <div class="stack">
+  {% set rhr_n = rhr_cal.missing|length %}
+  {% if messages or (medals and medals.note) or need or rhr_n %}<div class="alerts">
   {% for level, text in messages %}<div class="flash {{ level }}" role="status">{{ text }}</div>{% endfor %}
   {% if medals and medals.note %}<div class="notice medal-note" role="status"><span class="medal-icon" aria-hidden="true">{{ medals.note.icon }}</span><span>{{ medals.note.text }}</span>
     <form method="post" action="/a/{{ token }}/medal-note"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="monday" value="{{ medals.note.monday.isoformat() }}"><button type="submit" class="close" aria-label="Close">×</button></form></div>{% endif %}
   {% if need %}<p class="notice"><span>{{ need }} recent run{{ '' if need == 1 else 's' }} need{{ 's' if need == 1 else '' }} your effort rating.</span><a href="/a/{{ token }}/runs">Add effort ›</a></p>{% endif %}
-  {% set rhr_n = rhr_cal.missing|length %}{% if rhr_n %}<p class="notice rhr-reminder"><span>{{ rhr_n }} day{{ '' if rhr_n == 1 else 's' }} need{{ 's' if rhr_n == 1 else '' }} your resting heart rate.</span><a href="#rhr" onclick="var i=document.getElementById('rhr-bpm'); if (i) { setTimeout(function () { i.focus(); }, 300); }">Add it ›</a></p>{% endif %}
+  {% if rhr_n %}<p class="notice rhr-reminder"><span>{{ rhr_n }} day{{ '' if rhr_n == 1 else 's' }} need{{ 's' if rhr_n == 1 else '' }} your resting heart rate.</span><a href="#rhr" onclick="var i=document.getElementById('rhr-bpm'); if (i) { setTimeout(function () { i.focus(); }, 300); }">Add it ›</a></p>{% endif %}
+  </div>{% endif %}
   {% if calendar_link %}<a class="button secondary calendar-btn" href="{{ calendar_link }}">📅 Team calendar</a>{% endif %}
   {% for n in notes %}<section class="announcement" role="note" aria-label="Announcement">
     <div class="ann-title">{{ n.title }}</div>{% if n.body %}<div class="ann-body">{{ n.body }}</div>{% endif %}
@@ -124,15 +126,15 @@
     {% for x in paces %}{% set w = x.workout %}
     <div class="wpace">
       <div class="d">{{ 'Today' if w.date.isoformat() == today else w.date.strftime('%a, %b %-d') }} · {{ w.title }}</div>
-      {% set fw = workout_weather.get(w.date) if workout_weather is defined else none %}{% if fw %}<div class="small" style="margin:2px 0 6px">🌤 {{ fmt_clock(fw.time) }}{% if fw.where %} at {{ fw.where }}{% endif %}: {{ fw.text }}</div>{% endif %}
+      {% set fw = workout_weather.get(w.date) if workout_weather is defined else none %}{% if fw %}<div class="small" style="margin:2px 0 6px">🌤 {{ fmt_clock(fw.time) }}{% if fw.where %} at {{ fw.where }}{% endif %}: {{ fw.athlete_text }}</div>{% endif %}
       {% if x.parts is defined %}
       <div class="scroll"><table class="list compact part-paces">
         <thead><tr><th>Part</th><th class="num">At VDOT {{ x.vdot_now or '–' }}</th>{% if x.vdot_goal %}<th class="num">Goal VDOT {{ x.vdot_goal }}</th>{% endif %}</tr></thead>
         <tbody>{% for now, goal in x.parts %}<tr>
           <td><b>{{ now.label }}</b>{% if not now.part.fill %} {{ now.part.zone }}{% endif %}{% if now.part.rest %}<br><span class="small muted">{{ now.part.rest }} rest</span>{% endif %}</td>
-          {% for pc in ([now, goal] if x.vdot_goal else [now]) %}<td class="num">{% if pc.pace %}{% set q = pc.pace %}{% if q.rep is none %}<b>{{ fmt_time(q.mile)[:-2] }}/mi</b>
-            <br><span class="small muted">about {{ q.about }}{% if q.lap %} · {{ fmt_secs(q.lap) }}/400{% endif %}</span>{% else %}<b>{{ fmt_time(q.rep)[:-2] if q.rep >= 600 else fmt_time(q.rep) }}</b>
-            <br><span class="small muted">{{ fmt_time(q.mile)[:-2] }}/mi{% if q.lap %} · {{ fmt_secs(q.lap) }}/400{% endif %}</span>{% endif %}{% else %}<span class="small muted">–</span>{% endif %}</td>{% endfor %}
+          {% for pc in ([now, goal] if x.vdot_goal else [now]) %}<td class="num">{% if pc.pace %}{% set q = pc.pace %}{% if q.rep is none %}<b>{{ fmt_secs(q.mile) }}/mi</b>
+            <br><span class="small muted">about {{ q.about }}{% if q.lap %} · {{ fmt_secs(q.lap) }}/400{% endif %}</span>{% else %}<b>{{ fmt_secs(q.rep) }}</b>
+            <br><span class="small muted">{{ fmt_secs(q.mile) }}/mi{% if q.lap %} · {{ fmt_secs(q.lap) }}/400{% endif %}</span>{% endif %}{% else %}<span class="small muted">–</span>{% endif %}</td>{% endfor %}
         </tr>{% endfor %}</tbody>
       </table></div>
       {% if not x.vdot_now %}<p class="small muted">Your times appear once you have a VDOT (from a race, or set by your coach).</p>{% endif %}
@@ -141,8 +143,8 @@
       <div class="facts">
         {% for label, t, missing in (("From your current time", x.now, "Ask your coach to record a race or time trial."), ("From your goal", x.goal, "No goal set yet. Ask your coach.")) %}
         <div><span class="k">{{ label }}</span>
-          {% if t %}<span class="big">{{ fmt_time(t.mile)[:-2] ~ '/mi' if w.in_miles else fmt_time(t.rep) }}</span>
-          <span class="small">{% if w.in_miles %}about {{ fmt_time(t.rep)[:-2] }} for {{ w.distance_text }}{% else %}per rep · {{ fmt_time(t.mile) }}/mi{% if w.rep_distance_m > 400 %} · {{ fmt_time(t.lap) }}/400{% endif %}{% endif %}</span>
+          {% if t %}<span class="big">{{ fmt_secs(t.mile) ~ '/mi' if w.in_miles else fmt_secs(t.rep) }}</span>
+          <span class="small">{% if w.in_miles %}about {{ fmt_secs(t.rep) }} for {{ w.distance_text }}{% else %}per rep · {{ fmt_secs(t.mile) }}/mi{% if w.rep_distance_m > 400 %} · {{ fmt_secs(t.lap) }}/400{% endif %}{% endif %}</span>
           <span class="small muted">{{ t.source[0]|upper }}{{ t.source[1:] }}</span>
           {% else %}<span class="small muted">{{ missing }}</span>{% endif %}
         </div>
@@ -160,7 +162,7 @@
     {% for x in meets %}{% set m = x.meet %}{% set r = x.response %}
     <div class="wpace">
       <div class="d">{{ m.name }}</div>
-      <div class="small muted">{{ m.date.strftime('%a, %b %-d') }}{% if m.location %} · {{ m.location }}{% endif %}{% if x.race %} · You’re entered in {{ x.race.name }}{% if x.race.distance %} {{ x.race.distance }}{% endif %}{% endif %}</div>
+      <div class="small muted">{{ m.date.strftime('%a, %b %-d') }}{% if m.location %} · <a class="map-link" href="{{ map_url(m.location) }}" target="_blank" rel="noopener">{{ m.location }}</a>{% endif %}{% if x.race %} · You’re entered in {{ x.race.name }}{% if x.race.distance %} {{ x.race.distance }}{% endif %}{% endif %}</div>
       {% if m.forecast and m.forecast.temp_f is not none %}<p class="small" style="margin:6px 0 0">🌤 <b>Forecast{% if m.start_time %} for {{ m.start_time }}{% endif %}:</b> {{ describe_weather(m.forecast) }}</p>{% endif %}
       {% if x.course and x.course.video_url %}<p style="margin:8px 0"><a class="button secondary" href="{{ x.course.video_url }}" target="_blank" rel="noopener">▶ Course video: {{ x.course.name }}</a></p>{% endif %}
       {% if r and r.status == 'attending' %}<p class="small"><span class="pill good">You’re confirmed</span></p>
@@ -253,7 +255,9 @@
         {% for g in history.compare %}<option value="rv-{{ loop.index }}">Compare: {{ g.label }}</option>{% endfor %}
       </select></label>{% endif %}
     <div class="race-view" id="rv-years">
+      {% if history.seasons|length > 1 %}<div class="year-tabs" role="tablist" aria-label="Seasons">{% for season, rows in history.seasons %}<button type="button" role="tab" class="year-tab" data-season="ys-{{ loop.index }}" aria-selected="{{ 'true' if loop.first else 'false' }}">{{ season }}</button>{% endfor %}</div>{% endif %}
       {% for season, rows in history.seasons %}
+      <div class="year-block" id="ys-{{ loop.index }}">
       <h3 class="season">{{ season }} <span class="small muted">{{ rows|length }} race{{ '' if rows|length == 1 else 's' }}</span></h3>
       <ul class="runs">
         {% for x in rows %}{% set r = x.r %}
@@ -262,10 +266,11 @@
           <span class="r"><span class="mi">{{ fmt_time(r.time_s) }}</span>
             <span class="small muted">{{ fmt_time((r.time_s / (r.distance_m / 1609.344))|round)[:-2] }}/mi</span>
             {% if adjusted.get(r.id) %}<span class="small adj" title="What this effort would be on a track at 55°F or cooler, at sea level, with a low dew point">Adj. {{ fmt_time(adjusted[r.id]) }}</span>{% endif %}
-            <span class="small muted">{% if x.pr %}<span class="pill good">PR</span> {% elif x.cpr %}<span class="pill good">Course PR</span> {% elif x.sb %}<span class="pill">SB</span> {% endif %}{% if r.place %}Place {{ r.place }}{% endif %}</span></span>
+            <span class="small muted">{% if x.pr %}<span class="pill good">PR</span> {% elif x.cpr %}<span class="pill good">Course PR</span> {% elif x.sb %}<span class="pill">SB</span> {% endif %}{% if r.place %}Place {{ r.place }}{% endif %}</span>{% set vid = videos.get((r.date, r.meet, r.race)) if videos is defined else none %}{% if vid %}<a class="small video-link" href="{{ vid }}" target="_blank" rel="noopener">▶ Watch</a>{% endif %}</span>
         </div></li>
         {% endfor %}
       </ul>
+      </div>
       {% endfor %}
       <p class="muted small">PR = your best ever at that distance, on any course. Course PR = your best on that course at that distance (from your second race there). SB = your best that season.</p>
     </div>
@@ -290,6 +295,13 @@
       (function () { var sel = document.getElementById('race-view'); if (!sel) return;
         var show = function () { document.querySelectorAll('.race-view').forEach(function (d) { d.hidden = d.id !== sel.value; }); };
         sel.addEventListener('change', show); show(); })();
+      (function () { var tabs = document.querySelectorAll('.year-tab'); if (!tabs.length) return;
+        var pick = function (id) {
+          tabs.forEach(function (t) { t.setAttribute('aria-selected', t.dataset.season === id ? 'true' : 'false'); });
+          document.querySelectorAll('.year-block').forEach(function (b) { b.hidden = b.id !== id; });
+        };
+        tabs.forEach(function (t) { t.addEventListener('click', function () { pick(t.dataset.season); }); });
+        pick(tabs[0].dataset.season); })();
     </script>
   </section>
   {% endif %}

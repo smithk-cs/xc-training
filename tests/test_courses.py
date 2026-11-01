@@ -223,8 +223,15 @@ def test_race_times_show_pace_and_adjusted_time():
     c = TestClient(app, follow_redirects=False)
     csrf = re.search(r'name="csrf" value="([^"]+)"', c.get("/login").text).group(1)
     c.post("/login", data={"csrf": csrf, "username": "coach9", "password": "correct-horse-1"})
-    for page in (c.get(f"/athletes/{aid}").text, c.get("/races?season=all").text):
-        assert "<b>16:40.0</b>" in page and "5:22/mi" in page and f"Adj. {fmt_time(adj)}" in page
+    page = c.get(f"/athletes/{aid}").text
+    assert "<b>16:40.0</b>" in page and "5:22/mi" in page and f"Adj. {fmt_time(adj)}" in page
+    races = c.get("/races?season=all").text                       # races page: adjusted time and pace in their own column
+    assert "<b>16:40.0</b>" in races and "5:22/mi" in races and "Adj. " not in races
+    row = races[races.index("<b>16:40.0</b>"):]
+    row = row[:row.index("</tr>")]
+    adj_pace = fmt_time(round(adj / (5000 / 1609.344)))[:-2]
+    assert f'<td class="num nowrap adj-col"><b class="adj">{fmt_time(adj)}</b><br><span class="small muted">{adj_pace}/mi</span>' in row
+    assert ">Adjusted · pace</th>" in races
 
 
 def test_three_point_two_k_course_distance():

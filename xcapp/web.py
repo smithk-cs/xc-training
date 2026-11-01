@@ -159,7 +159,7 @@ def create_app() -> FastAPI:
     # A fingerprint of the style sheet and scripts: links carry it (?v=...), so browsers load new ones after each deploy.
     import hashlib
     asset_v = hashlib.sha256(b"".join(f.read_bytes() for f in sorted((HERE / "static").glob("*.[cj]s*")))).hexdigest()[:10]
-    templates.env.globals.update(asset_v=asset_v, fmt_clock=A.fmt_clock, fmt_secs=A.fmt_secs, describe_weather=WX.describe, fmt_time=A.fmt_time, timedelta=dt.timedelta, now=A.team_today, EVENTS=list(A.EVENTS), GROUPS=GROUPS, team_name=s.team_name,
+    templates.env.globals.update(asset_v=asset_v, map_url=A.map_url, fmt_clock=A.fmt_clock, fmt_secs=A.fmt_secs, describe_weather=WX.describe, fmt_time=A.fmt_time, timedelta=dt.timedelta, now=A.team_today, EVENTS=list(A.EVENTS), GROUPS=GROUPS, team_name=s.team_name,
                                  has_logo=has_logo, FEELS=FEELS, EFFORT_WORDS=EFFORT_WORDS, RUN_TYPES=A.RUN_TYPES,
                                  MISSED_REASONS=A.MISSED_REASONS, SIDES=A.SIDES, STARTED=A.STARTED, SEEN_BY=A.SEEN_BY,
                                  MORE_DAYS=A.MORE_DAYS, missed_label=A.missed_label,
@@ -979,12 +979,21 @@ def create_app() -> FastAPI:
             flash(request, "The meet needs a name.", "error")
             return back("/races")
         rows = db.scalars(select(RaceResult).where(RaceResult.date == d, RaceResult.meet == meet)).all()
+        course = str(f.get("course", "")).strip()[:160]
         for r in rows:
-            r.meet, r.date, r.course = name, new_date, str(f.get("course", "")).strip()[:160]
+            r.meet, r.date, r.course = name, new_date, course
             sync_benchmark(db, r)
         for model in (RaceTeamResult, MeetConditions):  # the meet's team results and race-day conditions move with it
             for x in db.scalars(select(model).where(model.date == d, model.meet == meet)).all():
                 x.meet, x.date = name, new_date
+        saved = db.scalar(select(Course).where(Course.name == course)) if course else None
+        if saved is not None:   # a course from the Courses page: adjusted times and race-day weather use it
+            db.flush()
+            cond = db.scalar(select(MeetConditions).where(MeetConditions.date == new_date, MeetConditions.meet == name))
+            if cond is None:
+                cond = MeetConditions(meet=name, date=new_date)
+                db.add(cond)
+            cond.course_id = saved.id
         log(db, "admin", f"{user.username} edited {meet} ({d}) → {name} ({new_date}).")
         flash(request, f"Saved {name} ({len(rows)} results).")
         return back(races_url(new_date))
@@ -1069,7 +1078,13 @@ def create_app() -> FastAPI:
             db.rollback()
             flash(request, "Team place and number of teams are whole numbers (place no more than the number of teams); points a number.", "error")
             return back(races_url(d))
-        if row.place is None and row.teams is None and row.points is None:
+        try:
+            row.video_url = A.youtube_url(str(f.get("video", "")))
+        except ValueError as exc:
+            db.rollback()
+            flash(request, str(exc), "error")
+            return back(races_url(d))
+        if row.place is None and row.teams is None and row.points is None and not row.video_url:
             db.delete(row)
         flash(request, f"Saved the team result for {race or 'the race'} at {meet}.")
         return back(races_url(d))
@@ -1736,7 +1751,9 @@ def create_app() -> FastAPI:
         races = db.scalars(select(RaceResult).where(RaceResult.athlete_id == a.id)
                            .order_by(RaceResult.date.desc(), RaceResult.id.desc())).all()
         history = A.race_history(races)
-        return render(request, "athlete.html", None, history=history, adjusted=CS.adjusted_times(db, races), paces=paces, a=a, acts=acts, tiles=tiles, seasons=seasons, need=need, ability=ability,
+        videos = {(t.date, t.meet, t.race): t.video_url for t in db.scalars(select(RaceTeamResult).where(
+            RaceTeamResult.video_url != "", RaceTeamResult.date.in_({r.date for r in races} or {today}))).all()}
+        return render(request, "athlete.html", None, history=history, videos=videos, adjusted=CS.adjusted_times(db, races), paces=paces, a=a, acts=acts, tiles=tiles, seasons=seasons, need=need, ability=ability,
                       show_group=show_group, open_delete=open_delete, races=races, vo2=A.latest_vo2(db, a.id),
                       rhr=A.resting_hr(db, a.id, today), rhr_range=(A.RESTING_HR_MIN, A.RESTING_HR_MAX),
                       rhr_cal=A.resting_hr_calendar(db, a.id, today), photo_v=photo_versions(db).get(a.id), meets=my_meets(db, a, today),

@@ -121,14 +121,15 @@ def test_athlete_page_layout(app_client=None):
     page = c.get("/a/t-lay").text
     assert page.index('id="wp-h"') < page.index('id="rhr-h"') < page.index('id="ac-h"')
     assert '<details class="panel fold" id="workouts" open>' in page and '<details class="panel fold" id="rhr" open>' in page
-    assert "Enter today’s ›" in page and '<span class="k">This week</span>' not in page
+    assert 'class="rhr-chips"' in page and '<span class="k">Your usual</span>' in page and '<span class="k">This week</span>' not in page
+    assert page.index("rhr-chips") < page.index("</summary>", page.index('id="rhr-h"'))         # on the heading's line
     assert '<option value="results">' not in page and "<section class=\"panel\" aria-labelledby=\"g-h\">" in page
     db = SessionLocal()
     db.add(RestingHeartRate(athlete_id=aid, date=A.team_today(), bpm=47, source="athlete"))
     db.commit()
     db.close()
     page = c.get("/a/t-lay").text
-    assert '<details class="panel fold" id="rhr">' in page and "Today 47 ✓" in page and "Enter today’s ›" not in page
+    assert '<details class="panel fold" id="rhr">' in page and '<span class="k">Latest · Today</span><b>47</b>' in page
     assert page.index('id="ac-h"') < page.index('id="rhr-h"')
 
 
