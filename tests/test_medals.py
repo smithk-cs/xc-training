@@ -14,7 +14,7 @@ def fake_week(calls):
     def team_week(db, monday, gender=None, athletes=None):
         calls.append(monday)
         score, miles, goal = WEEKS.get(monday, (50, 10, 30))
-        return [{"a": a, "score": score, "miles": miles, "goal_miles": goal, "points": score, "target": 100} for a in athletes]
+        return [{"a": a, "score": score, "miles": miles, "goal_miles": goal, "points": score, "target": 100, "run_days": 5} for a in athletes]
     return team_week
 
 

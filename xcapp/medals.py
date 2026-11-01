@@ -59,7 +59,8 @@ def ensure_weeks(db: Session, athletes: list[Athlete], mondays: list[dt.date], t
         WeekResult.athlete_id.in_(ids), WeekResult.monday >= min(mondays), WeekResult.monday <= max(mondays))).all()}
     for m in mondays:
         recent = m + dt.timedelta(days=6) >= today - dt.timedelta(days=RECHECK_DAYS)
-        need = [a for a in athletes if (r := saved.get((a.id, m))) is None or r.points is None or r.computed_on < RULES_CHANGED <= today
+        need = [a for a in athletes if (r := saved.get((a.id, m))) is None or r.points is None or r.run_days is None
+                or r.computed_on < RULES_CHANGED <= today
                 or (recent and r.computed_on < today)]
         if not need:
             continue
@@ -70,6 +71,7 @@ def ensure_weeks(db: Session, athletes: list[Athlete], mondays: list[dt.date], t
                 r = saved[key] = WeekResult(athlete_id=w["a"].id, monday=m)
                 db.add(r)
             r.score, r.miles, r.goal_miles, r.points, r.target = w["score"], w["miles"], w["goal_miles"], w["points"], w["target"]
+            r.run_days = w["run_days"]
             r.medal, r.computed_on = medal_for(w["score"], w["miles"], w["goal_miles"]), today
     db.flush()
     return saved

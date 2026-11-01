@@ -561,3 +561,6 @@ table.parts tr.dragging { opacity: .45; }
 .season-part.current .season-name input { font-weight: 700; }
 .season-year button { margin-top: 12px; }
 @media (max-width: 600px) { .season-part { grid-template-columns: 1fr 1fr; } .season-part .season-name { grid-column: 1 / -1; } }
+.scoring-form fieldset { border: 1px solid var(--color-border-line); border-radius: 12px; padding: 10px 14px; margin: 0 0 12px; }
+.scoring-form legend { padding: 0 6px; font-weight: 700; }
+.race-picks { display: flex; flex-direction: column; gap: 4px; max-height: 18em; overflow-y: auto; }

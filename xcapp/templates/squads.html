@@ -3,26 +3,34 @@
 {% set can_edit = user.role in ('admin', 'coach') %}
 {% macro dot(s) %}<span class="squad-dot" style="background:{{ s.color or '#888' }}"></span>{% endmacro %}
 {% macro pct(v) %}{{ '%.0f%%'|format(v) if v is not none else '–' }}{% endmacro %}
-{% macro week_table(w) %}
+{% macro week_table(w) %}{% set sc = st.scoring %}
   <div class="scroll squad-week">
     <h3>Week of {{ w.monday.strftime('%b %-d') }}{% if not w.done %} <span class="pill warn">so far</span>{% endif %}</h3>
-    <table class="list centered"><thead><tr><th>Squad</th><th class="num">Miles</th><th class="num">Of miles goals</th><th class="num">Practice points</th><th class="num">Of points targets</th><th class="num">Races</th><th class="num">Team points</th></tr></thead><tbody>
+    <table class="list centered"><thead><tr><th>Squad</th><th class="num">Miles run</th>
+      {% if sc.race_on %}<th class="num">Races</th>{% endif %}
+      {% if sc.miles_on %}<th class="num">{{ '%g'|format(sc.miles_pct) }}% of miles goal</th>{% endif %}
+      {% if sc.days_on %}<th class="num">{{ sc.days_min }}+ days run</th>{% endif %}
+      {% if sc.points_on %}<th class="num">{{ '%g'|format(sc.points_pct) }}% of points target</th>{% endif %}
+      <th class="num">Team points</th></tr></thead><tbody>
     {% for s in st.squads %}{% set r = w.rows[s.id] %}<tr>
       <td class="squad-name">{{ dot(s) }} {{ s.name }}</td>
       <td class="num">{{ '%.1f'|format(r.miles) }}<br><span class="small muted">{{ '%.1f'|format(r.miles / r.members) if r.members else '–' }} each</span></td>
-      <td class="num">{{ pct(r.miles_pct) }}{% if r.team_points.miles %}<br><span class="small muted">{{ '%g'|format(r.team_points.miles) }} tp</span>{% endif %}</td>
-      <td class="num">{{ '%.0f'|format(r.points) }}</td>
-      <td class="num">{{ pct(r.points_pct) }}{% if r.team_points.points %}<br><span class="small muted">{{ '%g'|format(r.team_points.points) }} tp</span>{% endif %}</td>
-      <td class="num">{% if r.races is not none %}{{ r.races }} beaten{% if r.team_points.races %}<br><span class="small muted">{{ '%g'|format(r.team_points.races) }} tp</span>{% endif %}{% else %}–{% endif %}</td>
-      <td class="num"><b>{{ '%g'|format(r.total) }}</b></td>
+      {% if sc.race_on %}<td class="num">{{ tp(r.parts.race) }}</td>{% endif %}
+      {% if sc.miles_on %}<td class="num">{{ r.hit_miles }} of {{ r.members }}<br><span class="small muted">{{ tp(r.parts.miles) }} pts</span></td>{% endif %}
+      {% if sc.days_on %}<td class="num">{{ r.hit_days }} of {{ r.members }}<br><span class="small muted">{{ tp(r.parts.days) }} pts</span></td>{% endif %}
+      {% if sc.points_on %}<td class="num">{{ r.hit_points }} of {{ r.members }}<br><span class="small muted">{{ tp(r.parts.points) }} pts</span></td>{% endif %}
+      <td class="num"><b>{{ '%g'|format(r.total) }}</b>{% if not w.done and r.total != (r.parts.race or 0) %}<br><span class="small muted">counts at week’s end</span>{% endif %}</td>
     </tr>{% endfor %}
     </tbody></table>
-    {% if w.races %}<p class="small muted">Races: {% for rc in w.races %}{{ rc.meet }}{% if rc.race %} ({{ rc.race }}){% endif %}, {{ rc.runners }} squad runner{{ 's' if rc.runners != 1 }}{% if not loop.last %}; {% endif %}{% endfor %}.</p>{% endif %}
+    {% for rc in w.races %}
+    <p class="small{{ ' muted' if not rc.counts }}" style="margin:8px 0 0"><b>{{ rc.meet }}{% if rc.race %} · {{ rc.race }}{% endif %}</b> ({{ rc.date.strftime('%a %b %-d') }}, {{ rc.runners }} squad runner{{ 's' if rc.runners != 1 }}){% if not rc.counts %}: not counted{% endif %}:
+      {% for x in rc.order %}{% set s = st.squads|selectattr('id', 'equalto', x.squad_id)|first %}{{ loop.index }}. {{ s.name }} {{ x.score }}{% if not x.complete %} ({{ x.finishers }} finisher{{ 's' if x.finishers != 1 }}, incomplete){% endif %}{% if rc.counts %} → {{ '%g'|format(x.points) }} pts{% endif %}{% if not loop.last %}; {% endif %}{% endfor %}</p>
+    {% endfor %}
   </div>
 {% endmacro %}
 {% macro tp(v) %}{{ ('%g'|format(v)) if v else '–' }}{% endmacro %}
 <h1>Squads</h1>
-<p class="small muted">The team split into balanced squads that compete each week on miles, practice points and races.</p>
+<p class="small muted">The team split into balanced squads that compete each week on races, miles and days run.</p>
 
 {% if comps|length > 1 or (comps and not comp) %}
 <form method="get" class="form-row" onsubmit="location.href='/squads/' + this.cid.value; return false;">
@@ -52,18 +60,17 @@
 
 <div class="card scroll" id="standings">
   <h2>Standings</h2>
-  <table class="list centered"><thead><tr><th>Squad</th><th class="num">Team points</th><th class="num">Miles</th><th class="num">Practice points</th><th class="num">Races</th><th class="num">Athletes</th><th class="num">Avg VDOT</th></tr></thead><tbody>
+  <table class="list centered"><thead><tr><th>Squad</th><th class="num">Team points</th>{% for k, n in st.categories %}<th class="num">{{ n }}</th>{% endfor %}<th class="num">Miles run</th><th class="num">Athletes</th><th class="num">Avg VDOT</th></tr></thead><tbody>
   {% for s in st.table %}{% set t = st.totals.get(s.id, {}) %}<tr>
     <td class="squad-name">{{ dot(s) }} <b>{{ s.name }}</b></td>
-    <td class="num"><b>{{ '%g'|format(t.get('team_points', 0)) }}</b></td>
-    <td class="num">{{ tp(t.get('miles_tp')) }}<br><span class="small muted">{{ '%.0f'|format(t.get('miles', 0)) }} mi</span></td>
-    <td class="num">{{ tp(t.get('points_tp')) }}<br><span class="small muted">{{ '%.0f'|format(t.get('points', 0)) }} pts</span></td>
-    <td class="num">{{ tp(t.get('races_tp')) }}<br><span class="small muted">{{ '%.0f'|format(t.get('races', 0)) }} beaten</span></td>
+    <td class="num"><b>{{ '%g'|format(t.get('total', 0)) }}</b></td>
+    {% for k, n in st.categories %}<td class="num">{{ tp(t.get(k)) }}</td>{% endfor %}
+    <td class="num">{{ '%.0f'|format(t.get('miles_run', 0)) }}</td>
     <td class="num">{{ s.members|length }}</td>
     <td class="num small">{% for g, v in st.strength[s.id].items() %}{{ g }} {{ '%.1f'|format(v) }}{% if not loop.last %}<br>{% endif %}{% else %}–{% endfor %}</td>
   </tr>{% endfor %}
   </tbody></table>
-  <p class="small muted">Team points and the miles, points and runners beaten under them add up the finished weeks. The current week shows below as it goes and counts once it ends.</p>
+  <p class="small muted">Race points count as soon as a race is in; miles, days and practice points once the week is over.</p>
 </div>
 
 <div class="card" id="weeks">
@@ -71,14 +78,14 @@
   {% for w in st.weeks[:3] %}{{ week_table(w) }}{% else %}<p class="muted">The first week hasn’t started yet.</p>{% endfor %}
   {% if st.weeks|length > 3 %}<details class="squad-earlier"><summary>Earlier weeks ({{ st.weeks|length - 3 }})</summary>
   {% for w in st.weeks[3:] %}{{ week_table(w) }}{% endfor %}</details>{% endif %}
-  <details class="small muted"><summary>How team points work</summary>
-    <p>Each week the squads are ranked in three ways, and the best squad gets as many team points as there are squads, the next one fewer, down to 1 (ties share):</p>
+  {% set sc = st.scoring %}<details class="small muted"><summary>How team points work</summary>
     <ul>
-      <li><b>Miles</b>: the squad’s average share of each athlete’s weekly miles goal, so a newer runner who hits a smaller goal helps as much as a varsity runner who hits a bigger one. Each athlete counts up to 110%.</li>
-      <li><b>Practice points</b>: the squad’s average share of each athlete’s weekly points target (the Week page’s points), up to 110%.</li>
-      <li><b>Races</b>, in weeks with races: in each race, every squad runner earns one point for each runner from another squad they finish ahead of.</li>
+      {% if sc.race_on %}<li><b>Races</b>: each counted race is scored like a cross country meet among the squads: squad runners are placed 1, 2, 3 … in finishing order and each squad adds the places of its first {{ sc.race_scorers }}; lowest wins. By place the squads earn {{ sc.race_points|map('string')|join(', ') }} points. A squad with fewer than {{ sc.race_scorers }} finishers places after the full ones.</li>{% endif %}
+      {% if sc.miles_on %}<li><b>Miles</b>: {{ '%g'|format(sc.miles_pts) }} point{{ 's' if sc.miles_pts != 1 }} for each athlete who runs at least {{ '%g'|format(sc.miles_pct) }}% of their weekly miles goal (their running group’s goal, set by VDOT).</li>{% endif %}
+      {% if sc.days_on %}<li><b>Days run</b>: {{ '%g'|format(sc.days_pts) }} point{{ 's' if sc.days_pts != 1 }} for each athlete who runs at least {{ sc.days_min }} days that week (days with the Week page’s minimum minutes, and race days).</li>{% endif %}
+      {% if sc.points_on %}<li><b>Practice points</b>: {{ '%g'|format(sc.points_pts) }} point{{ 's' if sc.points_pts != 1 }} for each athlete who earns at least {{ '%g'|format(sc.points_pct) }}% of their weekly points target.</li>{% endif %}
     </ul>
-    <p>Athletes count for the squad they are on now, for every week, so a move carries their weeks with them.</p>
+    <p>Change these under Scoring below. Athletes count for the squad they are on now, for every week, so a move carries their weeks with them.</p>
   </details>
 </div>
 
@@ -113,6 +120,32 @@
   </div>
   {% endif %}
 </div>
+
+<details class="card fold-card" id="scoring">
+  <summary><h2>Scoring</h2></summary>
+  {% set sc = st.scoring %}{% set ro = '' if can_edit else ' disabled' %}
+  <form method="post" action="/squads/{{ comp.id }}/scoring" class="scoring-form">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <fieldset><legend><label class="check"><input type="checkbox" name="race_on" value="1"{{ ' checked' if sc.race_on }}{{ ro }}> Races</label></legend>
+      <p class="small muted">Lowest squad score wins. Points by place:</p>
+      <div class="form-row">{% for s in st.squads %}<label>{{ loop.index }}{{ ['st','nd','rd'][loop.index0] if loop.index0 < 3 else 'th' }}<input type="number" name="race_place_{{ loop.index0 }}" value="{{ '%g'|format(sc.race_points[loop.index0]) if loop.index0 < sc.race_points|length else 0 }}" min="0" max="1000" step="any" style="width:5em"{{ ro }}></label>{% endfor %}
+        <label>Runners who score<input type="number" name="race_scorers" value="{{ sc.race_scorers }}" min="1" max="10" style="width:5em"{{ ro }}></label></div>
+      {% if races %}<p class="small muted" style="margin-bottom:4px">Races that count (new races count until you untick them):</p>
+      <div class="race-picks">{% for r in races %}<label class="check"><input type="hidden" name="race_listed" value="{{ r.key }}"><input type="checkbox" name="race_count" value="{{ r.key }}"{{ ' checked' if r.counts }}{{ ro }}> {{ r.date.strftime('%b %-d') }} · {{ r.meet }}{% if r.race %} · {{ r.race }}{% endif %} <span class="muted">({{ r.runners }})</span></label>{% endfor %}</div>
+      {% else %}<p class="small muted">No races yet during this competition.</p>{% endif %}
+    </fieldset>
+    <fieldset><legend><label class="check"><input type="checkbox" name="miles_on" value="1"{{ ' checked' if sc.miles_on }}{{ ro }}> Miles</label></legend>
+      <div class="form-row"><label>Points per athlete<input type="number" name="miles_pts" value="{{ '%g'|format(sc.miles_pts) }}" min="0" max="100" step="any" style="width:5em"{{ ro }}></label>
+        <label>who run at least (% of weekly miles goal)<input type="number" name="miles_pct" value="{{ '%g'|format(sc.miles_pct) }}" min="1" max="200" step="any" style="width:5em"{{ ro }}></label></div></fieldset>
+    <fieldset><legend><label class="check"><input type="checkbox" name="days_on" value="1"{{ ' checked' if sc.days_on }}{{ ro }}> Days run</label></legend>
+      <div class="form-row"><label>Points per athlete<input type="number" name="days_pts" value="{{ '%g'|format(sc.days_pts) }}" min="0" max="100" step="any" style="width:5em"{{ ro }}></label>
+        <label>who run at least (days a week)<input type="number" name="days_min" value="{{ sc.days_min }}" min="1" max="7" style="width:5em"{{ ro }}></label></div></fieldset>
+    <fieldset><legend><label class="check"><input type="checkbox" name="points_on" value="1"{{ ' checked' if sc.points_on }}{{ ro }}> Practice points</label></legend>
+      <div class="form-row"><label>Points per athlete<input type="number" name="points_pts" value="{{ '%g'|format(sc.points_pts) }}" min="0" max="100" step="any" style="width:5em"{{ ro }}></label>
+        <label>who earn at least (% of weekly points target)<input type="number" name="points_pct" value="{{ '%g'|format(sc.points_pct) }}" min="1" max="200" step="any" style="width:5em"{{ ro }}></label></div></fieldset>
+    {% if can_edit %}<button type="submit">Save scoring</button>{% endif %}
+  </form>
+</details>
 
 {% if can_edit %}
 <details class="card fold-card">

@@ -4,14 +4,14 @@ Balancing, boys and girls each on their own: athletes are ranked by VDOT, dealt 
 (1-2-3-3-2-1 ...), then the strongest and weakest squads swap runners while that brings their averages closer.
 Athletes without a VDOT count as average.
 
-Weekly team points (only for finished weeks; the current week shows so far):
-- Miles: the squad's average share of each athlete's weekly miles goal (capped at 110% so one big week can't carry
-  a squad);
-- Practice points: the squad's average share of each athlete's weekly points target (capped at 110%);
-- Races, in a week with races: in each race, every squad runner earns one point for each runner from another squad
-  they finish ahead of.
-In each category the best squad gets as many team points as there are squads, the next one fewer, down to 1 (ties
-share). Shares, not totals, so squads compare fairly however fast their runners are. Athletes count for the squad
+Scoring, set for each competition in its Settings (squads.DEFAULT_SCORING):
+- Races (the coach picks which completed races count): each race is scored like a cross country meet among the
+  squads (squad runners placed in finishing order, a squad's score the sum of its first five places, lowest wins),
+  and the squads earn 40, 25, 10, 5 ... points by place;
+- Miles: points for each athlete who runs at least 90% of their weekly miles goal (their VDOT group's goal);
+- Days run: points for each athlete who runs at least 6 days that week (the Week page's days run);
+- Practice points (off at first): points for each athlete who earns at least 90% of their weekly points target.
+Practice points count once the week is over; race points as soon as the race is in. Athletes count for the squad
 they are on now, for every week.
 """
 from __future__ import annotations
@@ -31,8 +31,6 @@ from .models import Athlete, RaceResult, Squad, SquadCompetition, SquadMember
 NAMES = ("Red", "Gold", "Blue", "Green", "Purple", "Orange", "Silver", "Black")
 COLORS = ("#C8102E", "#D4A017", "#1F5FBF", "#2E8B57", "#7B4FA0", "#E07B1F", "#8A8D91", "#333333")
 MAX_SQUADS = 8
-SHARE_CAP = 1.10
-CATEGORIES = (("miles", "Miles"), ("points", "Practice points"), ("races", "Races"))
 
 
 # ---------- choosing and balancing ----------
@@ -143,44 +141,54 @@ def move(db: Session, comp: SquadCompetition, athlete_id: int, squad_id: int | N
 
 # ---------- weekly scoring ----------
 
-def _rank_points(values: dict[int, float | None], n: int, low_wins: bool = False) -> dict[int, float]:
-    """n for the best squad down to 1, ties sharing; squads without a value get nothing."""
-    have = [(sid, v) for sid, v in values.items() if v is not None]
-    have.sort(key=lambda x: x[1] if low_wins else -x[1])
-    out, i = {}, 0
-    while i < len(have):
-        j = i
-        while j + 1 < len(have) and abs(have[j + 1][1] - have[i][1]) < 1e-9:
-            j += 1
-        pts = statistics.fmean(n - k for k in range(i, j + 1))
-        for k in range(i, j + 1):
-            out[have[k][0]] = pts
-        i = j + 1
+DEFAULT_SCORING = {
+    "race_on": True, "race_points": [40, 25, 10, 5], "race_scorers": 5, "excluded_races": [],
+    "miles_on": True, "miles_pct": 90, "miles_pts": 1,
+    "days_on": True, "days_min": 6, "days_pts": 1,
+    "points_on": False, "points_pct": 90, "points_pts": 1,
+}
+CATEGORIES = (("race", "Races"), ("miles", "Miles"), ("days", "Days run"), ("points", "Practice points"))
+
+
+def scoring(comp: SquadCompetition) -> dict:
+    import json
+    try:
+        saved = json.loads(comp.scoring) if comp.scoring else {}
+    except ValueError:
+        saved = {}
+    return {**DEFAULT_SCORING, **{k: v for k, v in saved.items() if k in DEFAULT_SCORING}}
+
+
+def race_key(day: dt.date, meet: str, race: str) -> str:
+    return f"{day.isoformat()}|{meet}|{race}"
+
+
+def score_race(rs: list[RaceResult], squad_of: dict[int, int], scorers: int) -> list[dict]:
+    """Cross country scoring among the squads: squad runners placed 1, 2, 3 ... in finishing order, each squad's
+    score the sum of its first `scorers` places (lowest wins). Squads short of that many finishers come after the
+    full ones (more finishers first, then the lower score)."""
+    rs = sorted((r for r in rs if r.athlete_id in squad_of and r.time_s), key=lambda r: r.time_s)
+    places: dict[int, list[int]] = defaultdict(list)
+    for k, r in enumerate(rs, 1):
+        places[squad_of[r.athlete_id]].append(k)
+    out = [{"squad_id": sid, "finishers": len(ps), "score": sum(ps[:scorers]), "complete": len(ps) >= scorers}
+           for sid, ps in places.items()]
+    out.sort(key=lambda x: (not x["complete"], -min(x["finishers"], scorers), x["score"]))
     return out
 
 
-def _share(done: float | None, due: float | None) -> float | None:
-    return min(done / due, SHARE_CAP) if due and due > 0 and done is not None else None
-
-
-def race_points(results: list[RaceResult], squad_of: dict[int, int]) -> tuple[dict[int, int], list[dict]]:
-    """Per squad, runners from other squads beaten in the same race; and each race's squad scores."""
-    races = defaultdict(list)
-    for r in results:
-        if r.athlete_id in squad_of and r.time_s:
-            races[(r.date, r.meet, r.race)].append(r)
-    total: dict[int, int] = defaultdict(int)
-    detail = []
-    for (day, meet, race), rs in sorted(races.items()):
-        rs.sort(key=lambda r: r.time_s)
-        score: dict[int, int] = defaultdict(int)
-        for k, r in enumerate(rs):
-            mine = squad_of[r.athlete_id]
-            score[mine] += sum(1 for x in rs[k + 1:] if squad_of[x.athlete_id] != mine)
-        for sid, v in score.items():
-            total[sid] += v
-        detail.append({"date": day, "meet": meet, "race": race, "runners": len(rs), "score": dict(score)})
-    return dict(total), detail
+def _award(order: list[dict], table: list[float], same) -> dict[int, float]:
+    """Points by place, ties sharing the points of the places they cover."""
+    pts, i = {}, 0
+    while i < len(order):
+        j = i
+        while j + 1 < len(order) and same(order[j + 1], order[i]):
+            j += 1
+        share = statistics.fmean(table[k] if k < len(table) else 0 for k in range(i, j + 1))
+        for k in range(i, j + 1):
+            pts[order[k]["squad_id"]] = share
+        i = j + 1
+    return pts
 
 
 def weeks_of(comp: SquadCompetition, today: dt.date) -> list[dt.date]:
@@ -192,12 +200,26 @@ def weeks_of(comp: SquadCompetition, today: dt.date) -> list[dt.date]:
     return out
 
 
+def completed_races(db: Session, comp: SquadCompetition, today: dt.date) -> list[dict]:
+    """Races squad members ran during the competition, newest first, and whether each counts."""
+    sc = scoring(comp)
+    ids = list(db.scalars(select(SquadMember.athlete_id).where(SquadMember.competition_id == comp.id)).all())
+    end = min(today, comp.end_date) if comp.end_date else today
+    rows = db.execute(select(RaceResult.date, RaceResult.meet, RaceResult.race).where(
+        RaceResult.athlete_id.in_(ids or [-1]), RaceResult.date >= comp.start_date, RaceResult.date <= end)).all()
+    count = defaultdict(int)
+    for d, m, r in rows:
+        count[(d, m, r or "")] += 1
+    return [{"date": d, "meet": m, "race": r, "runners": n, "key": race_key(d, m, r), "counts": race_key(d, m, r) not in sc["excluded_races"]}
+            for (d, m, r), n in sorted(count.items(), key=lambda x: (x[0][0], x[0][1], x[0][2]), reverse=True)]
+
+
 def standings(db: Session, comp: SquadCompetition, today: dt.date) -> dict:
+    sc = scoring(comp)
     squads = db.scalars(select(Squad).where(Squad.competition_id == comp.id).order_by(Squad.position)
                         .options(selectinload(Squad.members).selectinload(SquadMember.athlete))).all()
     squad_of = {m.athlete_id: s.id for s in squads for m in s.members}
     athletes = [m.athlete for s in squads for m in s.members]
-    n = len(squads)
     mondays = weeks_of(comp, today)
     finished = [m for m in mondays if m + dt.timedelta(days=6) < today]
     saved = MD.ensure_weeks(db, athletes, finished, today)
@@ -208,46 +230,66 @@ def standings(db: Session, comp: SquadCompetition, today: dt.date) -> dict:
     end = (mondays[-1] + dt.timedelta(days=6)) if mondays else comp.start_date
     results = db.scalars(select(RaceResult).where(RaceResult.athlete_id.in_(list(squad_of) or [-1]),
                                                   RaceResult.date >= comp.start_date, RaceResult.date <= end)).all()
+    races = defaultdict(list)
+    for r in results:
+        races[(r.date, r.meet, r.race or "")].append(r)
     weeks, totals = [], {s.id: defaultdict(float) for s in squads}
     for m in mondays:
         done = m in finished
         rows = {}
         for s in squads:
-            ws = []
+            hit_m = hit_d = hit_p = 0
+            miles = pts = 0.0
             for mem in s.members:
                 if done:
                     r = saved.get((mem.athlete_id, m))
-                    ws.append((r.miles, r.goal_miles, r.points, r.target, r.score) if r else (0, None, 0, None, None))
+                    vals = (r.miles, r.goal_miles, r.points, r.target, r.run_days or 0) if r else (0, None, 0, None, 0)
                 else:
                     w = live.get(mem.athlete_id)
-                    ws.append((w["miles"], w["goal_miles"], w["points"], w["target"], w.get("score_pct")) if w else (0, None, 0, None, None))
-            miles_sh = [x for x in (_share(mi, g) for mi, g, *_ in ws) if x is not None]
-            pts_sh = [x for x in (_share(p, t) for _, _, p, t, _ in ws) if x is not None]
-            rows[s.id] = {"members": len(ws), "miles": sum(w[0] for w in ws), "points": sum(w[2] for w in ws),
-                          "miles_pct": 100 * statistics.fmean(miles_sh) if miles_sh else None,
-                          "points_pct": 100 * statistics.fmean(pts_sh) if pts_sh else None}
-        week_results = [r for r in results if m <= r.date <= m + dt.timedelta(days=6)]
-        race_total, race_detail = race_points(week_results, squad_of)
-        for s in squads:
-            rows[s.id]["races"] = race_total.get(s.id, 0) if race_detail else None
-        cat_pts = {"miles": _rank_points({sid: r["miles_pct"] for sid, r in rows.items()}, n),
-                   "points": _rank_points({sid: r["points_pct"] for sid, r in rows.items()}, n),
-                   "races": _rank_points({sid: r["races"] for sid, r in rows.items()}, n) if race_detail else {}}
+                    vals = (w["miles"], w["goal_miles"], w["points"], w["target"], w["run_days"]) if w else (0, None, 0, None, 0)
+                mi, goal, p, target, days = vals
+                miles, pts = miles + mi, pts + p
+                hit_m += bool(goal) and mi >= goal * sc["miles_pct"] / 100 - 1e-9
+                hit_p += bool(target) and p >= target * sc["points_pct"] / 100 - 1e-9
+                hit_d += days >= sc["days_min"]
+            rows[s.id] = {"members": len(s.members), "miles": miles, "points": pts, "hit_miles": hit_m, "hit_days": hit_d,
+                          "hit_points": hit_p, "race": 0.0}
+        week_races = []
+        for (day, meet, race), rs in sorted(races.items()):
+            if not (m <= day <= m + dt.timedelta(days=6)):
+                continue
+            key = race_key(day, meet, race)
+            counts = sc["race_on"] and key not in sc["excluded_races"]
+            order = score_race(rs, squad_of, int(sc["race_scorers"]))
+            award = _award(order, [float(x) for x in sc["race_points"]],
+                           lambda a, b: (a["complete"], a["score"], a["complete"] or a["finishers"])
+                           == (b["complete"], b["score"], b["complete"] or b["finishers"])) if counts else {}
+            for x in order:
+                x["points"] = award.get(x["squad_id"], 0)
+                if counts:
+                    rows[x["squad_id"]]["race"] += x["points"]
+            week_races.append({"date": day, "meet": meet, "race": race, "key": key, "counts": counts, "order": order,
+                               "runners": sum(x["finishers"] for x in order)})
         for sid, r in rows.items():
-            r["team_points"] = {k: cat_pts[k].get(sid) for k in cat_pts}
-            r["total"] = sum(v for v in r["team_points"].values() if v)
-            if done:
+            r["parts"] = {"race": r["race"] if sc["race_on"] else None,
+                          "miles": r["hit_miles"] * sc["miles_pts"] if sc["miles_on"] else None,
+                          "days": r["hit_days"] * sc["days_pts"] if sc["days_on"] else None,
+                          "points": r["hit_points"] * sc["points_pts"] if sc["points_on"] else None}
+            r["total"] = sum(v for v in r["parts"].values() if v)
+            if done or any(x["counts"] for x in week_races):
                 t = totals[sid]
-                t["team_points"] += r["total"]
-                t["miles"] += r["miles"]
-                t["points"] += r["points"]
-                t["races"] += r["races"] or 0
-                for k in cat_pts:
-                    t[k + "_tp"] += r["team_points"][k] or 0
-        weeks.append({"monday": m, "done": done, "rows": rows, "races": race_detail})
-    table = sorted(squads, key=lambda s: (-totals[s.id]["team_points"], s.position))
+                # practice only counts once the week is over; races count as soon as they are run
+                t["total"] += r["total"] if done else (r["parts"]["race"] or 0)
+                for k, v in r["parts"].items():
+                    if v and (done or k == "race"):
+                        t[k] += v
+                if done:
+                    t["miles_run"] += r["miles"]
+        weeks.append({"monday": m, "done": done, "rows": rows, "races": week_races})
+    table = sorted(squads, key=lambda s: (-totals[s.id]["total"], s.position))
     return {"squads": squads, "weeks": weeks[::-1], "totals": {k: dict(v) for k, v in totals.items()}, "table": table,
-            "finished": len(finished), "strength": _squad_strength(db, squads, today)}
+            "finished": len(finished), "strength": _squad_strength(db, squads, today), "scoring": sc,
+            "categories": [(k, n) for k, n in CATEGORIES if sc[k + "_on"]]}
 
 
 def _squad_strength(db: Session, squads: list[Squad], today: dt.date) -> dict[int, dict]:

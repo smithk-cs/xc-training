@@ -35,13 +35,16 @@ def test_split_balances_each_gender():
         assert max(means) - min(means) < 0.35
 
 
-def test_rank_points_and_race_points():
-    assert SQ._rank_points({1: 90, 2: 80, 3: 90, 4: None}, 3) == {1: 2.5, 3: 2.5, 2: 1}
-    rr = lambda aid, t, race="V": RaceResult(athlete_id=aid, meet="Meet", date=MON, race=race, distance_m=5000, time_s=t)  # noqa: E731
-    squad_of = {1: 10, 2: 10, 3: 20, 4: 20, 5: 20}
-    total, detail = SQ.race_points([rr(1, 900), rr(3, 910), rr(2, 920), rr(4, 930), rr(5, 950, "JV"), rr(99, 800)], squad_of)
-    # Varsity: 1 beats 3 and 4 (2), 3 beats 2 (1), 2 beats 4 (1); JV alone: 0. Athlete 99 is on no squad.
-    assert total == {10: 3, 20: 1} and [d["runners"] for d in detail] == [1, 4]
+def test_race_scoring_like_cross_country():
+    rr = lambda aid, t: RaceResult(athlete_id=aid, meet="Meet", date=MON, race="V", distance_m=5000, time_s=t)  # noqa: E731
+    squad_of = {1: 10, 2: 10, 3: 20, 4: 20, 5: 30}
+    order = SQ.score_race([rr(1, 900), rr(3, 910), rr(2, 920), rr(4, 930), rr(5, 940), rr(99, 800)], squad_of, 2)
+    # places among squad runners: 1 (10), 2 (20), 3 (10), 4 (20), 5 (30); athlete 99 is on no squad
+    assert [(x["squad_id"], x["score"], x["complete"]) for x in order] == [(10, 4, True), (20, 6, True), (30, 5, False)]
+    same = lambda a, b: (a["complete"], a["score"]) == (b["complete"], b["score"])  # noqa: E731
+    assert SQ._award(order, [40, 25, 10, 5], same) == {10: 40, 20: 25, 30: 10}
+    tie = [{"squad_id": 1, "complete": True, "score": 10}, {"squad_id": 2, "complete": True, "score": 10}, {"squad_id": 3, "complete": True, "score": 12}]
+    assert SQ._award(tie, [40, 25, 10], same) == {1: 32.5, 2: 32.5, 3: 10}
 
 
 def make_team(db, n=8):
@@ -56,33 +59,36 @@ def make_team(db, n=8):
 
 
 def test_standings_from_saved_weeks_and_races(session, monkeypatch):
+    import json
     athletes = make_team(session, 4)
     monkeypatch.setattr(PT, "team_week", lambda db, monday, gender=None, athletes=None: [
-        {"a": a, "miles": 0, "goal_miles": 30, "points": 0, "target": 100, "score": 0, "score_pct": None} for a in athletes or []])
-    comp = SQ.create(session, "Fall", "Boys", 2, MON, None, MON + dt.timedelta(days=9))
-    assert sorted(len(s.members) for s in comp.squads) == [2, 2]
+        {"a": a, "miles": 0, "goal_miles": 30, "points": 0, "target": 100, "score": 0, "run_days": 0} for a in athletes or []])
+    today = MON + dt.timedelta(days=9)
+    comp = SQ.create(session, "Fall", "Boys", 2, MON, None, today)
     red, gold = comp.squads
-    on = {m.athlete_id: s for s in comp.squads for m in s.members}
-    # The finished week: Red's runners hit 100% and 90% of miles; Gold's 80% and 120% (counted as 110%).
-    miles = {}
-    for s, vals in ((red, (30, 27)), (gold, (24, 36))):
-        for m, mi in zip(s.members, vals):
-            miles[m.athlete_id] = mi
-            session.add(WeekResult(athlete_id=m.athlete_id, monday=MON, miles=mi, goal_miles=30, points=50, target=100,
-                                   score=50, medal="", computed_on=MON + dt.timedelta(days=9)))
-    first_red = red.members[0].athlete_id
-    session.add(RaceResult(athlete_id=first_red, meet="Inv", date=MON + dt.timedelta(days=5), race="V", distance_m=5000, time_s=900))
-    session.add(RaceResult(athlete_id=gold.members[0].athlete_id, meet="Inv", date=MON + dt.timedelta(days=5), race="V", distance_m=5000, time_s=950))
+    # The finished week: Red 30 and 27 miles of 30 (both at 90% or more), 6 and 5 days; Gold 26 and 36, 6 and 6 days
+    for s, vals in ((red, ((30, 6), (27, 5))), (gold, ((26, 6), (36, 6)))):
+        for m, (mi, days) in zip(s.members, vals):
+            session.add(WeekResult(athlete_id=m.athlete_id, monday=MON, miles=mi, goal_miles=30, points=95, target=100,
+                                   score=50, run_days=days, medal="", computed_on=today))
+    race = lambda m, t: RaceResult(athlete_id=m.athlete_id, meet="Inv", date=MON + dt.timedelta(days=5), race="V", distance_m=5000, time_s=t)  # noqa: E731
+    session.add_all([race(red.members[0], 900), race(gold.members[0], 905), race(red.members[1], 910), race(gold.members[1], 990)])
     session.flush()
-    st = SQ.standings(session, comp, MON + dt.timedelta(days=9))
+    comp.scoring = json.dumps({**SQ.DEFAULT_SCORING, "race_scorers": 2})
+    st = SQ.standings(session, comp, today)
     week = next(w for w in st["weeks"] if w["monday"] == MON)
-    assert week["done"] and round(week["rows"][red.id]["miles_pct"]) == 95 and round(week["rows"][gold.id]["miles_pct"]) == 95
-    assert week["rows"][red.id]["team_points"] == {"miles": 1.5, "points": 1.5, "races": 2}
-    assert week["rows"][gold.id]["total"] == 1.5 + 1.5 + 1
-    assert st["totals"][red.id]["team_points"] == 5 and st["table"][0].id == red.id
-    current = st["weeks"][0]
-    assert not current["done"] and current["monday"] == MON + dt.timedelta(days=7)
-    assert on[first_red] is red
+    assert week["rows"][red.id]["parts"] == {"race": 40, "miles": 2, "days": 1, "points": None}   # race 1+3=4 beats 2+4=6
+    assert week["rows"][gold.id]["parts"] == {"race": 25, "miles": 1, "days": 2, "points": None}
+    assert st["totals"][red.id]["total"] == 43 and st["table"][0].id == red.id
+    assert [k for k, _ in st["categories"]] == ["race", "miles", "days"]
+    # Leave the race out, count practice points at 1 point each
+    key = SQ.race_key(MON + dt.timedelta(days=5), "Inv", "V")
+    comp.scoring = json.dumps({**SQ.DEFAULT_SCORING, "excluded_races": [key], "points_on": True, "points_pts": 2})
+    st = SQ.standings(session, comp, today)
+    week = next(w for w in st["weeks"] if w["monday"] == MON)
+    assert week["rows"][red.id]["parts"] == {"race": 0, "miles": 2, "days": 1, "points": 4} and not week["races"][0]["counts"]
+    assert st["totals"][red.id]["total"] == 7
+    assert [r["counts"] for r in SQ.completed_races(session, comp, today)] == [False]
 
 
 def test_squads_pages(monkeypatch):
@@ -122,6 +128,13 @@ def test_squads_pages(monkeypatch):
     assert db.query(SquadMember).filter_by(athlete_id=ids[1]).count() == 0
     db.close()
     assert "Not on a squad" in c.get(f"/squads/{cid}").text
+    form = {"csrf": csrf, "race_on": "1", "miles_on": "1", "race_place_0": "50", "race_place_1": "30", "race_place_2": "10",
+            "race_scorers": "4", "miles_pct": "85", "miles_pts": "2", "days_min": "5", "days_pts": "1", "points_pct": "90", "points_pts": "1"}
+    c.post(f"/squads/{cid}/scoring", data=form)
+    page = c.get(f"/squads/{cid}").text
+    assert "Saved the scoring" in page and "85% of miles goal" in page and "5+ days run" not in page and 'value="50"' in page
+    c.post(f"/squads/{cid}/scoring", data=dict(form, days_min="9", days_on="1"))
+    assert "Days run: use 1 to 7." in c.get(f"/squads/{cid}").text
     c.post(f"/squads/{cid}/rebalance", data={"csrf": csrf})
     db = SessionLocal()
     assert db.query(SquadMember).count() == 9

@@ -65,7 +65,8 @@ def register(app, h: SimpleNamespace) -> None:
         comps = db.scalars(select(SquadCompetition).order_by(SquadCompetition.start_date.desc(), SquadCompetition.id.desc())).all()
         ab = A.abilities(db, today)
         return render(request, "squads.html", user, comps=comps, comp=comp, st=st, ab=ab, unassigned=SQ.unassigned(db, comp), season=SE.period_for(today),
-                      monday=A.week_monday(today), names=SQ.NAMES, max_squads=SQ.MAX_SQUADS, categories=SQ.CATEGORIES)
+                      monday=A.week_monday(today), names=SQ.NAMES, max_squads=SQ.MAX_SQUADS,
+                      races=SQ.completed_races(db, comp, today))
 
     @app.post("/squads/{cid}/move")
     async def squads_move(request: Request, cid: int, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
@@ -112,6 +113,40 @@ def register(app, h: SimpleNamespace) -> None:
         except ValueError:
             flash(request, "Check the dates.", "error")
         return back(f"/squads/{cid}")
+
+    @app.post("/squads/{cid}/scoring")
+    async def squads_scoring(request: Request, cid: int, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
+        import json
+        f = await form_checked(request)
+        comp = get_comp(db, cid)
+
+        def num(name: str, lo: float, hi: float, label: str) -> float:
+            try:
+                v = float(str(f.get(name, "")).strip())
+            except ValueError:
+                raise ValueError(f"{label}: enter a number.")
+            if not lo <= v <= hi:
+                raise ValueError(f"{label}: use {lo:g} to {hi:g}.")
+            return int(v) if v == int(v) else v
+
+        try:
+            sc = {"race_on": bool(f.get("race_on")), "miles_on": bool(f.get("miles_on")), "days_on": bool(f.get("days_on")),
+                  "points_on": bool(f.get("points_on")),
+                  "race_points": [num(f"race_place_{i}", 0, 1000, f"Race points for place {i + 1}") for i in range(len(comp.squads))],
+                  "race_scorers": int(num("race_scorers", 1, 10, "Runners who score")),
+                  "miles_pct": num("miles_pct", 1, 200, "Miles share"), "miles_pts": num("miles_pts", 0, 100, "Miles points"),
+                  "days_min": int(num("days_min", 1, 7, "Days run")), "days_pts": num("days_pts", 0, 100, "Days points"),
+                  "points_pct": num("points_pct", 1, 200, "Practice points share"), "points_pts": num("points_pts", 0, 100, "Practice points")}
+        except ValueError as exc:
+            flash(request, str(exc), "error")
+            return back(f"/squads/{cid}#scoring")
+        listed = set(f.getlist("race_listed"))
+        ticked = set(f.getlist("race_count"))
+        before = SQ.scoring(comp)["excluded_races"]
+        sc["excluded_races"] = sorted({k for k in before if k not in listed} | (listed - ticked))
+        comp.scoring = json.dumps(sc)
+        flash(request, "Saved the scoring. The standings use it for every week.")
+        return back(f"/squads/{cid}#scoring")
 
     @app.post("/squads/{cid}/delete")
     async def squads_delete(request: Request, cid: int, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):

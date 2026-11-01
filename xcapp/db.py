@@ -62,7 +62,8 @@ DEFAULT_TARGETS = {74: ("1:50", "4:06"), 73: ("1:51", "4:09"), 72: ("1:52", "4:1
 
 # Columns added after the first release, added in place to an existing database.
 ADDED_COLUMNS = {
-    "week_results": [("points", "FLOAT"), ("target", "FLOAT")],
+    "week_results": [("points", "FLOAT"), ("target", "FLOAT"), ("run_days", "INTEGER")],
+    "squad_competitions": [("scoring", "TEXT DEFAULT ''")],
     "activities": [("rpe", "INTEGER"), ("feel", "VARCHAR(20) DEFAULT ''"), ("athlete_note", "VARCHAR(300) DEFAULT ''"),
                    ("feedback_at", "TIMESTAMP"), ("run_type", "VARCHAR(20) DEFAULT ''"), ("workout_locked", "BOOLEAN DEFAULT FALSE"),
                    ("vo2_max", "FLOAT"), ("workout_check", "VARCHAR(12) DEFAULT ''"), ("workout_check_note", "VARCHAR(400) DEFAULT ''"),

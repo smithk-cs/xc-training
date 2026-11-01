@@ -777,6 +777,7 @@ class WeekResult(Base):
     goal_miles: Mapped[float | None] = mapped_column(Float, nullable=True)
     points: Mapped[float | None] = mapped_column(Float, nullable=True)
     target: Mapped[float | None] = mapped_column(Float, nullable=True)   # the week's points target
+    run_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
     medal: Mapped[str] = mapped_column(String(10), default="")
     computed_on: Mapped[dt.date] = mapped_column(Date)
     note_closed: Mapped[bool] = mapped_column(Boolean, default=False)   # the athlete closed the Monday message
@@ -790,6 +791,7 @@ class SquadCompetition(Base):
     gender: Mapped[str] = mapped_column(String(10), default="All")   # Boys | Girls | All
     start_date: Mapped[dt.date] = mapped_column(Date)                   # a Monday
     end_date: Mapped[dt.date | None] = mapped_column(Date, nullable=True)
+    scoring: Mapped[str] = mapped_column(Text, default="")   # JSON: what counts and for how much (see squads.DEFAULT_SCORING)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
     squads: Mapped[list["Squad"]] = relationship(cascade="all, delete-orphan", order_by="Squad.position")
 
