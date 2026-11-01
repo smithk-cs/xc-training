@@ -87,6 +87,15 @@ def fmt_time(seconds: float | None) -> str:
     return f"{m}:{t - m * 60:04.1f}"
 
 
+def fmt_clock(hhmm: str) -> str:
+    """'15:30' -> '3:30 PM'; '09:00' -> '9:00 AM'."""
+    try:
+        h, m = (int(x) for x in hhmm.split(":"))
+    except (ValueError, AttributeError):
+        return hhmm or ""
+    return f"{h % 12 or 12}:{m:02d} {'AM' if h < 12 else 'PM'}"
+
+
 def fmt_secs(seconds: float | None) -> str:
     """A short time for people: '58 s' under a minute, '1:19' from a minute on."""
     if seconds is None:

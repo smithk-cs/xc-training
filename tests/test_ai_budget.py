@@ -35,7 +35,9 @@ def test_month_spend_counts_this_month_only(session):
     spend(session, 4.00)
     failed = AiRun(kind="question", status="failed", model="claude-sonnet-5-5", created_at=now_utc(), input_tokens=500_000, output_tokens=0)
     session.add(failed)                                                   # billed tokens count even when the request failed
-    spend(session, 7.00, when=now_utc().replace(day=1) - dt.timedelta(days=2))   # last month
+    from xcapp.config import settings
+    local = dt.datetime.now(settings().tz)                                # "this month" is the team's month, not UTC's
+    spend(session, 7.00, when=(local.replace(day=1, hour=12) - dt.timedelta(days=2)).astimezone(dt.timezone.utc).replace(tzinfo=None))   # last month
     session.flush()
     assert AI.month_spend(session) == pytest.approx(5.00)
 

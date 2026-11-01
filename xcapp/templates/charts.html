@@ -19,8 +19,9 @@ svg text { font-family: var(--font-anthropic-sans); }
 </style>
 {% endblock %}
 {% block content %}
-<h1>Results charts</h1>
-<p class="muted">Built from every benchmark result in the system: races, time trials and converted track times. Higher on a chart is always faster.</p>
+<div class="form-row title-row" style="justify-content:space-between; margin-bottom:6px"><h1 style="margin:0">Results charts</h1>
+  <label>Times <select id="t-mode"><option value="run">As run</option><option value="adj">Adjusted for course and weather</option></select></label></div>
+<p class="muted">Built from every benchmark result in the system: races, time trials and converted track times. Higher on a chart is always faster. <span id="t-note">Adjusted times put every race on a flat track at 55°F or cooler at sea level, so different courses and days compare fairly; track meets and time trials stay as run.</span></p>
 <div class="card" id="career">
   <div class="form-row"><h2 style="flex:1">Career</h2><label>Athlete<select id="c-athlete"></select></label></div>
   <p class="small muted">Each benchmark event over time. The larger dot is the personal record. Hover a dot for the date, course and season.</p>
@@ -69,7 +70,10 @@ svg text { font-family: var(--font-anthropic-sans); }
     ['c-chart', 'm-chart', 'i-chart', 't-chart'].forEach((id) => empty($(id), 'Results could not be loaded. Reload the page to try again.'));
     return;
   }
-  const results = data.results.map((r) => ({ ...r, t: Number(r.time_sec), d: parseDay(r.date) }));
+  // 'As run' or 'Adjusted for course and weather': every chart reads r.t, so switching rebuilds the list and redraws
+  const asRun = data.results.map((r) => ({ ...r, t: Number(r.time_sec), d: parseDay(r.date) }));
+  const adjusted = data.results.map((r) => ({ ...r, t: Number(r.time_adj_sec ?? r.time_sec), d: parseDay(r.date) }));
+  let results = asRun;
   const roster = data.roster.slice().sort((a, b) => a.athlete.localeCompare(b.athlete));
   const seasons = [...new Set(results.map((r) => r.season))].sort((a, b) => seasonKey(a) - seasonKey(b));
   const xcSeasons = seasons.filter((x) => /XC$/.test(x));
@@ -250,6 +254,7 @@ svg text { font-family: var(--font-anthropic-sans); }
   }
 
   const redraw = () => { drawCareer(); drawPicks(); drawCompare(); drawImprove(); drawTop7(); };
+  $('t-mode').addEventListener('change', () => { results = $('t-mode').value === 'adj' ? adjusted : asRun; redraw(); });
   $('c-athlete').addEventListener('change', drawCareer);
   $('m-event').addEventListener('change', () => { picked.clear(); drawPicks(); drawCompare(); });
   $('m-season').addEventListener('change', () => { picked.clear(); drawPicks(); drawCompare(); });

@@ -704,3 +704,23 @@ class CaptainPost(Base):
     reviewed_by: Mapped[str] = mapped_column(String(80), default="")
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
     athlete: Mapped[Athlete] = relationship()
+
+
+class CalendarEvent(Base):
+    """A practice or team event on the shared team calendar (meets come from the Entries page). Repeats weekly on the
+    chosen weekdays until a date, minus any cancelled days."""
+    __tablename__ = "calendar_events"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    title: Mapped[str] = mapped_column(String(120))
+    kind: Mapped[str] = mapped_column(String(20), default="Practice")   # Practice | Event
+    team: Mapped[str] = mapped_column(String(10), default="")           # "" both | Boys | Girls
+    date: Mapped[dt.date] = mapped_column(Date, index=True)              # the first (or only) day
+    start_time: Mapped[str] = mapped_column(String(5), default="")      # "HH:MM"; "" all day
+    end_time: Mapped[str] = mapped_column(String(5), default="")
+    location: Mapped[str] = mapped_column(String(160), default="")
+    notes: Mapped[str] = mapped_column(String(300), default="")
+    repeat_days: Mapped[str] = mapped_column(String(20), default="")    # weekdays it repeats on, "0,2,4" (Monday = 0)
+    repeat_until: Mapped[dt.date | None] = mapped_column(Date, nullable=True)
+    skip_dates: Mapped[str] = mapped_column(Text, default="")            # cancelled days, "2026-11-26,2026-11-27"
+    created_by: Mapped[str] = mapped_column(String(80), default="")
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)

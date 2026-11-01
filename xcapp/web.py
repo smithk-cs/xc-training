@@ -34,6 +34,7 @@ from . import reports as RP
 from . import reminders as RM
 from . import garmin_csv as GCSV
 from . import weather as WX
+from . import team_calendar as TC
 from . import classyear as CY
 from .config import settings
 from .db import SessionLocal, create_all
@@ -155,7 +156,7 @@ def create_app() -> FastAPI:
     # A fingerprint of the style sheet and scripts: links carry it (?v=...), so browsers load new ones after each deploy.
     import hashlib
     asset_v = hashlib.sha256(b"".join(f.read_bytes() for f in sorted((HERE / "static").glob("*.[cj]s*")))).hexdigest()[:10]
-    templates.env.globals.update(asset_v=asset_v, fmt_secs=A.fmt_secs, describe_weather=WX.describe, fmt_time=A.fmt_time, timedelta=dt.timedelta, now=A.team_today, EVENTS=list(A.EVENTS), GROUPS=GROUPS, team_name=s.team_name,
+    templates.env.globals.update(asset_v=asset_v, fmt_clock=A.fmt_clock, fmt_secs=A.fmt_secs, describe_weather=WX.describe, fmt_time=A.fmt_time, timedelta=dt.timedelta, now=A.team_today, EVENTS=list(A.EVENTS), GROUPS=GROUPS, team_name=s.team_name,
                                  has_logo=has_logo, FEELS=FEELS, EFFORT_WORDS=EFFORT_WORDS, RUN_TYPES=A.RUN_TYPES,
                                  MISSED_REASONS=A.MISSED_REASONS, SIDES=A.SIDES, STARTED=A.STARTED, SEEN_BY=A.SEEN_BY,
                                  MORE_DAYS=A.MORE_DAYS, missed_label=A.missed_label,
@@ -376,7 +377,18 @@ def create_app() -> FastAPI:
 
     @app.get("/api/charts/results.json")
     def charts_results(user=Depends(any_staff, scope="function"), db: Session = Depends(get_db, scope="function")):
-        return JSONResponse({"results": A.benchmark_rows(db), "roster": A.roster_rows(db)})
+        # Each benchmark's time adjusted for its race's course and weather (the race's adjusted ÷ actual time); results
+        # without a race behind them (track meets, time trials) stay as run.
+        races = db.scalars(select(RaceResult).where(RaceResult.result_id.is_not(None))).all()
+        adj = CS.adjusted_times(db, races)
+        ratio = {r.result_id: adj[r.id] / r.time_s for r in races if adj.get(r.id) and r.time_s}
+        ids = [r.id for r in db.scalars(select(Result).join(Athlete, Athlete.id == Result.athlete_id).where(A.on_team())
+                                        .order_by(Result.date, Result.id)).all()]
+        rows = A.benchmark_rows(db)
+        for rid, row in zip(ids, rows):
+            row["time_adj_sec"] = round(row["time_sec"] * ratio[rid], 1) if rid in ratio else row["time_sec"]
+            row["adjusted"] = rid in ratio
+        return JSONResponse({"results": rows, "roster": A.roster_rows(db)})
 
     # ---------- athletes ----------
 
@@ -1526,6 +1538,7 @@ def create_app() -> FastAPI:
                       rhr=A.resting_hr(db, a.id, today), rhr_range=(A.RESTING_HR_MIN, A.RESTING_HR_MAX),
                       rhr_cal=A.resting_hr_calendar(db, a.id, today), photo_v=photo_versions(db).get(a.id), meets=my_meets(db, a, today),
                       wins=A.achievements(db, a, today),
+                      calendar_link=f"/team-calendar/{TC.token(db)}?team={a.gender if a.gender in ('Boys', 'Girls') else 'All'}",
                       captain_posts=db.scalars(select(CaptainPost).where(CaptainPost.athlete_id == a.id, CaptainPost.created_at >=
                                                                          dt.datetime.now(dt.timezone.utc).replace(tzinfo=None) - dt.timedelta(days=14))
                                                .order_by(CaptainPost.created_at.desc())).all() if a.is_captain else [],
@@ -1912,7 +1925,9 @@ def create_app() -> FastAPI:
         return None
 
     from types import SimpleNamespace
-    from . import newsletter_web
+    from . import calendar_web, newsletter_web
+    calendar_web.register(app, SimpleNamespace(render=render, flash=flash, back=back, form_checked=form_checked, any_staff=any_staff,
+                                               coach_or_admin=coach_or_admin, get_db=get_db, settings=s))
     newsletter_web.register(app, SimpleNamespace(render=render, flash=flash, back=back, form_checked=form_checked, any_staff=any_staff,
                                                  coach_or_admin=coach_or_admin, get_db=get_db, logo_bytes=logo_bytes, settings=s,
                                                  templates=templates))

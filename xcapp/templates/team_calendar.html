@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Team calendar · {{ team_name }}{% endblock %}
+{% block bodyclass %}athlete-page{% endblock %}
+{% block content %}
+{% from "_calendar_list.html" import day_list with context %}
+{% with hero_title="Team calendar", hero_text=None, hero_compact=True, back_url=None %}{% include "_hero.html" %}{% endwith %}
+<div class="stack">
+  <nav class="form-row team-switch" aria-label="Boys or girls" style="justify-content:center">
+    {% for t in ('All', 'Boys', 'Girls') %}<a class="button{% if t != team %} secondary{% endif %}" href="/team-calendar/{{ token }}?team={{ t }}"{% if t == team %} aria-current="page"{% endif %}>{{ 'Everyone' if t == 'All' else t }}</a>{% endfor %}
+  </nav>
+  <section class="panel">
+    <p style="margin:0"><a class="button" href="{{ links[team].webcal }}">Add to iPhone calendar</a></p>
+    <p class="small muted" style="margin:6px 0 0">Tap it, then Subscribe. Practices, meets and events then show in your phone’s calendar and update on their own. On Google Calendar or Outlook, choose “Add calendar from URL” and paste: <code class="copy">{{ links[team].feed }}</code></p>
+  </section>
+  {% for month, its in months.items() %}
+  <section class="panel">
+    <h2>{{ month }}</h2>
+    {{ day_list(its) }}
+  </section>
+  {% else %}<section class="panel"><p class="muted">Nothing on the calendar yet.</p></section>{% endfor %}
+  <p class="small muted" style="text-align:center">Times are {{ settings.team_timezone.split('/')[-1].replace('_', ' ') }} time. Questions? Ask a coach.</p>
+</div>
+{% endblock %}

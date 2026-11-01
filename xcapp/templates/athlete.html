@@ -146,9 +146,10 @@
     <p class="muted">No workouts planned for the next 7 days yet. Your coaches add them here, with your target times.</p>
     {% endfor %}
   </details>
+  {% if not meets and calendar_link %}<p class="small" style="text-align:center; margin:0"><a href="{{ calendar_link }}">Team calendar: practices, meets and events ›</a></p>{% endif %}
   {% if meets %}
   <section class="panel" id="meets" aria-labelledby="mt-h">
-    <h2 id="mt-h">Upcoming meets</h2>
+    <div class="panel-head"><h2 id="mt-h">Upcoming meets</h2>{% if calendar_link %}<a href="{{ calendar_link }}">Team calendar ›</a>{% endif %}</div>
     {% for x in meets %}{% set m = x.meet %}{% set r = x.response %}
     <div class="wpace">
       <div class="d">{{ m.name }}</div>

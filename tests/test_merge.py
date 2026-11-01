@@ -126,3 +126,30 @@ def test_athletes_page_boys_girls_all():
     every, boys, girls = (c.get("/athletes" + q).text for q in ("", "?team=Boys", "?team=Girls"))
     assert "Ava Doyle" in every and "Theo Marsh" in every and 'href="/athletes?team=All" aria-current="page"' in every
     assert "Theo Marsh" in boys and "Ava Doyle" not in boys and "Ava Doyle" in girls and "Theo Marsh" not in girls
+
+
+def test_former_and_alumni_keep_their_photo():
+    import datetime as dt
+    import re
+    from fastapi.testclient import TestClient
+    from xcapp.db import SessionLocal
+    from xcapp.models import Athlete, AthletePhoto, StaffUser
+    from xcapp.security import hash_password
+    from xcapp.web import create_app
+    db = SessionLocal()
+    db.add(StaffUser(username="coachp", role="coach", password_hash=hash_password("correct-horse-1")))
+    gone = Athlete(first_name="Lee", last_name="Ward", gender="Boys", grade=11, group="Varsity", link_token="p1", active=False, left_on=dt.date(2026, 9, 1))
+    grad = Athlete(first_name="Max", last_name="Fay", gender="Boys", grade=12, group="Varsity", link_token="p2", active=False, alumni=True, grad_year=2025)
+    db.add_all([gone, grad])
+    db.flush()
+    for a in (gone, grad):
+        db.add(AthletePhoto(athlete_id=a.id, data=b"\xff\xd8jpeg"))
+    db.commit()
+    ids = gone.id, grad.id
+    db.close()
+    c = TestClient(create_app(), follow_redirects=False)
+    csrf = re.search(r'name="csrf" value="([^"]+)"', c.get("/login").text).group(1)
+    c.post("/login", data={"csrf": csrf, "username": "coachp", "password": "correct-horse-1"})
+    page = c.get("/athletes").text
+    assert all(f'src="/athletes/{i}/photo?v=' in page for i in ids)
+    assert c.get(f"/athletes/{ids[1]}/photo").status_code == 200

@@ -514,3 +514,19 @@ table.workouts-by-day tr.day-row th { background: var(--color-soft); color: var(
 .top { position: sticky; top: 0; z-index: 50; }
 html { scroll-padding-top: calc(var(--top-h, 0px) + 8px); }
 @media (max-width: 760px) { .top.menu-open .top-menu { max-height: calc(100vh - 70px); overflow-y: auto; } }
+.alumni-faces { display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: center; }
+/* Team calendar */
+.cal-list, .cal-items { list-style: none; margin: 0; padding: 0; }
+.cal-day { display: flex; gap: 14px; padding: 10px 0; border-bottom: 1px solid var(--color-border-line); }
+.cal-day:last-child { border-bottom: 0; }
+.cal-day.today .cal-date { background: var(--brand-red); color: #FFFFFF; }
+.cal-date { flex: none; width: 52px; display: flex; flex-direction: column; align-items: center; border-radius: 10px; background: var(--color-soft); padding: 4px 0; line-height: 1.1; }
+.cal-date .dow, .cal-date .mon { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
+.cal-date .dnum { font-family: var(--font-display); font-weight: 700; font-size: 22px; }
+.cal-items { flex: 1; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.cal-item { display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap; }
+.cal-time { flex: none; width: 128px; font-size: 13px; color: var(--color-fg-muted); font-variant-numeric: tabular-nums; }
+.cal-what { flex: 1; min-width: 160px; }
+.cal-actions { margin-left: auto; }
+.cal-item.kind-meet .cal-time { color: var(--brand-red); font-weight: 600; }
+@media (max-width: 520px) { .cal-time { width: 100%; } }

@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
+{% macro face(a) %}{% if photos.get(a.id) %}<img class="avatar zoom" src="/athletes/{{ a.id }}/photo?v={{ photos[a.id] }}" alt="Photo of {{ a.name }}" loading="lazy" tabindex="0" role="button">{% else %}<span class="avatar blank" aria-hidden="true">{{ a.first_name[:1] }}{{ a.last_name[:1] }}</span>{% endif %}{% endmacro %}
 <div class="form-row title-row" style="margin-bottom:12px"><h1 style="margin:0">Athletes</h1>
   {% with base='/athletes', with_all=True %}{% include "_team_switch.html" %}{% endwith %}</div>
 <div class="card scroll">
@@ -39,14 +40,14 @@
   <p class="small muted">Graduates stay in the system as team history: their races, results and training are kept and show in race history and reports. They’re left out of the roster, team numbers and the AI, and their personal links no longer work.</p>
   {% for year, people in alumni.items() %}
   <h3 style="margin:10px 0 4px; font-size:16px">{{ 'Class of ' ~ year if year else 'Class year not set' }}</h3>
-  <p class="small" style="margin:0">{% for a in people %}<a href="/athletes/{{ a.id }}">{{ a.name }}</a>{{ ', ' if not loop.last else '' }}{% endfor %}</p>
+  <p class="small alumni-faces" style="margin:0">{% for a in people %}<span class="nowrap">{{ face(a) }}<a href="/athletes/{{ a.id }}">{{ a.name }}</a></span>{% endfor %}</p>
   {% endfor %}
 </details>
 {% endif %}
 {% if former %}
 <details style="margin:12px 0"><summary class="small" style="cursor:pointer; font-weight:600; color:var(--brand-red)">Former athletes ({{ former|length }})</summary>
   <table class="list centered" style="margin-top:8px"><thead><tr><th>Athlete</th><th>Grade</th><th>Left</th><th>Data kept until</th>{% if user.role != 'trainer' %}<th></th>{% endif %}</tr></thead><tbody>
-  {% for a in former %}<tr><td><a href="/athletes/{{ a.id }}">{{ a.name }}</a></td><td>{{ a.grade }}</td><td>{{ a.left_on.strftime('%b %-d, %Y') if a.left_on else '' }}</td><td>{{ delete_by(a).strftime('%b %-d, %Y') if a.left_on else '' }}</td>
+  {% for a in former %}<tr><td class="nowrap">{{ face(a) }}<a href="/athletes/{{ a.id }}">{{ a.name }}</a></td><td>{{ a.grade }}</td><td>{{ a.left_on.strftime('%b %-d, %Y') if a.left_on else '' }}</td><td>{{ delete_by(a).strftime('%b %-d, %Y') if a.left_on else '' }}</td>
     {% if user.role != 'trainer' %}<td><form method="post" action="/athletes/{{ a.id }}/status" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="return"><input type="hidden" name="next" value="/athletes"><button class="secondary" type="submit">Put back on the roster</button></form></td>{% endif %}</tr>{% endfor %}
   </tbody></table>
   <p class="small muted">Their runs, results and races are kept, but they’re left out of team numbers and the AI, and their personal links don’t work. Put one back if they return: their runs and results are still there and their personal link works again.</p>

@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Team calendar · {{ team_name }}{% endblock %}
+{% block content %}
+{% from "_calendar_list.html" import day_list with context %}
+<div class="form-row title-row" style="margin-bottom:6px"><h1 style="margin:0">Team calendar</h1>
+  {% with base='/calendar', with_all=True %}{% include "_team_switch.html" %}{% endwith %}</div>
+<p class="muted" style="max-width:88ch">Practices and events you add here, plus every meet from the Entries page (with its start time and location). Athletes and families see it through the private links below, and can add it to their phone’s calendar, where it stays up to date on its own. It shows no information about any athlete.</p>
+
+{% if user.role != 'trainer' %}
+<details class="card fold-card" id="event-form"{% if edit %} open{% endif %}><summary><h2>{% if edit %}Edit {{ edit.title }}{% else %}Add a practice or event{% endif %}</h2></summary>
+  <form method="post" action="/calendar/events" style="display:flex; flex-direction:column; gap:10px">
+    <input type="hidden" name="csrf" value="{{ csrf }}">{% if edit %}<input type="hidden" name="eid" value="{{ edit.id }}">{% endif %}
+    <div class="form-row">
+      <label style="flex:2">Name<input type="text" name="title" maxlength="120" required value="{{ edit.title if edit else 'Practice' }}"></label>
+      <label>Kind<select name="kind">{% for k in kinds %}<option{% if (edit.kind if edit else 'Practice') == k %} selected{% endif %}>{{ k }}</option>{% endfor %}</select></label>
+      <label>Team<select name="team"><option value=""{% if not edit or not edit.team %} selected{% endif %}>Boys and girls</option>{% for t in ('Boys', 'Girls') %}<option{% if edit and edit.team == t %} selected{% endif %}>{{ t }}</option>{% endfor %}</select></label>
+    </div>
+    <div class="form-row">
+      <label>{{ 'First day' }}<input type="date" name="date" required value="{{ edit.date.isoformat() if edit else today.isoformat() }}"></label>
+      <label>Starts<input type="time" name="start_time" value="{{ edit.start_time if edit else '15:30' }}" style="width:8em"></label>
+      <label>Ends<input type="time" name="end_time" value="{{ edit.end_time if edit else '17:30' }}" style="width:8em"></label>
+      <label style="flex:2">Where<input type="text" name="location" maxlength="160" value="{{ edit.location if edit else '' }}" placeholder="Jesuit track"></label>
+    </div>
+    {% set rd = (edit.repeat_days.split(',') if edit and edit.repeat_days else []) %}
+    <fieldset class="pick"><legend class="small">Repeats every week on</legend>
+      <div class="chips">{% for d in weekdays %}<label class="chip"><input type="checkbox" name="repeat" value="{{ loop.index0 }}"{% if loop.index0|string in rd %} checked{% endif %}><span>{{ d }}</span></label>{% endfor %}</div>
+      <label style="margin-top:6px">until<input type="date" name="repeat_until" value="{{ edit.repeat_until.isoformat() if edit and edit.repeat_until else '' }}"></label>
+      <p class="small muted" style="margin:4px 0 0">Leave the days unticked for a one-time event. Leave both times empty for an all-day event.</p>
+    </fieldset>
+    <label>Notes (optional)<input type="text" name="notes" maxlength="300" value="{{ edit.notes if edit else '' }}" placeholder="Bring spikes"></label>
+    <div class="form-row"><button type="submit">{% if edit %}Save changes{% else %}Add to the calendar{% endif %}</button>{% if edit %}<a href="/calendar">Cancel</a>{% endif %}</div>
+  </form>
+  {% if edit %}<form method="post" action="/calendar/events/{{ edit.id }}/delete" onsubmit="return confirm('Remove {{ edit.title }}{{ ' and all its repeats' if edit.repeat_days else '' }}?')" style="margin-top:8px"><input type="hidden" name="csrf" value="{{ csrf }}"><button type="submit" class="link">Remove {{ 'the whole series' if edit.repeat_days else 'it' }}</button></form>{% endif %}
+</details>
+{% endif %}
+
+<div class="card" id="share">
+  <h2>Share with athletes and families</h2>
+  <p class="small muted">Anyone with a link can see the calendar, so share it with your team only. On an iPhone, open the “Add to iPhone calendar” link and tap Subscribe; changes then appear on their own. Google Calendar and Outlook can subscribe to the feed address (“From URL”).</p>
+  <table class="list compact"><thead><tr><th>Calendar</th><th>Web page</th><th>Phone calendar</th><th>Feed address</th></tr></thead><tbody>
+  {% for t, l in links.items() %}<tr><td><b>{{ 'Boys and girls' if t == 'All' else t }}</b></td><td><a href="{{ l.page }}" target="_blank" rel="noopener">Open</a> · <button type="button" class="link copy-btn" data-copy="{{ l.page }}">Copy link</button></td>
+    <td><a href="{{ l.webcal }}">Add to iPhone calendar</a></td><td><button type="button" class="link copy-btn" data-copy="{{ l.feed }}">Copy feed address</button></td></tr>{% endfor %}
+  </tbody></table>
+  {% if user.role != 'trainer' %}<form method="post" action="/calendar/new-link" onsubmit="return confirm('Make new links? The old links and phone subscriptions stop updating, and everyone needs the new ones.')" style="margin-top:8px"><input type="hidden" name="csrf" value="{{ csrf }}"><button type="submit" class="link">Make new links (if a link was shared too widely)</button></form>{% endif %}
+</div>
+
+{% if series %}<details class="card fold-card"><summary><h2>Repeating practices ({{ series|length }})</h2></summary>
+  <ul class="plain-list">{% for e in series %}<li><b>{{ e.title }}</b>{% if e.team %} <span class="pill">{{ e.team }}</span>{% endif %} <span class="small muted">{% for d in e.repeat_days.split(',') %}{{ weekdays[d|int] }}{{ ', ' if not loop.last }}{% endfor %}{% if e.start_time %}, {{ fmt_clock(e.start_time) }}{% if e.end_time %}–{{ fmt_clock(e.end_time) }}{% endif %}{% endif %} · {{ e.date.strftime('%b %-d') }} to {{ e.repeat_until.strftime('%b %-d') }}{% if e.skip_dates %} · {{ e.skip_dates.split(',')|length }} cancelled{% endif %}</span>
+    {% if user.role != 'trainer' %}<a class="small" href="/calendar?edit={{ e.id }}#event-form">Edit</a>{% endif %}</li>{% endfor %}</ul>
+</details>{% endif %}
+
+<div class="card">
+  <h2>Next 60 days{% if team != 'All' %} · {{ team }}{% endif %}</h2>
+  {% if items %}{{ day_list(items, True) }}{% else %}<p class="muted">Nothing on the calendar yet.</p>{% endif %}
+</div>
+<script>document.querySelectorAll('.copy-btn').forEach(function (b) { b.addEventListener('click', function () { navigator.clipboard.writeText(b.dataset.copy).then(function () { b.textContent = 'Copied'; }); }); });</script>
+{% endblock %}

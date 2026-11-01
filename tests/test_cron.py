@@ -19,6 +19,10 @@ def client(monkeypatch, secret=SECRET):
         monkeypatch.delenv("CRON_SECRET", raising=False)
     else:
         monkeypatch.setenv("CRON_SECRET", secret)
+    # the reminder hour is never the hour the test runs in (at that hour the endpoint sends reminders instead)
+    import datetime as _dt
+    from zoneinfo import ZoneInfo
+    monkeypatch.setenv("REMINDER_HOUR", str((_dt.datetime.now(ZoneInfo("America/Los_Angeles")).hour + 12) % 24))
     config.reload_settings()
     from xcapp.web import create_app
     return TestClient(create_app(), follow_redirects=False)
