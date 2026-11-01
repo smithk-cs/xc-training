@@ -706,6 +706,7 @@ def save_resting_hr(db: Session, athlete_id: int, day: dt.date, bpm: int, source
     return row
 
 
+RESTING_HR_REMIND_DAYS = 7  # the reminder counts the days of the past week (today included) with no value
 RESTING_HR_BACKDATE = 34   # athletes can fill in or fix days this far back (the calendar's five weeks)
 
 
@@ -713,7 +714,9 @@ def resting_hr_calendar(db: Session, athlete_id: int, today: dt.date) -> dict:
     """Five Monday-to-Sunday weeks ending with this one, and the values entered on those days."""
     first = today - dt.timedelta(days=today.weekday() + 28)
     rows = db.scalars(select(RestingHeartRate).where(RestingHeartRate.athlete_id == athlete_id, RestingHeartRate.date >= first)).all()
-    return {"today": today, "days": [first + dt.timedelta(days=i) for i in range(35)], "by_day": {r.date: r for r in rows}}
+    by_day = {r.date: r for r in rows}
+    missing = [today - dt.timedelta(days=k) for k in range(RESTING_HR_REMIND_DAYS) if today - dt.timedelta(days=k) not in by_day]
+    return {"today": today, "days": [first + dt.timedelta(days=i) for i in range(35)], "by_day": by_day, "missing": missing}
 
 
 def resting_hr_summary(rows: list[RestingHeartRate], as_of: dt.date) -> dict | None:

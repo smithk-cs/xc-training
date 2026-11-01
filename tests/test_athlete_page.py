@@ -230,10 +230,17 @@ def test_resting_heart_rate_reminder_until_today_is_in():
     db.close()
     c = TestClient(create_app())
     page = c.get("/a/t-rr").text
-    assert "Today’s resting heart rate isn’t in yet." in page and 'href="#rhr"' in page
+    assert "7 days need your resting heart rate." in page and 'href="#rhr"' in page
     assert page.index("rhr-reminder") < page.index('id="wp-h"')                  # at the top, with the effort reminder
     db = SessionLocal()
     db.add(RestingHeartRate(athlete_id=aid, date=A.team_today(), bpm=48, source="athlete"))
     db.commit()
+    assert "6 days need your resting heart rate." in c.get("/a/t-rr").text
+    for k in range(1, 6):
+        db.add(RestingHeartRate(athlete_id=aid, date=A.team_today() - dt.timedelta(days=k), bpm=48, source="garmin"))
+    db.commit()
+    assert "1 day needs your resting heart rate." in c.get("/a/t-rr").text
+    db.add(RestingHeartRate(athlete_id=aid, date=A.team_today() - dt.timedelta(days=6), bpm=48, source="athlete"))
+    db.commit()
     db.close()
-    assert "Today’s resting heart rate isn’t in yet." not in c.get("/a/t-rr").text
+    assert "rhr-reminder" not in c.get("/a/t-rr").text
