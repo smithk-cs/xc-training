@@ -38,6 +38,7 @@ from . import team_calendar as TC
 from . import classyear as CY
 from . import data_check as DC
 from . import medals as MD
+from . import vdot_report as VR
 from . import seasons as SE
 from .config import settings
 from .db import SessionLocal, create_all
@@ -2539,6 +2540,23 @@ def create_app() -> FastAPI:
         data = RP.roster_pdf(rows, p["cols"], p["title"], roster_subtitle(p, len(rows)), s.team_name, logo_bytes(db), REG.contacts(db))
         fname = re.sub(r"[^A-Za-z0-9]+", "-", p["title"]).strip("-") + ".pdf"
         return Response(data, media_type="application/pdf", headers={"Content-Disposition": f'inline; filename="{fname}"'})
+
+    @app.get("/reports/vdot", response_class=HTMLResponse)
+    def report_vdot(request: Request, user=Depends(any_staff, scope="function"), db: Session = Depends(get_db, scope="function")):
+        today = A.team_today()
+        choices = VR.meets(db, today)
+        q = request.query_params
+        pick = next((m for m in choices if m["key"] == q.get("race")), choices[0] if choices else None)
+        show = {k for k, _ in VR.KINDS if k in q.getlist("show")} or {k for k, _ in VR.KINDS}
+        rep, before = None, None
+        if pick:
+            try:
+                before = dt.date.fromisoformat(q["before"]) if q.get("before") and q.get("race") == pick["key"] else None
+            except ValueError:
+                before = None
+            before = before or pick["date"] - dt.timedelta(days=1)
+            rep = VR.report(db, pick["date"], pick["meet"], before, show, today)
+        return render(request, "report_vdot.html", user, choices=choices, pick=pick, before=before, show=show, kinds=VR.KINDS, rep=rep)
 
     @app.get("/reports/athlete")
     def report_athlete_pick(athlete_id: int, season: str = "", user=Depends(any_staff, scope="function")):
