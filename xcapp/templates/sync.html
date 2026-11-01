@@ -3,13 +3,31 @@
 <h1>Sync log</h1>
 <p><a class="button" href="/data-check">Check run data</a> <span class="small muted">Duplicates, runs on the wrong day, and odd runs.</span></p>
 {% if webhook %}
-<div class="card"><h2>Garmin notification address</h2><p class="small muted">Paste this into the Garmin Developer Portal (Endpoint Configuration) as the endpoint for Activities, Activity Details and Activity Files, and for Deregistrations and User Permissions Change. Keep it private.</p><code class="copy">{{ webhook }}</code></div>
+<div class="card"><h2>Garmin notification address</h2><p class="small muted">Paste this into the Garmin Developer Portal (Endpoint Configuration) as the endpoint for Activities, Activity Details and Activity Files, for <b>Dailies</b> (resting heart rate), and for Deregistrations and User Permissions Change. Keep it private.</p><code class="copy">{{ webhook }}</code></div>
 {% endif %}
+<div class="card" id="rhr">
+  <h2>Resting heart rate from Garmin</h2>
+  <p>{{ rhr.recent }} of {{ rhr.connected }} connected athlete{{ 's' if rhr.connected != 1 }} sent one in the last 3 days.
+  {% if rhr.not_shared %}<span class="pill warn">{{ rhr.not_shared }} not sharing health data</span>{% endif %}</p>
+  {% if rhr.recent < rhr.connected %}
+  <p class="small muted">Garmin sends resting heart rate in its daily summaries (“Dailies”), not with runs. If none arrive:</p>
+  <ol class="small muted">
+    <li>In the Garmin Developer Portal, the app needs the Health API (health data) turned on, and under Endpoint Configuration the <b>Dailies</b> summary set to the same notification address as Activities (an admin sees it on this page).</li>
+    <li>Each athlete must allow health data for the team app. Athletes who connected before it was turned on, or turned it off: connect Garmin again from their athlete link and leave health data switched on in Garmin’s sharing screen.</li>
+    <li>The watch measures resting heart rate only when it is worn through the night and the day, and synced each morning.</li>
+  </ol>
+  {% endif %}
+  {% if user.role in ('admin', 'coach') %}
+  <form method="post" action="/sync/resting-hr"><input type="hidden" name="csrf" value="{{ csrf }}">
+    <button type="submit">Recheck permissions and ask Garmin for the past 30 days</button>
+  </form>
+  {% endif %}
+</div>
 <div class="card scroll">
   <h2>Garmin connections</h2>
-  <table class="list"><thead><tr><th>Athlete</th><th>Status</th><th>Shared with the team</th><th>Connected</th><th>Last sync</th></tr></thead><tbody>
-  {% for c in conns %}<tr><td>{{ c.athlete.name }}</td><td>{{ c.status }}</td><td class="small">{{ c.permissions or 'unknown' }}</td><td>{{ (c.connected_at|local).strftime('%b %-d') }}</td><td>{{ (c.last_sync_at|local).strftime('%b %-d %-I:%M %p') if c.last_sync_at else 'never' }}</td></tr>
-  {% else %}<tr><td colspan="5" class="muted">No athlete has connected Garmin yet.</td></tr>{% endfor %}
+  <table class="list"><thead><tr><th>Athlete</th><th>Status</th><th>Shared with the team</th><th>Resting HR</th><th>Connected</th><th>Last sync</th></tr></thead><tbody>
+  {% for c in conns %}<tr><td>{{ c.athlete.name }}</td><td>{{ c.status }}</td><td class="small">{{ c.permissions or 'unknown' }}</td><td class="small">{% set h = health in (c.permissions or '').split(',') %}{% if c.permissions and not h %}<span class="pill warn">not shared</span>{% elif last_rhr.get(c.athlete_id) %}{{ last_rhr[c.athlete_id].strftime('%b %-d') }}{% else %}<span class="muted">none yet</span>{% endif %}</td><td>{{ (c.connected_at|local).strftime('%b %-d') }}</td><td>{{ (c.last_sync_at|local).strftime('%b %-d %-I:%M %p') if c.last_sync_at else 'never' }}</td></tr>
+  {% else %}<tr><td colspan="6" class="muted">No athlete has connected Garmin yet.</td></tr>{% endfor %}
   </tbody></table>
 </div>
 <div class="card scroll">

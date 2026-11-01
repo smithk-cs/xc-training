@@ -191,8 +191,22 @@ def history_blocked(conn: GarminConnection) -> bool:
     return bool(conn.permissions) and HISTORY_PERMISSION not in conn.permissions.split(",")
 
 
-def queue_backfill(db: Session, conn: GarminConnection, days: int, delay: dt.timedelta = dt.timedelta(0)) -> str:
-    """Queue requests for the past `days` of runs, in ranges Garmin accepts. Returns a message for the coach."""
+def shares_health(conn: GarminConnection) -> bool | None:
+    """Whether the athlete lets Garmin send daily summaries (resting heart rate); None when Garmin hasn't said."""
+    return HEALTH_PERMISSION in conn.permissions.split(",") if conn.permissions else None
+
+
+def refresh_permissions(db: Session, conn: GarminConnection, http: httpx.Client) -> list[str]:
+    """Ask Garmin again which permissions the athlete granted (they can change them in Garmin Connect)."""
+    perms = _permissions_list(_api_get(http, access_token(db, conn, http), "/wellness-api/rest/user/permissions"))
+    conn.permissions = ",".join(perms)
+    return perms
+
+
+def queue_backfill(db: Session, conn: GarminConnection, days: int, delay: dt.timedelta = dt.timedelta(0),
+                   kinds: tuple[str, ...] | None = None) -> str:
+    """Queue requests for the past `days` of runs (or only `kinds`, e.g. ('dailies',)), in ranges Garmin accepts.
+    Returns a message for the coach."""
     if history_blocked(conn):
         msg = NO_HISTORY.format(p=HISTORY_PERMISSION, name=conn.athlete.name)
         log(db, "garmin", msg, "warn")
@@ -200,7 +214,11 @@ def queue_backfill(db: Session, conn: GarminConnection, days: int, delay: dt.tim
     days = max(1, min(int(days), 365))
     end = _now()
     start = end - dt.timedelta(days=days)
-    kinds = BACKFILL_KINDS + (("dailies",) if HEALTH_PERMISSION in (conn.permissions or "").split(",") else ())
+    health = HEALTH_PERMISSION in (conn.permissions or "").split(",")
+    only = kinds
+    kinds = tuple(k for k in (kinds or BACKFILL_KINDS + ("dailies",)) if k != "dailies" or health)
+    if not kinds:
+        return f"{conn.athlete.name} doesn't share health data ({HEALTH_PERMISSION}) with the team app in Garmin Connect."
     for kind in kinds:  # activities first: mileage matters most for load ratios
         chunk_end = end
         while chunk_end > start:
@@ -208,7 +226,8 @@ def queue_backfill(db: Session, conn: GarminConnection, days: int, delay: dt.tim
             db.add(GarminBackfill(connection_id=conn.id, kind=kind, start_at=chunk_start, end_at=chunk_end,
                                   not_before=end + delay))
             chunk_end = chunk_start
-    msg = (f"Queued a request to Garmin for {conn.athlete.name}'s runs from the past {days} days. "
+    what = "resting heart rates" if only == ("dailies",) else "runs"
+    msg = (f"Queued a request to Garmin for {conn.athlete.name}'s {what} from the past {days} days. "
            "They arrive over the next few minutes to hours.")
     log(db, "garmin", msg)
     return msg
@@ -417,7 +436,7 @@ def _connection(db: Session, user_id) -> GarminConnection | None:
 
 
 def handle_notification(db: Session, payload: dict, http: httpx.Client) -> dict:
-    counts = {"created": 0, "upgraded": 0, "duplicate": 0, "resting_hr": 0, "skipped": 0, "errors": 0}
+    counts = {"created": 0, "upgraded": 0, "duplicate": 0, "resting_hr": 0, "daily without resting HR": 0, "skipped": 0, "errors": 0}
     if not isinstance(payload, dict):
         raise GarminError("Notification body must be a JSON object.")
     for key, items in payload.items():
@@ -460,7 +479,7 @@ def _save_daily(db: Session, conn: GarminConnection, row: dict, counts: dict) ->
     try:
         bpm, day = int(bpm), dt.date.fromisoformat(str(day))
     except (TypeError, ValueError):
-        counts["skipped"] += 1
+        counts["daily without resting HR" if row.get("calendarDate") else "skipped"] += 1
         return
     if not analysis.RESTING_HR_MIN <= bpm <= analysis.RESTING_HR_MAX:
         counts["skipped"] += 1

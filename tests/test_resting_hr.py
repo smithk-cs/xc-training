@@ -3,6 +3,8 @@ import datetime as dt
 import json
 import re
 
+import httpx
+
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
@@ -48,7 +50,7 @@ def test_garmin_dailies_and_backfill(session, athlete, mock, http):
         {"userId": "garmin-user-1", "calendarDate": "2026-10-25"},                                       # no value
         {"userId": "garmin-user-1", "calendarDate": "2026-10-24", "restingHeartRateInBeatsPerMinute": 400}]}
     c = G.handle_notification(session, note, http)
-    assert (c["resting_hr"], c["skipped"], c["errors"]) == (2, 2, 0)
+    assert (c["resting_hr"], c["daily without resting HR"], c["skipped"], c["errors"]) == (2, 1, 1, 0)
     A.save_resting_hr(session, athlete.id, dt.date(2026, 10, 23), 52, "athlete")
     later = {"dailies": [{"userId": "garmin-user-1", "calendarDate": "2026-10-27", "restingHeartRateInBeatsPerMinute": 46},
                          {"userId": "garmin-user-1", "calendarDate": "2026-10-23", "restingHeartRateInBeatsPerMinute": 60}]}
@@ -64,6 +66,39 @@ def test_garmin_dailies_and_backfill(session, athlete, mock, http):
     session.query(GarminBackfill).delete()
     G.queue_backfill(session, athlete.garmin, 30)
     assert kinds() == {"activities", "activityDetails", "dailies"}
+    session.query(GarminBackfill).delete()
+    assert "resting heart rates" in G.queue_backfill(session, athlete.garmin, 30, kinds=("dailies",))
+    assert kinds() == {"dailies"}
+
+
+def test_sync_page_resting_hr_status_and_request(mock, http, monkeypatch):
+    db = SessionLocal()
+    db.add(StaffUser(username="coach1", role="coach", password_hash=hash_password("correct-horse-1")))
+    ava = Athlete(first_name="Ava", last_name="Doyle", gender="Girls", grade=11, group="Varsity", link_token="tok-ava")
+    db.add(ava)
+    db.flush()
+    connect(db, ava, http)
+    db.commit()
+    db.close()
+    monkeypatch.setattr(G, "make_client", lambda: httpx.Client(transport=httpx.MockTransport(mock)))
+    from xcapp.web import create_app
+    c = TestClient(create_app(), follow_redirects=False)
+    csrf = re.search(r'name="csrf" value="([^"]+)"', c.get("/login").text).group(1)
+    c.post("/login", data={"csrf": csrf, "username": "coach1", "password": "correct-horse-1"})
+    page = c.get("/sync").text
+    assert "0 of 1 connected athlete sent one" in page and "1 not sharing health data" in page and "<b>Dailies</b>" in page
+    assert "Garmin isn’t sharing your resting heart rate" in TestClient(create_app()).get("/a/tok-ava").text
+    csrf = re.search(r'name="csrf" value="([^"]+)"', page).group(1)
+    c.post("/sync/resting-hr", data={"csrf": csrf})
+    assert "Not sharing health data: Ava Doyle." in c.get("/sync").text
+    mock.permissions = mock.permissions + ["HEALTH_EXPORT"]       # the athlete turns health data on
+    c.post("/sync/resting-hr", data={"csrf": csrf})
+    db = SessionLocal()
+    assert {j.kind for j in db.scalars(select(GarminBackfill))} >= {"dailies"}
+    assert "HEALTH_EXPORT" in db.scalar(select(Athlete)).garmin.permissions
+    db.close()
+    page = c.get("/sync").text
+    assert "for 1 athlete." in page and "not sharing health data</span>" not in page
 
 
 def test_pages_entry_export_and_never_to_ai():

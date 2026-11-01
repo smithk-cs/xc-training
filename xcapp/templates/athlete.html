@@ -71,6 +71,9 @@
     {% if linked %}</summary>{% else %}</div>{% endif %}
     {% if a.garmin and a.garmin.status == 'connected' %}
       <p>New runs reach your coaches a few minutes after your watch syncs with the Garmin Connect app.</p>
+      {% if a.garmin.permissions and 'HEALTH_EXPORT' not in a.garmin.permissions.split(',') %}
+      <p class="notice" id="garmin-health"><span>Garmin isn’t sharing your resting heart rate. To share it, disconnect below, then connect again and leave health data switched on in Garmin’s sharing screen. Or type it in above each morning.</span></p>
+      {% endif %}
       <dl class="facts">
         <div><dt>Last run received</dt><dd>{{ (a.garmin.last_sync_at|local).strftime('%a, %b %-d') if a.garmin.last_sync_at else 'None yet' }}</dd></div>
         <div><dt>Watch</dt><dd>{{ acts[0].device if acts and acts[0].device else 'Garmin' }}</dd></div>

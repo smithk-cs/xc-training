@@ -24,6 +24,7 @@ class MockGarmin:
         self.requests = []
         self.n = 0
         self.backfill_status = 202
+        self.permissions = ["ACTIVITY_EXPORT", "WORKOUT_IMPORT", "HISTORICAL_DATA_EXPORT"]
 
     def __call__(self, req: httpx.Request):
         self.requests.append(req)
@@ -38,7 +39,7 @@ class MockGarmin:
             if u.path == "/wellness-api/rest/user/id":
                 return httpx.Response(200, json={"userId": "garmin-user-1"})
             if u.path == "/wellness-api/rest/user/permissions":
-                return httpx.Response(200, json=["ACTIVITY_EXPORT", "WORKOUT_IMPORT", "HISTORICAL_DATA_EXPORT"])
+                return httpx.Response(200, json=self.permissions)
             if u.path == "/files/activity/1":
                 return httpx.Response(200, content=FIT)
             if u.path == "/wellness-api/rest/user/registration" and req.method == "DELETE":

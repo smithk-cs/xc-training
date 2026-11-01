@@ -1611,7 +1611,46 @@ def create_app() -> FastAPI:
         conns = db.scalars(select(GarminConnection).options(selectinload(GarminConnection.athlete))).all()
         logs = db.scalars(select(SyncLog).order_by(SyncLog.id.desc()).limit(150)).all()
         webhook = f"{s.base_url.rstrip('/')}/garmin/webhook/{s.garmin_webhook_secret}" if user.role == "admin" and s.garmin_webhook_secret else ""
-        return render(request, "sync.html", user, conns=conns, logs=logs, webhook=webhook)
+        last_rhr = dict(db.execute(select(RestingHeartRate.athlete_id, func.max(RestingHeartRate.date))
+                                   .where(RestingHeartRate.source == "garmin").group_by(RestingHeartRate.athlete_id)).all())
+        live = [c for c in conns if c.status == "connected"]
+        today = A.team_today()
+        rhr = {"shared": sum(1 for c in live if G.shares_health(c)), "not_shared": sum(1 for c in live if G.shares_health(c) is False),
+               "recent": sum(1 for c in live if last_rhr.get(c.athlete_id) and last_rhr[c.athlete_id] >= today - dt.timedelta(days=3)),
+               "connected": len(live)}
+        return render(request, "sync.html", user, conns=conns, logs=logs, webhook=webhook, last_rhr=last_rhr, rhr=rhr,
+                      health=G.HEALTH_PERMISSION, today=today)
+
+    @app.post("/sync/resting-hr")
+    async def sync_resting_hr(request: Request, background: BackgroundTasks, user=Depends(coach_or_admin, scope="function"),
+                              db: Session = Depends(get_db, scope="function")):
+        """Read each connected athlete's Garmin permissions again, and ask for 30 days of daily summaries from those
+        who share health data."""
+        await form_checked(request)
+        asked, no_health, failed = [], [], []
+        with G.make_client() as http:
+            for c in db.scalars(select(GarminConnection).where(GarminConnection.status == "connected")
+                                .options(selectinload(GarminConnection.athlete))).all():
+                try:
+                    G.refresh_permissions(db, c, http)
+                except (G.GarminError, httpx.HTTPError) as exc:
+                    failed.append(c.athlete.name)
+                    log(db, "garmin", f"Could not read {c.athlete.name}'s Garmin permissions: {exc}", "warn")
+                    continue
+                if not G.shares_health(c):
+                    no_health.append(c.athlete.name)
+                elif not G.history_blocked(c):
+                    G.queue_backfill(db, c, 30, kinds=("dailies",))
+                    asked.append(c.athlete.name)
+        parts = [f"Asked Garmin for 30 days of resting heart rates for {len(asked)} athlete{'s' if len(asked) != 1 else ''}."]
+        if no_health:
+            parts.append(f"Not sharing health data: {', '.join(no_health)}.")
+        if failed:
+            parts.append(f"Couldn't reach Garmin for: {', '.join(failed)}.")
+        log(db, "garmin", " ".join(parts))
+        flash(request, " ".join(parts), "error" if failed and not asked else "ok")
+        background.add_task(kick_backfills)
+        return back("/sync")
 
     # ---------- run data check ----------
 
