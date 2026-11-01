@@ -154,9 +154,10 @@ def test_week_page_and_athlete_panel():
     boys = c.get("/week?team=Boys").text
     assert "Boys week" in boys and "Sam Lowry" in boys and "No score (–)" in boys   # Sam's group has no weekly goal
     csrf = re.search(r'name="csrf" value="([^"]+)"', girls).group(1)
-    c.post("/week/settings", data={"csrf": csrf, "team": "Girls", "start": monday.isoformat(), "target_days": "5", "min_minutes": "25"})
+    c.post("/week/settings", data={"csrf": csrf, "team": "Girls", "start": monday.isoformat(), "target_days": "5", "min_minutes": "25", "rest_day": "2"})
     page = c.get(f"/week?team=Girls&start={monday.isoformat()}").text
     assert "at least 25 minutes run (target 5)" in page and "of 5" in page
+    assert '<option value="2" selected>Wed</option>' in page and "5 run days and 2 rest days (Wed first)" in page
     c.post("/week/settings", data={"csrf": csrf, "team": "Girls", "target_days": "9", "min_minutes": "25"})
     assert "Target days run from 1 to 7" in c.get("/week?team=Girls").text
     me = TestClient(app).get("/a/t-ava").text
@@ -188,20 +189,35 @@ def test_experience_changes_the_miles_goal_and_target(session):
 def test_keep_pace_colours():
     assert [P.pace_status(x) for x in (None, 120, 90, 89.9, 80, 79.9)] == ["", "good", "good", "warn", "warn", "bad"]
     days = [{"date": MON + dt.timedelta(days=i), "miles": m, "points": p, "planned": pl, "plan_miles": pm} for i, (m, p, pl, pm) in enumerate(
-        [(0, 0, None, None), (6, 12, None, None), (5, 20, 20, 5), (0, 0, None, None), (0, 0, None, None), (0, 0, None, None), (0, 0, None, None)])]
-    week = {"days": days, "goal_miles": 36, "target": 72}
+        [(0, 0, None, None), (6, 10, None, None), (5, 20, 20, 5), (0, 0, None, None), (0, 0, None, None), (0, 0, None, None), (0, 0, None, None)])]
+    week = {"days": days, "goal_miles": 35, "target": 70, "why_target": {"easy": {"miles": 30, "points": 50}}}
+    P.plan_days(week, 6, 6)
+    # 6 run days, one a workout, so 5 easy days share the 30 easy miles and 50 points; Sunday rests
+    assert [d["kind"] for d in days] == ["easy", "easy", "workout", "easy", "easy", "easy", "rest"]
+    assert [d["due_m"] for d in days] == [6, 6, 5, 6, 6, 6, 0] and sum(d["due_p"] for d in days) == 70
     P.keep_pace(week, MON + dt.timedelta(days=2))
-    # Each day on its own: Tuesday 6 of 6 mi (36 / 6) and 12 of 12 pts; Wednesday's workout 5 of 5 planned mi and 20 of 20
-    # planned points. A missed Monday no longer turns the days after it red.
     assert [round(d["miles_pct"]) if d["miles_pct"] is not None else None for d in days] == [None, 100, 100, None, None, None, None]
     assert [round(d["points_pct"]) if d["points_pct"] is not None else None for d in days] == [None, 100, 100, None, None, None, None]
-    assert days[2]["why_miles"] == "5.0 of 5.0 mi planned for the workout: 100%"
-    assert days[1]["why_points"] == "12 of 12 pts (weekly 72 ÷ 6 days): 100%"
-    # The week so far: 11 of 15.4 mi due by Wednesday (3/7 of 36)
-    assert round(week["miles_pct"]) == 71 and P.pace_status(week["miles_pct"]) == "bad"
-    assert week["why_miles"] == "11.0 of 15.4 mi due (3 of 7 days, through Wed, of 36): 71%"
+    assert days[2]["why_miles"] == "5.0 of 5.0 mi (planned for the workout): 100%"
+    assert days[1]["why_points"] == "10 of 10 pts (easy day: the miles the workouts leave ÷ 5 easy days): 100%"
+    # The week so far: 11 of 17 mi due through Wednesday (6 + 6 + 5), 30 of 40 points
+    assert round(week["miles_pct"]) == 65 and P.pace_status(week["miles_pct"]) == "bad"
+    assert week["why_miles"] == "11.0 of 17.0 mi due through Wed (of 35): 65%"
+    assert round(week["points_pct"]) == 75
+    P.keep_pace(week, MON + dt.timedelta(days=5))            # Saturday: the whole goal is due already
+    assert week["why_miles"] == "11.0 of 35.0 mi due through Sat (of 35): 31%"
+    days[6].update(miles=6, points=10)                        # a run on the rest day is compared with an easy day
     P.keep_pace(week, MON + dt.timedelta(days=6))
-    assert week["why_points"].startswith("32 of 72 pts due (the whole week")
+    assert round(days[6]["miles_pct"]) == 100 and "rest day" in days[6]["why_miles"]
+    assert week["why_points"].startswith("40 of 70 pts due the whole week")
+
+
+def test_plan_days_other_rest_day_and_fewer_run_days():
+    days = [{"date": MON + dt.timedelta(days=i), "miles": 0, "points": 0, "planned": None, "plan_miles": None} for i in range(7)]
+    week = {"days": days, "why_target": {"easy": {"miles": 25, "points": 50}}}
+    P.plan_days(week, 5, 2)                                   # 5 run days, Wednesday off: Sunday rests too
+    assert [d["kind"] for d in days] == ["easy", "easy", "rest", "easy", "easy", "easy", "rest"]
+    assert days[0]["due_m"] == 5 and days[0]["due_p"] == 10
 
 
 def test_week_links_and_colours():
@@ -236,15 +252,16 @@ def test_week_links_and_colours():
 
 
 def test_score_on_track_colour():
-    days = [{"date": MON + dt.timedelta(days=i), "points": p} for i, p in enumerate([10, 10, 0, 0, 0, 0, 0])]
-    week = {"days": days, "target": 70, "run_days": 2}
-    P.score_pace(week, MON + dt.timedelta(days=1), 6)       # Tuesday: 20 of 20 points due, 2 of 1.7 days due
+    days = [{"date": MON + dt.timedelta(days=i), "points": p, "planned": None} for i, p in enumerate([10, 10, 0, 0, 0, 0, 0])]
+    week = {"days": days, "target": 60, "run_days": 2, "why_target": {"easy": {"miles": 30, "points": 60}}}
+    P.plan_days(week, 6, 6)                                  # 10 points a day Monday to Saturday, Sunday off
+    P.score_pace(week, MON + dt.timedelta(days=1), 6)       # Tuesday: 20 of 20 points due, 2 of 2 days
     assert round(week["score_pct"]) == 100 and P.pace_status(week["score_pct"]) == "good"
-    P.score_pace(week, MON + dt.timedelta(days=3), 6)       # Thursday, nothing more: 20 of 40 points, 2 of 3.4 days
-    assert round(week["score_pct"]) == 52 and P.pace_status(week["score_pct"]) == "bad"
-    assert week["why_score"].startswith("On track for 52%: points 20 of 40 due by Thu (50%)")
-    P.score_pace(week, MON + dt.timedelta(days=9), 6)       # week over: the score itself (80% x 20/70 + 20% x 2/6)
-    assert week["score_pct"] == pytest.approx(100 * (0.8 * 20 / 70 + 0.2 * 2 / 6))
+    P.score_pace(week, MON + dt.timedelta(days=3), 6)       # Thursday, nothing more: 20 of 40 points, 2 of 4 days
+    assert round(week["score_pct"]) == 50 and P.pace_status(week["score_pct"]) == "bad"
+    assert week["why_score"].startswith("On track for 50%: points 20 of 40 due by Thu (50%)")
+    P.score_pace(week, MON + dt.timedelta(days=9), 6)       # week over: the score itself (80% x 20/60 + 20% x 2/6)
+    assert week["score_pct"] == pytest.approx(100 * (0.8 * 20 / 60 + 0.2 * 2 / 6))
 
 
 def test_one_workout_a_day_counts_toward_the_target():

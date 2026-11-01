@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block content %}
+{% set can_fix = user.role in ('admin', 'coach') %}
+{% macro run(a) -%}
+<a href="/athletes/{{ a.athlete_id }}">{{ a.athlete.name }}</a> · {{ a.local_date.strftime('%a %b %-d') }} · {{ (a.start_utc|local).strftime('%-I:%M %p') }}
+· {{ '%.2f'|format(a.distance_m / 1609.344) }} mi · {{ fmt_secs(a.duration_s) }} <span class="small muted">({{ a.source }}{{ ', effort ' ~ a.rpe if a.rpe is not none }})</span>
+{%- endmacro %}
+<h1>Run data check</h1>
+<p class="small muted">Checks synced runs for copies of the same run, runs filed on the wrong day, and runs that look wrong. Days are Pacific time.</p>
+<form method="get" class="form-row">
+  <label>Look at<select name="days" onchange="this.form.submit()">{% for d, label in spans.items() %}<option value="{{ d }}"{{ ' selected' if d == days }}>{{ label }}</option>{% endfor %}</select></label>
+  <noscript><button type="submit">Check</button></noscript>
+</form>
+<p>{{ issues.checked }} run{{ 's' if issues.checked != 1 }} from {{ issues.start.strftime('%b %-d') }} to {{ issues.end.strftime('%b %-d') }}:
+{% if not (issues.duplicates or issues.wrong_day or issues.odd) %}<span class="pill good">all look right</span>{% else %}
+<span class="pill {{ 'bad' if issues.duplicates else 'good' }}">{{ issues.duplicates|length }} duplicate{{ 's' if issues.duplicates|length != 1 }}</span>
+<span class="pill {{ 'bad' if issues.wrong_day else 'good' }}">{{ issues.wrong_day|length }} on the wrong day</span>
+<span class="pill {{ 'warn' if issues.odd else 'good' }}">{{ issues.odd|length }} to look at</span>{% endif %}</p>
+
+<div class="card" id="duplicates">
+  <h2>Duplicates</h2>
+  <p class="small muted">Two runs of one athlete that overlap in time, or match in distance and time but start whole hours apart. The fuller copy is kept (a Garmin file over a summary over a CSV import); the athlete’s effort and notes move to it.</p>
+  {% if issues.duplicates %}
+  <form method="post" action="/data-check/remove">
+    <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="days" value="{{ days }}">
+    <table class="list"><thead><tr>{% if can_fix %}<th></th>{% endif %}<th>Keep</th><th>Remove</th><th>Why</th></tr></thead><tbody>
+    {% for p in issues.duplicates %}<tr>{% if can_fix %}<td><input type="checkbox" name="id" value="{{ p.drop.id }}" checked aria-label="Remove this copy"></td>{% endif %}
+      <td class="small">{{ run(p.keep) }}</td><td class="small">{{ run(p.drop) }}</td><td class="small">{{ p.why }}</td></tr>{% endfor %}
+    </tbody></table>
+    {% if can_fix %}<button type="submit">Remove the ticked copies</button>{% endif %}
+  </form>
+  {% else %}<p class="muted">None found.</p>{% endif %}
+</div>
+
+<div class="card" id="wrong-day">
+  <h2>On the wrong day</h2>
+  <p class="small muted">The day a run is filed under should be the day it started in Pacific time.</p>
+  {% if issues.wrong_day %}
+  <form method="post" action="/data-check/fix-days">
+    <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="days" value="{{ days }}">
+    <table class="list"><thead><tr><th>Run</th><th>Should be</th></tr></thead><tbody>
+    {% for w in issues.wrong_day %}<tr><td class="small">{{ run(w.act) }}<input type="hidden" name="id" value="{{ w.act.id }}"></td><td>{{ w.should_be.strftime('%a %b %-d') }}</td></tr>{% endfor %}
+    </tbody></table>
+    {% if can_fix %}<button type="submit">Move them to the right day</button>{% endif %}
+  </form>
+  {% else %}<p class="muted">None found.</p>{% endif %}
+</div>
+
+<div class="card" id="odd">
+  <h2>To look at</h2>
+  <p class="small muted">Nothing here changes unless you tick a run and remove it (for a bike ride or drive that synced as a run).</p>
+  {% if issues.odd %}
+  <form method="post" action="/data-check/delete" onsubmit="return confirm('Remove the ticked runs for good?')">
+    <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="days" value="{{ days }}">
+    <table class="list"><tbody>
+    {% for o in issues.odd %}<tr>{% if can_fix %}<td><input type="checkbox" name="id" value="{{ o.act.id }}" aria-label="Remove this run"></td>{% endif %}<td class="small">{{ run(o.act) }}</td><td class="small">{{ o.why|join('; ') }}</td></tr>{% endfor %}
+    </tbody></table>
+    {% if can_fix %}<button type="submit" class="danger">Remove the ticked runs</button>{% endif %}
+  </form>
+  {% else %}<p class="muted">None found.</p>{% endif %}
+</div>
+{% endblock %}

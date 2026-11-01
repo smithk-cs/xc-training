@@ -36,6 +36,7 @@ from . import garmin_csv as GCSV
 from . import weather as WX
 from . import team_calendar as TC
 from . import classyear as CY
+from . import data_check as DC
 from .config import settings
 from .db import SessionLocal, create_all
 from .fitfile import MAX_FITS_PER_UPLOAD, MAX_UPLOAD_BYTES, FitError, fit_files, parse_fit
@@ -1612,6 +1613,56 @@ def create_app() -> FastAPI:
         webhook = f"{s.base_url.rstrip('/')}/garmin/webhook/{s.garmin_webhook_secret}" if user.role == "admin" and s.garmin_webhook_secret else ""
         return render(request, "sync.html", user, conns=conns, logs=logs, webhook=webhook)
 
+    # ---------- run data check ----------
+
+    CHECK_SPANS = {7: "Last 7 days", 28: "Last 4 weeks", 90: "Last 3 months", 365: "Last year"}
+
+    @app.get("/data-check", response_class=HTMLResponse)
+    def data_check_page(request: Request, days: int = 28, user=Depends(any_staff, scope="function"), db: Session = Depends(get_db, scope="function")):
+        days = days if days in CHECK_SPANS else 28
+        today = A.team_today()
+        issues = DC.find_issues(db, today - dt.timedelta(days=days - 1), today, today)
+        return render(request, "data_check.html", user, issues=issues, days=days, spans=CHECK_SPANS)
+
+    @app.post("/data-check/fix-days")
+    async def data_check_fix_days(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
+        f = await form_checked(request)
+        ids = [int(x) for x in f.getlist("id") if x.isdigit()] if hasattr(f, "getlist") else []
+        n = DC.fix_days(db, ids or None)
+        flash(request, f"Moved {n} run{'s' if n != 1 else ''} to the right day." if n else "Nothing to move.")
+        return back(f"/data-check?days={f.get('days', '28')}")
+
+    @app.post("/data-check/remove")
+    async def data_check_remove(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
+        f = await form_checked(request)
+        days = int(f.get("days", "28")) if str(f.get("days", "")).isdigit() else 28
+        wanted = {int(x) for x in f.getlist("id") if x.isdigit()} if hasattr(f, "getlist") else set()
+        today = A.team_today()
+        # Only copies the check itself suggests can be removed, worked out again now
+        pairs = DC.find_issues(db, today - dt.timedelta(days=max(days, 7) - 1), today, today)["duplicates"]
+        n = 0
+        for p in pairs:
+            if p["drop"].id in wanted:
+                DC.remove_duplicate(db, p["drop"], p["keep"])
+                n += 1
+        flash(request, f"Removed {n} duplicate run{'s' if n != 1 else ''}." if n else "Nothing removed.")
+        return back(f"/data-check?days={days}")
+
+    @app.post("/data-check/delete")
+    async def data_check_delete(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
+        f = await form_checked(request)
+        n = 0
+        for x in f.getlist("id"):
+            act = db.get(Activity, int(x)) if x.isdigit() else None
+            if act is not None:
+                day = act.local_date
+                db.delete(act)
+                db.flush()
+                rematch_day(db, day)
+                n += 1
+        flash(request, f"Removed {n} run{'s' if n != 1 else ''}." if n else "Nothing removed.")
+        return back(f"/data-check?days={f.get('days', '28')}")
+
     # ---------- athlete link pages ----------
 
     @app.get("/a/{token}", response_class=HTMLResponse)
@@ -2522,6 +2573,7 @@ def create_app() -> FastAPI:
         order = {g.name: g.position for g in db.scalars(select(TrainingGroup)).all()}
         rows.sort(key=lambda r: (order.get(r["group_name"], 99), -(r["vdot"] or 0), r["a"].last_name, r["a"].first_name))
         target_days, min_minutes = PT.settings_for(db)
+        rest_day = PT.rest_day(db)
         group_workouts: dict[str, list[list]] = {}  # each group's team workouts per day, shown once on its group row
         for r in rows:
             per_day = group_workouts.setdefault(r["group_name"], [[] for _ in range(7)])
@@ -2529,15 +2581,17 @@ def create_app() -> FastAPI:
                 per_day[i] += [w for w in d["workouts"] if w not in per_day[i]]
         return render(request, "week.html", user, team=team, rows=rows, monday=monday, today=today, group_workouts=group_workouts,
                       days=[monday + dt.timedelta(days=i) for i in range(7)], rates=PT.RATES,
-                      target_days=target_days, min_minutes=min_minutes)
+                      target_days=target_days, min_minutes=min_minutes, rest_day=rest_day, weekdays=PT.WEEKDAYS)
 
     @app.post("/week/settings")
     async def week_settings(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
         f = await form_checked(request)
         try:
             days, mins = int(f.get("target_days", "")), int(f.get("min_minutes", ""))
-            if not (1 <= days <= 7 and 5 <= mins <= 120):
+            rest = int(f.get("rest_day", "6") or 6)
+            if not (1 <= days <= 7 and 5 <= mins <= 120 and 0 <= rest <= 6):
                 raise ValueError
+            A.set_setting(db, "points_rest_day", str(rest))
             A.set_setting(db, "points_target_days", str(days))
             A.set_setting(db, "points_min_minutes", str(mins))
             flash(request, "Saved.")

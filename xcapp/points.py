@@ -41,65 +41,97 @@ def pace_status(pct: float | None) -> str:
     return "good" if pct >= ON_PACE else "warn" if pct >= NEAR_PACE else "bad"
 
 
-RUN_DAYS = 6   # a day's share of the weekly goals: the goal over six running days (as on the athlete's miles chart)
+WEEKDAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
 
 
 def _pct(done: float, due: float) -> float | None:
     return 100 * done / due if due else None
 
 
+def plan_days(week: dict, target_days: int, rest_day: int) -> None:
+    """What each day of the week asks for (d['due_m'], d['due_p'], d['kind']): workout days their workout; the
+    rest of the target run days split the miles and points the workouts leave (easy days); the usual rest day, and
+    any other day beyond the target run days, nothing. Days are filled from Monday, so with 6 run days and Sunday
+    as the rest day, the full goals are due by Saturday."""
+    days = week["days"]
+    why = week.get("why_target") or {}
+    easy = why.get("easy") or {}
+    n_workouts = sum(1 for d in days if d.get("planned") is not None)
+    easy_days = max(target_days - n_workouts, 0)
+    others = [d for d in days if d.get("planned") is None]
+    # rest days: the usual rest day first, then the last other days, until only the target run days are left
+    order = sorted(others, key=lambda d: (d["date"].weekday() != rest_day, -d["date"].weekday()))
+    rest = {id(d) for d in order[:max(len(others) - easy_days, 0)]}
+    share_m = easy.get("miles", 0) / easy_days if easy_days else 0.0
+    share_p = easy.get("points", 0) / easy_days if easy_days else 0.0
+    week["easy_share"] = {"miles": share_m, "points": share_p, "days": easy_days}
+    for d in days:
+        if d.get("planned") is not None:
+            d["kind"], d["due_m"], d["due_p"] = "workout", d.get("plan_miles") or 0.0, d["planned"]
+        elif id(d) in rest:
+            d["kind"], d["due_m"], d["due_p"] = "rest", 0.0, 0.0
+        else:
+            d["kind"], d["due_m"], d["due_p"] = "easy", share_m, share_p
+
+
 def score_pace(week: dict, today: dt.date, target_days: int) -> None:
-    """Whether the athlete is on track for the week's score: the same 80/20 score, with points and days run measured
-    against what's due by today (a seventh of each a day). Once the week is over it is the score itself."""
+    """Whether the athlete is on track for the week's score: the same 80/20 score, with points and run days measured
+    against what the days so far ask for (plan_days). Once the week is over it is the score itself."""
     week["score_pct"], week["why_score"] = None, ""
     days = week["days"]
     if not days or not week.get("target") or today < days[0]["date"]:
         return
     i = min(7, (today - days[0]["date"]).days + 1)
-    due_p, due_d = week["target"] * i / 7, target_days * i / 7
-    done_p = sum(d["points"] for d in days[:i])
+    so_far = days[:i]
+    due_p = sum(d.get("due_p", 0) for d in so_far)
+    due_d = sum(1 for d in so_far if d.get("kind") in ("workout", "easy"))
+    done_p = sum(d["points"] for d in so_far)
     run = week["run_days"]   # days run so far (later days have no runs yet)
-    pts, dys = min(done_p / due_p, 1.0), min(run / due_d, 1.0) if due_d else 1.0
+    pts = min(done_p / due_p, 1.0) if due_p else 1.0
+    dys = min(run / due_d, 1.0) if due_d else 1.0
     week["score_pct"] = 100 * (POINTS_SHARE * pts + (1 - POINTS_SHARE) * dys)
     through = "the whole week" if i == 7 else f"by {days[i - 1]['date']:%a}"
     week["why_score"] = (f"On track for {week['score_pct']:.0f}%: points {done_p:.0f} of {due_p:.0f} due {through} ({100 * pts:.0f}%) "
-                         f"× 80% + days run {run} of {due_d:.1f} due ({100 * dys:.0f}%) × 20%")
+                         f"× 80% + days run {run} of {due_d} due ({100 * dys:.0f}%) × 20%")
 
 
 def keep_pace(week: dict, today: dt.date) -> None:
-    """Colours, each with the reason behind it ('why_miles', 'why_points'):
-    - each day judged on its own: miles against the day's planned workout miles (else the weekly goal over six
-      running days), and points against the day's planned points (else the weekly target over six);
-    - the week's totals against the share due by today (a seventh of the goals a day), or the whole goals once past."""
+    """Colours, each with the reason behind it ('why_miles', 'why_points'), from what each day asks for (plan_days):
+    - each day on its own: a workout day against its workout, an easy day against its share of the easy miles and
+      points (a run on a rest day too);
+    - the week's totals against what the days through today ask for, or the whole goals once the week is past."""
     goal_m, target = week["goal_miles"] or 0, week["target"] or 0
-    cum_m = cum_p = 0.0
+    share = week.get("easy_share") or {"miles": 0, "points": 0, "days": 0}
+    cum_m = cum_p = due_wm = due_wp = 0.0
     week["miles_pct"] = week["points_pct"] = None
     week["why_miles"] = week["why_points"] = ""
     for i, d in enumerate(week["days"], 1):
         cum_m += d["miles"]
         cum_p += d["points"]
+        due_wm += d.get("due_m", 0)
+        due_wp += d.get("due_p", 0)
         d["miles_pct"] = d["points_pct"] = None
         d["why_miles"] = d["why_points"] = ""
         if d["date"] > today:
             continue
         if d["miles"] or d["points"]:
-            plan_m = d.get("plan_miles") or 0
-            due_m = plan_m or goal_m / RUN_DAYS
-            due_p = d["planned"] if d.get("planned") else target / RUN_DAYS
+            kind = d.get("kind", "easy")
+            due_m = d.get("due_m", 0) if kind != "rest" else share["miles"]
+            due_p = d.get("due_p", 0) if kind != "rest" else share["points"]
+            how = ("planned for the workout" if kind == "workout" else
+                   f"easy day: the miles the workouts leave ÷ {share['days']} easy days" if kind == "easy" else
+                   "a rest day, so compared with an easy day")
             d["miles_pct"], d["points_pct"] = _pct(d["miles"], due_m), _pct(d["points"], due_p)
             if d["miles_pct"] is not None:
-                d["why_miles"] = (f"{d['miles']:.1f} of {due_m:.1f} mi " + ("planned for the workout" if plan_m else
-                                  f"(weekly {goal_m:g} ÷ {RUN_DAYS} days)") + f": {d['miles_pct']:.0f}%")
+                d["why_miles"] = f"{d['miles']:.1f} of {due_m:.1f} mi ({how}): {d['miles_pct']:.0f}%"
             if d["points_pct"] is not None:
-                d["why_points"] = (f"{d['points']:.0f} of {due_p:.0f} pts " + ("planned for the workout" if d.get("planned") else
-                                   f"(weekly {target:.0f} ÷ {RUN_DAYS} days)") + f": {d['points_pct']:.0f}%")
-        due_wm, due_wp = goal_m * i / 7, target * i / 7
+                d["why_points"] = f"{d['points']:.0f} of {due_p:.0f} pts ({how}): {d['points_pct']:.0f}%"
         week["miles_pct"], week["points_pct"] = _pct(cum_m, due_wm), _pct(cum_p, due_wp)
-        through = "the whole week" if i == 7 else f"{i} of 7 days, through {d['date']:%a}"
+        through = "the whole week" if i == 7 else f"through {d['date']:%a}"
         if week["miles_pct"] is not None:
-            week["why_miles"] = f"{cum_m:.1f} of {due_wm:.1f} mi due ({through}, of {goal_m:g}): {week['miles_pct']:.0f}%"
+            week["why_miles"] = f"{cum_m:.1f} of {due_wm:.1f} mi due {through} (of {goal_m:g}): {week['miles_pct']:.0f}%"
         if week["points_pct"] is not None:
-            week["why_points"] = f"{cum_p:.0f} of {due_wp:.0f} pts due ({through}, of {target:.0f}): {week['points_pct']:.0f}%"
+            week["why_points"] = f"{cum_p:.0f} of {due_wp:.0f} pts due {through} (of {target:.0f}): {week['points_pct']:.0f}%"
 
 
 # ---------- zones and one run's points ----------
@@ -210,6 +242,15 @@ def week_score(points: float, target: float, run_days: int, target_days: int) ->
 
 # ---------- a team's week ----------
 
+def rest_day(db: Session) -> int:
+    """The team's usual rest day (Monday = 0 ... Sunday = 6)."""
+    try:
+        d = int(A.get_setting(db, "points_rest_day", "6"))
+        return d if 0 <= d <= 6 else 6
+    except ValueError:
+        return 6
+
+
 def settings_for(db: Session) -> tuple[int, int]:
     """(target run days per week, minimum minutes for a day to count)."""
     try:
@@ -226,6 +267,7 @@ def team_week(db: Session, monday: dt.date, gender: str | None = None, athletes:
     sunday = monday + dt.timedelta(days=6)
     days = [monday + dt.timedelta(days=i) for i in range(7)]
     target_days, min_minutes = settings_for(db)
+    rest = rest_day(db)
     today = A.team_today()
     ab = A.abilities(db, min(sunday, today))
     groups = {g.name: g for g in db.scalars(select(TrainingGroup)).all()}
@@ -255,6 +297,7 @@ def team_week(db: Session, monday: dt.date, gender: str | None = None, athletes:
                 for offset in (0, -7)]
         week, last = rows
         week["score"] = week_score(week["points"], week["target"] or 0, week["run_days"], target_days)
+        plan_days(week, target_days, rest)
         keep_pace(week, today)
         score_pace(week, today, target_days)
         if last["points"] > 0 and week["points"] > JUMP * last["points"]:
