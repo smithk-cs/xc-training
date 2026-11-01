@@ -21,6 +21,8 @@ FORECAST_DAYS = 15          # how far ahead forecasts reach
 RECENT_DAYS = 80            # past days the forecast service still covers; older days come from the archive
 FILL_DAYS = 30              # race-day conditions are filled in nightly for races this recent
 IMPORT_DAYS = 400           # ... and for older ones right after results are imported or a past meet is saved
+ALL_PAST_DAYS = 10 * 366    # "Fill in race-day weather" and the nightly catch-up reach back this far
+CATCH_UP_PER_NIGHT = 25     # older races filled in each night, a few at a time
 DEFAULT_HOUR = 9            # when a meet has no start time
 HOURLY = "temperature_2m,dew_point_2m,relative_humidity_2m,wind_speed_10m,pressure_msl,precipitation_probability,weather_code"
 HPA_TO_INHG = 0.0295300   # sea-level pressure in hPa -> inches of mercury, as airports report the altimeter setting
@@ -171,7 +173,7 @@ def result_course(db: Session, meet: str, day: dt.date, course_name: str = "", c
     return course_named(db, course_name) or (course_for(db, entry) if entry else None) or course_named(db, meet)
 
 
-def fill_conditions(db: Session, http: httpx.Client, today: dt.date, days: int = FILL_DAYS) -> int:
+def fill_conditions(db: Session, http: httpx.Client, today: dt.date, days: int = FILL_DAYS, limit: int | None = None) -> int:
     """For races with results in the past `days`, fill in race-day temperature, dew point, humidity and wind from the
     weather at the meet's start time (9:00 when unknown). Only empty fields are filled: anything a coach entered stays."""
     n = 0
@@ -186,6 +188,8 @@ def fill_conditions(db: Session, http: httpx.Client, today: dt.date, days: int =
         course = result_course(db, meet, day, course_name, cond)
         if course is None or course.latitude is None or course.longitude is None:
             continue
+        if limit is not None and n >= limit:
+            break
         hh, _mm = start_hour(entry)
         w = at(http, course.latitude, course.longitude, day, hh, today)
         if w is None:
@@ -203,8 +207,11 @@ def fill_conditions(db: Session, http: httpx.Client, today: dt.date, days: int =
             cond.notes = ((cond.notes or "") + " " + note).strip()
         n += 1
     # races with their own start time
-    for rw in db.scalars(select(RaceWeather).where(RaceWeather.date >= since, RaceWeather.date <= today, RaceWeather.temp_f.is_(None),
-                                                   RaceWeather.start_time != "")).all():
+    from sqlalchemy import or_
+    for rw in db.scalars(select(RaceWeather).where(RaceWeather.date >= since, RaceWeather.date <= today, RaceWeather.start_time != "",
+                                                   or_(RaceWeather.temp_f.is_(None), RaceWeather.pressure_inhg.is_(None)))).all():
+        if limit is not None and n >= limit:
+            break
         name = db.scalar(select(RaceResult.course).where(RaceResult.meet == rw.meet, RaceResult.date == rw.date,
                                                          RaceResult.race == rw.race).limit(1)) or ""
         n += fill_race(db, http, rw, today, name)
@@ -267,6 +274,8 @@ def nightly(db: Session, http: httpx.Client | None = None, days: int = FILL_DAYS
         out["forecasts"] = refresh_forecasts(db, client, today)
         out["practice_forecasts"] = refresh_practice_forecasts(db, client, today)
         out["race_conditions"] = fill_conditions(db, client, today, days)
+        # older races still missing anything (such as pressure), a few each night
+        out["race_conditions"] += fill_conditions(db, client, today, ALL_PAST_DAYS, limit=CATCH_UP_PER_NIGHT)
     except WeatherError as exc:
         out["error"] = str(exc)
         log(db, "weather", f"Weather update failed: {exc}", "error")
@@ -289,9 +298,7 @@ def describe(f) -> str:
         bits.append(f"wind {f.wind_mph:.0f} mph")
     if f.dew_point_f is not None:
         bits.append(f"dew point {f.dew_point_f:.0f}°F")
-    if getattr(f, "pressure_inhg", None) is not None:
-        bits.append(f"pressure {f.pressure_inhg:.2f} inHg")
-    return ", ".join(bits)
+    return ", ".join(bits)   # pressure is recorded for races already run, not shown in forecasts
 
 
 

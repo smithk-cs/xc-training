@@ -59,7 +59,7 @@ def test_forecast_and_race_day_conditions():
     assert out == {"forecasts": 1, "practice_forecasts": 0, "race_conditions": 1}   # 30 days out: too far ahead to forecast
     f = soon.forecast
     assert f.at.endswith("T10:00") and f.temp_f == 60 and f.rain_pct == 20 and f.summary == "Partly cloudy"
-    assert WX.describe(f) == "60°F, partly cloudy, 20% chance of rain, wind 6 mph, dew point 45°F, pressure 30.02 inHg"
+    assert WX.describe(f) == "60°F, partly cloudy, 20% chance of rain, wind 6 mph, dew point 45°F"   # no pressure in forecasts
     cond = db.query(MeetConditions).one()
     assert cond.temp_f == 59 and cond.dew_point_f == 45 and cond.wind_mph == 12 and "Open-Meteo" in cond.notes   # 9 a.m. default
     assert cond.pressure_inhg == 30.02                                             # 1016.5 hPa at sea level, as an altimeter setting
@@ -272,4 +272,28 @@ def test_practice_forecasts_use_the_calendar_time_and_place():
     cl.post("/calendar/practice-place", data={"csrf": csrf, "place": "Jesuit HS", "lat": "38.6150", "lon": "-121.3400"})
     db = SessionLocal()
     assert WX.practice_place(db) == (38.615, -121.34, "Jesuit HS")
+    db.close()
+
+
+
+def test_pressure_is_collected_for_every_past_race():
+    calls = []
+    http = fake_service(calls)
+    db = SessionLocal()
+    c = Course(name="Woodward Park", latitude=36.86, longitude=-119.79)
+    db.add(c)
+    a = Athlete(first_name="Sam", last_name="Lowry", gender="Boys", grade=12, group="Varsity", link_token="t-old")
+    db.add(a)
+    db.flush()
+    old = TODAY - dt.timedelta(days=900)                                           # well over a year ago
+    db.add(RaceResult(athlete_id=a.id, date=old, meet="State Meet", race="Boys Varsity", distance_m=5000, distance_label="5K",
+                      time_s=1000, course="Woodward Park"))
+    db.add(MeetConditions(meet="State Meet", date=old, temp_f=61, dew_point_f=40, wind_mph=4))   # entered by a coach, no pressure
+    db.flush()
+    assert WX.fill_conditions(db, http, TODAY) == 0                                # the nightly 30 days don't reach it
+    WX.nightly(db, http)                                                           # but the nightly catch-up does
+    cond = db.query(MeetConditions).one()
+    assert cond.pressure_inhg == 30.02 and (cond.temp_f, cond.dew_point_f, cond.wind_mph) == (61, 40, 4)   # coach's values kept
+    assert calls[-1].url.host == "archive-api.open-meteo.com"
+    db.rollback()
     db.close()

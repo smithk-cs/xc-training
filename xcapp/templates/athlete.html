@@ -108,6 +108,7 @@
 <div class="stack">
   {% for level, text in messages %}<div class="flash {{ level }}" role="status">{{ text }}</div>{% endfor %}
   {% if need %}<p class="notice"><span>{{ need }} recent run{{ '' if need == 1 else 's' }} need{{ 's' if need == 1 else '' }} your effort rating.</span><a href="/a/{{ token }}/runs">Add effort ›</a></p>{% endif %}
+  {% if not rhr_cal.by_day.get(rhr_cal.today) %}<p class="notice rhr-reminder"><span>Today’s resting heart rate isn’t in yet.{% if a.garmin and a.garmin.status == 'connected' %} Your Garmin usually sends it after your watch syncs, or you can enter it.{% endif %}</span><a href="#rhr" onclick="var i=document.getElementById('rhr-bpm'); if (i) { setTimeout(function () { i.focus(); }, 300); }">Add it ›</a></p>{% endif %}
   {% for n in notes %}<section class="announcement" role="note" aria-label="Announcement">
     <div class="ann-title">{{ n.title }}</div>{% if n.body %}<div class="ann-body">{{ n.body }}</div>{% endif %}
   </section>{% endfor %}

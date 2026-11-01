@@ -214,3 +214,26 @@ def test_pr_by_distance_and_course_pr_by_course():
     assert marks[2] == "PR"                      # fastest 5K anywhere
     assert marks[3] == "Course PR"               # faster than before at Gibson Ranch, not a 5K PR
     assert marks[1] == "" and marks[4] == ""     # slower at Gibson; a first visit to Willow Hill is no course record
+
+
+def test_resting_heart_rate_reminder_until_today_is_in():
+    from fastapi.testclient import TestClient
+    from xcapp import analysis as A
+    from xcapp.db import SessionLocal
+    from xcapp.models import Athlete, RestingHeartRate
+    from xcapp.web import create_app
+    db = SessionLocal()
+    a = Athlete(first_name="Ava", last_name="Doyle", gender="Girls", grade=11, group="Varsity", link_token="t-rr")
+    db.add(a)
+    db.commit()
+    aid = a.id
+    db.close()
+    c = TestClient(create_app())
+    page = c.get("/a/t-rr").text
+    assert "Today’s resting heart rate isn’t in yet." in page and 'href="#rhr"' in page
+    assert page.index("rhr-reminder") < page.index('id="wp-h"')                  # at the top, with the effort reminder
+    db = SessionLocal()
+    db.add(RestingHeartRate(athlete_id=aid, date=A.team_today(), bpm=48, source="athlete"))
+    db.commit()
+    db.close()
+    assert "Today’s resting heart rate isn’t in yet." not in c.get("/a/t-rr").text

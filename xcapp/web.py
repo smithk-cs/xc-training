@@ -2168,7 +2168,7 @@ def create_app() -> FastAPI:
     async def weather_update(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
         """Forecasts for upcoming meets and race-day conditions for recent races, now rather than tonight."""
         f = await form_checked(request)
-        out = WX.nightly(db, days=WX.IMPORT_DAYS)
+        out = WX.nightly(db, days=WX.ALL_PAST_DAYS)
         if out.get("error"):
             flash(request, out["error"], "error")
         else:
