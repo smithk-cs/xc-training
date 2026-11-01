@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+{% block content %}
+{% set can_edit = user.role in ('admin', 'coach') %}
+{% macro dot(s) %}<span class="squad-dot" style="background:{{ s.color or '#888' }}"></span>{% endmacro %}
+{% macro pct(v) %}{{ '%.0f%%'|format(v) if v is not none else '–' }}{% endmacro %}
+{% macro week_table(w) %}
+  <div class="scroll squad-week">
+    <h3>Week of {{ w.monday.strftime('%b %-d') }}{% if not w.done %} <span class="pill warn">so far</span>{% endif %}</h3>
+    <table class="list centered"><thead><tr><th>Squad</th><th class="num">Miles</th><th class="num">Of miles goals</th><th class="num">Practice points</th><th class="num">Of points targets</th><th class="num">Races</th><th class="num">Team points</th></tr></thead><tbody>
+    {% for s in st.squads %}{% set r = w.rows[s.id] %}<tr>
+      <td class="squad-name">{{ dot(s) }} {{ s.name }}</td>
+      <td class="num">{{ '%.1f'|format(r.miles) }}<br><span class="small muted">{{ '%.1f'|format(r.miles / r.members) if r.members else '–' }} each</span></td>
+      <td class="num">{{ pct(r.miles_pct) }}{% if r.team_points.miles %}<br><span class="small muted">{{ '%g'|format(r.team_points.miles) }} tp</span>{% endif %}</td>
+      <td class="num">{{ '%.0f'|format(r.points) }}</td>
+      <td class="num">{{ pct(r.points_pct) }}{% if r.team_points.points %}<br><span class="small muted">{{ '%g'|format(r.team_points.points) }} tp</span>{% endif %}</td>
+      <td class="num">{% if r.races is not none %}{{ r.races }} beaten{% if r.team_points.races %}<br><span class="small muted">{{ '%g'|format(r.team_points.races) }} tp</span>{% endif %}{% else %}–{% endif %}</td>
+      <td class="num"><b>{{ '%g'|format(r.total) }}</b></td>
+    </tr>{% endfor %}
+    </tbody></table>
+    {% if w.races %}<p class="small muted">Races: {% for rc in w.races %}{{ rc.meet }}{% if rc.race %} ({{ rc.race }}){% endif %}, {{ rc.runners }} squad runner{{ 's' if rc.runners != 1 }}{% if not loop.last %}; {% endif %}{% endfor %}.</p>{% endif %}
+  </div>
+{% endmacro %}
+{% macro tp(v) %}{{ ('%g'|format(v)) if v else '–' }}{% endmacro %}
+<h1>Squads</h1>
+<p class="small muted">The team split into balanced squads that compete each week on miles, practice points and races.</p>
+
+{% if comps|length > 1 or (comps and not comp) %}
+<form method="get" class="form-row" onsubmit="location.href='/squads/' + this.cid.value; return false;">
+  <label>Competition<select name="cid" onchange="this.form.onsubmit()">{% for c in comps %}<option value="{{ c.id }}"{{ ' selected' if comp and c.id == comp.id }}>{{ c.name }} (from {{ c.start_date.strftime('%b %-d, %Y') }})</option>{% endfor %}</select></label>
+</form>
+{% endif %}
+
+{% if can_edit %}
+<details class="card fold-card"{% if not comps %} open{% endif %}>
+  <summary><h2>New squad competition</h2></summary>
+  <p class="small muted">Picks every active athlete (not alumni or test accounts) and deals them into squads of equal size and strength by VDOT, compared within boys and within girls. Athletes without a VDOT count as average.</p>
+  <form method="post" action="/squads/new" class="form-row">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label>Name<input name="name" value="{{ monday.year }} squads" maxlength="80"></label>
+    <label>Athletes<select name="gender"><option>All</option><option>Boys</option><option>Girls</option></select></label>
+    <label>Squads<input type="number" name="squads" value="4" min="2" max="{{ max_squads }}" style="width:5em"></label>
+    <label>Starts (week of)<input type="date" name="start" value="{{ monday.isoformat() }}"></label>
+    <label>Ends (optional)<input type="date" name="end"></label>
+    <button type="submit">Make squads</button>
+  </form>
+</details>
+{% endif %}
+
+{% if comp %}
+<h2>{{ comp.name }}</h2>
+<p class="small muted">{{ comp.gender if comp.gender != 'All' else 'Boys and girls' }} · from the week of {{ comp.start_date.strftime('%b %-d, %Y') }}{% if comp.end_date %} to {{ comp.end_date.strftime('%b %-d, %Y') }}{% endif %} · {{ st.finished }} finished week{{ 's' if st.finished != 1 }}</p>
+
+<div class="card scroll" id="standings">
+  <h2>Standings</h2>
+  <table class="list centered"><thead><tr><th>Squad</th><th class="num">Team points</th><th class="num">Miles</th><th class="num">Practice points</th><th class="num">Races</th><th class="num">Athletes</th><th class="num">Avg VDOT</th></tr></thead><tbody>
+  {% for s in st.table %}{% set t = st.totals.get(s.id, {}) %}<tr>
+    <td class="squad-name">{{ dot(s) }} <b>{{ s.name }}</b></td>
+    <td class="num"><b>{{ '%g'|format(t.get('team_points', 0)) }}</b></td>
+    <td class="num">{{ tp(t.get('miles_tp')) }}<br><span class="small muted">{{ '%.0f'|format(t.get('miles', 0)) }} mi</span></td>
+    <td class="num">{{ tp(t.get('points_tp')) }}<br><span class="small muted">{{ '%.0f'|format(t.get('points', 0)) }} pts</span></td>
+    <td class="num">{{ tp(t.get('races_tp')) }}<br><span class="small muted">{{ '%.0f'|format(t.get('races', 0)) }} beaten</span></td>
+    <td class="num">{{ s.members|length }}</td>
+    <td class="num small">{% for g, v in st.strength[s.id].items() %}{{ g }} {{ '%.1f'|format(v) }}{% if not loop.last %}<br>{% endif %}{% else %}–{% endfor %}</td>
+  </tr>{% endfor %}
+  </tbody></table>
+  <p class="small muted">Team points and the miles, points and runners beaten under them add up the finished weeks. The current week shows below as it goes and counts once it ends.</p>
+</div>
+
+<div class="card" id="weeks">
+  <h2>Weekly team statistics</h2>
+  {% for w in st.weeks[:3] %}{{ week_table(w) }}{% else %}<p class="muted">The first week hasn’t started yet.</p>{% endfor %}
+  {% if st.weeks|length > 3 %}<details class="squad-earlier"><summary>Earlier weeks ({{ st.weeks|length - 3 }})</summary>
+  {% for w in st.weeks[3:] %}{{ week_table(w) }}{% endfor %}</details>{% endif %}
+  <details class="small muted"><summary>How team points work</summary>
+    <p>Each week the squads are ranked in three ways, and the best squad gets as many team points as there are squads, the next one fewer, down to 1 (ties share):</p>
+    <ul>
+      <li><b>Miles</b>: the squad’s average share of each athlete’s weekly miles goal, so a newer runner who hits a smaller goal helps as much as a varsity runner who hits a bigger one. Each athlete counts up to 110%.</li>
+      <li><b>Practice points</b>: the squad’s average share of each athlete’s weekly points target (the Week page’s points), up to 110%.</li>
+      <li><b>Races</b>, in weeks with races: in each race, every squad runner earns one point for each runner from another squad they finish ahead of.</li>
+    </ul>
+    <p>Athletes count for the squad they are on now, for every week, so a move carries their weeks with them.</p>
+  </details>
+</div>
+
+<div id="rosters">
+  <h2>Rosters</h2>
+  <div class="grid">
+  {% for s in st.squads %}
+  <div class="card">
+    <h3>{{ dot(s) }} {{ s.name }} <span class="small muted">({{ s.members|length }})</span></h3>
+    <table class="list"><tbody>
+    {% for m in s.members|sort(attribute='athlete.last_name') %}{% set v = ab.get(m.athlete_id, {}) %}<tr>
+      <td><a href="/athletes/{{ m.athlete_id }}">{{ m.athlete.name }}</a>{% if comp.gender == 'All' %} <span class="small muted">{{ m.athlete.gender[:1] }}</span>{% endif %}</td>
+      <td class="num small">{{ v.get('vdot') or '–' }}</td>
+      {% if can_edit %}<td><form method="post" action="/squads/{{ comp.id }}/move"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="athlete_id" value="{{ m.athlete_id }}">
+        <select name="squad_id" aria-label="Move {{ m.athlete.name }}" onchange="this.form.submit()">{% for o in st.squads %}<option value="{{ o.id }}"{{ ' selected' if o.id == s.id }}>{{ o.name }}</option>{% endfor %}<option value="">Take out</option></select>
+        <noscript><button type="submit">Move</button></noscript></form></td>{% endif %}
+    </tr>{% endfor %}
+    </tbody></table>
+  </div>
+  {% endfor %}
+  </div>
+  {% if unassigned %}
+  <div class="card">
+    <h3>Not on a squad</h3>
+    <p class="small muted">Athletes who joined after the squads were made, or were taken out.</p>
+    <table class="list"><tbody>
+    {% for a in unassigned %}<tr><td>{{ a.name }}</td><td class="num small">{{ ab.get(a.id, {}).get('vdot') or '–' }}</td>
+      {% if can_edit %}<td><form method="post" action="/squads/{{ comp.id }}/move"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="athlete_id" value="{{ a.id }}">
+        <select name="squad_id" aria-label="Add {{ a.name }}">{% for o in st.squads %}<option value="{{ o.id }}">{{ o.name }} ({{ o.members|length }})</option>{% endfor %}</select>
+        <button type="submit" class="secondary">Add</button></form></td>{% endif %}</tr>{% endfor %}
+    </tbody></table>
+  </div>
+  {% endif %}
+</div>
+
+{% if can_edit %}
+<details class="card fold-card">
+  <summary><h2>Settings</h2></summary>
+  <form method="post" action="/squads/{{ comp.id }}/edit">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <div class="form-row">
+      <label>Name<input name="name" value="{{ comp.name }}" maxlength="80"></label>
+      <label>Starts (week of)<input type="date" name="start" value="{{ comp.start_date.isoformat() }}"></label>
+      <label>Ends (optional)<input type="date" name="end" value="{{ comp.end_date.isoformat() if comp.end_date else '' }}"></label>
+    </div>
+    <div class="form-row">{% for s in st.squads %}
+      <label>Squad<input name="name_{{ s.id }}" value="{{ s.name }}" maxlength="40" style="width:8em"><input type="color" name="color_{{ s.id }}" value="{{ s.color or '#888888' }}" aria-label="{{ s.name }} color"></label>{% endfor %}
+    </div>
+    <button type="submit">Save</button>
+  </form>
+  <div class="form-row" style="margin-top:16px">
+    <form method="post" action="/squads/{{ comp.id }}/rebalance" onsubmit="return confirm('Deal everyone into balanced squads again? Moves made by hand are undone.')"><input type="hidden" name="csrf" value="{{ csrf }}"><button type="submit" class="secondary">Rebalance squads</button></form>
+    <form method="post" action="/squads/{{ comp.id }}/delete" onsubmit="return confirm('Delete this squad competition? Runs and races stay.')"><input type="hidden" name="csrf" value="{{ csrf }}"><button type="submit" class="danger">Delete competition</button></form>
+  </div>
+</details>
+{% endif %}
+{% endif %}
+{% endblock %}

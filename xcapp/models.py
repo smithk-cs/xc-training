@@ -775,6 +775,40 @@ class WeekResult(Base):
     score: Mapped[float | None] = mapped_column(Float, nullable=True)
     miles: Mapped[float] = mapped_column(Float, default=0)
     goal_miles: Mapped[float | None] = mapped_column(Float, nullable=True)
+    points: Mapped[float | None] = mapped_column(Float, nullable=True)
+    target: Mapped[float | None] = mapped_column(Float, nullable=True)   # the week's points target
     medal: Mapped[str] = mapped_column(String(10), default="")
     computed_on: Mapped[dt.date] = mapped_column(Date)
     note_closed: Mapped[bool] = mapped_column(Boolean, default=False)   # the athlete closed the Monday message
+
+
+class SquadCompetition(Base):
+    """Athletes split into balanced squads that compete each week on practice (miles and points) and races."""
+    __tablename__ = "squad_competitions"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(80))
+    gender: Mapped[str] = mapped_column(String(10), default="All")   # Boys | Girls | All
+    start_date: Mapped[dt.date] = mapped_column(Date)                   # a Monday
+    end_date: Mapped[dt.date | None] = mapped_column(Date, nullable=True)
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
+    squads: Mapped[list["Squad"]] = relationship(cascade="all, delete-orphan", order_by="Squad.position")
+
+
+class Squad(Base):
+    __tablename__ = "squads"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    competition_id: Mapped[int] = mapped_column(ForeignKey("squad_competitions.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(40))
+    color: Mapped[str] = mapped_column(String(7), default="")
+    position: Mapped[int] = mapped_column(Integer, default=0)
+    members: Mapped[list["SquadMember"]] = relationship(cascade="all, delete-orphan")
+
+
+class SquadMember(Base):
+    __tablename__ = "squad_members"
+    __table_args__ = (UniqueConstraint("competition_id", "athlete_id"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    competition_id: Mapped[int] = mapped_column(ForeignKey("squad_competitions.id", ondelete="CASCADE"), index=True)
+    squad_id: Mapped[int] = mapped_column(ForeignKey("squads.id", ondelete="CASCADE"), index=True)
+    athlete_id: Mapped[int] = mapped_column(ForeignKey("athletes.id", ondelete="CASCADE"), index=True)
+    athlete: Mapped[Athlete] = relationship()

@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from .ingest import DUPLICATE_WINDOW_S
 from .models import (Activity, Athlete, AthletePhoto, DeletionRequest, DivisionAthlete, MeetResponse, VdotChange, GarminConnection, Goal, Injury, Insight, MissedDay,
-                     OAuthState, PainReport, RaceResult, RestingHeartRate, Result, WeekResult)
+                     OAuthState, PainReport, RaceResult, RestingHeartRate, Result, SquadMember, WeekResult)
 
 
 def other_names(a: Athlete) -> list[str]:
@@ -63,7 +63,7 @@ def merge(db: Session, keep: Athlete, other: Athlete) -> dict[str, int]:
         db.execute(delete(Activity).where(Activity.id.in_(drop(dup_runs))))
     # One per day / per event and season: the kept athlete's wins.
     for model, cols in ((RestingHeartRate, ("date",)), (MissedDay, ("date",)), (Goal, ("event", "season")), (DivisionAthlete, ("division_id",)),
-                        (MeetResponse, ("meet_id",))):
+                        (MeetResponse, ("meet_id",)), (SquadMember, ("competition_id",))):
         have = {tuple(getattr(r, c) for c in cols) for r in db.scalars(select(model).where(model.athlete_id == k)).all()}
         clash = [r.id for r in db.scalars(select(model).where(model.athlete_id == o)).all() if tuple(getattr(r, c) for c in cols) in have]
         if clash:
@@ -89,7 +89,7 @@ def merge(db: Session, keep: Athlete, other: Athlete) -> dict[str, int]:
     db.execute(delete(OAuthState).where(OAuthState.athlete_id == o))
     db.execute(delete(WeekResult).where(WeekResult.athlete_id.in_([k, o])))   # worked out again for the merged runs
     for model in (Activity, Result, RaceResult, Goal, Injury, PainReport, RestingHeartRate, MissedDay, GarminConnection,
-                  AthletePhoto, DeletionRequest, Insight, DivisionAthlete, MeetResponse, VdotChange):
+                  AthletePhoto, DeletionRequest, Insight, DivisionAthlete, MeetResponse, VdotChange, SquadMember):
         moved += db.execute(update(model).where(model.athlete_id == o).values(athlete_id=k)).rowcount or 0
 
     # Fill in what the kept athlete doesn't have yet.

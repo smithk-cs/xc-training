@@ -46,26 +46,36 @@ def _weeks(today: dt.date) -> list[dt.date]:
     return out
 
 
-def season_weeks(db: Session, a: Athlete, today: dt.date) -> list[WeekResult]:
-    """This season's finished weeks for the athlete, worked out where missing or recent."""
-    mondays = _weeks(today)
-    if not mondays:
-        return []
-    saved = {r.monday: r for r in db.scalars(select(WeekResult).where(
-        WeekResult.athlete_id == a.id, WeekResult.monday >= mondays[0], WeekResult.monday <= mondays[-1])).all()}
+def ensure_weeks(db: Session, athletes: list[Athlete], mondays: list[dt.date], today: dt.date) -> dict[tuple[int, dt.date], WeekResult]:
+    """Saved finished weeks for these athletes, worked out where missing, saved before points were kept, or recent
+    (once a day). One team calculation per week for all the athletes that need it."""
+    if not athletes or not mondays:
+        return {}
+    ids = [a.id for a in athletes]
+    saved = {(r.athlete_id, r.monday): r for r in db.scalars(select(WeekResult).where(
+        WeekResult.athlete_id.in_(ids), WeekResult.monday >= min(mondays), WeekResult.monday <= max(mondays))).all()}
     for m in mondays:
-        r = saved.get(m)
         recent = m + dt.timedelta(days=6) >= today - dt.timedelta(days=RECHECK_DAYS)
-        if r is not None and not (recent and r.computed_on < today):
+        need = [a for a in athletes if (r := saved.get((a.id, m))) is None or r.points is None or (recent and r.computed_on < today)]
+        if not need:
             continue
-        w = PT.team_week(db, m, athletes=[a])[0]
-        if r is None:
-            r = saved[m] = WeekResult(athlete_id=a.id, monday=m)
-            db.add(r)
-        r.score, r.miles, r.goal_miles = w["score"], w["miles"], w["goal_miles"]
-        r.medal, r.computed_on = medal_for(w["score"], w["miles"], w["goal_miles"]), today
+        for w in PT.team_week(db, m, athletes=need):
+            key = (w["a"].id, m)
+            r = saved.get(key)
+            if r is None:
+                r = saved[key] = WeekResult(athlete_id=w["a"].id, monday=m)
+                db.add(r)
+            r.score, r.miles, r.goal_miles, r.points, r.target = w["score"], w["miles"], w["goal_miles"], w["points"], w["target"]
+            r.medal, r.computed_on = medal_for(w["score"], w["miles"], w["goal_miles"]), today
     db.flush()
-    return [saved[m] for m in mondays]
+    return saved
+
+
+def season_weeks(db: Session, a: Athlete, today: dt.date) -> list[WeekResult]:
+    """This season's finished weeks for the athlete."""
+    mondays = _weeks(today)
+    saved = ensure_weeks(db, [a], mondays, today)
+    return [saved[(a.id, m)] for m in mondays]
 
 
 def _s(n: int) -> str:

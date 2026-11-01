@@ -549,3 +549,8 @@ table.parts .move-up, table.parts .move-down { font-size: 11px; padding: 0 2px; 
 table.parts tr.dragging { opacity: .45; }
 @media (pointer: fine) { table.parts .move-up, table.parts .move-down { opacity: .5; } }
 .week-table.show-why .why-target { text-align: left; max-width: 260px; white-space: normal; margin: 6px 0 0; }
+
+.squad-dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; vertical-align: middle; border: 1px solid rgba(0,0,0,.2); }
+.squad-week + .squad-week { margin-top: var(--cds-gap-lg); }
+.squad-name { white-space: nowrap; }
+.squad-earlier > summary { cursor: pointer; font-weight: 600; color: var(--brand-red); margin-top: var(--cds-gap-lg); }

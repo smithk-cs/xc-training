@@ -14,7 +14,7 @@ def fake_week(calls):
     def team_week(db, monday, gender=None, athletes=None):
         calls.append(monday)
         score, miles, goal = WEEKS.get(monday, (50, 10, 30))
-        return [{"score": score, "miles": miles, "goal_miles": goal}]
+        return [{"a": a, "score": score, "miles": miles, "goal_miles": goal, "points": score, "target": 100} for a in athletes]
     return team_week
 
 
@@ -61,7 +61,7 @@ def test_athlete_page_medals(monkeypatch):
     config.reload_settings()
     real = PT.team_week
     monkeypatch.setattr(PT, "team_week", lambda db, monday, gender=None, athletes=None:
-                        fake_week([])(db, monday) if monday < MONDAY else real(db, monday, gender, athletes))
+                        fake_week([])(db, monday, athletes=athletes) if monday < MONDAY else real(db, monday, gender, athletes))
     db = SessionLocal()
     db.add(Athlete(first_name="Ava", last_name="Doyle", gender="Girls", grade=11, group="Varsity", link_token="t-med"))
     db.commit()
