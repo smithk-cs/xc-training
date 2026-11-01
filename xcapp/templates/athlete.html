@@ -117,6 +117,7 @@
     {% for x in paces %}{% set w = x.workout %}
     <div class="wpace">
       <div class="d">{{ 'Today' if w.date.isoformat() == today else w.date.strftime('%a, %b %-d') }} · {{ w.title }}</div>
+      {% set fw = workout_weather.get(w.date) if workout_weather is defined else none %}{% if fw %}<div class="small" style="margin:2px 0 6px">🌤 {{ fmt_clock(fw.time) }}{% if fw.where %} at {{ fw.where }}{% endif %}: {{ fw.text }}</div>{% endif %}
       {% if x.parts is defined %}
       <div class="scroll"><table class="list compact part-paces">
         <thead><tr><th>Part</th><th class="num">At VDOT {{ x.vdot_now or '–' }}</th>{% if x.vdot_goal %}<th class="num">Goal VDOT {{ x.vdot_goal }}</th>{% endif %}</tr></thead>

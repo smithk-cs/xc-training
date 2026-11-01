@@ -268,3 +268,21 @@ def test_easy_run_to_finish_the_day_and_no_low_limits(app):
     assert db.query(PlannedWorkout).filter_by(title="Long").one().part_list[0]["mins"] == 200
     db.close()
     assert ' max="180"' not in c.get("/workouts").text
+
+
+def test_easy_runs_skip_groups_that_already_have_a_workout(app):
+    from xcapp.models import TrainingGroup
+    db = SessionLocal()
+    for g in db.query(TrainingGroup).all():
+        g.weekly_miles = g.weekly_miles_girls = 36
+    day = A.team_today() + dt.timedelta(days=3)
+    db.add(PlannedWorkout(date=day, title="Gold hills", rep_distance_m=400, pace_event="5K", pace_factor=1.0, groups="Gold"))
+    db.commit()
+    db.close()
+    c, csrf = login(app)
+    c.post("/workouts/easy-day", data={"csrf": csrf, "date": day.isoformat(), "days": "6"})
+    assert "Gold (already has Gold hills)" in c.get("/workouts").text
+    db = SessionLocal()
+    titles = {w.title for w in db.query(PlannedWorkout).filter_by(date=day).all()}
+    assert "Easy run · Gold" not in titles and "Easy run · Silver" in titles
+    db.close()

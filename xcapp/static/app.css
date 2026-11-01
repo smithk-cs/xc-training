@@ -536,3 +536,4 @@ table.parts .handle { cursor: grab; padding: 0 6px; font-size: 16px; user-select
 table.parts .move-up, table.parts .move-down { font-size: 11px; padding: 0 2px; text-decoration: none; }
 table.parts tr.dragging { opacity: .45; }
 @media (pointer: fine) { table.parts .move-up, table.parts .move-down { opacity: .5; } }
+.week-table.show-why .why-target { text-align: left; max-width: 260px; white-space: normal; margin: 6px 0 0; }

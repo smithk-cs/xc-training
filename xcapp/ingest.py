@@ -44,12 +44,18 @@ def _workout_rank(reps: int, distance_m: float | None) -> tuple[int, float]:
     return reps, distance_m or 0
 
 
+def pick_workout(workouts: list[PlannedWorkout]) -> PlannedWorkout | None:
+    """An athlete's one team workout for a day, when several apply: one written for their group or team before one for
+    everyone, then the first entered. Run matching and weekly points both use it."""
+    def specific(w):
+        return (w.groups or "All") != "All" or bool(w.gender)
+    return min(workouts, key=lambda w: (not specific(w), w.id or 0)) if workouts else None
+
+
 def match_planned(db: Session, athlete: Athlete, day: dt.date) -> PlannedWorkout | None:
     groups = athlete_groups(db, athlete)
-    for pw in db.scalars(select(PlannedWorkout).where(PlannedWorkout.date == day).order_by(PlannedWorkout.id)).all():
-        if pw.applies_to(*groups, gender=athlete.gender):
-            return pw
-    return None
+    return pick_workout([pw for pw in db.scalars(select(PlannedWorkout).where(PlannedWorkout.date == day).order_by(PlannedWorkout.id)).all()
+                         if pw.applies_to(*groups, gender=athlete.gender)])
 
 
 def ingest(db: Session, athlete: Athlete, parsed: ParsedActivity, source: str) -> tuple[Activity, str]:

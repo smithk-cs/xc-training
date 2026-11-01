@@ -34,6 +34,20 @@
 </details>
 {% endif %}
 
+<div class="card" id="practice-place">
+  <h2>Practice weather</h2>
+  <p class="small muted">Upcoming workouts show the forecast for practice: at the start time of that day’s practice on this calendar (or {{ default_time }} when there isn’t one), at {{ practice_place[2] }} ({{ '%.4f' % practice_place[0] }}, {{ '%.4f' % practice_place[1] }}). A practice whose Where matches a saved course uses that course’s map location instead.</p>
+  {% if user.role != 'trainer' %}<form method="post" action="/calendar/practice-place" class="form-row">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label style="flex:2">Usual practice place<input type="text" name="place" maxlength="120" value="{{ practice_place[2] }}"></label>
+    <label>Latitude<input type="number" name="lat" step="any" value="{{ '%.5f' % practice_place[0] }}" style="width:9em"></label>
+    <label>Longitude<input type="number" name="lon" step="any" value="{{ '%.5f' % practice_place[1] }}" style="width:9em"></label>
+    <button type="submit">Save</button>
+    <button type="submit" name="action" value="find" class="secondary" formnovalidate>Find on map</button>
+    <button type="submit" name="action" value="default" class="link" formnovalidate>Back to Jesuit High School</button>
+  </form>{% endif %}
+</div>
+
 <div class="card" id="share">
   <h2>Share with athletes and families</h2>
   <p class="small muted">Anyone with a link can see the calendar, so share it with your team only. On an iPhone, open the “Add to iPhone calendar” link and tap Subscribe; changes then appear on their own. Google Calendar and Outlook can subscribe to the feed address (“From URL”).</p>

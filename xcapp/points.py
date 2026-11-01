@@ -265,19 +265,23 @@ def team_week(db: Session, monday: dt.date, gender: str | None = None, athletes:
 
 
 def _athlete_week(a, v, g, days, mine, acts_by, pain_by, missed_by, min_minutes, offset, target_days: int = DEFAULT_TARGET_DAYS) -> dict:
+    from .ingest import pick_workout
     goal_miles = A.athlete_miles_goal(g, a.gender, a.experience)   # adjusted for experience
     workout_miles = workout_pts = 0.0
+    breakdown = []   # how the target is built, for "Show why": (day, workout, miles, points, other workouts not counted)
     cells, total, miles, run_days, flags = [], 0.0, 0.0, 0, []
     for d0 in days:
         d = d0 + dt.timedelta(days=offset)
         planned = mine(d)
         day_plan = day_plan_miles = None
         if planned and v:
-            plans = [workout_plan(w, v, goal_miles / target_days if goal_miles else None) for w in planned]
-            day_plan_miles = sum(m for m, _ in plans)
+            # one team workout a day: the one this athlete's run is matched to
+            w = pick_workout(planned)
+            day_plan_miles, day_plan = workout_plan(w, v, goal_miles / target_days if goal_miles else None)
             workout_miles += day_plan_miles
-            day_plan = sum(p for _, p in plans)
             workout_pts += day_plan
+            breakdown.append({"date": d, "title": w.title, "miles": day_plan_miles, "points": day_plan,
+                              "not_counted": [x.title for x in planned if x is not w]})
         runs = [x for x in acts_by.get((a.id, d), []) if "run" in (x.sport or "running")]
         zones: dict[str, float] = {}
         for r in runs:
@@ -307,9 +311,14 @@ def _athlete_week(a, v, g, days, mine, acts_by, pain_by, missed_by, min_minutes,
                       "workouts": planned, "hr": hr, "rpe": max((r.rpe for r in runs if r.rpe is not None), default=None),
                       "pain": pain, "pain_id": pain_id, "missed": miss, "flags": day_flags})
     target = None
+    easy = None
     if v and goal_miles:  # without the group's weekly miles goal the target would be the workouts alone
         easy_pace = A.pace_at(v, A.EASY_PCT)
-        target = workout_pts + max(goal_miles - workout_miles, 0) * easy_pace / 60 * RATES["Easy"]
+        easy_miles = max(goal_miles - workout_miles, 0)
+        easy = {"miles": easy_miles, "pace": easy_pace, "points": easy_miles * easy_pace / 60 * RATES["Easy"]}
+        target = workout_pts + easy["points"]
     points = min(total, WEEK_CAP * target) if target else total
     return {"days": cells, "points": points, "target": target, "miles": miles, "goal_miles": goal_miles,
-            "run_days": run_days, "flags": flags}
+            "run_days": run_days, "flags": flags,
+            "why_target": {"workouts": breakdown, "workout_miles": workout_miles, "workout_points": workout_pts, "easy": easy,
+                           "earned": total, "cap": WEEK_CAP * target if target else None}}

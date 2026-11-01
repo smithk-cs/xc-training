@@ -42,6 +42,7 @@ class Settings:
     anthropic_base_url: str
     nightly_hour: int
     reminder_hour: int        # team-time hour for the daily reminder emails
+    weather_auto: bool        # fetch a practice forecast when a workout is saved (off in tests)
     resend_api_key: str       # email service (Resend) key; reminder emails are off without it
     email_from: str           # sender, such as "Jesuit XC <reminders@yourdomain.org>" (a domain verified with Resend)
     ai_monthly_budget: float  # US dollars; AI requests stop for the month once this would be exceeded
@@ -102,6 +103,7 @@ class Settings:
             anthropic_base_url=_env("ANTHROPIC_BASE_URL", ""),
             nightly_hour=int(_env("NIGHTLY_HOUR", "4")),
             reminder_hour=int(_env("REMINDER_HOUR", "17")),
+            weather_auto=_env("WEATHER_AUTO", "on").lower() not in ("off", "0", "false", "no"),
             resend_api_key=_env("RESEND_API_KEY", ""),
             email_from=_env("EMAIL_FROM", ""),
             ai_monthly_budget=float(_env("AI_MONTHLY_BUDGET_USD", "25")),

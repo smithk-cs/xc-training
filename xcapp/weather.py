@@ -11,7 +11,8 @@ from sqlalchemy.orm import Session
 from . import analysis as A
 from .config import settings
 from .ingest import log
-from .models import Course, MeetConditions, MeetEntry, MeetForecast, RaceResult, RaceWeather, utcnow
+from .models import (CalendarEvent, Course, MeetConditions, MeetEntry, MeetForecast, PlannedWorkout, PracticeForecast, RaceResult,
+                     RaceWeather, utcnow)
 
 FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
 ARCHIVE_URL = "https://archive-api.open-meteo.com/v1/archive"
@@ -264,6 +265,7 @@ def nightly(db: Session, http: httpx.Client | None = None, days: int = FILL_DAYS
     out = {}
     try:
         out["forecasts"] = refresh_forecasts(db, client, today)
+        out["practice_forecasts"] = refresh_practice_forecasts(db, client, today)
         out["race_conditions"] = fill_conditions(db, client, today, days)
     except WeatherError as exc:
         out["error"] = str(exc)
@@ -290,3 +292,72 @@ def describe(f) -> str:
     if getattr(f, "pressure_inhg", None) is not None:
         bits.append(f"pressure {f.pressure_inhg:.2f} inHg")
     return ", ".join(bits)
+
+
+
+# ---------- practice forecasts (for upcoming workouts) ----------
+
+# Jesuit High School, Carmichael, CA: the center of Carmichael (weather data is on a grid a few kilometers wide).
+DEFAULT_PRACTICE = (38.6171, -121.3283, "Jesuit High School, Carmichael")
+DEFAULT_PRACTICE_TIME = "15:30"
+
+
+def practice_place(db: Session) -> tuple[float, float, str]:
+    try:
+        lat = float(A.get_setting(db, "practice_lat", ""))
+        lon = float(A.get_setting(db, "practice_lon", ""))
+        return lat, lon, A.get_setting(db, "practice_place", "") or "Practice"
+    except ValueError:
+        return DEFAULT_PRACTICE
+
+
+def practice_slot(db: Session, day: dt.date, team: str) -> dict:
+    """When and where practice is that day for a team ('Boys', 'Girls' or 'All'): the team calendar's practice
+    (its start time, and its place when that's a saved course on the map), else the usual time at the usual place."""
+    from .team_calendar import days_of, for_team
+    lat, lon, label = practice_place(db)
+    found = []
+    for e in db.scalars(select(CalendarEvent).where(CalendarEvent.kind == "Practice")).all():
+        if e.start_time and for_team(e.team, team) and days_of(e, day, day):
+            found.append(e)
+    if found:
+        e = min(found, key=lambda x: x.start_time)
+        c = course_named(db, e.location) if e.location else None
+        if c is not None and c.latitude is not None and c.longitude is not None:
+            lat, lon, label = c.latitude, c.longitude, c.name
+        elif e.location:
+            label = e.location
+        return {"time": e.start_time, "lat": lat, "lon": lon, "where": label, "from_calendar": True}
+    return {"time": DEFAULT_PRACTICE_TIME, "lat": lat, "lon": lon, "where": label, "from_calendar": False}
+
+
+def practice_forecast(db: Session, day: dt.date, team: str) -> dict | None:
+    """The saved forecast for that day's practice (no network): the slot plus the weather, or None."""
+    s = practice_slot(db, day, team)
+    f = db.scalar(select(PracticeForecast).where(PracticeForecast.date == day, PracticeForecast.start_time == s["time"],
+                                                 PracticeForecast.lat == round(s["lat"], 3), PracticeForecast.lon == round(s["lon"], 3)))
+    return {**s, "forecast": f, "text": describe(f)} if f is not None and f.temp_f is not None else None
+
+
+def refresh_practice_forecasts(db: Session, http: httpx.Client, today: dt.date, only: dt.date | None = None) -> int:
+    """Forecasts for practice on every day with a planned workout in the next two weeks (or just `only`), for boys and girls."""
+    days = sorted({d for (d,) in db.execute(select(PlannedWorkout.date).where(
+        PlannedWorkout.date >= today, PlannedWorkout.date <= today + dt.timedelta(days=FORECAST_DAYS)).distinct()).all()
+        if only is None or d == only})
+    n = 0
+    for d in days:
+        for s in {(x["time"], round(x["lat"], 3), round(x["lon"], 3)): x for x in (practice_slot(db, d, t) for t in ("Boys", "Girls"))}.values():
+            w = at(http, s["lat"], s["lon"], d, int(s["time"].split(":")[0]), today)
+            if w is None:
+                continue
+            key = (PracticeForecast.date == d, PracticeForecast.start_time == s["time"], PracticeForecast.lat == round(s["lat"], 3),
+                   PracticeForecast.lon == round(s["lon"], 3))
+            f = db.scalar(select(PracticeForecast).where(*key))
+            if f is None:
+                f = PracticeForecast(date=d, start_time=s["time"], lat=round(s["lat"], 3), lon=round(s["lon"], 3))
+                db.add(f)
+            for k in ("temp_f", "dew_point_f", "humidity_pct", "wind_mph", "rain_pct", "pressure_inhg", "summary"):
+                setattr(f, k, w[k])
+            f.fetched_at = utcnow()
+            n += 1
+    return n

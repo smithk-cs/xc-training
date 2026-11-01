@@ -1243,6 +1243,7 @@ def create_app() -> FastAPI:
                       zones=list(A.WORKOUT_ZONES), fill_pace=A.FILL_MIN_PER_MILE,
                       easy_groups=db.scalars(select(TrainingGroup).order_by(TrainingGroup.position)).all(),
                       previews={w.id: A.group_part_paces(db, w.part_list) for w in rows[:30] if w.part_list},
+                      day_weather={d: WX.practice_forecast(db, d, "All") for d in {w.date for w in rows if w.date >= today}},
                       part_label=A.part_label)
 
     @app.post("/workouts")
@@ -1333,10 +1334,32 @@ def create_app() -> FastAPI:
             pw.rep_distance_m, pw.pace_event, pw.pace_factor, pw.distance_unit = float(main.get("dist", 0)), "5K", 1.0, "m"
             db.flush()
             n = rematch_day(db, d) + (rematch_day(db, old_day) if old_day and old_day != d else 0)
+            forecast_day(db, d)
             flash(request, f"{'Updated' if old_day else 'Saved'} {title}." + (f" Re-matched {n} runs already synced." if n else ""))
         except ValueError as exc:
             flash(request, str(exc) if "part" in str(exc).lower() or "Add at least" in str(exc) else "Check the date and each part's numbers.", "error")
         return back("/workouts")
+
+    @app.post("/workouts/forecast")
+    async def workouts_forecast(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
+        await form_checked(request)
+        try:
+            with WX.make_client() as http:
+                n = WX.refresh_practice_forecasts(db, http, A.team_today())
+            flash(request, f"Updated {n} practice forecast{'' if n == 1 else 's'} for the next two weeks of workouts.")
+        except WX.WeatherError as exc:
+            flash(request, str(exc), "error")
+        return back("/workouts#list")
+
+    def forecast_day(db: Session, d: dt.date) -> None:
+        """A quick forecast for a workout day just saved; any trouble waits for tonight's update."""
+        if not settings().weather_auto or not A.team_today() <= d <= A.team_today() + dt.timedelta(days=WX.FORECAST_DAYS):
+            return
+        try:
+            with WX.make_client() as http:
+                WX.refresh_practice_forecasts(db, http, A.team_today(), only=d)
+        except WX.WeatherError:
+            pass
 
     @app.post("/workouts/easy-day")
     async def workouts_easy_day(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
@@ -1353,7 +1376,8 @@ def create_app() -> FastAPI:
             flash(request, "Pick a date and the number of running days.", "error")
             return back("/workouts#easy")
         teams = [t for t in ("Boys", "Girls") if f.get(f"easy_{t}")] or ["Boys", "Girls"]
-        made, skipped, existing = [], [], {(w.title, w.gender) for w in db.scalars(select(PlannedWorkout).where(PlannedWorkout.date == d)).all()}
+        that_day = db.scalars(select(PlannedWorkout).where(PlannedWorkout.date == d)).all()
+        made, skipped, existing = [], [], {(w.title, w.gender) for w in that_day}
         for g in db.scalars(select(TrainingGroup).order_by(TrainingGroup.position)).all():
             miles = {t: round(g.miles_goal(t) / div * 2) / 2 for t in teams}
             same = len(teams) == 2 and miles["Boys"] == miles["Girls"]
@@ -1365,6 +1389,10 @@ def create_app() -> FastAPI:
                 if (title, t) in existing:
                     skipped.append(f"{g.name}{' ' + t if t else ''} (already on {d:%b %-d})")
                     continue
+                busy = [w.title for w in that_day if w.applies_to(g.name, gender=t or "") and (not t or not w.gender or w.gender == t)]
+                if busy:   # one workout a day per athlete: don't stack an easy run on another workout
+                    skipped.append(f"{g.name}{' ' + t if t else ''} (already has {busy[0]})")
+                    continue
                 m = round(mi * A.METERS_PER_MILE)
                 part = {"sets": 1, "reps": 1, "dist": m, "mi": mi, "zone": "Easy", "rest": "", "note": ""}
                 db.add(PlannedWorkout(date=d, title=title, groups=g.name, gender=t, parts=json.dumps([part]), rep_distance_m=float(m),
@@ -1372,6 +1400,8 @@ def create_app() -> FastAPI:
                 made.append(f"{g.name}{' ' + t if t else ''} {mi:g} mi")
         db.flush()
         n = rematch_day(db, d)
+        if made:
+            forecast_day(db, d)
         flash(request, (f"Easy runs for {d:%a %b %-d}: " + ", ".join(made) + "." if made else "No easy runs were added.")
               + (f" Skipped: {', '.join(skipped)}." if skipped else "") + (f" Matched {n} runs already synced." if n else ""),
               "ok" if made else "error")
@@ -1614,6 +1644,8 @@ def create_app() -> FastAPI:
                       rhr_cal=A.resting_hr_calendar(db, a.id, today), photo_v=photo_versions(db).get(a.id), meets=my_meets(db, a, today),
                       wins=A.achievements(db, a, today),
                       calendar_link=f"/team-calendar/{TC.token(db)}?team={a.gender if a.gender in ('Boys', 'Girls') else 'All'}",
+                      workout_weather={x["workout"].date: WX.practice_forecast(db, x["workout"].date, a.gender if a.gender in ("Boys", "Girls") else "All")
+                                       for x in paces},
                       captain_posts=db.scalars(select(CaptainPost).where(CaptainPost.athlete_id == a.id, CaptainPost.created_at >=
                                                                          dt.datetime.now(dt.timezone.utc).replace(tzinfo=None) - dt.timedelta(days=14))
                                                .order_by(CaptainPost.created_at.desc())).all() if a.is_captain else [],

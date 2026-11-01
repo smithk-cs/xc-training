@@ -245,3 +245,24 @@ def test_score_on_track_colour():
     assert week["why_score"].startswith("On track for 52%: points 20 of 40 due by Thu (50%)")
     P.score_pace(week, MON + dt.timedelta(days=9), 6)       # week over: the score itself (80% x 20/70 + 20% x 2/6)
     assert week["score_pct"] == pytest.approx(100 * (0.8 * 20 / 70 + 0.2 * 2 / 6))
+
+
+def test_one_workout_a_day_counts_toward_the_target():
+    import json
+    from xcapp.ingest import pick_workout
+    from xcapp.models import PlannedWorkout
+    team = PlannedWorkout(id=1, groups="All", gender="", title="Team tempo")
+    gold = PlannedWorkout(id=2, groups="Gold", gender="", title="Easy run · Gold")
+    assert pick_workout([team, gold]) is gold and pick_workout([team]) is team and pick_workout([]) is None
+
+
+def test_two_workouts_on_one_day_count_once(session):
+    extra = (1, [{"sets": 1, "reps": 1, "mi": 7, "dist": 11265, "zone": "Easy"}])    # a second workout the same Tuesday
+    a = make_week(session, [], [TUESDAY, extra], goal=30)
+    w = P.team_week(session, MON, athletes=[a])[0]
+    first = session.query(PlannedWorkout).order_by(PlannedWorkout.id).first()
+    one = P.workout_plan(first, V)
+    assert w["days"][1]["planned"] == pytest.approx(one[1])                          # not both workouts
+    assert w["target"] == pytest.approx(one[1] + (30 - one[0]) * PACE["Easy"] / 60 * 0.2)
+    why = w["why_target"]
+    assert len(why["workouts"]) == 1 and why["workouts"][0]["not_counted"] == ["w"] and why["easy"]["miles"] == pytest.approx(30 - one[0])

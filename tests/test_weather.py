@@ -56,7 +56,7 @@ def test_forecast_and_race_day_conditions():
     db.add(MeetConditions(meet="League Finals", date=past, wind_mph=12))          # entered by a coach: kept
     db.flush()
     out = WX.nightly(db, http)
-    assert out == {"forecasts": 1, "race_conditions": 1}                           # 30 days out: too far ahead to forecast
+    assert out == {"forecasts": 1, "practice_forecasts": 0, "race_conditions": 1}   # 30 days out: too far ahead to forecast
     f = soon.forecast
     assert f.at.endswith("T10:00") and f.temp_f == 60 and f.rain_pct == 20 and f.summary == "Partly cloudy"
     assert WX.describe(f) == "60°F, partly cloudy, 20% chance of rain, wind 6 mph, dew point 45°F, pressure 30.02 inHg"
@@ -234,3 +234,42 @@ def test_each_race_gets_the_weather_at_its_own_start_time(monkeypatch):
     cl.post("/races/edit-race", data={"csrf": csrf, "date": day.isoformat(), "meet": "SFL League Championships", "race": "Boys JV",
                                       "meters": str(jv.distance_m), "new_race": "Boys JV", "distance": "2 Miles", "start_time": "3pm"})
     assert "Start time looks like 13:20." in cl.get("/races?season=all").text
+
+
+def test_practice_forecasts_use_the_calendar_time_and_place():
+    from xcapp.models import CalendarEvent, PlannedWorkout
+    calls = []
+    http = fake_service(calls)
+    db = SessionLocal()
+    db.add(StaffUser(username="coach6", role="coach", password_hash=hash_password("correct-horse-1")))
+    tue, wed = TODAY + dt.timedelta(days=2), TODAY + dt.timedelta(days=3)
+    db.add(CalendarEvent(title="Practice", kind="Practice", team="", date=tue, start_time="16:00", end_time="18:00", location="Jesuit track"))
+    db.add(CalendarEvent(title="Hills", kind="Practice", team="Boys", date=wed, start_time="07:00", location="Gibson Ranch"))
+    db.add(Course(name="Gibson Ranch", latitude=38.71, longitude=-121.46))
+    for d in (tue, wed, TODAY + dt.timedelta(days=4)):
+        db.add(PlannedWorkout(date=d, title=f"W {d}", rep_distance_m=400, pace_event="5K", pace_factor=1.0, groups="All"))
+    db.add(Athlete(first_name="Sam", last_name="Lowry", gender="Boys", grade=12, group="Varsity", link_token="t-pf"))
+    db.flush()
+    assert WX.refresh_practice_forecasts(db, http, TODAY) == 4                  # Wed: boys at Gibson, girls at the usual place
+    assert WX.practice_slot(db, tue, "Girls")["time"] == "16:00"
+    hills = WX.practice_forecast(db, wed, "Boys")
+    assert hills["time"] == "07:00" and hills["where"] == "Gibson Ranch" and hills["forecast"].temp_f == 57   # 50 + 7 a.m.
+    usual = WX.practice_forecast(db, TODAY + dt.timedelta(days=4), "All")
+    assert usual["time"] == "15:30" and not usual["from_calendar"] and usual["where"] == "Jesuit High School, Carmichael"
+    assert any(c.url.params.get("latitude") == "38.6171" for c in calls)        # Jesuit (Carmichael) by default
+    db.commit()
+    db.close()
+    from xcapp.web import create_app
+    app = create_app()
+    me = TestClient(app).get("/a/t-pf").text
+    assert "🌤 4:00 PM at Jesuit track: 66°F" in me and "7:00 AM at Gibson Ranch: 57°F" in me
+    cl = TestClient(app, follow_redirects=False)
+    csrf = re.search(r'name="csrf" value="([^"]+)"', cl.get("/login").text).group(1)
+    cl.post("/login", data={"csrf": csrf, "username": "coach6", "password": "correct-horse-1"})
+    page = cl.get("/workouts").text
+    assert "4:00 PM: 66°F" in page and "3:30 PM (usual time): 65°F" in page
+    csrf = re.search(r'name="csrf" value="([^"]+)"', cl.get("/calendar").text).group(1)
+    cl.post("/calendar/practice-place", data={"csrf": csrf, "place": "Jesuit HS", "lat": "38.6150", "lon": "-121.3400"})
+    db = SessionLocal()
+    assert WX.practice_place(db) == (38.615, -121.34, "Jesuit HS")
+    db.close()

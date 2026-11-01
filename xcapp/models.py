@@ -742,3 +742,22 @@ class RaceWeather(Base):
     wind_mph: Mapped[float | None] = mapped_column(Float, nullable=True)
     pressure_inhg: Mapped[float | None] = mapped_column(Float, nullable=True)
     fetched_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class PracticeForecast(Base):
+    """The forecast for a practice: a day, its start time (from the team calendar) and its place."""
+    __tablename__ = "practice_forecasts"
+    __table_args__ = (UniqueConstraint("date", "start_time", "lat", "lon"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    date: Mapped[dt.date] = mapped_column(Date, index=True)
+    start_time: Mapped[str] = mapped_column(String(5))
+    lat: Mapped[float] = mapped_column(Float)
+    lon: Mapped[float] = mapped_column(Float)
+    temp_f: Mapped[float | None] = mapped_column(Float, nullable=True)
+    dew_point_f: Mapped[float | None] = mapped_column(Float, nullable=True)
+    humidity_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
+    wind_mph: Mapped[float | None] = mapped_column(Float, nullable=True)
+    rain_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
+    pressure_inhg: Mapped[float | None] = mapped_column(Float, nullable=True)
+    summary: Mapped[str] = mapped_column(String(60), default="")
+    fetched_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)

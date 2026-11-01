@@ -41,7 +41,9 @@ def register(app, h: SimpleNamespace) -> None:
         today = A.team_today()
         team = request.query_params.get("team") if request.query_params.get("team") in TC.TEAMS else "All"
         edit = db.get(CalendarEvent, int(request.query_params["edit"])) if request.query_params.get("edit", "").isdigit() else None
+        from . import weather as WX
         return render(request, "calendar_manage.html", user, items=TC.items(db, today, today + dt.timedelta(days=60), team), team=team,
+                      practice_place=WX.practice_place(db), default_time=A.fmt_clock(WX.DEFAULT_PRACTICE_TIME),
                       links=links(s.base_url, TC.token(db)), kinds=TC.KINDS, weekdays=TC.WEEKDAYS, today=today, edit=edit,
                       series=sorted((e for e in db.query(CalendarEvent).all() if e.repeat_days and e.repeat_until and e.repeat_until >= today),
                                     key=lambda e: e.date))
@@ -114,6 +116,33 @@ def register(app, h: SimpleNamespace) -> None:
             db.delete(e)
             flash(request, f"Removed {e.title}{' and all its repeats' if e.repeat_days else ''}.")
         return back("/calendar")
+
+    @app.post("/calendar/practice-place")
+    async def calendar_practice_place(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
+        """Where practice usually is, for practice forecasts: typed coordinates, or found on the map from a name."""
+        from . import weather as WX
+        f = await form_checked(request)
+        place = str(f.get("place", "")).strip()[:120]
+        try:
+            if f.get("action") == "find":
+                with WX.make_client() as http:
+                    hit = WX.geocode(http, place)
+                if hit is None:
+                    raise ValueError(f"Couldn’t find “{place}” on the map. Try the town, or paste the coordinates from Google Maps.")
+                lat, lon = hit[0], hit[1]
+            elif f.get("action") == "default":
+                lat, lon, place = WX.DEFAULT_PRACTICE
+            else:
+                lat, lon = float(f.get("lat", "")), float(f.get("lon", ""))
+                if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+                    raise ValueError("Latitude is −90 to 90 and longitude −180 to 180.")
+            for k, v in (("practice_lat", f"{lat:.5f}"), ("practice_lon", f"{lon:.5f}"), ("practice_place", place or "Practice")):
+                A.set_setting(db, k, v)
+            flash(request, f"Practice forecasts now use {place or 'this place'} ({lat:.4f}, {lon:.4f}).")
+        except (ValueError, WX.WeatherError) as exc:
+            msg = str(exc)
+            flash(request, msg if msg.endswith(".") else "Latitude and longitude are numbers, such as 38.6171 and −121.3283.", "error")
+        return back("/calendar#practice-place")
 
     @app.post("/calendar/new-link")
     async def calendar_new_link(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):

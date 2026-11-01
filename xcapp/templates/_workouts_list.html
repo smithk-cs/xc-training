@@ -1,7 +1,7 @@
 {# The workout list on the Workouts and All workouts pages. #}
   <table class="list workouts-by-day"><thead><tr><th>Workout</th><th>Parts</th><th>Groups</th><th class="num">Athletes matched</th><th>AI check</th><th></th></tr></thead><tbody>
   {% for w in rows %}
-  {% if loop.first or w.date != rows[loop.index0 - 1].date %}<tr class="day-row"><th colspan="6" scope="rowgroup">{{ w.date.strftime('%a, %B %-d') }}</th></tr>{% endif %}
+  {% if loop.first or w.date != rows[loop.index0 - 1].date %}{% set fw = day_weather.get(w.date) if day_weather is defined else none %}<tr class="day-row"><th colspan="6" scope="rowgroup">{{ w.date.strftime('%a, %B %-d') }}{% if fw %} <span class="small day-weather">· {{ fmt_clock(fw.time) }}{% if not fw.from_calendar %} (usual time){% endif %}: {{ fw.text }}</span>{% endif %}</th></tr>{% endif %}
   <tr{% if user.role != 'trainer' %} class="row-link" data-href="/workouts?edit={{ w.id }}#plan"{% endif %}><td>{% if user.role != 'trainer' %}<a href="/workouts?edit={{ w.id }}#plan">{{ w.title }}</a>{% else %}{{ w.title }}{% endif %}</td><td class="small">{% if w.part_list %}{% for p in w.part_list %}{{ part_label(p) }}{% if not p.fill %} {{ p.zone }}{% endif %}{% if p.rest %} ({{ p.rest }} rest){% endif %}{% if p.note %} <span class="muted">– {{ p.note }}</span>{% endif %}{{ '<br>'|safe if not loop.last else '' }}{% endfor %}
     {% if previews.get(w.id) %}<details class="paces-preview"><summary>Paces by group</summary>
       <table class="list compact"><thead><tr><th>Group</th><th>VDOT</th>{% for p in w.part_list %}<th class="num">{{ part_label(p) }}</th>{% endfor %}</tr></thead><tbody>

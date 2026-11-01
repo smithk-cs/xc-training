@@ -140,6 +140,7 @@
       <button type="submit" class="secondary">Search</button>
       <a class="button secondary" href="/workouts/all">All workouts</a>
     </form>
+    {% if user.role != 'trainer' %}<form method="post" action="/workouts/forecast" class="inline" title="Practice forecasts for the next two weeks of workouts, at the team calendar’s practice times (also updated nightly)"><input type="hidden" name="csrf" value="{{ csrf }}"><button type="submit" class="link">Update forecasts</button></form>{% endif %}
   </div>
   {% with all_dates=false %}{% include "_workouts_list.html" %}{% endwith %}
 </div>
