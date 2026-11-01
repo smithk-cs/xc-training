@@ -29,10 +29,12 @@ Flat SAC Invitational,2026-10-24,Gibson Ranch Regional Park,Boys Varsity Large S
 {% endif %}
 {% if season_teams %}
 <details class="card fold-card" id="team-results"><summary><h2>Team results{% if season and season != 'all' %}, {{ season }}{% endif %} ({{ season_teams|length }})</h2></summary>
-  <div class="scroll"><table class="list compact sortable"><thead><tr><th>Date</th><th>Meet</th><th>Race</th><th class="num">Place</th><th class="num">Teams</th><th class="num">Points</th></tr></thead><tbody>
-  {% for t in season_teams %}<tr><td data-sort="{{ t.date.isoformat() }}" class="nowrap">{{ t.date.strftime('%b %-d') }}</td><td>{{ t.meet }}</td><td>{{ t.race or 'Race' }}</td>
-    <td class="num">{{ ord(t.place) if t.place else '' }}</td><td class="num">{{ t.teams or '' }}</td><td class="num">{{ '%g' % t.points if t.points is not none else '' }}</td></tr>{% endfor %}
+  <div class="scroll"><table class="list compact team-grid"><thead><tr><th>Meet</th>{% for c in result_columns %}<th class="num">{{ c }}</th>{% endfor %}</tr></thead><tbody>
+  {% for row in team_grid %}<tr><td><b>{{ row.meet }}</b>{% if row.gender %} <span class="small muted">{{ row.gender }}</span>{% endif %}<br><span class="small muted">{{ row.date.strftime('%a %b %-d, %Y') }}</span></td>
+    {% for c in result_columns %}<td class="num">{% for t in row.cells.get(c, []) %}{% if not loop.first %}<br>{% endif %}{% if t.place %}<b>{{ ord(t.place) }}</b>{% if t.teams %} <span class="small muted">of {{ t.teams }}</span>{% endif %}{% endif %}{% if t.points is not none %}<br><span class="small">{{ '%g' % t.points }} pts</span>{% endif %}{% if row.cells[c]|length > 1 %}<br><span class="small muted">{{ t.race }}</span>{% endif %}{% else %}<span class="muted">–</span>{% endfor %}</td>{% endfor %}
+  </tr>{% endfor %}
   </tbody></table></div>
+  <p class="small muted">Place among the teams, and the team score (lowest wins).</p>
 </details>
 {% endif %}
 {% if meets %}<p class="small muted">Click a meet to open or close it.</p>{% endif %}

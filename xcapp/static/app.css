@@ -564,3 +564,4 @@ table.parts tr.dragging { opacity: .45; }
 .scoring-form fieldset { border: 1px solid var(--color-border-line); border-radius: 12px; padding: 10px 14px; margin: 0 0 12px; }
 .scoring-form legend { padding: 0 6px; font-weight: 700; }
 .race-picks { display: flex; flex-direction: column; gap: 4px; max-height: 18em; overflow-y: auto; }
+.calendar-btn { align-self: center; display: inline-flex; align-items: center; gap: 6px; min-height: 44px; }

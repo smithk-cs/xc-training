@@ -28,6 +28,17 @@ def links(base_url: str, token: str) -> dict[str, dict]:
     return out
 
 
+def with_weather(db: Session, its: list[dict], team: str, today: dt.date) -> list[dict]:
+    """Practices in the next two weeks get their saved forecast (temperature and sky only)."""
+    from . import weather as WX
+    last = today + dt.timedelta(days=WX.FORECAST_DAYS)
+    for x in its:
+        if x["kind"] == "Practice" and today <= x["date"] <= last:
+            fc = WX.practice_forecast(db, x["date"], x["team"] or team)
+            x["weather"] = WX.short(fc["forecast"]) if fc else None
+    return its
+
+
 def register(app, h: SimpleNamespace) -> None:
     render, flash, back, form_checked, get_db = h.render, h.flash, h.back, h.form_checked, h.get_db
     any_staff, coach_or_admin, s = h.any_staff, h.coach_or_admin, h.settings
@@ -43,7 +54,7 @@ def register(app, h: SimpleNamespace) -> None:
         team = request.query_params.get("team") if request.query_params.get("team") in TC.TEAMS else "All"
         edit = db.get(CalendarEvent, int(request.query_params["edit"])) if request.query_params.get("edit", "").isdigit() else None
         from . import weather as WX
-        return render(request, "calendar_manage.html", user, items=TC.items(db, today, today + dt.timedelta(days=60), team), team=team,
+        return render(request, "calendar_manage.html", user, items=with_weather(db, TC.items(db, today, today + dt.timedelta(days=60), team), team, today), team=team,
                       practice_place=WX.practice_place(db), default_time=A.fmt_clock(WX.DEFAULT_PRACTICE_TIME),
                       links=links(s.base_url, TC.token(db)), kinds=TC.KINDS, weekdays=TC.WEEKDAYS, today=today, edit=edit,
                       series=sorted((e for e in db.query(CalendarEvent).all() if e.repeat_days and e.repeat_until and e.repeat_until >= today),
@@ -201,7 +212,7 @@ def register(app, h: SimpleNamespace) -> None:
         check_token(db, token)
         team = team if team in TC.TEAMS else "All"
         today = A.team_today()
-        its = TC.items(db, today, today + dt.timedelta(days=120), team)
+        its = with_weather(db, TC.items(db, today, today + dt.timedelta(days=120), team), team, today)
         months: dict[str, list] = {}
         for x in its:
             months.setdefault(x["date"].strftime("%B %Y"), []).append(x)

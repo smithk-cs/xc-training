@@ -17,6 +17,26 @@ from .models import MeetEntry, RaceResult, Result, StaffUser
 FONTS = Path(__file__).parent / "pdf_fonts"
 GENDERS = ("Boys", "Girls")
 LEVELS = ("Varsity", "JV", "Frosh/Soph", "Freshman", "Sophomore")
+RESULT_COLUMNS = ("Varsity", "JV", "F/S", "Frosh", "Soph")   # the team results table on the Races page
+
+
+def result_column(race: str) -> str:
+    """Which column of the team results table a race belongs in, from its name ('Boys Frosh/Soph' -> 'F/S')."""
+    n = (race or "").lower().replace("-", "/").replace(" ", "")
+    if "frosh/soph" in n or "f/s" in n or "freshman/soph" in n or ("fresh" in n and "soph" in n) or ("frosh" in n and "soph" in n):
+        return "F/S"
+    if "frosh" in n or "fresh" in n:
+        return "Frosh"
+    if "soph" in n:
+        return "Soph"
+    if "jv" in n or "juniorvarsity" in n:
+        return "JV"
+    return "Varsity"
+
+
+def result_gender(race: str) -> str:
+    n = (race or "").lower()
+    return "Girls" if n.startswith(("girl", "women")) or " girls" in n or " women" in n else "Boys"
 ATTENDANCE_CUTOFF_DAYS = 4  # athletes can say whether they'll be at a meet until this many days before it
 DISTANCES = [("1 Mile", 1609.344), ("1.5 Miles", 2414.016), ("2 Miles", 3218.688), ("2.5 Miles", 4023.36), ("3 Miles", 4828.032),
              ("4K", 4000.0), ("5K", 5000.0), ("6K", 6000.0)]

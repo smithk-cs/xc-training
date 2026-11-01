@@ -34,8 +34,8 @@
 </details>
 {% endif %}
 
-<div class="card" id="practice-place">
-  <h2>Practice weather</h2>
+<details class="card fold-card" id="practice-place">
+  <summary><h2>Practice weather</h2></summary>
   <p class="small muted">Upcoming workouts show the forecast for practice: at the start time of that day’s practice on this calendar (or {{ default_time }} when there isn’t one), at {{ practice_place[2] }} ({{ '%.4f' % practice_place[0] }}, {{ '%.4f' % practice_place[1] }}). A practice whose Where matches a saved course uses that course’s map location instead.</p>
   {% if user.role != 'trainer' %}<form method="post" action="/calendar/practice-place" class="form-row">
     <input type="hidden" name="csrf" value="{{ csrf }}">
@@ -46,17 +46,17 @@
     <button type="submit" name="action" value="find" class="secondary" formnovalidate>Find on map</button>
     <button type="submit" name="action" value="default" class="link" formnovalidate>Back to Jesuit High School</button>
   </form>{% endif %}
-</div>
+</details>
 
-<div class="card" id="share">
-  <h2>Share with athletes and families</h2>
+<details class="card fold-card" id="share">
+  <summary><h2>Share with athletes and families</h2></summary>
   <p class="small muted">Anyone with a link can see the calendar, so share it with your team only. On an iPhone, open the “Add to iPhone calendar” link and tap Subscribe; changes then appear on their own. Google Calendar and Outlook can subscribe to the feed address (“From URL”).</p>
   <table class="list compact"><thead><tr><th>Calendar</th><th>Web page</th><th>Phone calendar</th><th>Feed address</th></tr></thead><tbody>
   {% for t, l in links.items() %}<tr><td><b>{{ 'Boys and girls' if t == 'All' else t }}</b></td><td><a href="{{ l.page }}" target="_blank" rel="noopener">Open</a> · <button type="button" class="link copy-btn" data-copy="{{ l.page }}">Copy link</button></td>
     <td><a href="{{ l.webcal }}">Add to iPhone calendar</a></td><td><button type="button" class="link copy-btn" data-copy="{{ l.feed }}">Copy feed address</button></td></tr>{% endfor %}
   </tbody></table>
   {% if user.role != 'trainer' %}<form method="post" action="/calendar/new-link" onsubmit="return confirm('Make new links? The old links and phone subscriptions stop updating, and everyone needs the new ones.')" style="margin-top:8px"><input type="hidden" name="csrf" value="{{ csrf }}"><button type="submit" class="link">Make new links (if a link was shared too widely)</button></form>{% endif %}
-</div>
+</details>
 
 {% if series %}<details class="card fold-card"><summary><h2>Repeating practices ({{ series|length }})</h2></summary>
   <ul class="plain-list">{% for e in series %}<li><b>{{ e.title }}</b>{% if e.team %} <span class="pill">{{ e.team }}</span>{% endif %} <span class="small muted">{% for d in e.repeat_days.split(',') %}{{ weekdays[d|int] }}{{ ', ' if not loop.last }}{% endfor %}{% if e.start_time %}, {{ fmt_clock(e.start_time) }}{% if e.end_time %}–{{ fmt_clock(e.end_time) }}{% endif %}{% endif %} · {{ e.date.strftime('%b %-d') }} to {{ e.repeat_until.strftime('%b %-d') }}{% if e.skip_dates %} · {{ e.skip_dates.split(',')|length }} cancelled{% endif %}</span>

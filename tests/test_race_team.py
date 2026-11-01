@@ -36,7 +36,12 @@ def test_team_place_and_points():
     c.post("/races/team", data={**base, "place": "3", "teams": "12", "points": "41"})
     page = c.get("/races?season=all").text
     assert "Team: <b>3rd</b> of 12 teams · <b>41</b> points" in page
-    assert "Team results (1)" in page and "<td>Boys Frosh/Soph</td>" in page
+    assert "Team results (1)" in page
+    grid = page[page.index('class="list compact team-grid"'):]
+    grid = grid[:grid.index("</table>")]
+    assert [h for h in re.findall(r'<th class="num">([^<]+)</th>', grid)] == ["Varsity", "JV", "F/S", "Frosh", "Soph"]
+    cells = re.findall(r'<td class="num">(.*?)</td>', grid, re.S)
+    assert "<b>3rd</b>" in cells[2] and "of 12" in cells[2] and "41 pts" in cells[2] and "–" in cells[0]   # F/S column
 
     # Renaming the race and the meet carries the team result (and race-day conditions) along.
     db = SessionLocal()

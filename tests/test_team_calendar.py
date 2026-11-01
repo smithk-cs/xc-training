@@ -66,7 +66,9 @@ def test_calendar_end_to_end():
     assert f"DTSTART:{start:%Y%m%dT%H%M%SZ}" in body                                 # 3:30 p.m. Pacific, in UTC
     assert all(len(line.encode()) <= 75 for line in body.split("\r\n"))
     assert "Ava" not in body and "Doyle" not in body                                  # nothing about athletes
-    assert f"/team-calendar/{token}?team=Girls" in anon.get("/a/t-ava").text          # the athlete's own team calendar
+    me = anon.get("/a/t-ava").text
+    assert f'<a class="button secondary calendar-btn" href="/team-calendar/{token}?team=Girls">' in me   # her own team's calendar
+    assert "How to add it</summary>" in anon.get(f"/team-calendar/{token}?team=Girls").text
     c.post("/calendar/new-link", data={"csrf": csrf})
     assert anon.get(f"/team-calendar/{token}/all.ics").status_code == 404             # old links stop working
 

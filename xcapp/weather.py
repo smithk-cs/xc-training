@@ -309,6 +309,19 @@ DEFAULT_PRACTICE = (38.6171, -121.3283, "Jesuit High School, Carmichael")
 DEFAULT_PRACTICE_TIME = "15:30"
 
 
+SKY_ICONS = (("thunder", "⛈️"), ("snow", "❄️"), ("rain", "🌧️"), ("shower", "🌧️"), ("drizzle", "🌦️"), ("fog", "🌫️"),
+             ("overcast", "☁️"), ("cloud", "⛅"), ("clear", "☀️"), ("sun", "☀️"))
+
+
+def short(f) -> dict | None:
+    """Just the temperature and the sky, for the team calendar: {'icon': '⛅', 'text': '68°F, partly cloudy'}."""
+    if f is None or f.temp_f is None:
+        return None
+    sky = (f.summary or "").lower()
+    icon = next((i for k, i in SKY_ICONS if k in sky), "🌡️")
+    return {"icon": icon, "text": f"{f.temp_f:.0f}°F" + (f", {sky}" if sky else "")}
+
+
 def practice_place(db: Session) -> tuple[float, float, str]:
     try:
         lat = float(A.get_setting(db, "practice_lat", ""))
@@ -347,10 +360,15 @@ def practice_forecast(db: Session, day: dt.date, team: str) -> dict | None:
 
 
 def refresh_practice_forecasts(db: Session, http: httpx.Client, today: dt.date, only: dt.date | None = None) -> int:
-    """Forecasts for practice on every day with a planned workout in the next two weeks (or just `only`), for boys and girls."""
-    days = sorted({d for (d,) in db.execute(select(PlannedWorkout.date).where(
-        PlannedWorkout.date >= today, PlannedWorkout.date <= today + dt.timedelta(days=FORECAST_DAYS)).distinct()).all()
-        if only is None or d == only})
+    """Forecasts for practice on every day with a planned workout or a practice on the team calendar in the next two
+    weeks (or just `only`), for boys and girls."""
+    from .team_calendar import days_of
+    last = today + dt.timedelta(days=FORECAST_DAYS)
+    days = {d for (d,) in db.execute(select(PlannedWorkout.date).where(
+        PlannedWorkout.date >= today, PlannedWorkout.date <= last).distinct()).all()}
+    for e in db.scalars(select(CalendarEvent).where(CalendarEvent.kind == "Practice")).all():
+        days.update(days_of(e, today, last))
+    days = sorted(d for d in days if only is None or d == only)
     n = 0
     for d in days:
         for s in {(x["time"], round(x["lat"], 3), round(x["lon"], 3)): x for x in (practice_slot(db, d, t) for t in ("Boys", "Girls"))}.values():

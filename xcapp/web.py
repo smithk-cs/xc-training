@@ -809,9 +809,15 @@ def create_app() -> FastAPI:
                     suggested[(d, meet, race)] = sum(pts[:5])
         season_teams = sorted((t for t in teams.values() if season in ("all", A.season_for(t.date)) and (t.place or t.points is not None)),
                               key=lambda t: (t.date, t.meet, t.race), reverse=True)
+        grid: dict = {}   # one row per meet (and team), one column per level
+        for t in season_teams:
+            row = grid.setdefault((t.date, t.meet, REG.result_gender(t.race)), {})
+            row.setdefault(REG.result_column(t.race), []).append(t)
+        both = len({g for _, _, g in grid}) > 1
+        team_grid = [{"date": d, "meet": m, "gender": g if both else "", "cells": cells} for (d, m, g), cells in grid.items()]
         return render(request, "races.html", user, own=own, meets=meets, seasons=seasons, season=season, counts=counts,
                       info=info, courses=courses, footings=[f for f in CS.FOOTING if f], teams=teams, suggested=suggested,
-                      season_teams=season_teams)
+                      season_teams=season_teams, team_grid=team_grid, result_columns=REG.RESULT_COLUMNS)
 
     @app.post("/races/conditions")
     async def races_conditions(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):

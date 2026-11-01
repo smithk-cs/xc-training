@@ -58,6 +58,15 @@
 {% block flashes %}{% for level, text in messages %}<div class="flash {{ level }}" role="status">{{ text }}</div>{% endfor %}{% endblock %}
 {% block content %}{% endblock %}
 </main>
+<script>(function () {   // a link or save that returns to a folded section (#scoring, #share ...) opens it
+  function open() {
+    var id = decodeURIComponent((location.hash || '').slice(1)), el = id && document.getElementById(id);
+    for (var d = el; d; d = d.parentElement) { if (d.tagName === 'DETAILS') d.open = true; }
+    if (el) el.scrollIntoView();
+  }
+  window.addEventListener('hashchange', open);
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', open); else open();
+})();</script>
 <script src="/static/sortable.js?v={{ asset_v }}" defer></script>
 <script src="/static/photo-zoom.js?v={{ asset_v }}" defer></script>
 </body>

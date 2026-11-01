@@ -268,7 +268,10 @@ def test_practice_forecasts_use_the_calendar_time_and_place():
     cl.post("/login", data={"csrf": csrf, "username": "coach6", "password": "correct-horse-1"})
     page = cl.get("/workouts").text
     assert "4:00 PM: 66°F" in page and "3:30 PM (usual time): 65°F" in page
-    csrf = re.search(r'name="csrf" value="([^"]+)"', cl.get("/calendar").text).group(1)
+    cal = cl.get("/calendar").text
+    assert re.search(r'<span class="small cal-weather"[^>]*>\S+ 66°F', cal)             # Tuesday's 4 p.m. practice
+    assert '<details class="card fold-card" id="practice-place">' in cal and '<details class="card fold-card" id="share">' in cal
+    csrf = re.search(r'name="csrf" value="([^"]+)"', cal).group(1)
     cl.post("/calendar/practice-place", data={"csrf": csrf, "place": "Jesuit HS", "lat": "38.6150", "lon": "-121.3400"})
     db = SessionLocal()
     assert WX.practice_place(db) == (38.615, -121.34, "Jesuit HS")

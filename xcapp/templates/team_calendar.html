@@ -8,9 +8,11 @@
   <nav class="form-row team-switch" aria-label="Boys or girls" style="justify-content:center">
     {% for t in ('All', 'Boys', 'Girls') %}<a class="button{% if t != team %} secondary{% endif %}" href="/team-calendar/{{ token }}?team={{ t }}"{% if t == team %} aria-current="page"{% endif %}>{{ 'Everyone' if t == 'All' else t }}</a>{% endfor %}
   </nav>
-  <section class="panel">
+  <section class="panel add-cal">
     <p style="margin:0"><a class="button" href="{{ links[team].webcal }}">Add to iPhone calendar</a></p>
-    <p class="small muted" style="margin:6px 0 0">Tap it, then Subscribe. Practices, meets and events then show in your phone’s calendar and update on their own. On Google Calendar or Outlook, choose “Add calendar from URL” and paste: <code class="copy">{{ links[team].feed }}</code></p>
+    <details class="small muted" style="margin-top:8px"><summary style="cursor:pointer">How to add it</summary>
+      <p style="margin:6px 0 0">Tap the button, then Subscribe. Practices, meets and events then show in your phone’s calendar and update on their own. On Google Calendar or Outlook, choose “Add calendar from URL” and paste: <code class="copy">{{ links[team].feed }}</code></p>
+    </details>
   </section>
   {% for month, its in months.items() %}
   <section class="panel">
