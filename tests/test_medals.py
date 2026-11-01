@@ -42,6 +42,15 @@ def test_summary_saves_weeks_and_monday_note(session, athlete, monkeypatch):
     assert MD.summary(session, athlete, MONDAY)["note"] is None
 
 
+def test_weeks_saved_before_the_rule_change_are_worked_out_again(session, athlete, monkeypatch):
+    calls = []
+    monkeypatch.setattr(PT, "team_week", fake_week(calls))
+    MD.ensure_weeks(session, [athlete], [dt.date(2026, 9, 28)], dt.date(2026, 10, 20))
+    MD.ensure_weeks(session, [athlete], [dt.date(2026, 9, 28)], MD.RULES_CHANGED)
+    MD.ensure_weeks(session, [athlete], [dt.date(2026, 9, 28)], MD.RULES_CHANGED + dt.timedelta(days=3))
+    assert calls == [dt.date(2026, 9, 28)] * 2
+
+
 def test_silver_and_miles_notes(session, athlete, monkeypatch):
     monkeypatch.setattr(PT, "team_week", fake_week([]))
     assert MD.summary(session, athlete, dt.date(2026, 10, 19))["note"]["text"].startswith("Silver week! You scored 85% last week, your 1st silver")

@@ -22,6 +22,7 @@ from .models import Athlete, WeekResult
 KINDS = ("gold", "silver", "miles")
 ICONS = {"gold": "🥇", "silver": "🥈", "miles": "👟"}
 RECHECK_DAYS = 14
+RULES_CHANGED = dt.date(2026, 11, 1)   # weeks saved before this are worked out again (race days now count as days run)
 
 
 def medal_for(score: float | None, miles: float, goal_miles: float | None) -> str:
@@ -56,7 +57,8 @@ def ensure_weeks(db: Session, athletes: list[Athlete], mondays: list[dt.date], t
         WeekResult.athlete_id.in_(ids), WeekResult.monday >= min(mondays), WeekResult.monday <= max(mondays))).all()}
     for m in mondays:
         recent = m + dt.timedelta(days=6) >= today - dt.timedelta(days=RECHECK_DAYS)
-        need = [a for a in athletes if (r := saved.get((a.id, m))) is None or r.points is None or (recent and r.computed_on < today)]
+        need = [a for a in athletes if (r := saved.get((a.id, m))) is None or r.points is None or r.computed_on < RULES_CHANGED <= today
+                or (recent and r.computed_on < today)]
         if not need:
             continue
         for w in PT.team_week(db, m, athletes=need):

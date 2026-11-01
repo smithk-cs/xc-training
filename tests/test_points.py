@@ -112,6 +112,21 @@ def test_too_fast_easy_week(session):
     assert any("faster than easy pace" in f for f in w["flags"])
 
 
+def test_race_days_count_and_short_days_are_marked(session):
+    from xcapp.models import RaceResult
+    a = make_week(session, [(1, [(PACE["Easy"], 40)]), (4, [(PACE["Easy"], 25)]), (5, [(PACE["Interval"], 12), (PACE["Easy"], 8)])], goal=30)
+    session.add(RaceResult(athlete_id=a.id, meet="Invite", date=MON + dt.timedelta(days=5), race="JV", distance_m=3218, time_s=720))
+    session.flush()
+    w = P.team_week(session, MON, athletes=[a])[0]
+    assert w["run_days"] == 2                                                        # Tuesday and the race on Saturday
+    assert [(d["counts"], d["race"]) for d in w["days"][4:6]] == [(False, False), (True, True)]
+    assert w["no_score"] == ""
+    w["group"].weekly_miles_girls = 0
+    session.flush()
+    none = P.team_week(session, MON, athletes=[a])[0]
+    assert none["score"] is None and none["no_score"] == f"No weekly miles goal for {w['group_name']} (girls)"
+
+
 def test_missed_week_and_extra_cap(session):
     a = make_week(session, [(2, [(PACE["Easy"], 20)])], [TUESDAY], goal=30)
     w = P.team_week(session, MON, athletes=[a])[0]

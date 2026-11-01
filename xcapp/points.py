@@ -20,7 +20,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from . import analysis as A
-from .models import Activity, Athlete, MissedDay, PainReport, PlannedWorkout, TrainingGroup
+from .models import Activity, Athlete, MissedDay, PainReport, PlannedWorkout, RaceResult, TrainingGroup
 
 RATES = {"Easy": 0.2, "Moderate": 0.4, "Threshold": 0.6, "Interval": 1.0, "Repetition": 1.5}   # points per minute
 ZONES = [n for n, _ in A.PACE_ZONES]           # slowest first
@@ -283,6 +283,10 @@ def team_week(db: Session, monday: dt.date, gender: str | None = None, athletes:
     plans = db.scalars(select(PlannedWorkout).where(PlannedWorkout.date >= prev_monday, PlannedWorkout.date <= sunday)).all()
     pains = db.scalars(select(PainReport).where(PainReport.athlete_id.in_(ids), PainReport.date >= monday, PainReport.date <= sunday)).all()
     missed = db.scalars(select(MissedDay).where(MissedDay.athlete_id.in_(ids), MissedDay.date >= monday, MissedDay.date <= sunday)).all()
+    # Race days always count as a day run, however short the race and warm-up
+    race_days = set(db.execute(select(RaceResult.athlete_id, RaceResult.date).where(
+        RaceResult.athlete_id.in_(ids), RaceResult.date >= prev_monday, RaceResult.date <= sunday)).all())
+    race_days |= {(x.athlete_id, x.local_date) for x in acts if x.run_type == "Race"}
     by = lambda rows, key: {k: [r for r in rows if key(r) == k] for k in {key(r) for r in rows}}  # noqa: E731
     acts_by = by(acts, lambda r: (r.athlete_id, r.local_date))
     pain_by = by(pains, lambda r: (r.athlete_id, r.date))
@@ -293,7 +297,7 @@ def team_week(db: Session, monday: dt.date, gender: str | None = None, athletes:
         v, group = me.get("vdot"), me.get("group") or ""
         g = groups.get(group)
         mine = lambda d: [w for w in plans if w.date == d and w.applies_to(a.group, group, gender=a.gender)]  # noqa: E731
-        rows = [_athlete_week(a, v, g, days, mine, acts_by, pain_by, missed_by, min_minutes, offset, target_days)
+        rows = [_athlete_week(a, v, g, days, mine, acts_by, pain_by, missed_by, min_minutes, offset, target_days, race_days)
                 for offset in (0, -7)]
         week, last = rows
         week["score"] = week_score(week["points"], week["target"] or 0, week["run_days"], target_days)
@@ -302,12 +306,15 @@ def team_week(db: Session, monday: dt.date, gender: str | None = None, athletes:
         score_pace(week, today, target_days)
         if last["points"] > 0 and week["points"] > JUMP * last["points"]:
             week["flags"].append(f"Points up {100 * (week['points'] / last['points'] - 1):.0f}% on last week")
+        no_score = ("" if week["target"] else "No VDOT yet (needs a race)" if not v else "No running group" if g is None
+                    else f"No weekly miles goal for {g.name} ({'girls' if a.gender == 'Girls' else 'boys'})")
         out.append({"a": a, "group": g, "group_name": group, "vdot": v, "target_days": target_days, **week,
-                    "last_points": last["points"]})
+                    "last_points": last["points"], "no_score": no_score, "min_minutes": min_minutes})
     return out
 
 
-def _athlete_week(a, v, g, days, mine, acts_by, pain_by, missed_by, min_minutes, offset, target_days: int = DEFAULT_TARGET_DAYS) -> dict:
+def _athlete_week(a, v, g, days, mine, acts_by, pain_by, missed_by, min_minutes, offset, target_days: int = DEFAULT_TARGET_DAYS,
+                  race_days: set | None = None) -> dict:
     from .ingest import pick_workout
     goal_miles = A.athlete_miles_goal(g, a.gender, a.experience)   # adjusted for experience
     workout_miles = workout_pts = 0.0
@@ -345,14 +352,17 @@ def _athlete_week(a, v, g, days, mine, acts_by, pain_by, missed_by, min_minutes,
             day_flags.append("Treadmill: watch pace may be off without a footpod")
         total += earned
         miles += day_miles
-        run_days += minutes >= min_minutes
+        race = (a.id, d) in (race_days or set())
+        counts = bool(runs) and (minutes >= min_minutes or race)
+        run_days += counts
         flags += [f"{d.strftime('%a')}: {f}" for f in day_flags]
         worst = max(pain_by.get((a.id, d), []), key=lambda p: p.severity, default=None)
         pain, pain_id = (worst.severity, worst.id) if worst else (None, None)
         miss = (missed_by.get((a.id, d)) or [None])[0]
         cells.append({"date": d, "runs": runs, "miles": day_miles, "minutes": minutes, "points": earned, "planned": day_plan, "plan_miles": day_plan_miles,
                       "workouts": planned, "hr": hr, "rpe": max((r.rpe for r in runs if r.rpe is not None), default=None),
-                      "pain": pain, "pain_id": pain_id, "missed": miss, "flags": day_flags})
+                      "pain": pain, "pain_id": pain_id, "missed": miss, "flags": day_flags,
+                      "counts": counts, "race": race})
     target = None
     easy = None
     if v and goal_miles:  # without the group's weekly miles goal the target would be the workouts alone
