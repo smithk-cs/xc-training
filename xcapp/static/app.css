@@ -530,3 +530,9 @@ html { scroll-padding-top: calc(var(--top-h, 0px) + 8px); }
 .cal-actions { margin-left: auto; }
 .cal-item.kind-meet .cal-time { color: var(--brand-red); font-weight: 600; }
 @media (max-width: 520px) { .cal-time { width: 100%; } }
+/* Workout parts: drag handle and arrows to reorder */
+table.parts td.drag { width: 1%; color: var(--color-fg-muted); }
+table.parts .handle { cursor: grab; padding: 0 6px; font-size: 16px; user-select: none; }
+table.parts .move-up, table.parts .move-down { font-size: 11px; padding: 0 2px; text-decoration: none; }
+table.parts tr.dragging { opacity: .45; }
+@media (pointer: fine) { table.parts .move-up, table.parts .move-down { opacity: .5; } }

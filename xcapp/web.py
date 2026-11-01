@@ -1226,6 +1226,10 @@ def create_app() -> FastAPI:
             checked.setdefault(wid, {})[verdict] = n
         ability_names = [g.name for g in db.scalars(select(TrainingGroup).order_by(TrainingGroup.position)).all()]
         edit = db.get(PlannedWorkout, int(request.query_params["edit"])) if request.query_params.get("edit", "").isdigit() else None
+        copying = False
+        if edit is None and request.query_params.get("copy", "").isdigit():   # a copy opens as a new workout to adjust
+            edit = db.get(PlannedWorkout, int(request.query_params["copy"]))
+            copying = edit is not None
         edit_parts = edit.part_list if edit else []
         if edit and not edit_parts:  # an older single-rep workout opens as one part
             edit_parts = [{"sets": 1, "reps": 1, "dist": round(edit.rep_distance_m), "zone": A.OLD_TYPE_ZONE.get(A.pace_type(edit.pace_factor), "Interval"), "rest": ""}]
@@ -1234,7 +1238,8 @@ def create_app() -> FastAPI:
                       today=today.isoformat(), q=q, window=WORKOUT_WINDOW, rates=PT.RATES, zone_pcts=dict(A.PACE_ZONES),
                       ref_vdot=vdots[len(vdots) // 2] if vdots else 50,
                       ai_ready=settings().ai_configured, pending_checks=len(AI.pending_workout_checks(db)),
-                      ability_names=ability_names, edit=edit, edit_parts=edit_parts, zones=list(A.WORKOUT_ZONES),
+                      ability_names=ability_names, edit=edit, copying=copying, edit_parts=edit_parts, zones=list(A.WORKOUT_ZONES),
+                      easy_groups=db.scalars(select(TrainingGroup).order_by(TrainingGroup.position)).all(),
                       previews={w.id: A.group_part_paces(db, w.part_list) for w in rows[:30] if w.part_list},
                       part_label=A.part_label)
 
@@ -1326,6 +1331,45 @@ def create_app() -> FastAPI:
         except ValueError as exc:
             flash(request, str(exc) if "part" in str(exc).lower() or "Add at least" in str(exc) else "Check the date and each part's numbers.", "error")
         return back("/workouts")
+
+    @app.post("/workouts/easy-day")
+    async def workouts_easy_day(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
+        """Easy runs for the whole team on one day: one per training group (by VDOT), each the group's weekly miles goal
+        over the week's running days, rounded to the half mile. Athletes see their own easy pace from their VDOT."""
+        import json
+        f = await form_checked(request)
+        try:
+            d = parse_date(f.get("date", ""))
+            div = int(f.get("days", 6))
+            if not 3 <= div <= 7:
+                raise ValueError
+        except (ValueError, TypeError):
+            flash(request, "Pick a date and the number of running days.", "error")
+            return back("/workouts#easy")
+        teams = [t for t in ("Boys", "Girls") if f.get(f"easy_{t}")] or ["Boys", "Girls"]
+        made, skipped, existing = [], [], {(w.title, w.gender) for w in db.scalars(select(PlannedWorkout).where(PlannedWorkout.date == d)).all()}
+        for g in db.scalars(select(TrainingGroup).order_by(TrainingGroup.position)).all():
+            miles = {t: round(g.miles_goal(t) / div * 2) / 2 for t in teams}
+            same = len(teams) == 2 and miles["Boys"] == miles["Girls"]
+            for t, mi in ([("", miles["Boys"])] if same else list(miles.items())):
+                title = f"Easy run · {g.name}"
+                if not mi:
+                    skipped.append(f"{g.name}{' ' + t if t else ''} (no weekly miles goal)")
+                    continue
+                if (title, t) in existing:
+                    skipped.append(f"{g.name}{' ' + t if t else ''} (already on {d:%b %-d})")
+                    continue
+                m = round(mi * A.METERS_PER_MILE)
+                part = {"sets": 1, "reps": 1, "dist": m, "mi": mi, "zone": "Easy", "rest": "", "note": ""}
+                db.add(PlannedWorkout(date=d, title=title, groups=g.name, gender=t, parts=json.dumps([part]), rep_distance_m=float(m),
+                                      pace_event="5K", pace_factor=1.0, distance_unit="m"))
+                made.append(f"{g.name}{' ' + t if t else ''} {mi:g} mi")
+        db.flush()
+        n = rematch_day(db, d)
+        flash(request, (f"Easy runs for {d:%a %b %-d}: " + ", ".join(made) + "." if made else "No easy runs were added.")
+              + (f" Skipped: {', '.join(skipped)}." if skipped else "") + (f" Matched {n} runs already synced." if n else ""),
+              "ok" if made else "error")
+        return back("/workouts#list")
 
     @app.post("/workouts/{wid}/delete")
     async def delete_workout(request: Request, wid: int, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):

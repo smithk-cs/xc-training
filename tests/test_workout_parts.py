@@ -186,3 +186,51 @@ def test_team_notes_window_and_search(app):
     assert "No workouts mention “zzz”." in c.get("/workouts/all?q=zzz").text
     edit = c.get(f"/workouts?edit={w['Girls hills'].id}").text
     assert 'name="team_Girls" checked' in edit and 'name="team_Boys" checked' not in edit and 'value="On the grass loop"' in edit
+
+
+def test_easy_runs_for_the_whole_team_by_group(app):
+    from xcapp.models import TrainingGroup
+    db = SessionLocal()
+    for g in db.query(TrainingGroup).all():
+        g.weekly_miles, g.weekly_miles_girls = {"Gold": 42, "Silver": 36}.get(g.name, 0), {"Gold": 42, "Silver": 30}.get(g.name, 0)
+    db.commit()
+    db.close()
+    c, csrf = login(app)
+    day = (A.team_today() + dt.timedelta(days=2)).isoformat()
+    page = c.post("/workouts/easy-day", data={"csrf": csrf, "date": day, "days": "6"})
+    page = c.get("/workouts").text
+    assert "Easy runs for" in page and "Gold 7 mi" in page and "Silver Boys 6 mi" in page and "Silver Girls 5 mi" in page
+    db = SessionLocal()
+    rows = {(w.title, w.gender): w for w in db.query(PlannedWorkout).all()}
+    gold = rows[("Easy run · Gold", "")]
+    assert gold.groups == "Gold" and json.loads(gold.parts)[0]["mi"] == 7 and json.loads(gold.parts)[0]["zone"] == "Easy"
+    assert rows[("Easy run · Silver", "Girls")].groups == "Silver"
+    n = db.query(PlannedWorkout).count()
+    db.close()
+    c.post("/workouts/easy-day", data={"csrf": csrf, "date": day, "days": "6"})           # again: nothing doubled
+    assert "already on" in c.get("/workouts").text
+    db = SessionLocal()
+    assert db.query(PlannedWorkout).count() == n
+    db.close()
+
+
+def test_copy_opens_a_new_workout_and_parts_can_be_reordered(app):
+    c, csrf = login(app)
+    day = (A.team_today() + dt.timedelta(days=1)).isoformat()
+    c.post("/workouts", data={"csrf": csrf, "date": day, "title": "Hills", "p_sets": ["1", "1"], "p_reps": ["1", "8"],
+                              "p_dist": ["3200", "200"], "p_zone": ["Easy", "Repetition"], "p_rest": ["", "jog down"]})
+    db = SessionLocal()
+    wid = db.query(PlannedWorkout).one().id
+    db.close()
+    page = c.get(f"/workouts?copy={wid}").text
+    assert "Copy of Hills" in page and 'name="wid"' not in page and "Save as a new workout" in page
+    assert page.index('value="3200"') < page.index('value="200"') and "move-up" in page and 'class="handle"' in page
+    # Saving the copy with the parts in a new order (as dragging leaves them in the form) makes a second workout
+    c.post("/workouts", data={"csrf": csrf, "date": day, "title": "Hills again", "p_sets": ["1", "1"], "p_reps": ["8", "1"],
+                              "p_dist": ["200", "3200"], "p_zone": ["Repetition", "Easy"], "p_rest": ["jog down", ""]})
+    db = SessionLocal()
+    rows = db.query(PlannedWorkout).order_by(PlannedWorkout.id).all()
+    assert [w.title for w in rows] == ["Hills", "Hills again"]
+    assert [p["zone"] for p in rows[1].part_list] == ["Repetition", "Easy"] and [p["zone"] for p in rows[0].part_list] == ["Easy", "Repetition"]
+    db.close()
+    assert f'href="/workouts?copy={wid}#plan">Copy</a>' in c.get("/workouts").text

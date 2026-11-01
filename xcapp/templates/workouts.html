@@ -9,18 +9,18 @@
 {% endif %}
 {% if user.role != 'trainer' %}
 <div class="card">
-  <h2 id="plan">{% if edit %}Edit workout{% else %}Plan a workout{% endif %}</h2>
+  <h2 id="plan">{% if copying %}Copy of {{ edit.title }}: adjust it and save as a new workout{% elif edit %}Edit workout{% else %}Plan a workout{% endif %}</h2>
   <form method="post" action="/workouts">
     <input type="hidden" name="csrf" value="{{ csrf }}">
-    {% if edit %}<input type="hidden" name="wid" value="{{ edit.id }}">{% endif %}
+    {% if edit and not copying %}<input type="hidden" name="wid" value="{{ edit.id }}">{% endif %}
     <div class="form-row">
-      <label>Date<input type="date" name="date" value="{{ edit.date.isoformat() if edit else today }}" required></label>
+      <label>Date<input type="date" name="date" value="{{ edit.date.isoformat() if edit and not copying else today }}" required></label>
       <label style="flex:1">Name (optional)<input type="text" name="title" placeholder="Made from the parts if left empty" value="{{ edit.title if edit else '' }}" maxlength="120"></label>
     </div>
-    <table class="list compact parts"><thead><tr><th>Sets</th><th>Reps</th><th>Distance or time</th><th>Pace</th><th>Rest</th><th>Notes</th><th class="num">Points</th><th></th></tr></thead>
+    <table class="list compact parts"><thead><tr><th aria-label="Order"></th><th>Sets</th><th>Reps</th><th>Distance or time</th><th>Pace</th><th>Rest</th><th>Notes</th><th class="num">Points</th><th></th></tr></thead>
       <tbody id="parts">
       {% for p in (edit_parts or [{"sets": 1, "reps": 6, "dist": 1000, "zone": "Interval", "rest": "2 min jog"}]) %}
-        <tr class="part"><td><input type="number" name="p_sets" min="1" max="10" value="{{ p.sets }}" required style="width:4em" aria-label="Sets"></td>
+        <tr class="part"><td class="drag nowrap"><span class="handle" title="Drag to move this part" aria-hidden="true">⋮⋮</span><button type="button" class="link move-up" aria-label="Move this part up">▲</button><button type="button" class="link move-down" aria-label="Move this part down">▼</button></td><td><input type="number" name="p_sets" min="1" max="10" value="{{ p.sets }}" required style="width:4em" aria-label="Sets"></td>
           <td><input type="number" name="p_reps" min="1" max="40" value="{{ p.reps }}" required style="width:4em" aria-label="Reps"></td>
           <td class="nowrap"><input type="number" name="p_dist" min="{{ 0.25 if p.mins or p.mi else 100 }}" max="{{ 180 if p.mins else 20 if p.mi else 20000 }}" step="{{ 0.25 if p.mins else 0.01 if p.mi else 1 }}" value="{{ p.mins or p.mi or p.dist }}" required style="width:6em" aria-label="Distance or minutes">
             <select name="p_unit" class="p-unit" aria-label="Meters, miles or minutes"><option value="m"{% if not p.mins and not p.mi %} selected{% endif %}>m</option><option value="mi"{% if p.mi %} selected{% endif %}>mi</option><option value="min"{% if p.mins %} selected{% endif %}>min</option></select></td>
@@ -31,7 +31,7 @@
           <td><button type="button" class="link remove-part" aria-label="Remove this part">Remove</button></td></tr>
       {% endfor %}
       </tbody>
-      <tfoot><tr><td colspan="6" class="num small">Total at VDOT <input type="number" id="ref-vdot" value="{{ ref_vdot }}" min="30" max="85" style="width:4.5em" aria-label="VDOT for the points"></td>
+      <tfoot><tr><td colspan="7" class="num small">Total at VDOT <input type="number" id="ref-vdot" value="{{ ref_vdot }}" min="30" max="85" style="width:4.5em" aria-label="VDOT for the points"></td>
         <td class="num nowrap"><b id="p-total"></b></td><td></td></tr></tfoot>
     </table>
     <p class="small muted" style="margin:4px 0 0">Points: minutes × the zone’s rate ({% for z, r in rates.items() %}{{ z|lower }} {{ r }}{{ ', ' if not loop.last else '' }}{% endfor %} a minute). Timed parts are exact; distances turn into minutes at the VDOT above (the team’s middle VDOT to start), so faster runners earn a little less for the same distance.</p>
@@ -77,6 +77,24 @@
         amt.min = u[0]; amt.max = u[1]; amt.step = u[2]; amt.value = u[3];
         points();
       });
+      // Reordering parts: drag a row by its handle, or use the arrows (phones). The form saves parts in the order shown.
+      var dragging = null;
+      body.addEventListener('mousedown', function (e) { var r = e.target.closest('tr.part'); if (r) r.draggable = !!e.target.closest('.handle'); });
+      body.addEventListener('dragstart', function (e) { dragging = e.target.closest('tr.part'); if (!dragging) return; dragging.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', ''); });
+      body.addEventListener('dragover', function (e) {
+        if (!dragging) return;
+        e.preventDefault();
+        var over = e.target.closest('tr.part');
+        if (!over || over === dragging) return;
+        var box = over.getBoundingClientRect();
+        body.insertBefore(dragging, e.clientY < box.top + box.height / 2 ? over : over.nextSibling);
+      });
+      body.addEventListener('dragend', function () { if (dragging) { dragging.classList.remove('dragging'); dragging.draggable = false; dragging = null; points(); } });
+      body.addEventListener('click', function (e) {
+        var row = e.target.closest('tr.part');
+        if (e.target.classList.contains('move-up') && row.previousElementSibling) { body.insertBefore(row, row.previousElementSibling); }
+        if (e.target.classList.contains('move-down') && row.nextElementSibling) { body.insertBefore(row.nextElementSibling, row); }
+      });
       body.addEventListener('click', function (e) {
         if (!e.target.classList.contains('remove-part')) return;
         if (body.querySelectorAll('tr.part').length > 1) e.target.closest('tr').remove();
@@ -89,11 +107,25 @@
       <span style="border-left:1px solid var(--color-border-line); height:24px"></span>
       {% for g in ('Boys', 'Girls') %}<label class="check"><input type="checkbox" name="team_{{ g }}"{% if edit and edit.gender == g %} checked{% endif %}> {{ g }}</label>{% endfor %}
       <span class="small muted">Leave both unticked for boys and girls.</span>
-      <button type="submit">{% if edit %}Save changes{% else %}Save workout{% endif %}</button>
+      <button type="submit">{% if copying %}Save as a new workout{% elif edit %}Save changes{% else %}Save workout{% endif %}</button>
       {% if edit %}<a href="/workouts">Cancel</a>{% endif %}
     </div>
   </form>
 </div>
+{% endif %}
+{% if user.role != 'trainer' %}
+<details class="card fold-card" id="easy"><summary><h2>Easy runs for the whole team</h2></summary>
+  <p class="small muted">One easy run per training group on the day you pick. Each group’s distance is its weekly miles goal (Groups page) divided by the week’s running days, to the nearest half mile; every athlete sees their own easy pace from their VDOT. Groups without a weekly miles goal are skipped.</p>
+  <form method="post" action="/workouts/easy-day" class="form-row">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label>Day<input type="date" name="date" value="{{ today }}" required></label>
+    <label>Running days this week<select name="days">{% for n in (5, 6, 7) %}<option{% if n == 6 %} selected{% endif %}>{{ n }}</option>{% endfor %}</select></label>
+    {% for g in ('Boys', 'Girls') %}<label class="check"><input type="checkbox" name="easy_{{ g }}"> {{ g }}</label>{% endfor %}
+    <span class="small muted">Leave both unticked for boys and girls.</span>
+    <button type="submit">Create easy runs</button>
+  </form>
+  {% if easy_groups %}<p class="small muted" style="margin-top:6px">At 6 days: {% for g in easy_groups %}{{ g.name }} {{ '%g' % ((g.miles_goal('Boys') / 6 * 2)|round / 2) }} mi{% if g.miles_goal('Girls') != g.miles_goal('Boys') %} (girls {{ '%g' % ((g.miles_goal('Girls') / 6 * 2)|round / 2) }}){% endif %}{{ ' · ' if not loop.last }}{% endfor %}</p>{% endif %}
+</details>
 {% endif %}
 <div class="card scroll" id="list">
   <div class="form-row" style="justify-content:space-between; align-items:center">

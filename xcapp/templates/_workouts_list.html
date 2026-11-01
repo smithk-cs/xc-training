@@ -9,7 +9,7 @@
       </tbody></table><p class="small muted">Time per rep across each group’s VDOT range (pace per mile for parts run for a time).</p></details>{% endif %}
     {% else %}{{ w.distance_text }} reps · {{ pace_type(w.pace_factor) }} ({{ w.pace_event }} × {{ '%.2f' % w.pace_factor }}){% endif %}</td><td>{{ w.groups }}{% if w.gender %}<br><span class="small muted">{{ w.gender }} only</span>{% endif %}</td><td class="num">{{ counts.get(w.id, 0) }}</td>
   <td class="small nowrap">{% set ck = checked.get(w.id, {}) %}{% for v in ('Done', 'Partly', 'Not done') %}{% if ck.get(v) %}{{ ck[v] }} {{ v|lower }}{{ '<br>'|safe }}{% endif %}{% endfor %}</td>
-  <td>{% if user.role != 'trainer' %}<form method="post" action="/workouts/{{ w.id }}/delete" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="link" type="submit">Delete</button></form>{% endif %}</td></tr>
+  <td class="nowrap">{% if user.role != 'trainer' %}<a href="/workouts?copy={{ w.id }}#plan">Copy</a> · <form method="post" action="/workouts/{{ w.id }}/delete" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="link" type="submit">Delete</button></form>{% endif %}</td></tr>
   {% else %}<tr><td colspan="6" class="muted">{% if q %}No workouts mention “{{ q }}”.{% else %}No workouts {{ 'planned yet' if all_dates else 'within ' ~ window ~ ' days of today' }}.{% endif %}</td></tr>{% endfor %}
   </tbody></table>
   {% if user.role != 'trainer' %}<p class="small muted">Click a workout to edit it.</p>{% endif %}
