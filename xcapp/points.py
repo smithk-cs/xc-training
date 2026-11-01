@@ -190,10 +190,11 @@ def part_plan(p: dict, v: float) -> tuple[float, float, float]:
     return minutes, miles, minutes * RATES.get(zone, RATES["Easy"])
 
 
-def workout_plan(pw: PlannedWorkout, v: float) -> tuple[float, float]:
-    """(miles, points) a team workout asks of an athlete at VDOT v. Older one-rep workouts count one rep."""
-    parts = pw.part_list or [{"sets": 1, "reps": 1, "dist": pw.rep_distance_m,
-                              "zone": A.OLD_TYPE_ZONE.get(A.pace_type(pw.pace_factor), "Interval")}]
+def workout_plan(pw: PlannedWorkout, v: float, daily_miles: float | None = None) -> tuple[float, float]:
+    """(miles, points) a team workout asks of an athlete at VDOT v, with any 'finish the day' easy run sized to their
+    daily miles. Older one-rep workouts count one rep."""
+    parts = A.resolve_fill(pw.part_list, daily_miles) if pw.part_list else [
+        {"sets": 1, "reps": 1, "dist": pw.rep_distance_m, "zone": A.OLD_TYPE_ZONE.get(A.pace_type(pw.pace_factor), "Interval")}]
     plans = [part_plan(p, v) for p in parts]
     return sum(m for _, m, _ in plans), sum(pts for _, _, pts in plans)
 
@@ -250,7 +251,7 @@ def team_week(db: Session, monday: dt.date, gender: str | None = None, athletes:
         v, group = me.get("vdot"), me.get("group") or ""
         g = groups.get(group)
         mine = lambda d: [w for w in plans if w.date == d and w.applies_to(a.group, group, gender=a.gender)]  # noqa: E731
-        rows = [_athlete_week(a, v, g, days, mine, acts_by, pain_by, missed_by, min_minutes, offset)
+        rows = [_athlete_week(a, v, g, days, mine, acts_by, pain_by, missed_by, min_minutes, offset, target_days)
                 for offset in (0, -7)]
         week, last = rows
         week["score"] = week_score(week["points"], week["target"] or 0, week["run_days"], target_days)
@@ -263,7 +264,7 @@ def team_week(db: Session, monday: dt.date, gender: str | None = None, athletes:
     return out
 
 
-def _athlete_week(a, v, g, days, mine, acts_by, pain_by, missed_by, min_minutes, offset) -> dict:
+def _athlete_week(a, v, g, days, mine, acts_by, pain_by, missed_by, min_minutes, offset, target_days: int = DEFAULT_TARGET_DAYS) -> dict:
     goal_miles = A.athlete_miles_goal(g, a.gender, a.experience)   # adjusted for experience
     workout_miles = workout_pts = 0.0
     cells, total, miles, run_days, flags = [], 0.0, 0.0, 0, []
@@ -272,7 +273,7 @@ def _athlete_week(a, v, g, days, mine, acts_by, pain_by, missed_by, min_minutes,
         planned = mine(d)
         day_plan = day_plan_miles = None
         if planned and v:
-            plans = [workout_plan(w, v) for w in planned]
+            plans = [workout_plan(w, v, goal_miles / target_days if goal_miles else None) for w in planned]
             day_plan_miles = sum(m for m, _ in plans)
             workout_miles += day_plan_miles
             day_plan = sum(p for _, p in plans)

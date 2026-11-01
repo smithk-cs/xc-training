@@ -22,7 +22,7 @@
       {% for p in (edit_parts or [{"sets": 1, "reps": 6, "dist": 1000, "zone": "Interval", "rest": "2 min jog"}]) %}
         <tr class="part"><td class="drag nowrap"><span class="handle" title="Drag to move this part" aria-hidden="true">⋮⋮</span><button type="button" class="link move-up" aria-label="Move this part up">▲</button><button type="button" class="link move-down" aria-label="Move this part down">▼</button></td><td><input type="number" name="p_sets" min="1" max="10" value="{{ p.sets }}" required style="width:4em" aria-label="Sets"></td>
           <td><input type="number" name="p_reps" min="1" max="40" value="{{ p.reps }}" required style="width:4em" aria-label="Reps"></td>
-          <td class="nowrap"><input type="number" name="p_dist" min="{{ 0.25 if p.mins or p.mi else 100 }}" max="{{ 180 if p.mins else 20 if p.mi else 20000 }}" step="{{ 0.25 if p.mins else 0.01 if p.mi else 1 }}" value="{{ p.mins or p.mi or p.dist }}" required style="width:6em" aria-label="Distance or minutes">
+          <td class="nowrap"><input type="number" name="p_dist" min="{{ 0.25 if p.mins else 0.1 if p.mi else 50 }}" step="{{ 'any' if p.mins or p.mi else 1 }}" value="{{ p.mins or p.mi or p.dist }}" required style="width:6em" aria-label="Distance or minutes">
             <select name="p_unit" class="p-unit" aria-label="Meters, miles or minutes"><option value="m"{% if not p.mins and not p.mi %} selected{% endif %}>m</option><option value="mi"{% if p.mi %} selected{% endif %}>mi</option><option value="min"{% if p.mins %} selected{% endif %}>min</option></select></td>
           <td><select name="p_zone" aria-label="Pace">{% for z in zones %}<option{% if z == p.zone %} selected{% endif %}>{{ z }}</option>{% endfor %}</select></td>
           <td><input type="text" name="p_rest" maxlength="60" value="{{ p.rest }}" placeholder="90 s jog" style="width:9em" aria-label="Rest"></td>
@@ -35,6 +35,11 @@
         <td class="num nowrap"><b id="p-total"></b></td><td></td></tr></tfoot>
     </table>
     <p class="small muted" style="margin:4px 0 0">Points: minutes × the zone’s rate ({% for z, r in rates.items() %}{{ z|lower }} {{ r }}{{ ', ' if not loop.last else '' }}{% endfor %} a minute). Timed parts are exact; distances turn into minutes at the VDOT above (the team’s middle VDOT to start), so faster runners earn a little less for the same distance.</p>
+    <div class="form-row fill-row">
+      <label class="check"><input type="checkbox" name="fill_easy" value="1"{% if edit_fill %} checked{% endif %}> End with an easy run that makes up each athlete’s daily miles</label>
+      <input type="text" name="fill_note" maxlength="200" value="{{ edit_fill.note if edit_fill and edit_fill.note else '' }}" placeholder="Note, such as: on the levee" style="width:16em" aria-label="Note for the easy run">
+      <span class="small muted">Daily miles: the group’s weekly goal ÷ the week’s running days. The workout counts its distances, and timed parts at a mile per {{ '%g' % fill_pace }} minutes; the rest is the easy run, worked out for each athlete.</span>
+    </div>
     <div class="form-row" style="margin:6px 0 10px"><button type="button" class="secondary" id="add-part">Add a part</button>
       <span class="small muted">For example 1 × 14 min Easy (warm-up), 2 sets × 4 × 400 m Interval, 1 × 5 mi Moderate, 4 × 5 min Threshold with “1 min easy” rest. Choose m, mi or min for each part. Zones from slowest: easy, moderate, threshold, interval, repetition (short, quick reps, faster than interval pace).</span></div>
     <script>(function () {
@@ -73,8 +78,8 @@
       body.addEventListener('change', function (e) {
         if (!e.target.classList.contains('p-unit')) return;
         var amt = e.target.closest('td').querySelector('[name=p_dist]');
-        var u = {m: [100, 20000, 1, 1000], mi: [0.25, 20, 0.01, 3], min: [0.25, 180, 0.25, 5]}[e.target.value];
-        amt.min = u[0]; amt.max = u[1]; amt.step = u[2]; amt.value = u[3];
+        var u = {m: [50, 1, 1000], mi: [0.1, 'any', 3], min: [0.25, 'any', 5]}[e.target.value];
+        amt.min = u[0]; amt.removeAttribute('max'); amt.step = u[1]; amt.value = u[2];
         points();
       });
       // Reordering parts: drag a row by its handle, or use the arrows (phones). The form saves parts in the order shown.

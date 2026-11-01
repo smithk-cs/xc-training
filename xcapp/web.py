@@ -1230,7 +1230,8 @@ def create_app() -> FastAPI:
         if edit is None and request.query_params.get("copy", "").isdigit():   # a copy opens as a new workout to adjust
             edit = db.get(PlannedWorkout, int(request.query_params["copy"]))
             copying = edit is not None
-        edit_parts = edit.part_list if edit else []
+        edit_parts = [p for p in edit.part_list if not p.get("fill")] if edit else []
+        edit_fill = next((p for p in edit.part_list if p.get("fill")), None) if edit else None
         if edit and not edit_parts:  # an older single-rep workout opens as one part
             edit_parts = [{"sets": 1, "reps": 1, "dist": round(edit.rep_distance_m), "zone": A.OLD_TYPE_ZONE.get(A.pace_type(edit.pace_factor), "Interval"), "rest": ""}]
         vdots = sorted(v for v in (x.get("vdot") for x in A.abilities(db, today).values()) if v)
@@ -1238,7 +1239,8 @@ def create_app() -> FastAPI:
                       today=today.isoformat(), q=q, window=WORKOUT_WINDOW, rates=PT.RATES, zone_pcts=dict(A.PACE_ZONES),
                       ref_vdot=vdots[len(vdots) // 2] if vdots else 50,
                       ai_ready=settings().ai_configured, pending_checks=len(AI.pending_workout_checks(db)),
-                      ability_names=ability_names, edit=edit, copying=copying, edit_parts=edit_parts, zones=list(A.WORKOUT_ZONES),
+                      ability_names=ability_names, edit=edit, copying=copying, edit_parts=edit_parts, edit_fill=edit_fill,
+                      zones=list(A.WORKOUT_ZONES), fill_pace=A.FILL_MIN_PER_MILE,
                       easy_groups=db.scalars(select(TrainingGroup).order_by(TrainingGroup.position)).all(),
                       previews={w.id: A.group_part_paces(db, w.part_list) for w in rows[:30] if w.part_list},
                       part_label=A.part_label)
@@ -1304,15 +1306,19 @@ def create_app() -> FastAPI:
                     p["dist"] = n
                 if not (1 <= p["sets"] <= 10 and 1 <= p["reps"] <= 40 and zone in A.WORKOUT_ZONES):
                     raise ValueError(f"Check part {len(parts) + 1}: 1 to 10 sets, 1 to 40 reps, and a pace.")
-                if by_time and not (0.25 <= amount <= 180):
-                    raise ValueError(f"Check part {len(parts) + 1}: a timed part runs from 0.25 to 180 minutes.")
-                if by_miles and not (0.25 <= amount <= 20):
-                    raise ValueError(f"Check part {len(parts) + 1}: a distance in miles runs from 0.25 to 20 miles.")
-                if unit == "m" and not (100 <= amount <= 20000):
-                    raise ValueError(f"Check part {len(parts) + 1}: a distance runs from 100 to 20,000 meters.")
+                # Only typing slips are refused (such as meters typed as minutes); real workouts fit easily.
+                if by_time and not (0.25 <= amount <= 600):
+                    raise ValueError(f"Check part {len(parts) + 1}: a timed part runs from 0.25 to 600 minutes.")
+                if by_miles and not (0.1 <= amount <= 60):
+                    raise ValueError(f"Check part {len(parts) + 1}: a distance in miles runs from 0.1 to 60 miles.")
+                if unit == "m" and not (50 <= amount <= 100000):
+                    raise ValueError(f"Check part {len(parts) + 1}: a distance runs from 50 to 100,000 meters.")
                 parts.append(p)
             if not parts:
                 raise ValueError("Add at least one part: sets, reps, distance and pace.")
+            if f.get("fill_easy"):   # an easy run after the workout, sized to each athlete's daily miles
+                parts.append({"sets": 1, "reps": 1, "fill": True, "zone": "Easy", "rest": "",
+                              **({"note": str(f.get("fill_note", "")).strip()[:200]} if str(f.get("fill_note", "")).strip() else {})})
             title = str(f.get("title", "")).strip()[:120] or A.workout_summary(parts)[:120]
             ability_names = [g.name for g in db.scalars(select(TrainingGroup).order_by(TrainingGroup.position)).all()]
             groups = ",".join(g for g in ability_names if f.get(f"group_{g}")) or "All"

@@ -421,7 +421,7 @@ def pending_workout_checks(db: Session, as_of: dt.date | None = None) -> list[Ac
 def _workout_for_check(db: Session, act: Activity) -> dict:
     """The assigned workout without its typed name or rest notes (free text is never sent), with the runner's targets."""
     pw = act.planned
-    parts = pw.part_list
+    parts = [p for p in pw.part_list if not p.get("fill")]   # the easy run to finish the day isn't checked
     if parts:
         key = ("abilities", pw.date)
         if key not in db.info:

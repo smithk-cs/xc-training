@@ -58,8 +58,8 @@ def test_parts_workout(app):
     assert "5:26/mi" in me and "90 s jog rest" in me
     pat = TestClient(app).get("/a/t-pat").text
     assert "Your times appear once you have a VDOT" in pat
-    c.post("/workouts", data={**form, "wid": str(w.id), "p_dist": ["3200", "50", "1600", ""]})
-    assert "Check part 2: a distance runs from 100 to 20,000 meters." in c.get("/workouts").text
+    c.post("/workouts", data={**form, "wid": str(w.id), "p_dist": ["3200", "40", "1600", ""]})
+    assert "Check part 2: a distance runs from 50 to 100,000 meters." in c.get("/workouts").text
     c.post("/workouts", data={**form, "p_dist": ["", "", "", ""]})
     assert "Add at least one part" in c.get("/workouts").text
 
@@ -72,7 +72,7 @@ def test_older_workout_opens_as_one_part(app):
     wid = db.query(PlannedWorkout).one().id
     db.close()
     page = c.get(f"/workouts?edit={wid}").text
-    assert 'name="p_dist" min="100" max="20000" step="1" value="1000"' in page and '<option value="m" selected>m</option>' in page and "<option selected>Threshold</option>" in page
+    assert 'name="p_dist" min="50" step="1" value="1000"' in page and '<option value="m" selected>m</option>' in page and "<option selected>Threshold</option>" in page
 
 
 def test_parts_by_time(app):
@@ -97,9 +97,9 @@ def test_parts_by_time(app):
     assert "<b>4 × 5 min</b> Threshold" in me and f"<b>{A.fmt_time(tempo)[:-2]}/mi</b>" in me and "about 1," in me
     assert A.minutes_text(1.5) == "1:30 min" and A.part_label({"sets": 1, "reps": 1, "mins": 14}) == "14 min"
     page = c.get(f"/workouts?edit={w.id}").text
-    assert 'step="0.25" value="5"' in page and '<option value="min" selected>min</option>' in page
-    c.post("/workouts", data={**form, "wid": str(w.id), "p_dist": ["14", "500", "1600"]})
-    assert "Check part 2: a timed part runs from 0.25 to 180 minutes." in c.get("/workouts").text
+    assert 'step="any" value="5"' in page and '<option value="min" selected>min</option>' in page
+    c.post("/workouts", data={**form, "wid": str(w.id), "p_dist": ["14", "900", "1600"]})
+    assert "Check part 2: a timed part runs from 0.25 to 600 minutes." in c.get("/workouts").text
 
 
 def test_parts_in_miles(app):
@@ -119,9 +119,9 @@ def test_parts_in_miles(app):
     tempo = A.pace_at(60, A.THRESHOLD_PCT)
     assert "<b>3 × 1.5 mi</b> Threshold" in me and A.fmt_time(tempo * 2414 / A.METERS_PER_MILE)[:-2] in me   # time per 1.5 mi rep
     page = c.get(f"/workouts?edit={w.id}").text
-    assert 'step="0.01" value="1.5"' in page and '<option value="mi" selected>mi</option>' in page
-    c.post("/workouts", data={**form, "wid": str(w.id), "p_dist": ["5", "30"]})
-    assert "Check part 2: a distance in miles runs from 0.25 to 20 miles." in c.get("/workouts").text
+    assert 'step="any" value="1.5"' in page and '<option value="mi" selected>mi</option>' in page
+    c.post("/workouts", data={**form, "wid": str(w.id), "p_dist": ["5", "80"]})
+    assert "Check part 2: a distance in miles runs from 0.1 to 60 miles." in c.get("/workouts").text
 
 
 def test_workout_leaves_the_athlete_page_once_run(app):
@@ -234,3 +234,37 @@ def test_copy_opens_a_new_workout_and_parts_can_be_reordered(app):
     assert [p["zone"] for p in rows[1].part_list] == ["Repetition", "Easy"] and [p["zone"] for p in rows[0].part_list] == ["Easy", "Repetition"]
     db.close()
     assert f'href="/workouts?copy={wid}#plan">Copy</a>' in c.get("/workouts").text
+
+
+def test_easy_run_to_finish_the_day_and_no_low_limits(app):
+    from xcapp.models import TrainingGroup
+    db = SessionLocal()
+    for g in db.query(TrainingGroup).all():
+        g.weekly_miles = 42
+    db.commit()
+    db.close()
+    c, csrf = login(app)
+    day = (A.team_today() + dt.timedelta(days=1)).isoformat()
+    # 2 mi warm-up + 4 x 5 min threshold (20 min = 20/7 mi) + the easy run to finish 7 mi (42 / 6 days)
+    c.post("/workouts", data={"csrf": csrf, "date": day, "title": "Tempo day", "p_sets": ["1", "1"], "p_reps": ["1", "4"],
+                              "p_dist": ["2", "5"], "p_unit": ["mi", "min"], "p_zone": ["Easy", "Threshold"], "p_rest": ["", "1 min easy"],
+                              "fill_easy": "1", "fill_note": "On the levee"})
+    db = SessionLocal()
+    w = db.query(PlannedWorkout).one()
+    assert w.part_list[-1]["fill"] and A.main_part(w.part_list)["zone"] == "Threshold"
+    left = A.resolve_fill(w.part_list, 7.0)[-1]
+    assert left["mi"] == round((7 - 2 - 20 / 7) * 4) / 4 == 2.25 and left["zone"] == "Easy"
+    assert all(not p.get("fill") for p in A.resolve_fill(w.part_list, 4.0))    # already covered: no easy run
+    db.close()
+    page = c.get("/workouts").text
+    assert "Easy run to finish the day’s miles" in page and ">2.25 mi<" in page   # Gold's share in the group preview
+    me = TestClient(app).get("/a/t-sam").text                                   # Sam's group: VDOT 60 is Silver here
+    assert "mi easy to finish the day</b>" in me
+    assert 'name="fill_easy" value="1" checked' in c.get(f"/workouts?edit={w.id}").text
+    # long timed and distance parts are fine now
+    c.post("/workouts", data={"csrf": csrf, "date": day, "title": "Long", "p_sets": ["1"], "p_reps": ["1"], "p_dist": ["200"],
+                              "p_unit": ["min"], "p_zone": ["Easy"], "p_rest": [""]})
+    db = SessionLocal()
+    assert db.query(PlannedWorkout).filter_by(title="Long").one().part_list[0]["mins"] == 200
+    db.close()
+    assert ' max="180"' not in c.get("/workouts").text

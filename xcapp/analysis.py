@@ -473,6 +473,8 @@ def distance_text(m: float) -> str:
 def part_label(p: dict) -> str:
     """'2 × 4 × 400 m', '6 × 1K', '1 × 5 mi', '4 × 5 min' (parts run for a time have 'mins' instead of 'dist';
     parts set in miles keep 'mi' for showing, with 'dist' in meters)."""
+    if p.get("fill"):   # the easy run that finishes the day's miles
+        return f"{p['mi']:g} mi easy to finish the day" if p.get("mi") else "Easy run to finish the day’s miles"
     km = (p.get("dist") or 0) / 1000
     dist = (minutes_text(p["mins"]) if p.get("mins") else f"{p['mi']:g} mi" if p.get("mi")
             else f"{km:.0f}K" if km >= 1 and km == int(km) else f"{p['dist']:,.0f} m")
@@ -482,12 +484,45 @@ def part_label(p: dict) -> str:
 
 def workout_summary(parts: list[dict]) -> str:
     """A name for a workout from its parts: '2 × 4 × 400 m Interval + 1,600 m Threshold'."""
-    return " + ".join(f"{part_label(p)} {p['zone']}" for p in parts)
+    return " + ".join(part_label(p) if p.get("fill") else f"{part_label(p)} {p['zone']}" for p in parts)
 
 
 def main_part(parts: list[dict]) -> dict | None:
     """The hardest part (the one rep-matching and targets use)."""
+    parts = [p for p in parts if not p.get("fill")]
     return max(parts, key=lambda p: WORKOUT_ZONES.get(p["zone"], 0)) if parts else None
+
+
+FILL_MIN_PER_MILE = 7.0   # timed parts count a mile for every 7 minutes when working out the miles left for the day
+
+
+def parts_miles(parts: list[dict]) -> float:
+    """About how far a workout's parts are: distances as given, timed parts at a mile per FILL_MIN_PER_MILE minutes."""
+    total = 0.0
+    for p in parts:
+        if p.get("fill"):
+            continue
+        n = (p.get("sets") or 1) * (p.get("reps") or 1)
+        total += (p["mins"] / FILL_MIN_PER_MILE if p.get("mins") else p["mi"] if p.get("mi")
+                  else (p.get("dist") or 0) / METERS_PER_MILE) * n
+    return total
+
+
+def resolve_fill(parts: list[dict], daily_miles: float | None) -> list[dict]:
+    """A workout's parts with its 'easy run to finish the day' set to the miles left of the athlete's daily miles
+    (to the quarter mile), or left out when the workout already covers the day or there is no daily goal."""
+    if not any(p.get("fill") for p in parts):
+        return parts
+    left = round(max(0.0, (daily_miles or 0) - parts_miles(parts)) * 4) / 4
+    out = []
+    for p in parts:
+        if p.get("fill"):
+            if left > 0:
+                out.append({**p, "sets": 1, "reps": 1, "mi": left, "dist": round(left * METERS_PER_MILE), "zone": "Easy",
+                            "daily": round(daily_miles or 0, 1)})
+            continue
+        out.append(p)
+    return out
 
 
 def part_paces(parts: list[dict], v: float | None) -> list[dict]:
@@ -512,6 +547,8 @@ def part_paces(parts: list[dict], v: float | None) -> list[dict]:
 def group_part_paces(db: Session, parts: list[dict]) -> list[dict]:
     """For the coaches' preview: each running group's VDOT range and, per part, the rep time from its fastest to its
     slowest member (boys' cutoffs; the lowest group shows its top VDOT only)."""
+    from .points import settings_for
+    target_days = settings_for(db)[0] or 6
     groups = sorted(db.scalars(select(TrainingGroup)).all(), key=lambda g: g.min_vdot_boys, reverse=True)
     out = []
     for i, g in enumerate(groups):
@@ -523,8 +560,14 @@ def group_part_paces(db: Session, parts: list[dict]) -> list[dict]:
         if hi < lo:
             continue
         times = []
+        daily = (g.weekly_miles or 0) / target_days
         for p in parts:
             pct = WORKOUT_ZONES.get(p["zone"])
+            if p.get("fill"):   # the miles this group has left to run, shown instead of a time
+                left = resolve_fill(parts, daily)
+                fill = next((x for x in left if x.get("fill")), None)
+                times.append((fill["mi"] if fill else 0, None, "fill"))
+                continue
             if pct is None:
                 times.append(None)
             elif p.get("mins"):  # timed parts show the pace per mile instead
@@ -1036,12 +1079,19 @@ def workout_paces(db: Session, athlete, workouts) -> list[dict]:
     results = [r for r in db.scalars(select(Result).where(Result.athlete_id == athlete.id)).all() if r.event in EVENTS]
     goals = [g for g in db.scalars(select(Goal).where(Goal.athlete_id == athlete.id)).all() if g.event in EVENTS]
     out = []
-    now_v = abilities(db, team_today()).get(athlete.id, {}).get("vdot") if any(w.part_list for w in workouts) else None
+    me = abilities(db, team_today()).get(athlete.id, {}) if any(w.part_list for w in workouts) else {}
+    now_v = me.get("vdot")
+    daily = None
+    if any(p.get("fill") for w in workouts for p in w.part_list):   # the athlete's daily miles, for "finish the day"
+        from .points import settings_for
+        g = db.scalar(select(TrainingGroup).where(TrainingGroup.name == me.get("group"))) if me.get("group") else None
+        daily = athlete_miles_goal(g, athlete.gender, athlete.experience) / (settings_for(db)[0] or 6)
     for pw in workouts:
         if pw.part_list:
             gv = goal_vdot(db, athlete.id, pw.date)
+            parts = resolve_fill(pw.part_list, daily)
             out.append({"workout": pw, "vdot_now": now_v, "vdot_goal": gv,
-                        "parts": list(zip(part_paces(pw.part_list, now_v), part_paces(pw.part_list, gv)))})
+                        "parts": list(zip(part_paces(parts, now_v), part_paces(parts, gv)))})
             continue
         if pw.pace_event not in EVENTS:
             continue
