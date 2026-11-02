@@ -108,7 +108,7 @@ def test_too_fast_easy_week(session):
     a = make_week(session, runs, [TUESDAY], goal=30)
     w = P.team_week(session, MON, athletes=[a])[0]
     assert w["days"][0]["points"] == pytest.approx(40 * 0.2, abs=0.2)               # no plan that day: easy minutes only
-    assert w["days"][1]["points"] == pytest.approx(19)                              # capped at the day's plan
+    assert w["days"][1]["points"] == pytest.approx(19 + 15 * 0.2, abs=0.1)         # the plan (35 min) + 15 extra minutes at easy
     assert any("faster than easy pace" in f for f in w["flags"])
 
 
@@ -125,6 +125,25 @@ def test_race_days_count_and_short_days_are_marked(session):
     session.flush()
     none = P.team_week(session, MON, athletes=[a])[0]
     assert none["score"] is None and none["no_score"] == f"No weekly miles goal for {w['group_name']} (girls)"
+
+
+def test_every_day_a_workout_extra_running_counts_as_easy(session):
+    """A week with a team workout every run day: the target still includes the goal's miles the workouts leave, and
+    running beyond each workout's planned minutes earns them (at the easy rate), so a full week can reach 100%."""
+    e, i = PACE["Easy"], PACE["Interval"]
+    days = [(d, [{"sets": 1, "reps": 1, "mins": 10, "zone": "Easy"}, {"sets": 1, "reps": 4, "mins": 3, "zone": "Interval"}]) for d in range(6)]
+    runs = [(d, [(e, 10), (i, 12), (e, 20)]) for d in range(6)]          # each workout, then 20 easy minutes more
+    a = make_week(session, runs, days, goal=30)
+    w = P.team_week(session, MON, athletes=[a])[0]
+    plan = w["days"][0]["planned"]
+    assert plan == pytest.approx(10 * 0.2 + 12 * 1.0, abs=0.01)
+    assert w["why_target"]["easy"]["miles"] > 0                              # 30 miles is more than the six workouts
+    assert all(d["points"] == pytest.approx(plan + 20 * 0.2, abs=0.3) for d in w["days"][:6])
+    assert w["points"] >= w["target"] * 0.99 and w["points"] <= w["target"] * 1.1
+    # Running the workout harder than planned, for no longer, still earns only the plan
+    session.rollback()
+    b = make_week(session, [(0, [(e, 10), (PACE["Repetition"], 12)])], days[:1], goal=30)
+    assert P.team_week(session, MON, athletes=[b])[0]["days"][0]["points"] == pytest.approx(plan, abs=0.3)
 
 
 def test_missed_week_and_extra_cap(session):

@@ -222,13 +222,18 @@ def part_plan(p: dict, v: float) -> tuple[float, float, float]:
     return minutes, miles, minutes * RATES.get(zone, RATES["Easy"])
 
 
-def workout_plan(pw: PlannedWorkout, v: float, daily_miles: float | None = None) -> tuple[float, float]:
-    """(miles, points) a team workout asks of an athlete at VDOT v, with any 'finish the day' easy run sized to their
-    daily miles. Older one-rep workouts count one rep."""
+def workout_minutes_miles_points(pw: PlannedWorkout, v: float, daily_miles: float | None = None) -> tuple[float, float, float]:
+    """(minutes, miles, points) a team workout asks of an athlete at VDOT v, with any 'finish the day' easy run sized
+    to their daily miles. Older one-rep workouts count one rep."""
     parts = A.resolve_fill(pw.part_list, daily_miles) if pw.part_list else [
         {"sets": 1, "reps": 1, "dist": pw.rep_distance_m, "zone": A.OLD_TYPE_ZONE.get(A.pace_type(pw.pace_factor), "Interval")}]
     plans = [part_plan(p, v) for p in parts]
-    return sum(m for _, m, _ in plans), sum(pts for _, _, pts in plans)
+    return sum(mi for mi, _, _ in plans), sum(m for _, m, _ in plans), sum(pts for _, _, pts in plans)
+
+
+def workout_plan(pw: PlannedWorkout, v: float, daily_miles: float | None = None) -> tuple[float, float]:
+    """(miles, points) a team workout asks of an athlete at VDOT v (see workout_minutes_miles_points)."""
+    return workout_minutes_miles_points(pw, v, daily_miles)[1:]
 
 
 def week_score(points: float, target: float, run_days: int, target_days: int) -> float | None:
@@ -324,10 +329,11 @@ def _athlete_week(a, v, g, days, mine, acts_by, pain_by, missed_by, min_minutes,
         d = d0 + dt.timedelta(days=offset)
         planned = mine(d)
         day_plan = day_plan_miles = None
+        day_plan_minutes = 0.0
         if planned and v:
             # one team workout a day: the one this athlete's run is matched to
             w = pick_workout(planned)
-            day_plan_miles, day_plan = workout_plan(w, v, goal_miles / target_days if goal_miles else None)
+            day_plan_minutes, day_plan_miles, day_plan = workout_minutes_miles_points(w, v, goal_miles / target_days if goal_miles else None)
             workout_miles += day_plan_miles
             workout_pts += day_plan
             breakdown.append({"date": d, "title": w.title, "miles": day_plan_miles, "points": day_plan,
@@ -339,7 +345,10 @@ def _athlete_week(a, v, g, days, mine, acts_by, pain_by, missed_by, min_minutes,
                 zones[z] = zones.get(z, 0) + s
         minutes = moving_minutes(zones)
         if planned and day_plan is not None:
-            earned = min(zone_points(zones), day_plan)     # the day cap: running faster than planned earns nothing extra
+            # The day cap: the workout's planned points, plus easy points for running beyond the workout's planned
+            # minutes (warm-up, cool-down, extra miles). Running the workout faster than planned earns nothing extra.
+            extra = max(minutes - day_plan_minutes, 0.0)
+            earned = min(zone_points(zones), day_plan + extra * RATES["Easy"])
         else:
             earned = minutes * RATES["Easy"]                # unplanned days count as easy minutes
         day_miles = sum(r.distance_m or 0 for r in runs) / A.METERS_PER_MILE
