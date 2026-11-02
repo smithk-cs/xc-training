@@ -127,7 +127,7 @@ def test_pages_entry_export_and_never_to_ai():
     c.post("/a/tok-ava/resting-hr", data={"csrf": csrf, "bpm": "57"})
     page = c.get("/a/tok-ava").text
     assert "Saved: 57 beats per minute this morning." in page and "you entered it" in page
-    assert 'class="day done today"' in page and 'value="57"> beats/min' in page and 'id="rhr-form" hidden' in page  # today done: form folded away
+    assert 'class="day done today"' in page and 'value="57"><span class="small muted">beats/min</span>' in page and 'id="rhr-form" hidden' in page  # today done: form folded away
     assert page.index('id="rhr-h"') > page.index('id="ac-h"')                    # entered today: moved below the charts
     week_ago = (today - dt.timedelta(days=5)).isoformat()
     c.post("/a/tok-ava/resting-hr", data={"csrf": csrf, "bpm": "50", "date": week_ago})

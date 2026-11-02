@@ -19,11 +19,14 @@
     <p class="muted small">{% if garmin_connected %}Your Garmin sends this each day. You can also enter it yourself.{% else %}Your resting heart rate each morning helps your coaches spot when you’re getting sick or worn down.{% endif %}</p>
     {% endif %}
     {% set r0 = rhr_cal.by_day.get(rhr_cal.today) %}
-    <form method="post" action="/a/{{ token }}/resting-hr" class="form-row" id="rhr-form"{% if r0 %} hidden{% endif %}>
+    <form method="post" action="/a/{{ token }}/resting-hr" id="rhr-form"{% if r0 %} hidden{% endif %}>
       <input type="hidden" name="csrf" value="{{ csrf }}">
       <input type="hidden" name="date" id="rhr-date" value="{{ rhr_cal.today.isoformat() }}">
-      <label>Resting heart rate for <b id="rhr-day">today</b> <input type="number" name="bpm" id="rhr-bpm" min="{{ rhr_range[0] }}" max="{{ rhr_range[1] }}" inputmode="numeric" required style="width:5em" value="{{ r0.bpm if r0 else '' }}"> beats/min</label>
-      <button type="submit">Save</button>
+      <label for="rhr-bpm" class="rhr-for">Resting heart rate for <b id="rhr-day">today</b></label>
+      <div class="rhr-entry">
+        <span class="rhr-box"><input type="number" name="bpm" id="rhr-bpm" min="{{ rhr_range[0] }}" max="{{ rhr_range[1] }}" inputmode="numeric" required value="{{ r0.bpm if r0 else '' }}"><span class="small muted">beats/min</span></span>
+        <button type="submit">Save</button>
+      </div>
     </form>
     <details class="rhr-more">
       <summary class="small" style="cursor:pointer; min-height:44px; display:flex; align-items:center">Add or fix earlier days</summary>

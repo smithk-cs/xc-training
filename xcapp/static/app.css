@@ -573,8 +573,11 @@ table.parts tr.dragging { opacity: .45; }
 .rhr-chip b { font-family: var(--font-display); font-size: 22px; }
 .alerts { display: flex; flex-direction: column; gap: 8px; }
 .alerts > * { margin: 0; }
-#rhr-form label { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; flex-direction: row; }
-#rhr-form { align-items: center; }
+#rhr-form .rhr-for { display: block; margin-bottom: 6px; }
+#rhr-form .rhr-entry { display: flex; align-items: flex-start; gap: 12px; }
+#rhr-form .rhr-box { display: inline-flex; flex-direction: column; align-items: center; gap: 2px; }
+#rhr-form .rhr-box input { width: 6em; text-align: center; }
+#rhr-form .rhr-entry button { min-height: 44px; }
 .map-link { color: inherit; text-decoration: underline; text-decoration-style: dotted; text-underline-offset: 2px; }
 .year-tabs { display: flex; gap: 6px; overflow-x: auto; margin: 4px 0 8px; padding-bottom: 2px; }
 .year-tab { flex: none; min-height: 40px; padding: 6px 14px; border-radius: 999px; border: 1px solid var(--color-border-line); background: var(--color-bg); color: inherit; font-weight: 600; cursor: pointer; }
