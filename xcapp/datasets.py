@@ -35,7 +35,7 @@ def insight_rows(db: Session) -> list[dict]:
         out.append({
             "insight_id": f"I{ins.position}", "priority": ins.priority, "scope": ins.scope,
             "athlete_id": f"A{ins.athlete_id:02d}" if ins.athlete_id else "", "category": ins.category,
-            "headline": ins.headline, "insight": ins.insight, "action": ins.action, "generated_at": gen, "model": run.model,
+            "headline": A.mmss_text(ins.headline), "insight": A.mmss_text(ins.insight), "action": A.mmss_text(ins.action), "generated_at": gen, "model": run.model,
         })
     return out
 

@@ -584,3 +584,8 @@ table.parts tr.dragging { opacity: .45; }
 .year-tab[aria-selected="true"] { background: var(--brand-red); border-color: var(--brand-red); color: #fff; }
 .video-link { font-weight: 600; white-space: nowrap; }
 .how-points > summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; }
+.vdot-move .arrow { display: inline-block; margin: 0 6px; font-weight: 700; }
+.vdot-move .arrow.up { color: var(--color-ok); }
+.vdot-move .arrow.down { color: var(--color-bad); }
+.vdot-move .arrow.same, .vdot-move .arrow.new { color: var(--color-muted, #888); }
+.vdot-move .was { color: var(--color-muted, #888); }

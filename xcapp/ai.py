@@ -35,6 +35,8 @@ Definitions:
 - days_missed_last_14: days the athlete reported not running, with the reason; for injuries also where, which side,
   pain (1-10), when it started, who has seen it, and whether they expect to miss more days.
 - Times are in seconds; paces are seconds per mile. Lower is faster.
+- In what you write, give every time and pace in minutes and seconds, never as a number of seconds: 412 seconds per
+  mile is "6:52/mi", 85 seconds is "1:25". Under a minute, write seconds ("48 s").
 
 Rules:
 - Use only numbers that appear in the data. Quote them accurately, with units.
@@ -54,7 +56,8 @@ SYSTEM_QUESTION = """You answer a high school cross country coach's question abo
 The data is one JSON object; athletes appear only as codes such as R07, and the definitions are:
 load_ratio = this week's miles / average of the previous four weeks (above 1.3 is flagged);
 recovery_bpm = heart-rate drop in the first 60 seconds of rest between reps (under 25 is flagged);
-times in seconds, paces in seconds per mile.
+times in seconds, paces in seconds per mile. In your answer write times and paces as minutes and seconds
+("6:52/mi", "1:25"), never as a number of seconds over a minute.
 Use only the data. Refer to athletes by code. Do not diagnose; send medical questions to the athletic trainer or a
 physician. If the data cannot answer the question, say so. Answer in at most 200 words of plain prose."""
 
@@ -397,7 +400,8 @@ For each run decide:
 - "Not done": the run doesn't resemble the workout (for example an easy run on a repeats day).
 If the laps can't show the reps (auto-laps only), judge from total distance, time and pace, and say so.
 
-Rules: use only the numbers given. Don't diagnose or mention health. Notes are for the coach: plain, factual, at most
+Rules: use only the numbers given. Write times and paces as minutes and seconds ("6:52/mi", "1:25"), never as a number
+of seconds over a minute. Don't diagnose or mention health. Notes are for the coach: plain, factual, at most
 40 words, quoting the key numbers (such as "5 of 6 reps, average 3:22 per 1,000 m against 3:18 target").
 Reply with JSON only, no other text, in this exact shape:
 {"checks": [{"id": "W1", "verdict": "Done|Partly|Not done", "note": "..."}]}

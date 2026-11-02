@@ -14,9 +14,9 @@
   {% for i in brief.insights %}
   <div class="ins">
     <span class="small pri-{{ i.priority }}">{{ i.priority }}</span> <span class="small muted">{{ i.category }} · {{ i.scope }}</span>
-    <h3>{{ i.headline }}</h3>
-    <p>{{ i.insight }}</p>
-    <p><b>Next step:</b> {{ i.action }}</p>
+    <h3>{{ mmss(i.headline) }}</h3>
+    <p>{{ mmss(i.insight) }}</p>
+    <p><b>Next step:</b> {{ mmss(i.action) }}</p>
   </div>
   {% endfor %}
   <p class="small muted">Model {{ brief.model }}. {{ brief.input_tokens }} tokens in, {{ brief.output_tokens }} out.</p>
@@ -33,7 +33,7 @@
   <div class="ins">
     <p class="small muted">{{ (q.created_at|local).strftime('%b %-d %-I:%M %p') }}</p>
     <p><b>{{ q.question }}</b></p>
-    {% if q.status == 'ok' %}<p class="answer">{{ q.answer }}</p>{% else %}<p class="small" style="color:var(--color-bad)">{{ q.error }}</p>{% endif %}
+    {% if q.status == 'ok' %}<p class="answer">{{ mmss(q.answer) }}</p>{% else %}<p class="small" style="color:var(--color-bad)">{{ q.error }}</p>{% endif %}
   </div>
   {% endfor %}
 </div>

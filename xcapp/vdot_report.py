@@ -63,6 +63,15 @@ def report(db: Session, day: dt.date, meet: str, before: dt.date, show: set[str]
             best[r.athlete_id] = (v, r)
     athletes = [r.athlete for _, r in best.values()]
     targets = A.vdot_targets(db)
+    from . import courses as CS
+    from . import weather as WX
+    from .models import MeetConditions
+    cond = db.scalar(select(MeetConditions).where(MeetConditions.meet == meet, MeetConditions.date == day))
+    own = WX.race_weather(db)
+
+    def adjusted(r):
+        c = WX.result_course(db, meet, day, r.course or "", cond)
+        return CS.adjusted_time(r.time_s, r.distance_m, c, WX.merged(cond, own.get((meet, day, r.race))))
     old = vdot_on(db, athletes, before)
     now = A.abilities(db, today)
     rows, counts = [], {k: 0 for k, _ in KINDS}
@@ -75,6 +84,7 @@ def report(db: Session, day: dt.date, meet: str, before: dt.date, show: set[str]
         if kind in show:
             cur = now.get(aid, {})
             rows.append({"a": r.athlete, "r": r, "new": new, "was": was, "source": source, "change": change, "kind": kind,
-                         "current": cur.get("vdot"), "group": cur.get("group") or ""})
+                         "current": cur.get("vdot"), "group": cur.get("group") or "", "color": cur.get("color") or "",
+                         "adjusted": adjusted(r)})
     rows.sort(key=lambda x: (x["change"] is None, -(x["change"] or 0), x["a"].last_name, x["a"].first_name))
     return {"rows": rows, "counts": counts, "total": len(best)}

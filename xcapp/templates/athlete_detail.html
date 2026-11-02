@@ -14,9 +14,9 @@
     {% if g.group %}
     <b>Running group: {{ g.group }}</b>
     {% if g.target_1600 %}<div class="facts"><div><span class="k">800 target</span><span class="big">{{ g.target_800 }}</span></div><div><span class="k">1600 target</span><span class="big">{{ g.target_1600 }}</span></div></div>{% endif %}
-    <span class="small muted">{% if g.override %}Pinned to this group by a coach.{% elif g.vdot_set %}VDOT set by a coach{% if g.race_vdot %} (most recent race: {{ g.race_vdot }}){% endif %}.{% else %}From {{ a.first_name }}’s most recent race{% if g.source %} ({{ g.source }}){% endif %}.{% endif %}</span>
+    <span class="small muted">{% if g.override %}Pinned to this group by a coach.{% elif g.vdot_set %}VDOT set by a coach{% if g.race_vdot %} (fastest race: {{ g.race_vdot }}){% endif %}.{% else %}From {{ a.first_name }}’s fastest race{% if g.source %} ({{ g.source }}){% endif %}.{% endif %}</span>
     {% else %}
-    <span class="small">No VDOT yet. It comes from {{ a.first_name }}’s most recent race, or set one below or on the VDOT page.</span>
+    <span class="small">No VDOT yet. It comes from {{ a.first_name }}’s fastest race, or set one below or on the VDOT page.</span>
     {% endif %}
     {% if user.role != 'trainer' %}<a class="small" href="/vdot">Open the VDOT page</a>{% endif %}
   </div>
@@ -115,7 +115,7 @@
     <div class="form-row">
       <label>VDOT set by coach <input type="number" name="vdot" min="20" max="90" value="{{ a.vdot_override if a.vdot_override is not none else '' }}" placeholder="{{ ability.race_vdot or '' }}" style="width:5em"></label>
       <button type="submit" class="secondary">Set VDOT</button>
-      <span class="small muted">{% if ability.race_vdot %}From the most recent race: {{ ability.race_vdot }}.{% else %}No race yet.{% endif %} Leave empty to use the race.</span>
+      <span class="small muted">{% if ability.race_vdot %}From the fastest race: {{ ability.race_vdot }}.{% else %}No race yet.{% endif %} Leave empty to use the race.</span>
     </div>
   </form>
   <form method="post" action="/athletes/{{ a.id }}/photo" enctype="multipart/form-data">

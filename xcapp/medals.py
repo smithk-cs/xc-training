@@ -23,7 +23,7 @@ from .models import Athlete, WeekResult
 KINDS = ("gold", "silver", "miles")
 ICONS = {"gold": "🥇", "silver": "🥈", "miles": "👟"}
 RECHECK_DAYS = 14
-RULES_CHANGED = dt.date(2026, 11, 2)   # weeks saved before this are worked out again (race days count as days run; running beyond a workout earns easy points)
+RULES_CHANGED = dt.date(2026, 11, 3)   # weeks saved before this are worked out again (race days count as days run; running beyond a workout earns easy points; VDOT from the fastest race)
 
 
 def medal_for(score: float | None, miles: float, goal_miles: float | None) -> str:

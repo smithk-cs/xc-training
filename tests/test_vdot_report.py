@@ -49,9 +49,11 @@ def test_report_and_page(session):
     assert [x["a"].first_name for x in rep["rows"]][0] == "Up"                        # biggest gain first
     only = VR.report(session, MEET, "League Meet", MEET - dt.timedelta(days=1), {"up", "new"}, MEET)
     assert {x["a"].first_name for x in only["rows"]} == {"Up", "New"}
-    # Comparing with the day of the meet itself picks up the meet's own result: no change for anyone with a race
+    # Comparing with the day of the meet itself: VDOT is the fastest result, so a faster meet is the VDOT already (no
+    # change), and a slower one still shows below the earlier best
     same_day = VR.report(session, MEET, "League Meet", MEET, {"up", "same", "down", "new"}, MEET)
-    assert {x["kind"] for x in same_day["rows"] if x["a"].first_name != "Coach"} == {"same"}
+    assert {x["a"].first_name: x["kind"] for x in same_day["rows"] if x["a"].first_name != "Coach"} == {
+        "Up": "same", "Same": "same", "Down": "down", "New": "same"}
     session.add(StaffUser(username="coach1", role="coach", password_hash=hash_password("correct-horse-1")))
     session.commit()
     from xcapp.web import create_app
@@ -63,4 +65,11 @@ def test_report_and_page(session):
     assert "League Meet" in page and 'value="2026-10-16"' in page and "1 up" in page and "2 down" in page
     page = c.get("/reports/vdot?race=2026-10-17|League Meet&before=2026-10-16&show=down").text
     assert page.count("<tr>") == 3 and "Down Runner" in page and "Up Runner" not in page    # header + 2 rows
+    assert '<span class="arrow down" aria-label="down' in page and ">Athlete</th><th>Group</th><th class=\"num\">VDOT</th><th class=\"num\">Distance</th>" in page
+    every = c.get("/reports/vdot?race=2026-10-17|League Meet&before=2026-10-16").text
+    assert '<span class="arrow up"' in every and '<span class="arrow same" aria-label="no change">–</span>' in every and '<span class="arrow new"' in every
     assert ">Early Invite</option>" not in page and "· Early Invite</option>" in page
+
+
+def test_ai_text_in_minutes_and_seconds():
+    assert A.mmss_text("Reps averaged 85 seconds; pace 412 s/mi, 48 s rest, HR 170 bpm") == "Reps averaged 1:25; pace 6:52/mi, 48 s rest, HR 170 bpm"

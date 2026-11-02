@@ -19,17 +19,20 @@
 <div class="card scroll">
   <h2>{{ pick.meet }} <span class="small muted">{{ pick.date.strftime('%a, %b %-d, %Y') }} · compared with {{ before.strftime('%b %-d, %Y') }}</span></h2>
   <p class="small">{{ rep.total }} runner{{ 's' if rep.total != 1 }}: <span class="pill good">{{ rep.counts.up }} up</span> <span class="pill">{{ rep.counts.same }} no change</span> <span class="pill bad">{{ rep.counts.down }} down</span>{% if rep.counts.new %} <span class="pill warn">{{ rep.counts.new }} no earlier VDOT</span>{% endif %}</p>
-  <table class="list centered sortable"><thead><tr><th>Athlete</th><th>Race</th><th class="num">VDOT before</th><th class="num">Race VDOT</th><th class="num">Change</th><th class="num">VDOT now</th></tr></thead><tbody>
+  <table class="list centered sortable vdot-update"><thead><tr><th>Athlete</th><th>Group</th><th class="num">VDOT</th><th class="num">Distance</th><th class="num">Time</th><th class="num">Adjusted</th></tr></thead><tbody>
   {% for x in rep.rows %}<tr>
-    <td><a href="/athletes/{{ x.a.id }}">{{ x.a.name }}</a>{% if x.group %}<br><span class="small muted">{{ x.group }}</span>{% endif %}</td>
-    <td class="small">{{ x.r.race or 'Race' }}<br>{{ x.r.distance_label or ('%g m' % x.r.distance_m) }} · {{ fmt_time(x.r.time_s) }}</td>
-    <td class="num" title="{{ x.source }}">{{ x.was if x.was is not none else '–' }}{% if x.source == 'set by a coach' %}<br><span class="small muted">set by a coach</span>{% endif %}</td>
-    <td class="num"><b>{{ x.new }}</b></td>
-    <td class="num" data-sort="{{ x.change if x.change is not none else -999 }}">{% if x.change is none %}<span class="pill warn">new</span>{% elif x.change > 0 %}<span class="pill good">+{{ x.change }}</span>{% elif x.change < 0 %}<span class="pill bad">{{ x.change }}</span>{% else %}<span class="pill">0</span>{% endif %}</td>
-    <td class="num">{{ x.current if x.current is not none else '–' }}</td>
+    <td><a href="/athletes/{{ x.a.id }}">{{ x.a.name }}</a></td>
+    <td>{% if x.group %}<span class="pill" style="background:{{ x.color or '#FFFFF0' }}; color:{{ ink(x.color or '#FFFFF0') }}; border-color:rgba(0,0,0,.18)">{{ x.group }}</span>{% else %}<span class="muted">–</span>{% endif %}</td>
+    <td class="num nowrap vdot-move" data-sort="{{ x.change if x.change is not none else -999 }}" title="{{ ('Before: ' ~ x.source) if x.source else 'No VDOT before this meet' }}">
+      <span class="was">{{ x.was if x.was is not none else '–' }}</span>
+      {% if x.change is none %}<span class="arrow new" aria-label="first VDOT">→</span>{% elif x.change > 0 %}<span class="arrow up" aria-label="up {{ x.change }}">▲</span>{% elif x.change < 0 %}<span class="arrow down" aria-label="down {{ -x.change }}">▼</span>{% else %}<span class="arrow same" aria-label="no change">–</span>{% endif %}
+      <b>{{ x.new }}</b></td>
+    <td class="num">{{ x.r.distance_label or ('%g m' % x.r.distance_m) }}</td>
+    <td class="num">{{ fmt_time(x.r.time_s) }}</td>
+    <td class="num">{{ fmt_time(x.adjusted) if x.adjusted else '–' }}</td>
   </tr>{% else %}<tr><td colspan="6" class="muted">Nobody in the groups you picked.</td></tr>{% endfor %}
   </tbody></table>
-  <p class="small muted">VDOT now is what the app uses today (a later race, or a coach’s setting, may have changed it). To set a VDOT by hand, use the <a href="/vdot">VDOT</a> page.</p>
+  <p class="small muted">VDOT: before the meet, then from the meet (point at it to see where the earlier one came from). Group is the athlete’s running group now. Adjusted is the time on a track at 55°F or cooler at sea level, when the course or weather is known. To set a VDOT by hand, use the <a href="/vdot">VDOT</a> page.</p>
 </div>
 {% endif %}
 {% endif %}

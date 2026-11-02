@@ -43,13 +43,13 @@ def login(app, user):
     return c
 
 
-def test_most_recent_race_sets_vdot(app):
+def test_fastest_race_sets_vdot(app):
     _, (sam, theo, pat) = app
     db = SessionLocal()
     ab = A.abilities(db, DAY)
     assert A.vdot(5000, 902) > A.vdot(4000, 767.9)                       # the older 5K was the better race...
-    assert ab[sam]["vdot"] == A.team_vdot(A.vdot(4000, 767.9), A.vdot_targets(db))   # ...but the latest race counts
-    assert ab[sam]["source"] == "Oak Hills, 4K 12:47.9 on Oct 17, 2026" and ab[sam]["group"] == "Silver"
+    assert ab[sam]["vdot"] == A.team_vdot(A.vdot(5000, 902), A.vdot_targets(db))     # ...and the fastest race counts
+    assert "15:02.0" in ab[sam]["source"]
     assert ab[theo]["source"].startswith("5K 16:31.7") and ab[pat]["vdot"] is None
     db.get(Athlete, theo).vdot_override = 70                              # coach-set VDOT wins and moves the group
     db.flush()
@@ -100,13 +100,14 @@ def test_vdot_page_and_editing(app):
     c.post(f"/athletes/{sam}/vdot", data={"csrf": csrf, "vdot": "74"})
     assert "VDOT 74, set by a coach" in c.get(f"/athletes/{sam}").text
     c.post(f"/athletes/{sam}/vdot", data={"csrf": csrf, "vdot": ""})
-    assert "worked out from their most recent race" in c.get(f"/athletes/{sam}").text
+    assert "worked out from their fastest race" in c.get(f"/athletes/{sam}").text
     me = TestClient(web).get("/a/t-sam").text
-    assert "From your most recent race (Oak Hills" in me and "My training paces" not in me
+    assert "From your fastest race (" in me and "15:02.0" in me and "My training paces" not in me
     assert '<a class="button secondary" href="/a/t-sam/paces">My paces: 100 m to 1600 m</a>' in me
     paces = TestClient(web).get("/a/t-sam/paces").text
-    v = A.abilities(SessionLocal(), A.team_today())[sam]["vdot"]
-    assert f"from your VDOT of {v} (Silver group)" in paces
+    mine = A.abilities(SessionLocal(), A.team_today())[sam]
+    v = mine['vdot']
+    assert f"from your VDOT of {mine['vdot']} ({mine['group']} group)" in paces
     for z, pct in A.PACE_ZONES:
         assert f"<th class=\"num\"><span class=\"long\">{z}</span>" in paces
     assert "<span class=\"long\">1,600 m</span>" in paces and "<span class=\"long\">300 m</span>" in paces

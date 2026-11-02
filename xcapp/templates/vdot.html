@@ -9,7 +9,7 @@
     {% with base='/vdot', extra=('&edit=1' if edit else '') %}{% include "_team_switch.html" %}{% endwith %}</div>
   {% if user.role != 'trainer' %}{% if edit %}<span class="form-row"><a href="/vdot?team={{ team }}">Cancel</a><button type="submit" form="vdot-form">Save and finish</button></span>{% else %}<a class="button secondary" href="/vdot?team={{ team }}&edit=1">Edit VDOT</a>{% endif %}{% endif %}
 </div>
-<p class="muted" style="max-width:80ch">VDOT comes from each athlete’s most recent race or time trial (1500 m to 10K), read on the team’s VDOT table, unless a coach has set it. Paces per mile, as a share of VDOT: {% for n, pct in zones %}{{ n|lower }} {{ (pct * 100)|round(1)|string|replace('.0', '') }}%{{ ', ' if not loop.last else '' }}{% endfor %}. Boys and girls each have their own group cutoffs and weekly mileage goals, set on the <a href="/groups">Groups</a> page.</p>
+<p class="muted" style="max-width:80ch">VDOT comes from each athlete’s fastest race or time trial in the look-back window (1500 m to 10K), read on the team’s VDOT table, unless a coach has set it. Paces per mile, as a share of VDOT: {% for n, pct in zones %}{{ n|lower }} {{ (pct * 100)|round(1)|string|replace('.0', '') }}%{{ ', ' if not loop.last else '' }}{% endfor %}. Boys and girls each have their own group cutoffs and weekly mileage goals, set on the <a href="/groups">Groups</a> page.</p>
 {% if edit %}<form method="post" action="/vdot" id="vdot-form"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="team" value="{{ team }}">{% endif %}
 {% for b in board %}
 <div class="vdot-board">

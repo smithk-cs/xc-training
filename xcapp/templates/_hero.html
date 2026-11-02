@@ -16,9 +16,9 @@
         {% if g.group %}
         <b>Running group: {{ g.group }}</b>
         {% if hero_paces_link is defined and hero_paces_link %}<a class="button secondary" href="{{ hero_paces_link }}">My paces: 100 m to 1600 m</a>{% endif %}
-        <span class="small muted">{% if g.override %}Your coach placed you in this group.{% elif g.vdot_set %}Your coach set your VDOT.{% else %}From your most recent race{% if g.source %} ({{ g.source }}){% endif %}. It updates after each race.{% endif %}</span>
+        <span class="small muted">{% if g.override %}Your coach placed you in this group.{% elif g.vdot_set %}Your coach set your VDOT.{% else %}From your fastest race{% if g.source %} ({{ g.source }}){% endif %}. It goes up when you run faster.{% endif %}</span>
         {% else %}
-        <span class="small">Your running group and VDOT come from your most recent race. They appear here once your coach records one.</span>
+        <span class="small">Your running group and VDOT come from your fastest race. They appear here once your coach records one.</span>
         {% endif %}
         {% if hero_vo2 %}<div class="small" style="margin-top:8px"><b>Watch VO2 max: {{ '%.1f' % hero_vo2.vo2_max }}</b> ({{ hero_vo2.local_date.strftime('%b %-d') }}). Your Garmin’s own estimate. It doesn’t change your group.</div>{% endif %}
       </div>

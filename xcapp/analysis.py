@@ -221,6 +221,21 @@ def youtube_url(raw: str) -> str:
     return "https://" + host + u.path + (("?" + u.query) if u.query else "")
 
 
+_SECONDS_RE = re.compile(r"\b(\d{2,5}(?:\.\d+)?)\s*(?:seconds|secs?|s)\b(\s*(?:per mile|/\s*mi(?:le)?\b))?", re.I)
+
+
+def mmss_text(text: str) -> str:
+    """Times written as plain seconds in AI text, shown as minutes and seconds: '412 seconds per mile' -> '6:52/mi',
+    '85 s' -> '1:25'. Under a minute stays as it is."""
+    def fix(m):
+        secs = float(m.group(1))
+        if secs < 60:
+            return m.group(0)
+        s = round(secs)
+        return f"{s // 60}:{s % 60:02d}" + ("/mi" if m.group(2) else "")
+    return _SECONDS_RE.sub(fix, text or "")
+
+
 def map_url(place: str) -> str:
     """A Google Maps search for a place or address; on a phone it opens the Maps app."""
     from urllib.parse import quote
@@ -436,13 +451,14 @@ VDOT_MIN, VDOT_MAX = 20, 90             # coach-set VDOT limits
 
 
 def latest_races(db: Session, since: dt.date, as_of: dt.date) -> dict[int, tuple[float, str, dt.date]]:
-    """athlete id -> (VDOT, description, date) from their most recent race or time trial in the window, at any distance
-    from 1500 m to 10K (benchmark results, and meet results at other distances such as 4K). Two on the same day: the faster."""
+    """athlete id -> (VDOT, description, date) from their fastest race or time trial in the window (the highest VDOT),
+    at any distance from 1500 m to 10K (benchmark results, and meet results at other distances such as 4K). Equal
+    VDOTs: the more recent."""
     found: dict[int, tuple[dt.date, float, str]] = {}
 
     def offer(aid, day, v, text):
         cur = found.get(aid)
-        if cur is None or day > cur[0] or (day == cur[0] and v > cur[1]):
+        if cur is None or v > cur[1] + 1e-9 or (abs(v - cur[1]) <= 1e-9 and day > cur[0]):
             found[aid] = (day, v, text)
 
     for r in db.scalars(select(Result).where(Result.date >= since, Result.date <= as_of)).all():
@@ -457,7 +473,7 @@ def latest_races(db: Session, since: dt.date, as_of: dt.date) -> dict[int, tuple
 
 
 def abilities(db: Session, as_of: dt.date) -> dict[int, dict]:
-    """athlete id -> {group, vdot, source, override, ...}. VDOT comes from the athlete's most recent race in the look-back
+    """athlete id -> {group, vdot, source, override, ...}. VDOT comes from the athlete's fastest race in the look-back
     window, read on the team's scale, unless a coach has set it; the group follows from VDOT unless a coach pinned one."""
     lookback = int(get_setting(db, "group_lookback_days", "365"))
     groups = db.scalars(select(TrainingGroup).order_by(TrainingGroup.position)).all()

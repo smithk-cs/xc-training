@@ -4,7 +4,7 @@
 {% set girls = team == 'Girls' %}{% set mk = 'girls' if girls else 'boys' %}
 <div class="form-row title-row" style="margin-bottom:12px"><h1 style="margin:0">{{ team }} training groups</h1>
   {% with base='/groups', extra='' %}{% include "_team_switch.html" %}{% endwith %}</div>
-<p class="muted" style="max-width:78ch">Each athlete goes in the highest group their VDOT reaches. VDOT is worked out from their most recent race or time trial in the look-back window (any distance from 1500 m to 10K), then read against the team’s 1600 targets below: a result counts as VDOT 60 if its 1600-equivalent time reaches the VDOT 60 target. The watch’s own VO2 max is shown on each run for interest but doesn’t set groups. Cross country courses vary, so coaches can set an athlete’s VDOT or pin them to a group on their athlete page or the <a href="/vdot">VDOT</a> page.</p>
+<p class="muted" style="max-width:78ch">Each athlete goes in the highest group their VDOT reaches. VDOT is worked out from their fastest race or time trial in the look-back window (any distance from 1500 m to 10K), then read against the team’s 1600 targets below: a result counts as VDOT 60 if its 1600-equivalent time reaches the VDOT 60 target. The watch’s own VO2 max is shown on each run for interest but doesn’t set groups. Cross country courses vary, so coaches can set an athlete’s VDOT or pin them to a group on their athlete page or the <a href="/vdot">VDOT</a> page.</p>
 <form method="post" action="/groups">
   <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="team" value="{{ team }}">
   <details class="card fold-card" id="groups-table"><summary><h2>Groups, cutoffs and weekly goals</h2></summary>
