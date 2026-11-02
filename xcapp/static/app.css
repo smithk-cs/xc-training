@@ -580,3 +580,4 @@ table.parts tr.dragging { opacity: .45; }
 .year-tab { flex: none; min-height: 40px; padding: 6px 14px; border-radius: 999px; border: 1px solid var(--color-border-line); background: var(--color-bg); color: inherit; font-weight: 600; cursor: pointer; }
 .year-tab[aria-selected="true"] { background: var(--brand-red); border-color: var(--brand-red); color: #fff; }
 .video-link { font-weight: 600; white-space: nowrap; }
+.how-points > summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; }

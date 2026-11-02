@@ -227,6 +227,20 @@ def map_url(place: str) -> str:
     return "https://www.google.com/maps/search/?api=1&query=" + quote(place or "")
 
 
+def course_place(course, fallback: str = "") -> dict | None:
+    """'Course name, City' for a meet, and a Google Maps link to it (its map position when saved). The city is the
+    last part of the course's location ('Park, city'). Without a saved course, the meet's own location."""
+    if course is None:
+        return {"text": fallback, "url": map_url(fallback)} if fallback else None
+    city = (course.location or "").split(",")[-1].strip()
+    text = course.name + (f", {city}" if city and city.lower() not in course.name.lower() else "")
+    if course.latitude is not None and course.longitude is not None:
+        url = map_url(f"{course.latitude},{course.longitude}")
+    else:
+        url = map_url(", ".join(x for x in (course.name, course.location) if x))
+    return {"text": text, "url": url}
+
+
 def team_today() -> dt.date:
     if settings().as_of_date:
         return dt.date.fromisoformat(settings().as_of_date)

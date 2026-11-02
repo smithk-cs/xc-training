@@ -160,7 +160,7 @@ def create_app() -> FastAPI:
     # A fingerprint of the style sheet and scripts: links carry it (?v=...), so browsers load new ones after each deploy.
     import hashlib
     asset_v = hashlib.sha256(b"".join(f.read_bytes() for f in sorted((HERE / "static").glob("*.[cj]s*")))).hexdigest()[:10]
-    templates.env.globals.update(asset_v=asset_v, map_url=A.map_url, fmt_clock=A.fmt_clock, fmt_secs=A.fmt_secs, describe_weather=WX.describe, fmt_time=A.fmt_time, timedelta=dt.timedelta, now=A.team_today, EVENTS=list(A.EVENTS), GROUPS=GROUPS, team_name=s.team_name,
+    templates.env.globals.update(asset_v=asset_v, map_url=A.map_url, course_place=A.course_place, fmt_clock=A.fmt_clock, fmt_secs=A.fmt_secs, describe_weather=WX.describe, fmt_time=A.fmt_time, timedelta=dt.timedelta, now=A.team_today, EVENTS=list(A.EVENTS), GROUPS=GROUPS, team_name=s.team_name,
                                  has_logo=has_logo, FEELS=FEELS, EFFORT_WORDS=EFFORT_WORDS, RUN_TYPES=A.RUN_TYPES,
                                  MISSED_REASONS=A.MISSED_REASONS, SIDES=A.SIDES, STARTED=A.STARTED, SEEN_BY=A.SEEN_BY,
                                  MORE_DAYS=A.MORE_DAYS, missed_label=A.missed_label,

@@ -25,7 +25,6 @@
       <label>Resting heart rate for <b id="rhr-day">today</b> <input type="number" name="bpm" id="rhr-bpm" min="{{ rhr_range[0] }}" max="{{ rhr_range[1] }}" inputmode="numeric" required style="width:5em" value="{{ r0.bpm if r0 else '' }}"> beats/min</label>
       <button type="submit">Save</button>
     </form>
-    <p class="small muted" id="rhr-tip"{% if r0 %} hidden{% endif %}>Before you get out of bed, count your pulse for 30 seconds and double it.</p>
     <details class="rhr-more">
       <summary class="small" style="cursor:pointer; min-height:44px; display:flex; align-items:center">Add or fix earlier days</summary>
     <div class="rhr-cal" role="group" aria-label="Pick a day to enter or fix">
@@ -50,7 +49,6 @@
           var bpm = document.getElementById('rhr-bpm');
           bpm.value = b.dataset.bpm;
           document.getElementById('rhr-form').hidden = false;
-          document.getElementById('rhr-tip').hidden = false;
           bpm.focus();
         });
       });
@@ -122,7 +120,6 @@
   </section>{% endfor %}
   <details class="panel fold" id="workouts" open>
     <summary><h2 id="wp-h">Upcoming workouts</h2></summary>
-    {% if paces %}<p class="muted small">Your targets for the next 7 days, from your VDOT now and from your goal. Times are per rep; for parts run for a time, the pace to hold.</p>{% endif %}
     {% for x in paces %}{% set w = x.workout %}
     <div class="wpace">
       <div class="d">{{ 'Today' if w.date.isoformat() == today else w.date.strftime('%a, %b %-d') }} · {{ w.title }}</div>
@@ -162,7 +159,7 @@
     {% for x in meets %}{% set m = x.meet %}{% set r = x.response %}
     <div class="wpace">
       <div class="d">{{ m.name }}</div>
-      <div class="small muted">{{ m.date.strftime('%a, %b %-d') }}{% if m.location %} · <a class="map-link" href="{{ map_url(m.location) }}" target="_blank" rel="noopener">{{ m.location }}</a>{% endif %}{% if x.race %} · You’re entered in {{ x.race.name }}{% if x.race.distance %} {{ x.race.distance }}{% endif %}{% endif %}</div>
+      <div class="small muted">{{ m.date.strftime('%a, %b %-d') }}{% set pl = course_place(x.course, m.location) %}{% if pl %} · <a class="map-link" href="{{ pl.url }}" target="_blank" rel="noopener" title="Open in Google Maps">📍 {{ pl.text }}</a>{% endif %}{% if x.race %} · You’re entered in {{ x.race.name }}{% if x.race.distance %} {{ x.race.distance }}{% endif %}{% endif %}</div>
       {% if m.forecast and m.forecast.temp_f is not none %}<p class="small" style="margin:6px 0 0">🌤 <b>Forecast{% if m.start_time %} for {{ m.start_time }}{% endif %}:</b> {{ describe_weather(m.forecast) }}</p>{% endif %}
       {% if x.course and x.course.video_url %}<p style="margin:8px 0"><a class="button secondary" href="{{ x.course.video_url }}" target="_blank" rel="noopener">▶ Course video: {{ x.course.name }}</a></p>{% endif %}
       {% if r and r.status == 'attending' %}<p class="small"><span class="pill good">You’re confirmed</span></p>
@@ -207,7 +204,7 @@
       <div><span class="k">Days run</span><span class="big">{{ mp.run_days }}</span><span class="small muted">of {{ mp.target_days }}</span></div>
       {% if mp.score is not none %}<div><span class="k">Score</span><span class="big">{{ '%.0f' % mp.score }}%</span><span class="small muted">of target</span></div>{% endif %}
     </div>
-    <p class="small muted">Every minute you run earns points, and harder minutes earn more ({% for z, r in rates.items() %}{{ z|lower }} {{ r }}{{ ', ' if not loop.last else '' }}{% endfor %} a minute). Your target comes from the team’s plan for your group. Hit it and you’re at 100%. Your score is 80% points and 20% days run. Run on pace, run on the days you’re scheduled, and the points take care of themselves.</p>
+    <details class="small muted how-points"><summary>How points work</summary><p style="margin:6px 0 0">Every minute you run earns points, and harder minutes earn more ({% for z, r in rates.items() %}{{ z|lower }} {{ r }}{{ ', ' if not loop.last else '' }}{% endfor %} a minute). Your target comes from the team’s plan for your group. Hit it and you’re at 100%. Your score is 80% points and 20% days run. Run on pace, run on the days you’re scheduled, and the points take care of themselves.</p></details>
   </section>
   {% endif %}
 

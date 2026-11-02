@@ -25,3 +25,14 @@ def test_race_season_tabs_and_map_links():
     assert ('<a class="map-link" href="https://www.google.com/maps/search/?api=1&amp;query=Willow%20Hill%20Reservoir%2C%20Folsom%20CA"'
             in page)
     assert "dew point" not in page
+    assert "Your targets for the next 7 days" not in page and "count your pulse" not in page
+    assert '<details class="small muted how-points"><summary>How points work</summary>' in page or "How points work" not in page
+
+
+def test_meet_shows_course_and_city_with_map_link():
+    from xcapp.models import Course
+    c = Course(name="Gibson Ranch", location="Gibson Ranch Park, Orangevale", latitude=38.7, longitude=-121.4)
+    assert A.course_place(c) == {"text": "Gibson Ranch, Orangevale", "url": "https://www.google.com/maps/search/?api=1&query=38.7%2C-121.4"}
+    no_pin = Course(name="Willow Hill", location="Folsom")
+    assert A.course_place(no_pin)["url"].endswith("query=Willow%20Hill%2C%20Folsom") and A.course_place(no_pin)["text"] == "Willow Hill, Folsom"
+    assert A.course_place(None, "") is None and A.course_place(None, "Lake Natoma")["text"] == "Lake Natoma"
