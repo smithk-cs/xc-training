@@ -37,6 +37,15 @@ Flat SAC Invitational,2026-10-24,Gibson Ranch Regional Park,Boys Varsity Large S
   <p class="small muted">Place among the teams, and the team score (lowest wins).</p>
 </details>
 {% endif %}
+{% if videos %}
+<details class="card fold-card" id="race-videos"><summary><h2>Race videos ({{ videos|length }})</h2></summary>
+  <table class="list compact"><tbody>
+  {% for v in videos %}<tr><td class="nowrap small">{{ v.date.strftime('%b %-d, %Y') }}</td><td><a href="{{ races_url(v.date) }}">{{ v.meet }}</a>{% if v.race %} <span class="small muted">· {{ v.race }}</span>{% endif %}</td>
+    <td><a class="video-link" href="{{ v.video_url }}" target="_blank" rel="noopener">▶ Watch</a></td></tr>{% endfor %}
+  </tbody></table>
+  <p class="small muted">Every race video saved, from all seasons. Add one under the race’s heading in its meet.</p>
+</details>
+{% endif %}
 {% if meets %}<p class="small muted">Click a meet to open or close it.</p>{% endif %}
 {% for (date, meet, course), races in meets.items() %}
 <details class="card meet">
@@ -89,6 +98,16 @@ Flat SAC Invitational,2026-10-24,Gibson Ranch Regional Park,Boys Varsity Large S
     <h3>{{ race or 'Race' }} · {{ label }}{% if t and (t.place or t.points is not none) %} <span class="small team-result">Team: {{ team_line(t) }}</span>{% endif %}{% if t and t.video_url %} <a class="small video-link" href="{{ t.video_url }}" target="_blank" rel="noopener">▶ Watch the race</a>{% endif %}
       {% set rw = own.get((meet, date, race)) %}{% if rw and rw.start_time %}<br><span class="small muted" style="font-weight:400">Started {{ fmt_clock(rw.start_time) }}{% if rw.temp_f is not none %}: {{ '%.0f' % rw.temp_f }}°F, dew point {{ '%.0f' % rw.dew_point_f }}°F{% if rw.wind_mph is not none %}, wind {{ '%.0f' % rw.wind_mph }} mph{% endif %}{% if rw.pressure_inhg is not none %}, {{ '%.2f' % rw.pressure_inhg }} inHg{% endif %} (used for this race’s adjusted times){% else %}: weather not filled in yet{% endif %}</span>{% endif %}</h3>
     {% if user.role != 'trainer' %}
+    <details class="edit-box video-box"><summary class="small">{{ '✎ Change race video' if t and t.video_url else '▶ Add race video' }}</summary>
+      <form method="post" action="/races/video" class="form-row">
+        <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="date" value="{{ date.isoformat() }}">
+        <input type="hidden" name="meet" value="{{ meet }}"><input type="hidden" name="race" value="{{ race }}">
+        <label style="flex:3">YouTube link<input type="url" name="video" value="{{ t.video_url if t else '' }}" maxlength="300" placeholder="https://youtu.be/... or https://www.youtube.com/watch?v=..." required></label>
+        <button type="submit">Save video</button>
+        {% if t and t.video_url %}<button type="submit" name="remove" value="1" class="link" formnovalidate>Remove</button>{% endif %}
+      </form>
+      <p class="small muted">Kept with this race for later; athletes who ran it see it in My races.</p>
+    </details>
     <details class="edit-box"><summary class="small">Edit race</summary>
       <form method="post" action="/races/edit-race" class="form-row">
         <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="date" value="{{ date.isoformat() }}">
@@ -100,15 +119,14 @@ Flat SAC Invitational,2026-10-24,Gibson Ranch Regional Park,Boys Varsity Large S
       </form>
       <p class="small muted">Changes this race for all {{ rows|length }} results. Times at 1 mile, 1.5 miles, 2 miles or 5K count toward VDOT.</p>
     </details>
-    <details class="edit-box"><summary class="small">Team place, points and video</summary>
+    <details class="edit-box"><summary class="small">Team place and points</summary>
       <form method="post" action="/races/team" class="form-row">
         <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="date" value="{{ date.isoformat() }}">
         <input type="hidden" name="meet" value="{{ meet }}"><input type="hidden" name="race" value="{{ race }}">
         <label>Team place<input type="number" name="place" value="{{ t.place if t and t.place else '' }}" min="1" max="500" style="width:5em"></label>
         <label>of how many teams<input type="number" name="teams" value="{{ t.teams if t and t.teams else '' }}" min="1" max="500" style="width:5em"></label>
         <label>Team points<input type="number" name="points" value="{{ '%g' % t.points if t and t.points is not none else ('%g' % sug if sug else '') }}" min="0" max="5000" step="any" style="width:6em"></label>
-        <label style="flex:2">YouTube link<input type="url" name="video" value="{{ t.video_url if t else '' }}" maxlength="300" placeholder="https://youtu.be/..."></label>
-        <button type="submit">Save</button>
+        <button type="submit">Save team result</button>
       </form>
       {% if sug and not (t and t.points is not none) %}<p class="small muted">Points filled in from the top five runners’ points in the results ({{ '%g' % sug }}). Change it if the meet scored differently.</p>{% endif %}
     </details>

@@ -818,7 +818,8 @@ def create_app() -> FastAPI:
         team_grid = [{"date": d, "meet": m, "gender": g if both else "", "cells": cells} for (d, m, g), cells in grid.items()]
         return render(request, "races.html", user, own=own, meets=meets, seasons=seasons, season=season, counts=counts,
                       info=info, courses=courses, footings=[f for f in CS.FOOTING if f], teams=teams, suggested=suggested,
-                      season_teams=season_teams, team_grid=team_grid, result_columns=REG.RESULT_COLUMNS)
+                      season_teams=season_teams, team_grid=team_grid, result_columns=REG.RESULT_COLUMNS, races_url=races_url,
+                      videos=sorted((t for t in teams.values() if t.video_url), key=lambda t: (t.date, t.meet, t.race), reverse=True))
 
     @app.post("/races/conditions")
     async def races_conditions(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
@@ -1052,6 +1053,31 @@ def create_app() -> FastAPI:
               (" These times now count toward VDOT." if rows and rows[0].result_id else "") + weather_note)
         return back(races_url(d))
 
+    @app.post("/races/video")
+    async def races_video(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
+        """A YouTube video of one race at a meet, kept for later."""
+        f = await form_checked(request)
+        try:
+            d = dt.date.fromisoformat(str(f.get("date", "")))
+        except ValueError:
+            raise HTTPException(400, "Bad race.")
+        meet, race = str(f.get("meet", ""))[:160], str(f.get("race", ""))[:120]
+        try:
+            url = "" if f.get("remove") else A.youtube_url(str(f.get("video", "")))
+        except ValueError as exc:
+            flash(request, str(exc), "error")
+            return back(races_url(d))
+        row = db.scalar(select(RaceTeamResult).where(RaceTeamResult.meet == meet, RaceTeamResult.date == d, RaceTeamResult.race == race))
+        if row is None and url:
+            row = RaceTeamResult(meet=meet, date=d, race=race)
+            db.add(row)
+        if row is not None:
+            row.video_url = url
+            if not url and row.place is None and row.teams is None and row.points is None:
+                db.delete(row)
+        flash(request, (f"Saved the video for {race or 'the race'} at {meet}." if url else f"Removed the video for {race or 'the race'} at {meet}."))
+        return back(races_url(d))
+
     @app.post("/races/team")
     async def races_team(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
         """The team's place and score in one race of a meet."""
@@ -1078,12 +1104,6 @@ def create_app() -> FastAPI:
         except ValueError:
             db.rollback()
             flash(request, "Team place and number of teams are whole numbers (place no more than the number of teams); points a number.", "error")
-            return back(races_url(d))
-        try:
-            row.video_url = A.youtube_url(str(f.get("video", "")))
-        except ValueError as exc:
-            db.rollback()
-            flash(request, str(exc), "error")
             return back(races_url(d))
         if row.place is None and row.teams is None and row.points is None and not row.video_url:
             db.delete(row)
