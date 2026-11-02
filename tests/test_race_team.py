@@ -74,3 +74,8 @@ def test_team_place_and_points():
     db = SessionLocal()
     assert db.query(RaceTeamResult).count() == 0 and db.query(MeetConditions).count() == 0
     db.close()
+
+
+def test_fs_races_are_frosh_soph():
+    from xcapp.registration import result_column
+    assert [result_column(n) for n in ("Boys FS", "FS Boys", "Boys F-S", "Boys F/S", "Fresno State Invite JV")] == ["F/S"] * 4 + ["JV"]

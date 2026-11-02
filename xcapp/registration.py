@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime as dt
 import io
+import re
 from pathlib import Path
 
 from fpdf import FPDF
@@ -23,6 +24,8 @@ RESULT_COLUMNS = ("Varsity", "JV", "F/S", "Frosh", "Soph")   # the team results 
 def result_column(race: str) -> str:
     """Which column of the team results table a race belongs in, from its name ('Boys Frosh/Soph' -> 'F/S')."""
     n = (race or "").lower().replace("-", "/").replace(" ", "")
+    if re.search(r"\bf\s*[/\-]?\s*s\b", (race or "").lower()):   # FS, F/S, F-S, F S
+        return "F/S"
     if "frosh/soph" in n or "f/s" in n or "freshman/soph" in n or ("fresh" in n and "soph" in n) or ("frosh" in n and "soph" in n):
         return "F/S"
     if "frosh" in n or "fresh" in n:

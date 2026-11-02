@@ -70,8 +70,9 @@ def test_vdot_page_and_editing(app):
     c = login(web, "coach1")
     page = c.get("/vdot").text
     assert '<a href="/vdot" aria-current="page">VDOT</a>' in page
-    assert '<th class="name">Gold</th><th>VDOT 68-72</th>' in page and "easy: 6:21-6:39" in page and "threshold: 5:05-5:20" in page
-    assert "moderate: 5:23-5:39" in page and "interval: 4:41-4:54" in page and "repetition: 4:21-4:33" in page   # Gold's other ranges
+    assert '<th class="name">Gold</th><th>VDOT 68-72</th>' in page and '<span class="zone-name">Easy</span><br>6:21-6:39' in page and '<span class="zone-name">Threshold</span><br>5:05-5:20' in page
+    assert all(f'<span class="zone-name">{z}</span><br>{r}' in page for z, r in (("Moderate", "5:23-5:39"), ("Interval", "4:41-4:54"),
+                                                                                ("Repetition", "4:21-4:33")))   # Gold's other ranges
     assert "long run" not in page and "tempo:" not in page and "Paste a VDOT list" not in page
     sam_paces = [A.fmt_time(z["mile"])[:-2] for z in A.training_paces(A.abilities(SessionLocal(), A.team_today())[sam]["vdot"])]
     assert "".join(f'<td class="pace">{x}</td>' for x in sam_paces) in page          # each athlete's own paces

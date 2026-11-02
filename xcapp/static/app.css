@@ -583,9 +583,14 @@ table.parts tr.dragging { opacity: .45; }
 .year-tab { flex: none; min-height: 40px; padding: 6px 14px; border-radius: 999px; border: 1px solid var(--color-border-line); background: var(--color-bg); color: inherit; font-weight: 600; cursor: pointer; }
 .year-tab[aria-selected="true"] { background: var(--brand-red); border-color: var(--brand-red); color: #fff; }
 .video-link { font-weight: 600; white-space: nowrap; }
-.how-points > summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; }
+.how-points > summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; gap: 6px; list-style: none; }
+.how-points > summary::-webkit-details-marker { display: none; }
+.how-points > summary::before { content: "▸"; color: var(--brand-red); font-size: 16px; transition: transform .15s; }
+.how-points[open] > summary::before { transform: rotate(90deg); }
 .vdot-move .arrow { display: inline-block; margin: 0 6px; font-weight: 700; }
 .vdot-move .arrow.up { color: var(--color-ok); }
 .vdot-move .arrow.down { color: var(--color-bad); }
 .vdot-move .arrow.same, .vdot-move .arrow.new { color: var(--color-muted, #888); }
 .vdot-move .was { color: var(--color-muted, #888); }
+.zone-head { text-align: center; white-space: nowrap; }
+.zone-head .zone-name { font-weight: 700; }
