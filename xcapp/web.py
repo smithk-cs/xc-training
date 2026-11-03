@@ -2015,6 +2015,8 @@ def create_app() -> FastAPI:
             raise HTTPException(404, "Run not found.")
         pain = next((p for p in a.pain_reports if p.activity_id == act.id), None)
         wv = WV.build(db, act) if (act.planned_workout_id or act.stream or act.laps) else None
+        if wv is not None:
+            wv["summary"] = WV.summary(wv)
         return render(request, "staff_run.html", user, a=a, act=act, pain=pain, choices=workout_choices(db, act), wv=wv)
 
     @app.post("/athletes/{athlete_id}/runs/{activity_id}")
@@ -2724,7 +2726,17 @@ def create_app() -> FastAPI:
             per_day = group_workouts.setdefault(r["group_name"], [[] for _ in range(7)])
             for i, d in enumerate(r["days"]):
                 per_day[i] += [w for w in d["workouts"] if w not in per_day[i]]
+        recovery = {}   # each workout run's recovery line (saved with the run after the first time)
+        for r in rows:
+            for d in r["days"]:
+                for act in d["runs"]:
+                    if act.planned_workout_id:
+                        try:
+                            recovery[act.id] = WV.day_summary(db, act)
+                        except Exception as exc:   # one odd run must not break the Week page
+                            log(db, "app", f"Recovery summary failed for run {act.id}: {exc}", "warn")
         return render(request, "week.html", user, team=team, rows=rows, monday=monday, today=today, group_workouts=group_workouts,
+                      recovery=recovery,
                       days=[monday + dt.timedelta(days=i) for i in range(7)], rates=PT.RATES,
                       target_days=target_days, min_minutes=min_minutes, rest_day=rest_day, weekdays=PT.WEEKDAYS,
                       season=SE.period_for(monday))

@@ -108,6 +108,7 @@ def test_page_and_week_link():
     assert page.count("✓ on target") >= 4 and "Watch paused 3 times" in page and "Warm-up" in page and "184–200" in page
     week = c.get(f"/week?team=Boys&start={DAY - dt.timedelta(days=DAY.weekday())}").text
     assert f'href="/athletes/{aid}/runs/{rid}#workout"' in week
+    assert "✓ Rests OK</a>" in week and "rest 1:31" in page
 
 
 def test_fit_file_keeps_its_detail_and_a_resent_copy_fills_it_in(session, athlete):
@@ -167,3 +168,30 @@ def test_recovery_shrinking_and_below_usual(session):
     assert wv["usual_recovery"] == 38
     notes = " ".join(wv["recovery_notes"])
     assert "the athlete was tiring" in notes and "smaller than this athlete’s usual (38)" in notes
+    assert WV.summary(wv)["label"] == "Slow recovery"
+
+
+def test_rest_rules_by_zone():
+    rep = {"t0": 0, "t1": 60, "secs": 60, "zone": "Repetition", "rest": "", "rec_end": 190, "rec_next": 150}
+    nxt = {"t0": 60 + 90, "found": True}
+    r = WV.rest_check(rep, nxt, 200)                       # 90 s after a 60 s R rep: Daniels wants 2-3 times
+    assert r["rest_verdict"] == "short" and r["rest_target"].startswith("Daniels") and "not recovered" in r["ready_flag"]
+    r = WV.rest_check(dict(rep, rec_next=135), {"t0": 60 + 150, "found": True}, 200)
+    assert r["rest_verdict"] == "ok" and r["ready_flag"] == ""
+    i = dict(rep, zone="Interval", secs=180, t1=180, rec_end=190, rec_next=184)
+    r = WV.rest_check(i, {"t0": 180 + 170, "found": True}, 200)
+    assert r["rest_verdict"] == "ok" and "barely came down" in r["ready_flag"]
+    t = WV.rest_check(dict(rep, zone="Threshold", secs=300, t1=300, rest="1 min jog", rec_next=185), {"t0": 300 + 65, "found": True}, 200)
+    assert t["rest_verdict"] == "ok" and t["rest_target"] == "1:00 written" and t["ready_flag"] == ""
+    assert WV.rest_check(rep, None, 200)["rest_secs"] is None
+
+
+def test_summaries_and_week_line(session):
+    a, act = make(session)
+    wv = WV.build(session, act)
+    assert [r["rest_verdict"] for r in wv["reps"][:3]] == ["ok"] * 3                  # 90 s written, about 91 taken
+    assert WV.summary(wv) == {"label": "Rests OK", "level": "good", "why": "3 of 3 rests about as planned."}
+    first = WV.day_summary(session, act)
+    assert first["label"] == "Rests OK" and json.loads(act.recovery_note)["for"] == act.planned_workout_id
+    act.stream = ""                                                                   # saved: not worked out again
+    assert WV.day_summary(session, act) == first

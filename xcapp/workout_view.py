@@ -364,6 +364,95 @@ def recovery(points, pauses, rep: dict, next_rep: dict | None) -> dict:
     return out
 
 
+# Daniels' rest between reps, as a share of the rep's time: threshold about 1 minute per 5 minutes run, interval about
+# equal to the rep (or a little less), repetition 2-3 times the rep (full recovery). (low, high): shorter than low is
+# "short", longer than high is "long".
+DANIELS_REST = {"Threshold": (0.1, 0.5, "about 1 min per 5 min run"), "Interval": (0.5, 1.75, "about as long as the rep"),
+                "Repetition": (1.75, 4.0, "2–3 times the rep")}
+WRITTEN_REST = (0.65, 1.5)          # a rest the coach wrote: within these shares of it is about right
+REP_READY_PCT = 70                  # repetition reps should start with heart rate back under 70% of max
+INTERVAL_MIN_FALL = 10              # interval reps: heart rate should have come down at least 10 beats
+
+
+def parse_rest(text: str) -> float | None:
+    """Seconds from a written rest: '90 s jog', '2 min jog', '1:30 rest', '2.5 min'. Distances ('200 m jog') give None."""
+    import re
+    s = (text or "").lower()
+    m = re.search(r"(\d+):(\d{2})", s)
+    if m:
+        return int(m.group(1)) * 60 + int(m.group(2))
+    m = re.search(r"(\d+(?:\.\d+)?)\s*(min|minute|m(?![a-z]))", s)
+    if m and m.group(2).startswith("min"):
+        return float(m.group(1)) * 60
+    m = re.search(r"(\d+(?:\.\d+)?)\s*(s|sec|second)", s)
+    if m:
+        return float(m.group(1))
+    return None
+
+
+def rest_check(rep: dict, next_rep: dict | None, hmax: float | None) -> dict:
+    """The rest after a rep against what the workout or Daniels asks, and heart rate going into the next rep."""
+    out = {"rest_secs": None, "rest_verdict": "", "rest_target": "", "ready_flag": ""}
+    if not next_rep or not next_rep.get("found"):
+        return out
+    rest = next_rep["t0"] - rep["t1"]
+    out["rest_secs"] = rest
+    written = parse_rest(rep.get("rest") or "")
+    rep_secs = rep.get("secs") or (rep["t1"] - rep["t0"])
+    if written:
+        lo, hi = written * WRITTEN_REST[0], written * WRITTEN_REST[1] + 15
+        out["rest_target"] = f"{A.fmt_secs(written)} written"
+    elif rep["zone"] in DANIELS_REST and rep_secs:
+        a, b, words = DANIELS_REST[rep["zone"]]
+        lo, hi = rep_secs * a, rep_secs * b + 15
+        out["rest_target"] = f"Daniels: {words}"
+    else:
+        return out
+    out["rest_verdict"] = "short" if rest < lo else "long" if rest > hi else "ok"
+    nxt, end = rep.get("rec_next"), rep.get("rec_end")
+    if rep["zone"] == "Repetition" and nxt and hmax and nxt > hmax * REP_READY_PCT / 100:
+        out["ready_flag"] = f"not recovered: {nxt:.0f} going in (over {REP_READY_PCT}% of max, {hmax * REP_READY_PCT / 100:.0f})"
+    elif rep["zone"] == "Interval" and nxt and end and end - nxt < INTERVAL_MIN_FALL:
+        out["ready_flag"] = f"barely came down: {end:.0f} to {nxt:.0f} before the next rep"
+    return out
+
+
+def summary(wv: dict) -> dict | None:
+    """One line for the Week page: Slow recovery, Rests short, Long rests or Rests OK (None when nothing to judge)."""
+    reps = [r for r in wv["reps"] if r.get("found")]
+    rests = [r["rest_verdict"] for r in reps if r.get("rest_verdict")]
+    flags = [r for r in reps if r.get("ready_flag")]
+    slow_notes = [n for n in wv.get("recovery_notes", []) if "tiring" in n or "usual" in n]
+    if flags or slow_notes:
+        why = ([f"{len(flags)} rep{'s' if len(flags) != 1 else ''} started before heart rate had come down"] if flags else []) + slow_notes
+        return {"label": "Slow recovery", "level": "bad", "why": " ".join(why)}
+    if len(rests) >= 2 and rests.count("short") * 2 >= len(rests):
+        return {"label": "Rests short", "level": "warn", "why": f"{rests.count('short')} of {len(rests)} rests were shorter than planned."}
+    if len(rests) >= 2 and rests.count("long") * 2 >= len(rests):
+        return {"label": "Long rests", "level": "warn", "why": f"{rests.count('long')} of {len(rests)} rests were much longer than planned."}
+    if len(rests) >= 2:
+        return {"label": "Rests OK", "level": "good", "why": f"{rests.count('ok')} of {len(rests)} rests about as planned."}
+    return None
+
+
+def day_summary(db: Session, act: Activity) -> dict | None:
+    """The run's recovery line, saved with it (worked out again if the run's workout changes)."""
+    if not act.planned_workout_id:
+        return None
+    try:
+        saved = json.loads(act.recovery_note) if act.recovery_note else None
+    except ValueError:
+        saved = None
+    if saved is not None and saved.get("for") == act.planned_workout_id and saved.get("v") == SUMMARY_VERSION:
+        return saved.get("s")
+    s = summary(build(db, act))
+    act.recovery_note = json.dumps({"for": act.planned_workout_id, "v": SUMMARY_VERSION, "s": s})
+    return s
+
+
+SUMMARY_VERSION = 1
+
+
 def usual_recovery(db: Session, a: Athlete, act: Activity) -> float | None:
     """The athlete's typical 60-second drop after reps over the past 8 weeks of workouts (other runs), from the rep
     laps; needs at least 4."""
@@ -399,11 +488,15 @@ def build(db: Session, act: Activity) -> dict:
     """Everything the workout chart and table need, as plain data."""
     a = act.athlete
     pw = act.planned
-    v = act.zone_vdot or A.abilities(db, act.local_date).get(a.id, {}).get("vdot")
+    key = ("abilities", act.local_date)
+    if key not in db.info:   # one team calculation per day, however many runs are looked at
+        db.info[key] = A.abilities(db, act.local_date)
+    ab = db.info[key]
+    v = act.zone_vdot or ab.get(a.id, {}).get("vdot")
     hmax, hmax_from = max_hr(db, a, act.local_date)
     points = stream_points(act)
     paces, pauses = moving_series(points) if points else ([], [])
-    group = A.abilities(db, act.local_date).get(a.id, {}).get("group") or ""
+    group = ab.get(a.id, {}).get("group") or ""
     from .models import TrainingGroup
     g = db.scalar(select(TrainingGroup).where(TrainingGroup.name == group)) if group else None
     goal = A.athlete_miles_goal(g, a.gender, a.experience)
@@ -440,6 +533,7 @@ def build(db: Session, act: Activity) -> dict:
     found = [r for r in reps if r["found"]]
     for i, r in enumerate(found):
         r.update(recovery(points, pauses, r, found[i + 1] if i + 1 < len(found) else None), rec_last=i == len(found) - 1)
+        r.update(rest_check(r, found[i + 1] if i + 1 < len(found) else None, hmax))
     usual = usual_recovery(db, a, act)
     easy = []
     if points:
@@ -456,10 +550,10 @@ def build(db: Session, act: Activity) -> dict:
             x.update(judge(points, paces, x["t0"], x["t1"], eb, ehb, 0))
             x["pace_verdict"], x["hr_verdict"] = verdict(x.get("pace"), eb), verdict(x.get("hr"), ehb, "low", "high")
     keys = ("secs", "dist", "pace", "hr", "pace_in", "pace_fast", "hr_in", "hr_high", "pace_verdict", "hr_verdict", "rest",
-            "rec_end", "rec_60", "rec_drop", "rec_next", "rec_note")
+            "rec_end", "rec_60", "rec_drop", "rec_next", "rec_note", "rest_secs", "rest_verdict", "rest_target", "ready_flag")
     for row in reps + easy:   # every row has every field, empty when the run doesn't say
         for k in keys:
-            row.setdefault(k, None if k not in ("pace_verdict", "hr_verdict", "rest", "rec_note") else "")
+            row.setdefault(k, None if k not in ("pace_verdict", "hr_verdict", "rest", "rec_note", "rest_verdict", "rest_target", "ready_flag") else "")
     return {
         "has_stream": bool(act.stream), "source": source, "usual_recovery": usual,
         "recovery_notes": recovery_notes(found[:-1], usual),   # after the last rep the athlete stops: not comparable "any_recovery": any(r.get("rec_end") for r in found), "vdot": v, "hr_max": hmax, "hr_max_from": hmax_from,

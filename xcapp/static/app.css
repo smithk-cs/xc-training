@@ -612,3 +612,6 @@ table.parts tr.dragging { opacity: .45; }
 .sections-grid th.sec-head { vertical-align: bottom; height: 7.5em; padding: 4px 2px; }
 .sections-grid th.sec-head span { writing-mode: vertical-rl; transform: rotate(180deg); white-space: nowrap; font-size: 12px; }
 .sections-grid input[type=checkbox] { width: 20px; height: 20px; }
+.rec-pill { margin-top: 4px; font-size: 12px; text-decoration: none; }
+.wc-sum { margin: 12px 0 4px; }
+.wc-flag { margin: 2px 0; color: var(--color-bad); }

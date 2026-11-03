@@ -237,6 +237,8 @@ class Activity(Base):
     zone_seconds: Mapped[str] = mapped_column(Text, default="")
     # Second-by-second detail, compact JSON (see workout_view.make_stream): for the workout chart
     stream: Mapped[str] = mapped_column(Text, default="")
+    # The workout chart's recovery line for the Week page, saved: {"for": workout id, "v": version, "s": {...}}
+    recovery_note: Mapped[str] = mapped_column(Text, default="")
     zone_vdot: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     athlete: Mapped[Athlete] = relationship(back_populates="activities")

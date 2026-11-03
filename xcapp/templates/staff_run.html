@@ -70,7 +70,9 @@
   <td class="nowrap small">{{ (r.hr_band[0]|round|int) ~ '–' ~ (r.hr_band[1]|round|int) if r.hr_band else 'not checked' }}</td>
   <td>{{ pct(r.hr_in) if r.hr_band else '–' }}</td>
   <td class="nowrap rec">{% if r.found is not defined %}–{% elif r.rec_drop is not none %}{{ r.rec_end|round|int }} → {{ r.rec_60|round|int }} <b>(−{{ r.rec_drop|round|int }})</b>{% if r.rec_last %}<br><span class="small muted">after the last rep, not compared</span>{% elif wv.usual_recovery is not none and wv.usual_recovery - r.rec_drop >= 8 %} <span class="pill warn" title="Usual: {{ wv.usual_recovery|round|int }}">▼ small</span>{% endif %}{% elif r.rec_note %}<span class="muted small">{{ r.rec_note }}</span>{% else %}–{% endif %}
-    {% if r.rec_next %}<br><span class="small muted">next rep starts at {{ r.rec_next|round|int }}</span>{% endif %}</td>{% endif %}
+    {% if r.rec_next %}<br><span class="small muted">next rep starts at {{ r.rec_next|round|int }}</span>{% endif %}
+    {% if r.rest_secs is not none %}<br><span class="small">rest {{ fmt_secs(r.rest_secs) }}{% if r.rest_verdict == 'short' %} <span class="pill warn">short</span>{% elif r.rest_verdict == 'long' %} <span class="pill warn">long</span>{% elif r.rest_verdict == 'ok' %} ✓{% endif %}</span>{% if r.rest_target %}<br><span class="small muted">{{ r.rest_target }}</span>{% endif %}{% endif %}
+    {% if r.ready_flag %}<br><span class="pill bad" title="{{ r.ready_flag }}">▲ {{ r.ready_flag.split(':')[0] }}</span>{% endif %}</td>{% endif %}
 </tr>{% endmacro %}
 {% macro pct(v) %}{{ '%.0f%%'|format(v) if v is not none else '–' }}{% endmacro %}
 <div class="card" id="workout">
@@ -93,8 +95,10 @@
     {% for r in wv.reps %}{{ row(r, loop.index ~ '. ' ~ r.label) }}{% endfor %}
     {% for x in wv.easy if x.label != 'Warm-up' %}{{ row(x, x.label) }}{% endfor %}
     </tbody></table></div>
+  {% if wv.summary %}<p class="wc-sum"><span class="pill {{ wv.summary.level }}">{{ wv.summary.label }}</span> <span class="small">{{ wv.summary.why }}</span></p>{% endif %}
+  {% for r in wv.reps if r.ready_flag %}<p class="small wc-flag">Rep {{ loop.index }}: {{ r.ready_flag }}.</p>{% endfor %}
   {% if wv.recovery_notes %}<div class="notice wc-rec"><span>{% for n in wv.recovery_notes %}{{ n }}{% if not loop.last %}<br>{% endif %}{% endfor %}</span></div>{% endif %}
-  {% if wv.any_recovery %}<p class="small muted">Recovery: heart rate at the end of each rep (its highest in the last 10 s), one minute later, and the drop{% if wv.usual_recovery is not none %}; this athlete’s usual drop over the past 8 weeks is {{ wv.usual_recovery|round|int }} beats, and a drop 8 or more below it is marked{% endif %}. Compare an athlete with their own usual, not with teammates: a normal drop varies a lot from runner to runner, and standing still recovers faster than jogging.</p>{% endif %}
+  {% if wv.any_recovery %}<p class="small muted">Recovery: heart rate at the end of each rep (its highest in the last 10 s), one minute later, and the drop{% if wv.usual_recovery is not none %}; this athlete’s usual drop over the past 8 weeks is {{ wv.usual_recovery|round|int }} beats, and a drop 8 or more below it is marked{% endif %}. Compare an athlete with their own usual, not with teammates: a normal drop varies a lot from runner to runner, and standing still recovers faster than jogging. Rest is checked against the rest written on the workout, or Daniels’ guidance for the zone (threshold about 1 minute per 5 minutes run, interval about as long as the rep, repetition 2–3 times the rep). Going into the next rep, heart rate should be under {{ 70 }}% of max for repetition reps; for interval reps it should at least have come down {{ 10 }} beats (partial recovery is the point); threshold rests are short by design.</p>{% endif %}
   <p class="small muted">Reps matched {{ 'from the rep laps' if wv.source == 'laps' else 'from pace (stretches clearly faster than easy)' }}, in order; extra efforts such as strides are left out. Heart rate skips each rep’s first 30 seconds while it rises. Heart-rate zones as a share of max (Daniels): easy 65–79%, moderate 80–90%, threshold 88–92%, interval 92–100% (Daniels’ 98–100% is reached late in 3–5 minute reps, so shorter reps average lower); none for repetition. Each part’s heart-rate zone can be changed on the Workouts page.</p>
   {% endif %}
 </div>
