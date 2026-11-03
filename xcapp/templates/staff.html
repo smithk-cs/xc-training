@@ -20,6 +20,29 @@
   {% endfor %}
   </tbody></table>
 </div>
+{% set others = rows|rejectattr('role', 'equalto', 'admin')|list %}
+{% if others %}
+<div class="card scroll" id="sections">
+  <h2>Sections each person sees</h2>
+  <p class="small muted">Untick a section to take it out of that person’s menu; its pages then tell them it’s turned off. Admins always see everything.</p>
+  <form method="post" action="/staff/sections">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <table class="list compact centered sections-grid"><thead><tr><th>Account</th>{% for k, label, _ in sections %}<th class="sec-head"><span>{{ label }}</span></th>{% endfor %}</tr></thead><tbody>
+    {% for u in others %}<tr><td class="nowrap"><b>{{ u.display_name or u.username }}</b><br><span class="small muted">{{ u.role }}</span><input type="hidden" name="users" value="{{ u.id }}">
+      <br><button type="button" class="link small sec-all" data-uid="{{ u.id }}">All</button> · <button type="button" class="link small sec-none" data-uid="{{ u.id }}">None</button></td>
+      {% for k, label, _ in sections %}<td><input type="checkbox" name="show_{{ u.id }}" value="{{ k }}"{{ ' checked' if u.sees(k) }} aria-label="{{ label }} for {{ u.display_name or u.username }}"></td>{% endfor %}</tr>{% endfor %}
+    </tbody></table>
+    <button type="submit">Save sections</button>
+  </form>
+  <script>
+    document.querySelectorAll('.sec-all, .sec-none').forEach(function (b) {
+      b.addEventListener('click', function () {
+        document.querySelectorAll('input[name="show_' + b.dataset.uid + '"]').forEach(function (c) { c.checked = b.classList.contains('sec-all'); });
+      });
+    });
+  </script>
+</div>
+{% endif %}
 <div class="card">
   <h2>Add a staff member</h2>
   <form method="post" action="/staff">

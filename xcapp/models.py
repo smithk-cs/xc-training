@@ -31,7 +31,17 @@ class StaffUser(Base):
     title: Mapped[str] = mapped_column(String(80), default="")      # such as Head Coach
     phone: Mapped[str] = mapped_column(String(30), default="")      # cell phone, shown on meet entry sheets
     on_entries: Mapped[bool] = mapped_column(Boolean, default=True)  # listed as a contact on meet entry sheets
+    # Sections of the app an admin has turned off for this account (comma list of keys from sections.SECTIONS)
+    hidden_sections: Mapped[str] = mapped_column(String(400), default="", server_default="")
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
+
+    @property
+    def hidden(self) -> set[str]:
+        return set() if self.role == "admin" else {s for s in (self.hidden_sections or "").split(",") if s}
+
+    def sees(self, key: str) -> bool:
+        """Whether this account has the section (admins always have every one)."""
+        return key not in self.hidden
 
     @property
     def display_name(self) -> str:

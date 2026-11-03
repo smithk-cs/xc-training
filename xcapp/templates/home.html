@@ -65,7 +65,7 @@
     {% for w in snap.watchlist %}<tr><td>{{ w.athlete }}</td><td>{{ w.reasons }}</td></tr>{% endfor %}
     </tbody></table>
     {% else %}<p class="muted">Nobody is flagged this week.</p>{% endif %}
-    <p><a href="/dashboard">Open the dashboard</a></p>
+    {% if user.sees("dashboard") %}<p><a href="/dashboard">Open the dashboard</a></p>{% endif %}
   </div>
   {% if rhr_flags %}
   <div class="card">
@@ -82,7 +82,7 @@
       <p class="muted small">Last run {{ (last_ai.created_at|local).strftime('%b %-d, %-I:%M %p') }}: {{ 'ready' if last_ai.status == 'ok' else 'failed' }}.</p>
       {% if last_ai.status == 'failed' %}<p class="small">{{ last_ai.error }}</p>{% endif %}
     {% else %}<p class="muted">No briefing yet.</p>{% endif %}
-    <p><a href="/ai">Read it or ask a question</a></p>
+    {% if user.sees("ai") %}<p><a href="/ai">Read it or ask a question</a></p>{% endif %}
   </div>
 </div>
 {% endblock %}

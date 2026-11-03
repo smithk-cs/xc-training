@@ -17,24 +17,24 @@
   <div class="top-menu" id="top-menu">
   <nav aria-label="Main">
     {% set p = request.url.path %}
-    <a href="/dashboard" {% if p == '/dashboard' %}aria-current="page"{% endif %}>Dashboard</a>
-    <a href="/athletes" {% if p.startswith('/athletes') %}aria-current="page"{% endif %}>Athletes</a>
-    <a href="/charts" {% if p == '/charts' %}aria-current="page"{% endif %}>Charts</a>
-    <a href="/races" {% if p == '/races' %}aria-current="page"{% endif %}>Races</a>
-    <a href="/courses" {% if p == '/courses' %}aria-current="page"{% endif %}>Courses</a>
-    <a href="/registrations" {% if p.startswith('/registrations') %}aria-current="page"{% endif %}>Entries</a>
-    <a href="/results" {% if p.startswith('/results') %}aria-current="page"{% endif %}>Goals</a>
-    <a href="/workouts" {% if p == '/workouts' %}aria-current="page"{% endif %}>Workouts</a>
-    <a href="/week" {% if p == '/week' %}aria-current="page"{% endif %}>Week</a>
-    <a href="/squads" {% if p.startswith('/squads') %}aria-current="page"{% endif %}>Squads</a>
-    <a href="/calendar" {% if p.startswith('/calendar') %}aria-current="page"{% endif %}>Calendar</a>
-    <a href="/vdot" {% if p == '/vdot' %}aria-current="page"{% endif %}>VDOT</a>
-    <a href="/reports" {% if p.startswith('/reports') %}aria-current="page"{% endif %}>Reports</a>
-    <a href="/newsletter" {% if p.startswith('/newsletter') %}aria-current="page"{% endif %}>Newsletter</a>
-    <a href="/groups" {% if p == '/groups' %}aria-current="page"{% endif %}>Groups</a>
-    <a href="/injuries" {% if p == '/injuries' %}aria-current="page"{% endif %}>Injuries</a>
-    <a href="/ai" {% if p == '/ai' %}aria-current="page"{% endif %}>AI</a>
-    <a href="/sync" {% if p == '/sync' %}aria-current="page"{% endif %}>Sync log</a>
+    {% if user.sees("dashboard") %}<a href="/dashboard" {% if p == '/dashboard' %}aria-current="page"{% endif %}>Dashboard</a>{% endif %}
+    {% if user.sees("athletes") %}<a href="/athletes" {% if p.startswith('/athletes') %}aria-current="page"{% endif %}>Athletes</a>{% endif %}
+    {% if user.sees("charts") %}<a href="/charts" {% if p == '/charts' %}aria-current="page"{% endif %}>Charts</a>{% endif %}
+    {% if user.sees("races") %}<a href="/races" {% if p == '/races' %}aria-current="page"{% endif %}>Races</a>{% endif %}
+    {% if user.sees("courses") %}<a href="/courses" {% if p == '/courses' %}aria-current="page"{% endif %}>Courses</a>{% endif %}
+    {% if user.sees("entries") %}<a href="/registrations" {% if p.startswith('/registrations') %}aria-current="page"{% endif %}>Entries</a>{% endif %}
+    {% if user.sees("goals") %}<a href="/results" {% if p.startswith('/results') %}aria-current="page"{% endif %}>Goals</a>{% endif %}
+    {% if user.sees("workouts") %}<a href="/workouts" {% if p == '/workouts' %}aria-current="page"{% endif %}>Workouts</a>{% endif %}
+    {% if user.sees("week") %}<a href="/week" {% if p == '/week' %}aria-current="page"{% endif %}>Week</a>{% endif %}
+    {% if user.sees("squads") %}<a href="/squads" {% if p.startswith('/squads') %}aria-current="page"{% endif %}>Squads</a>{% endif %}
+    {% if user.sees("calendar") %}<a href="/calendar" {% if p.startswith('/calendar') %}aria-current="page"{% endif %}>Calendar</a>{% endif %}
+    {% if user.sees("vdot") %}<a href="/vdot" {% if p == '/vdot' %}aria-current="page"{% endif %}>VDOT</a>{% endif %}
+    {% if user.sees("reports") %}<a href="/reports" {% if p.startswith('/reports') %}aria-current="page"{% endif %}>Reports</a>{% endif %}
+    {% if user.sees("newsletter") %}<a href="/newsletter" {% if p.startswith('/newsletter') %}aria-current="page"{% endif %}>Newsletter</a>{% endif %}
+    {% if user.sees("groups") %}<a href="/groups" {% if p == '/groups' %}aria-current="page"{% endif %}>Groups</a>{% endif %}
+    {% if user.sees("injuries") %}<a href="/injuries" {% if p == '/injuries' %}aria-current="page"{% endif %}>Injuries</a>{% endif %}
+    {% if user.sees("ai") %}<a href="/ai" {% if p == '/ai' %}aria-current="page"{% endif %}>AI</a>{% endif %}
+    {% if user.sees("sync") %}<a href="/sync" {% if p == '/sync' %}aria-current="page"{% endif %}>Sync log</a>{% endif %}
     {% if user.role == 'admin' %}<a href="/staff" {% if p == '/staff' %}aria-current="page"{% endif %}>Staff</a>{% endif %}
   </nav>
   <div class="top-user"><span class="who">{{ user.username }} ({{ user.role }})</span>

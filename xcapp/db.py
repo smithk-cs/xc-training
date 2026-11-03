@@ -78,7 +78,7 @@ ADDED_COLUMNS = {
                  ("consent_at", "TIMESTAMP")],
     "staff_users": [("email", "VARCHAR(254) DEFAULT ''"), ("full_name", "VARCHAR(120) DEFAULT ''"), ("first_name", "VARCHAR(60) DEFAULT ''"),
                     ("last_name", "VARCHAR(60) DEFAULT ''"), ("title", "VARCHAR(80) DEFAULT ''"),
-                    ("phone", "VARCHAR(30) DEFAULT ''"), ("on_entries", "BOOLEAN DEFAULT TRUE")],
+                    ("phone", "VARCHAR(30) DEFAULT ''"), ("on_entries", "BOOLEAN DEFAULT TRUE"), ("hidden_sections", "VARCHAR(400) DEFAULT ''")],
     "meet_entries": [("course_id", "INTEGER"), ("start_time", "VARCHAR(5) DEFAULT ''")],
     "courses": [("video_url", "VARCHAR(500) DEFAULT ''"), ("distances", "VARCHAR(200) DEFAULT ''"), ("latitude", "FLOAT"),
                 ("longitude", "FLOAT")],

@@ -609,3 +609,6 @@ table.parts tr.dragging { opacity: .45; }
 .run-link b { text-decoration: underline; text-decoration-style: dotted; text-underline-offset: 3px; }
 .wc-rec { margin: 10px 0; }
 .wc-table td.rec { text-align: center; }
+.sections-grid th.sec-head { vertical-align: bottom; height: 7.5em; padding: 4px 2px; }
+.sections-grid th.sec-head span { writing-mode: vertical-rl; transform: rotate(180deg); white-space: nowrap; font-size: 12px; }
+.sections-grid input[type=checkbox] { width: 20px; height: 20px; }

@@ -39,6 +39,7 @@ from . import classyear as CY
 from . import data_check as DC
 from . import medals as MD
 from . import vdot_report as VR
+from . import sections as SEC
 from . import workout_view as WV
 from . import seasons as SE
 from .config import settings
@@ -215,6 +216,9 @@ def create_app() -> FastAPI:
                 raise HTTPException(303, headers={"Location": "/login"})
             if roles and user.role not in roles:
                 raise HTTPException(403, "Your account does not have access to this page.")
+            sec = SEC.section_for(request.url.path)
+            if sec and not user.sees(sec):
+                raise HTTPException(403, f"{SEC.LABELS[sec]} is turned off for your account. Ask an admin if you need it.")
             return user
         return dep
 
@@ -1579,6 +1583,7 @@ def create_app() -> FastAPI:
     @app.get("/staff", response_class=HTMLResponse)
     def staff_page(request: Request, user=Depends(staff("admin"), scope="function"), db: Session = Depends(get_db, scope="function")):
         return render(request, "staff.html", user, rows=db.scalars(select(StaffUser).order_by(StaffUser.username)).all(), roles=ROLES,
+                      sections=SEC.SECTIONS,
                       uploaded_logo=db.get(AppSetting, LOGO_TYPE_KEY) is not None)
 
     @app.post("/staff")
@@ -1598,6 +1603,25 @@ def create_app() -> FastAPI:
         except ValueError as exc:
             flash(request, str(exc), "error")
         return back("/staff")
+
+    @app.post("/staff/sections")
+    async def staff_sections(request: Request, user=Depends(staff("admin"), scope="function"), db: Session = Depends(get_db, scope="function")):
+        """Which sections each coach or trainer sees (admins always see all)."""
+        f = await form_checked(request)
+        changed = []
+        for raw in f.getlist("users"):
+            u = db.get(StaffUser, int(raw)) if str(raw).isdigit() else None
+            if u is None or u.role == "admin":
+                continue
+            shown = {k for k in f.getlist(f"show_{u.id}") if k in SEC.KEYS}
+            hidden = ",".join(k for k, _, _ in SEC.SECTIONS if k not in shown)
+            if hidden != (u.hidden_sections or ""):
+                u.hidden_sections = hidden
+                changed.append(u.display_name or u.username)
+        if changed:
+            log(db, "admin", f"{user.username} changed the sections for {', '.join(changed)}.")
+        flash(request, f"Saved the sections for {', '.join(changed)}." if changed else "No changes.")
+        return back("/staff#sections")
 
     @app.post("/staff/{uid}/password")
     async def staff_password(request: Request, uid: int, user=Depends(any_staff, scope="function"), db: Session = Depends(get_db, scope="function")):
