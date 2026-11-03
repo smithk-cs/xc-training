@@ -94,10 +94,12 @@ def test_perfect_week(session):
     runs = [(0, [(e, 40)]), (1, [(e, 10), (i, 15), (e, 10)]), (2, [(e, 40)]), (3, [(e, 40)]), (4, [(e, 35)]), (5, [(e, 80)])]
     a = make_week(session, runs, [TUESDAY], goal=30)
     w = P.team_week(session, MON, athletes=[a])[0]
+    assert w["target"] == pytest.approx(19)                                      # only the posted workout
     easy_miles = 30 - P.workout_plan(session.query(PlannedWorkout).one(), V)[0]
-    assert w["target"] == pytest.approx(19 + easy_miles * PACE["Easy"] / 60 * 0.2)
+    assert w["why_target"]["easy"]["miles"] == pytest.approx(easy_miles) and w["why_target"]["easy"]["points"] == 0
     tue = w["days"][1]
     assert tue["planned"] == pytest.approx(19) and tue["points"] == pytest.approx(19, abs=0.5)
+    assert [d["points"] for i, d in enumerate(w["days"]) if i != 1] == [0] * 6       # easy days: miles, no points
     assert w["run_days"] == 6 and not w["flags"]
     assert w["score"] == pytest.approx(100 * (0.8 * min(w["points"] / w["target"], 1) + 0.2))
 
@@ -107,8 +109,8 @@ def test_too_fast_easy_week(session):
     runs = [(0, [(t, 40)]), (1, [(t, 50)]), (2, [(t, 40)])]                       # everything at threshold, Tuesday too
     a = make_week(session, runs, [TUESDAY], goal=30)
     w = P.team_week(session, MON, athletes=[a])[0]
-    assert w["days"][0]["points"] == pytest.approx(40 * 0.2, abs=0.2)               # no plan that day: easy minutes only
-    assert w["days"][1]["points"] == pytest.approx(19 + 15 * 0.2, abs=0.1)         # the plan (35 min) + 15 extra minutes at easy
+    assert w["days"][0]["points"] == 0                                              # no posted workout that day: no points
+    assert w["days"][1]["points"] == pytest.approx(19)                              # capped at the workout's plan
     assert any("faster than easy pace" in f for f in w["flags"])
 
 
@@ -120,16 +122,16 @@ def test_race_days_count_and_short_days_are_marked(session):
     w = P.team_week(session, MON, athletes=[a])[0]
     assert w["run_days"] == 2                                                        # Tuesday and the race on Saturday
     assert [(d["counts"], d["race"]) for d in w["days"][4:6]] == [(False, False), (True, True)]
-    assert w["no_score"] == ""
-    w["group"].weekly_miles_girls = 0
+    assert w["no_score"] == "" or w["target"] is None
+    session.query(PlannedWorkout).delete()
     session.flush()
     none = P.team_week(session, MON, athletes=[a])[0]
-    assert none["score"] is None and none["no_score"] == f"No weekly miles goal for {w['group_name']} (girls)"
+    assert none["score"] is None and none["no_score"] == "No team workout posted yet this week"
 
 
-def test_every_day_a_workout_extra_running_counts_as_easy(session):
-    """A week with a team workout every run day: the target still includes the goal's miles the workouts leave, and
-    running beyond each workout's planned minutes earns them (at the easy rate), so a full week can reach 100%."""
+def test_every_day_a_workout_reaches_the_target(session):
+    """A week with a team workout every run day: the target is the six workouts, and doing each one as planned is
+    100%; the extra easy minutes after each count as miles, not points."""
     e, i = PACE["Easy"], PACE["Interval"]
     days = [(d, [{"sets": 1, "reps": 1, "mins": 10, "zone": "Easy"}, {"sets": 1, "reps": 4, "mins": 3, "zone": "Interval"}]) for d in range(6)]
     runs = [(d, [(e, 10), (i, 12), (e, 20)]) for d in range(6)]          # each workout, then 20 easy minutes more
@@ -138,8 +140,8 @@ def test_every_day_a_workout_extra_running_counts_as_easy(session):
     plan = w["days"][0]["planned"]
     assert plan == pytest.approx(10 * 0.2 + 12 * 1.0, abs=0.01)
     assert w["why_target"]["easy"]["miles"] > 0                              # 30 miles is more than the six workouts
-    assert all(d["points"] == pytest.approx(plan + 20 * 0.2, abs=0.3) for d in w["days"][:6])
-    assert w["points"] >= w["target"] * 0.99 and w["points"] <= w["target"] * 1.1
+    assert all(d["points"] == pytest.approx(plan, abs=0.3) for d in w["days"][:6])
+    assert w["target"] == pytest.approx(6 * plan) and w["points"] == pytest.approx(w["target"], rel=0.01)
     # Running the workout harder than planned, for no longer, still earns only the plan
     session.rollback()
     b = make_week(session, [(0, [(e, 10), (PACE["Repetition"], 12)])], days[:1], goal=30)
@@ -154,7 +156,8 @@ def test_missed_week_and_extra_cap(session):
     session.rollback()
     b = make_week(session, [(d, [(PACE["Easy"], 150)]) for d in range(7)], goal=10)
     w = P.team_week(session, MON, athletes=[b])[0]
-    assert w["points"] == pytest.approx(1.1 * w["target"])                          # extra running counts up to 110%
+    assert w["points"] == 0 and w["target"] is None and w["score"] is None           # no workouts posted: no points
+    assert w["miles"] > 60 and w["run_days"] == 7                                     # the running still shows
 
 
 def test_week_page_and_athlete_panel():
@@ -172,6 +175,7 @@ def test_week_page_and_athlete_panel():
     a = make_week(db, [(0, [(PACE["Easy"], 40)])], goal=30)
     act = db.query(Activity).one()
     act.local_date = monday                                  # this week, for the athlete's own page
+    db.add(PlannedWorkout(date=monday + dt.timedelta(days=1), title="w", rep_distance_m=0, groups="All", gender="Girls", parts=json.dumps(TUESDAY[1])))
     boy = Athlete(first_name="Sam", last_name="Lowry", gender="Boys", grade=12, group="Varsity", link_token="t-sam", vdot_override=60)
     db.add(boy)
     db.commit()
@@ -186,7 +190,7 @@ def test_week_page_and_athlete_panel():
     assert "Girls week" in girls and f'href="/athletes/{aid}">Ava Doyle</a>' in girls and "Sam Lowry" not in girls
     assert re.search(r"<b>\d+%</b>", girls) and "of 30" in girls and "Effort" not in girls
     boys = c.get("/week?team=Boys").text
-    assert "Boys week" in boys and "Sam Lowry" in boys and "No score (–)" in boys   # Sam's group has no weekly goal
+    assert "Boys week" in boys and "Sam Lowry" in boys and "No score (–)" in boys   # no workout posted for the boys
     csrf = re.search(r'name="csrf" value="([^"]+)"', girls).group(1)
     c.post("/week/settings", data={"csrf": csrf, "team": "Girls", "start": monday.isoformat(), "target_days": "5", "min_minutes": "25", "rest_day": "2"})
     page = c.get(f"/week?team=Girls&start={monday.isoformat()}").text
@@ -195,7 +199,7 @@ def test_week_page_and_athlete_panel():
     c.post("/week/settings", data={"csrf": csrf, "team": "Girls", "target_days": "9", "min_minutes": "25"})
     assert "Target days run from 1 to 7" in c.get("/week?team=Girls").text
     me = TestClient(app).get("/a/t-ava").text
-    assert "This week’s points" in me and "Hit it and you’re at 100%" in me
+    assert "This week’s points" in me and "Hit them all and you’re at 100%" in me
     page = c.get(f"/athletes/{aid}").text
     assert '<option value="2" selected>2: usual</option>' in page
     c.post(f"/athletes/{aid}/edit", data={"csrf": csrf, "grade": "11", "experience": "3"})
@@ -213,9 +217,9 @@ def test_experience_changes_the_miles_goal_and_target(session):
     a.experience = 3
     pro = P.team_week(session, MON, athletes=[a])[0]
     assert new["goal_miles"] == pytest.approx(27) and pro["goal_miles"] == pytest.approx(33)
-    easy_points_per_mile = PACE["Easy"] / 60 * 0.2
-    assert usual["target"] - new["target"] == pytest.approx(3 * easy_points_per_mile)
-    assert pro["target"] - usual["target"] == pytest.approx(3 * easy_points_per_mile)
+    # Experience changes the miles goal (and the easy miles beside the workouts), not the points target
+    assert usual["target"] == new["target"] == pro["target"]
+    assert usual["why_target"]["easy"]["miles"] - new["why_target"]["easy"]["miles"] == pytest.approx(3)
     goal = A.mileage_goal(session, a.id, usual["group_name"], MON, "Girls", 3)
     assert goal["goal"] == pytest.approx(33)
 
@@ -314,6 +318,6 @@ def test_two_workouts_on_one_day_count_once(session):
     first = session.query(PlannedWorkout).order_by(PlannedWorkout.id).first()
     one = P.workout_plan(first, V)
     assert w["days"][1]["planned"] == pytest.approx(one[1])                          # not both workouts
-    assert w["target"] == pytest.approx(one[1] + (30 - one[0]) * PACE["Easy"] / 60 * 0.2)
+    assert w["target"] == pytest.approx(one[1])                                       # only the one workout counted
     why = w["why_target"]
     assert len(why["workouts"]) == 1 and why["workouts"][0]["not_counted"] == ["w"] and why["easy"]["miles"] == pytest.approx(30 - one[0])

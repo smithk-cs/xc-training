@@ -130,6 +130,13 @@ def create_all():
         for name, _b, _g, color in DEFAULT_GROUPS:
             conn.execute(text("UPDATE training_groups SET color = :new WHERE name = :name AND UPPER(color) = :old"),
                          {"new": color, "name": name, "old": SHEET_COLORS[name]})
+        # Saved weeks (medals, squads) are worked out again when the points rules change. 2: points only from the
+        # posted workouts, and the target only those workouts.
+        WEEK_RULES = "2"
+        if conn.execute(text("SELECT value FROM app_settings WHERE key = 'week_rules'")).scalar() != WEEK_RULES:
+            conn.execute(text("DELETE FROM week_results"))
+            conn.execute(text("DELETE FROM app_settings WHERE key = 'week_rules'"))
+            conn.execute(text("INSERT INTO app_settings (key, value) VALUES ('week_rules', :v)"), {"v": WEEK_RULES})
         if not conn.execute(text("SELECT COUNT(*) FROM app_settings WHERE key = 'vdot_targets'")).scalar():
             import json
             conn.execute(text("INSERT INTO app_settings (key, value) VALUES ('vdot_targets', :v)"),

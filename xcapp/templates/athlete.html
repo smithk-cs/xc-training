@@ -207,7 +207,7 @@
       <div><span class="k">Days run</span><span class="big">{{ mp.run_days }}</span><span class="small muted">of {{ mp.target_days }}</span></div>
       {% if mp.score is not none %}<div><span class="k">Score</span><span class="big">{{ '%.0f' % mp.score }}%</span><span class="small muted">of target</span></div>{% endif %}
     </div>
-    <details class="small muted how-points"><summary>How points work</summary><p style="margin:6px 0 0">Every minute you run earns points, and harder minutes earn more ({% for z, r in rates.items() %}{{ z|lower }} {{ r }}{{ ', ' if not loop.last else '' }}{% endfor %} a minute). Your target comes from the team’s plan for your group. Hit it and you’re at 100%. Your score is 80% points and 20% days run. Run on pace, run on the days you’re scheduled, and the points take care of themselves.</p></details>
+    <details class="small muted how-points"><summary>How points work</summary><p style="margin:6px 0 0">Every minute of a team workout earns points, and harder minutes earn more ({% for z, r in rates.items() %}{{ z|lower }} {{ r }}{{ ', ' if not loop.last else '' }}{% endfor %} a minute). Points come from the team workouts posted for your group, up to each workout’s plan, so your target grows as the week’s workouts are added. Hit them all and you’re at 100%. Your score is 80% points and 20% days run. Run on pace, run on the days you’re scheduled, and the points take care of themselves.</p></details>
   </section>
   {% endif %}
 

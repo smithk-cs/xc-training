@@ -311,8 +311,8 @@ def team_week(db: Session, monday: dt.date, gender: str | None = None, athletes:
         score_pace(week, today, target_days)
         if last["points"] > 0 and week["points"] > JUMP * last["points"]:
             week["flags"].append(f"Points up {100 * (week['points'] / last['points'] - 1):.0f}% on last week")
-        no_score = ("" if week["target"] else "No VDOT yet (needs a race)" if not v else "No running group" if g is None
-                    else f"No weekly miles goal for {g.name} ({'girls' if a.gender == 'Girls' else 'boys'})")
+        no_score = ("" if week["target"] else "No VDOT yet (needs a race)" if not v
+                    else "No team workout posted yet this week")
         out.append({"a": a, "group": g, "group_name": group, "vdot": v, "target_days": target_days, **week,
                     "last_points": last["points"], "no_score": no_score, "min_minutes": min_minutes})
     return out
@@ -345,12 +345,11 @@ def _athlete_week(a, v, g, days, mine, acts_by, pain_by, missed_by, min_minutes,
                 zones[z] = zones.get(z, 0) + s
         minutes = moving_minutes(zones)
         if planned and day_plan is not None:
-            # The day cap: the workout's planned points, plus easy points for running beyond the workout's planned
-            # minutes (warm-up, cool-down, extra miles). Running the workout faster than planned earns nothing extra.
-            extra = max(minutes - day_plan_minutes, 0.0)
-            earned = min(zone_points(zones), day_plan + extra * RATES["Easy"])
+            # Points come only from the posted workouts: up to the workout's planned points (running it faster, or
+            # adding miles, earns nothing extra).
+            earned = min(zone_points(zones), day_plan)
         else:
-            earned = minutes * RATES["Easy"]                # unplanned days count as easy minutes
+            earned = 0.0                                    # no posted workout that day: miles and days run, no points
         day_miles = sum(r.distance_m or 0 for r in runs) / A.METERS_PER_MILE
         hr_s = [(r.avg_hr, r.duration_s) for r in runs if r.avg_hr and r.duration_s]
         hr = sum(h * s for h, s in hr_s) / sum(s for _, s in hr_s) if hr_s else None
@@ -374,11 +373,12 @@ def _athlete_week(a, v, g, days, mine, acts_by, pain_by, missed_by, min_minutes,
                       "counts": counts, "race": race})
     target = None
     easy = None
-    if v and goal_miles:  # without the group's weekly miles goal the target would be the workouts alone
+    if v and goal_miles:  # the goal's miles the workouts leave: run easy, counted in miles (no points)
         easy_pace = A.pace_at(v, A.EASY_PCT)
         easy_miles = max(goal_miles - workout_miles, 0)
-        easy = {"miles": easy_miles, "pace": easy_pace, "points": easy_miles * easy_pace / 60 * RATES["Easy"]}
-        target = workout_pts + easy["points"]
+        easy = {"miles": easy_miles, "pace": easy_pace, "points": 0.0}
+    if v and workout_pts > 0:  # the target is only the week's posted workouts, so it grows as workouts are added
+        target = workout_pts
     points = min(total, WEEK_CAP * target) if target else total
     return {"days": cells, "points": points, "target": target, "miles": miles, "goal_miles": goal_miles,
             "run_days": run_days, "flags": flags,
