@@ -618,3 +618,7 @@ table.parts tr.dragging { opacity: .45; }
 #effort > form { display: flex; flex-direction: column; gap: 14px; margin-top: 10px; }
 #effort .effort-done { margin-left: auto; margin-right: 8px; color: var(--color-ok); font-weight: 600; }
 .wc-athlete > .card { border: 0; padding: 0; margin: 0; background: transparent; }
+.workouts-by-day .parts-col { min-width: 24rem; }
+.workouts-by-day .part-line { white-space: nowrap; line-height: 1.5; }
+.workouts-by-day .part-line + .part-line { border-top: 1px dashed var(--color-border-line); }
+.workouts-by-day .groups-col { width: 1%; white-space: nowrap; }
