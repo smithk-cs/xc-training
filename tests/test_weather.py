@@ -263,11 +263,12 @@ def test_practice_forecasts_use_the_calendar_time_and_place():
     app = create_app()
     me = TestClient(app).get("/a/t-pf").text
     assert "🌤 4:00 PM at Jesuit track: 66°F" in me and "7:00 AM at Gibson Ranch: 57°F" in me
+    assert "66°F, partly cloudy, 70% humidity" in me and "dew point" not in me                 # athletes: humidity, no dew point
     cl = TestClient(app, follow_redirects=False)
     csrf = re.search(r'name="csrf" value="([^"]+)"', cl.get("/login").text).group(1)
     cl.post("/login", data={"csrf": csrf, "username": "coach6", "password": "correct-horse-1"})
     page = cl.get("/workouts").text
-    assert "4:00 PM: 66°F" in page and "3:30 PM (usual time): 65°F" in page
+    assert "4:00 PM: 66°F" in page and "3:30 PM (usual time): 65°F" in page and "% humidity" not in page   # coaches as before
     cal = cl.get("/calendar").text
     assert re.search(r'<span class="small cal-weather"[^>]*>\S+ 66°F', cal)             # Tuesday's 4 p.m. practice
     assert '<details class="card fold-card" id="practice-place">' in cal and '<details class="card fold-card" id="share">' in cal

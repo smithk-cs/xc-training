@@ -285,13 +285,16 @@ def nightly(db: Session, http: httpx.Client | None = None, days: int = FILL_DAYS
     return out
 
 
-def describe(f, dew: bool = True) -> str:
-    """'68°F, partly cloudy, 10% chance of rain, wind 6 mph, dew point 52°F'"""
+def describe(f, dew: bool = True, humidity: bool = False) -> str:
+    """'68°F, partly cloudy, 10% chance of rain, wind 6 mph, dew point 52°F' (athletes see humidity instead of dew point:
+    '68°F, partly cloudy, 45% humidity, ...')"""
     if f is None or f.temp_f is None:
         return ""
     bits = [f"{f.temp_f:.0f}°F"]
     if f.summary:
         bits.append(f.summary.lower())
+    if humidity and getattr(f, "humidity_pct", None) is not None:
+        bits.append(f"{f.humidity_pct:.0f}% humidity")
     if f.rain_pct is not None and f.rain_pct >= 10:
         bits.append(f"{f.rain_pct:.0f}% chance of rain")
     if f.wind_mph is not None:
@@ -356,7 +359,7 @@ def practice_forecast(db: Session, day: dt.date, team: str) -> dict | None:
     s = practice_slot(db, day, team)
     f = db.scalar(select(PracticeForecast).where(PracticeForecast.date == day, PracticeForecast.start_time == s["time"],
                                                  PracticeForecast.lat == round(s["lat"], 3), PracticeForecast.lon == round(s["lon"], 3)))
-    return ({**s, "forecast": f, "text": describe(f), "athlete_text": describe(f, dew=False)}
+    return ({**s, "forecast": f, "text": describe(f), "athlete_text": describe(f, dew=False, humidity=True)}
             if f is not None and f.temp_f is not None else None)
 
 
