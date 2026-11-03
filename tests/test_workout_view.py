@@ -109,7 +109,8 @@ def test_page_and_week_link():
     assert page.count("✓ on target") >= 4 and "Watch paused 3 times" in page and "Warm-up" in page and "184–200" in page
     week = c.get(f"/week?team=Boys&start={DAY - dt.timedelta(days=DAY.weekday())}").text
     assert f'href="/athletes/{aid}/runs/{rid}#workout"' in week
-    assert "✓ Rests OK</a>" in week and "rest 1:31" in page
+    assert re.search(r'<span class="pace-(good|warn|bad)">Pace \d+%</span> · <span class="pace-(good|warn|bad)">HR \d+%</span>', week)
+    assert "Rests OK</a>" not in week and "rest 1:31" in page
     assert "Pace targets at VDOT 50." in page and "Heart-rate targets from a max of 200" in page and "No max heart rate" not in page
 
 
@@ -194,7 +195,8 @@ def test_summaries_and_week_line(session):
     assert [r["rest_verdict"] for r in wv["reps"][:3]] == ["ok"] * 3                  # 90 s written, about 91 taken
     assert WV.summary(wv) == {"label": "Rests OK", "level": "good", "why": "3 of 3 rests about as planned."}
     first = WV.day_summary(session, act)
-    assert first["label"] == "Rests OK" and json.loads(act.recovery_note)["for"] == act.planned_workout_id
+    assert first["recovery"]["label"] == "Rests OK" and json.loads(act.recovery_note)["for"] == act.planned_workout_id
+    assert first["pace"]["reps"] == 4 and first["pace"]["pct"] > 85 and first["hr"]["reps"] == 4
     act.stream = ""                                                                   # saved: not worked out again
     assert WV.day_summary(session, act) == first
 

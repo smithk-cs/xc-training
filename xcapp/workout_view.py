@@ -447,8 +447,22 @@ def summary(wv: dict) -> dict | None:
     return None
 
 
+def zone_shares(wv: dict) -> dict:
+    """Across the workout's reps that were found: the share of rep time in the pace zone and in the heart-rate zone
+    (each rep weighted by its time). None when there is nothing to judge."""
+    reps = [r for r in wv["reps"] if r.get("found") and r.get("secs")]
+
+    def share(key, band_key):
+        rows = [(r[key], r["secs"]) for r in reps if r.get(band_key) and r.get(key) is not None]
+        tot = sum(w for _, w in rows)
+        return {"pct": sum(v * w for v, w in rows) / tot, "reps": len(rows)} if tot else None
+
+    return {"pace": share("pace_in", "pace_band"), "hr": share("hr_in", "hr_band")}
+
+
 def day_summary(db: Session, act: Activity) -> dict | None:
-    """The run's recovery line, saved with it (worked out again if the run's workout changes)."""
+    """For the Week page: the workout's share of rep time in the pace and heart-rate zones, and the recovery line.
+    Saved with the run (worked out again if the run's workout changes)."""
     if not act.planned_workout_id:
         return None
     try:
@@ -457,12 +471,13 @@ def day_summary(db: Session, act: Activity) -> dict | None:
         saved = None
     if saved is not None and saved.get("for") == act.planned_workout_id and saved.get("v") == SUMMARY_VERSION:
         return saved.get("s")
-    s = summary(build(db, act))
+    wv = build(db, act)
+    s = {**zone_shares(wv), "recovery": summary(wv)}
     act.recovery_note = json.dumps({"for": act.planned_workout_id, "v": SUMMARY_VERSION, "s": s})
     return s
 
 
-SUMMARY_VERSION = 2   # 2: worked out again with max heart rate (missing in version 1)
+SUMMARY_VERSION = 3   # 3: pace and heart-rate zone shares for the Week page
 
 
 def usual_recovery(db: Session, a: Athlete, act: Activity) -> float | None:
