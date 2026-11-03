@@ -123,3 +123,47 @@ def test_fit_file_keeps_its_detail_and_a_resent_copy_fills_it_in(session, athlet
     session.flush()
     again, outcome = ingest(session, athlete, parse_fit(data), "garmin_file")
     assert outcome == "duplicate" and again.id == act.id and again.stream
+
+
+def test_recovery_column_paused_and_measured(session):
+    a, act = make(session)
+    wv = WV.build(session, act)
+    reps = wv["reps"]
+    assert [r["rec_note"] for r in reps[:3]] == ["Watch paused"] * 3 and reps[3]["rec_drop"] is not None
+    assert any("watch was paused" in n for n in wv["recovery_notes"])
+
+
+def test_recovery_shrinking_and_below_usual(session):
+    from xcapp.models import Lap
+    a = Athlete(first_name="Ann", last_name="Rec", gender="Girls", grade=11, group="Varsity", link_token="t-rec", vdot_override=V, hr_max=200)
+    session.add(a)
+    session.flush()
+    easy = A.pace_at(V, A.EASY_PCT) / A.METERS_PER_MILE
+    fast = A.pace_at(V, A.INTERVAL_PCT) / A.METERS_PER_MILE
+    t, d, dist, hrs = 0.0, 0.0, [], []
+    for k in range(300):                                   # warm-up
+        dist.append((t, d)); hrs.append((t, 135)); t += 1; d += 1 / easy
+    for after in (160, 165, 170, 176, 180):                # 5 x 400, then 90 s jogging with the watch running
+        for k in range(int(400 * fast)):
+            dist.append((t, d)); hrs.append((t, 190)); t += 1; d += 1 / fast
+        for k in range(90):
+            dist.append((t, d)); hrs.append((t, int(190 - (190 - after) * min(k / 60, 1)))); t += 1; d += 1 / (easy * 1.3)
+    pw = PlannedWorkout(date=DAY, title="5 x 400", rep_distance_m=400, groups="All",
+                        parts=json.dumps([{"sets": 1, "reps": 5, "dist": 400, "zone": "Interval", "rest": "90 s jog"}]))
+    session.add(pw)
+    session.flush()
+    act = Activity(athlete_id=a.id, source="garmin_file", external_id="rec1", start_utc=dt.datetime(2026, 10, 20, 22), local_date=DAY,
+                   duration_s=t, distance_m=d, sport="running", planned_workout_id=pw.id, stream=WV.make_stream(dist, hrs), zone_vdot=V)
+    earlier = Activity(athlete_id=a.id, source="garmin_file", external_id="rec0", start_utc=dt.datetime(2026, 10, 13, 22),
+                       local_date=DAY - dt.timedelta(days=7), duration_s=1800, distance_m=6000, sport="running")
+    for i in range(6):
+        earlier.laps.append(Lap(idx=i, start_offset_s=i * 200, elapsed_s=90, timer_s=90, distance_m=400, is_rep=True, hr_drop_60s=38))
+    session.add_all([act, earlier])
+    session.flush()
+    wv = WV.build(session, act)
+    drops = [round(r["rec_drop"]) for r in wv["reps"]]
+    assert drops[:4] == [30, 25, 20, 14] and wv["reps"][4]["rec_drop"] == 10 and wv["reps"][4]["rec_last"]
+    assert wv["reps"][0]["rec_end"] == 190 and wv["reps"][0]["rec_next"] is not None and wv["reps"][0]["rec_next"] < 190
+    assert wv["usual_recovery"] == 38
+    notes = " ".join(wv["recovery_notes"])
+    assert "the athlete was tiring" in notes and "smaller than this athlete’s usual (38)" in notes

@@ -607,3 +607,5 @@ table.parts tr.dragging { opacity: .45; }
 .wc-sw.pause { background: repeating-linear-gradient(45deg, var(--cds-chart-muted) 0 2px, transparent 2px 5px); }
 .run-link { text-decoration: none; color: inherit; }
 .run-link b { text-decoration: underline; text-decoration-style: dotted; text-underline-offset: 3px; }
+.wc-rec { margin: 10px 0; }
+.wc-table td.rec { text-align: center; }

@@ -330,6 +330,71 @@ def old_style_items(db: Session, a: Athlete, pw) -> list[dict]:
     return [dict(base, rep=1, label=unit, open_count=True)]
 
 
+# ---------- recovery between reps ----------
+
+RECOVERY_S = 60
+USUAL_DAYS = 56
+SMALLER_THAN_USUAL = 8    # beats: a session's typical drop this much below the athlete's usual is pointed out
+TIRING_DROP = 10          # beats: recovery shrinking at least this much from the first reps to the last
+
+
+def hr_near(points, t: float, before: float = 0, after: float = 0, pick=max) -> float | None:
+    """Heart rate around t: the highest (or chosen) reading from t-before to t+after, or the nearest within 5 s."""
+    window = [h for tt, _, h in points if h and t - before <= tt <= t + after]
+    if window:
+        return pick(window)
+    near = [(abs(tt - t), h) for tt, _, h in points if h and abs(tt - t) <= 5]
+    return min(near)[1] if near else None
+
+
+def recovery(points, pauses, rep: dict, next_rep: dict | None) -> dict:
+    """Heart rate at the end of a rep, 60 s later (only if the watch kept running), and at the next rep's start."""
+    t1 = rep["t1"]
+    out = {"rec_end": hr_near(points, t1, before=10), "rec_60": None, "rec_drop": None, "rec_next": None, "rec_note": ""}
+    if any(t1 - 2 <= a0 < t1 + RECOVERY_S for a0, _ in pauses):
+        out["rec_note"] = "Watch paused"
+    elif not points or points[-1][0] < t1 + RECOVERY_S - 5:
+        out["rec_note"] = "Run ended"
+    else:
+        out["rec_60"] = hr_near(points, t1 + RECOVERY_S)
+    if out["rec_end"] and out["rec_60"]:
+        out["rec_drop"] = out["rec_end"] - out["rec_60"]
+    if next_rep and next_rep.get("found"):
+        out["rec_next"] = hr_near(points, next_rep["t0"], before=5, after=2, pick=min)   # where it was as the rep began
+    return out
+
+
+def usual_recovery(db: Session, a: Athlete, act: Activity) -> float | None:
+    """The athlete's typical 60-second drop after reps over the past 8 weeks of workouts (other runs), from the rep
+    laps; needs at least 4."""
+    from .models import Lap
+    drops = db.scalars(select(Lap.hr_drop_60s).join(Activity, Activity.id == Lap.activity_id).where(
+        Activity.athlete_id == a.id, Activity.id != act.id, Lap.is_rep.is_(True), Lap.hr_drop_60s.is_not(None),
+        Activity.local_date >= act.local_date - dt.timedelta(days=USUAL_DAYS), Activity.local_date <= act.local_date)).all()
+    return statistics.median(drops) if len(drops) >= 4 else None
+
+
+def recovery_notes(reps: list[dict], usual: float | None) -> list[str]:
+    drops = [r["rec_drop"] for r in reps if r.get("rec_drop") is not None]
+    notes = []
+    if len(drops) >= 3:
+        k = max(1, len(drops) // 3)
+        first, last = statistics.fmean(drops[:k]), statistics.fmean(drops[-k:])
+        if first - last >= TIRING_DROP and sum(b <= a + 3 for a, b in zip(drops, drops[1:])) >= len(drops) - 2:
+            notes.append(f"Recovery shrank from about {first:.0f} beats after the first rep{'s' if k > 1 else ''} to "
+                         f"{last:.0f} after the last: the athlete was tiring.")
+    if drops and usual is not None:
+        typical = statistics.median(drops)
+        if usual - typical >= SMALLER_THAN_USUAL:
+            notes.append(f"Recovery today ({typical:.0f} beats in 60 s) was smaller than this athlete’s usual ({usual:.0f}) "
+                         f"over the past {USUAL_DAYS // 7} weeks. Worth a check-in: sleep, illness, heat or a hard week can all do it.")
+    paused = sum(1 for r in reps if r.get("rec_note") == "Watch paused")
+    if paused:
+        notes.append(f"Recovery couldn’t be measured after {paused} rep{'s' if paused != 1 else ''}: the watch was paused "
+                     "during the rest. Leaving it running between reps gives the full picture.")
+    return notes
+
+
 def build(db: Session, act: Activity) -> dict:
     """Everything the workout chart and table need, as plain data."""
     a = act.athlete
@@ -373,6 +438,9 @@ def build(db: Session, act: Activity) -> dict:
             row["hr_verdict"] = verdict(row.get("hr"), hb, "low", "high")
         reps.append(row)
     found = [r for r in reps if r["found"]]
+    for i, r in enumerate(found):
+        r.update(recovery(points, pauses, r, found[i + 1] if i + 1 < len(found) else None), rec_last=i == len(found) - 1)
+    usual = usual_recovery(db, a, act)
     easy = []
     if points:
         start, end = points[0][0], points[-1][0]
@@ -387,12 +455,14 @@ def build(db: Session, act: Activity) -> dict:
         for x in easy:
             x.update(judge(points, paces, x["t0"], x["t1"], eb, ehb, 0))
             x["pace_verdict"], x["hr_verdict"] = verdict(x.get("pace"), eb), verdict(x.get("hr"), ehb, "low", "high")
-    keys = ("secs", "dist", "pace", "hr", "pace_in", "pace_fast", "hr_in", "hr_high", "pace_verdict", "hr_verdict", "rest")
+    keys = ("secs", "dist", "pace", "hr", "pace_in", "pace_fast", "hr_in", "hr_high", "pace_verdict", "hr_verdict", "rest",
+            "rec_end", "rec_60", "rec_drop", "rec_next", "rec_note")
     for row in reps + easy:   # every row has every field, empty when the run doesn't say
         for k in keys:
-            row.setdefault(k, None if k not in ("pace_verdict", "hr_verdict", "rest") else "")
+            row.setdefault(k, None if k not in ("pace_verdict", "hr_verdict", "rest", "rec_note") else "")
     return {
-        "has_stream": bool(act.stream), "source": source, "vdot": v, "hr_max": hmax, "hr_max_from": hmax_from,
+        "has_stream": bool(act.stream), "source": source, "usual_recovery": usual,
+        "recovery_notes": recovery_notes(found[:-1], usual),   # after the last rep the athlete stops: not comparable "any_recovery": any(r.get("rec_end") for r in found), "vdot": v, "hr_max": hmax, "hr_max_from": hmax_from,
         "reps": reps, "easy": easy, "pauses": [{"t0": a0, "t1": a1, "secs": a1 - a0} for a0, a1 in pauses],
         "paused_secs": sum(a1 - a0 for a0, a1 in pauses), "items": items, "workout": pw,
         "chart": {"t": [p[0] for p in points], "pace": [None if x is None else round(x, 1) for x in paces],
