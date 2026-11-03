@@ -225,6 +225,8 @@ class Activity(Base):
     # Seconds in each pace zone as JSON ({"Easy": 1800, "Threshold": 600, "walk": 40}), worked out when the run arrived
     # with the VDOT the athlete had then (zone_vdot), so later VDOT changes don't move old points.
     zone_seconds: Mapped[str] = mapped_column(Text, default="")
+    # Second-by-second detail, compact JSON (see workout_view.make_stream): for the workout chart
+    stream: Mapped[str] = mapped_column(Text, default="")
     zone_vdot: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     athlete: Mapped[Athlete] = relationship(back_populates="activities")

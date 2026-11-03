@@ -39,6 +39,7 @@ from . import classyear as CY
 from . import data_check as DC
 from . import medals as MD
 from . import vdot_report as VR
+from . import workout_view as WV
 from . import seasons as SE
 from .config import settings
 from .db import SessionLocal, create_all
@@ -1281,7 +1282,7 @@ def create_app() -> FastAPI:
             edit_parts = [{"sets": 1, "reps": 1, "dist": round(edit.rep_distance_m), "zone": A.OLD_TYPE_ZONE.get(A.pace_type(edit.pace_factor), "Interval"), "rest": ""}]
         vdots = sorted(v for v in (x.get("vdot") for x in A.abilities(db, today).values()) if v)
         return render(request, "workouts_all.html" if all_dates else "workouts.html", user, rows=rows, counts=counts, checked=checked,
-                      today=today.isoformat(), q=q, window=WORKOUT_WINDOW, rates=PT.RATES, zone_pcts=dict(A.PACE_ZONES),
+                      today=today.isoformat(), q=q, window=WORKOUT_WINDOW, rates=PT.RATES, zone_pcts=dict(A.PACE_ZONES), hr_zones=WV.HR_CHOICES,
                       ref_vdot=vdots[len(vdots) // 2] if vdots else 50,
                       ai_ready=settings().ai_configured, pending_checks=len(AI.pending_workout_checks(db)),
                       ability_names=ability_names, edit=edit, copying=copying, edit_parts=edit_parts, edit_fill=edit_fill,
@@ -1332,6 +1333,7 @@ def create_app() -> FastAPI:
             parts = []
             units = f.getlist("p_unit")
             notes = f.getlist("p_note")
+            hrs = f.getlist("p_hr")
             for i, (sets, reps, dist, zone, rest) in enumerate(zip(f.getlist("p_sets"), f.getlist("p_reps"), f.getlist("p_dist"),
                                                                    f.getlist("p_zone"), f.getlist("p_rest"))):
                 if not str(dist).strip():
@@ -1344,6 +1346,9 @@ def create_app() -> FastAPI:
                 note = str(notes[i]).strip()[:200] if i < len(notes) else ""
                 if note:
                     p["note"] = note
+                hr = str(hrs[i]) if i < len(hrs) else ""
+                if hr in WV.HR_CHOICES or hr == "none":   # empty: the heart-rate zone follows the pace zone
+                    p["hr"] = hr
                 if by_time:
                     p["mins"] = n
                 elif by_miles:  # kept in meters like any distance, and in miles for showing
@@ -1985,7 +1990,8 @@ def create_app() -> FastAPI:
         if act is None or act.athlete_id != a.id:
             raise HTTPException(404, "Run not found.")
         pain = next((p for p in a.pain_reports if p.activity_id == act.id), None)
-        return render(request, "staff_run.html", user, a=a, act=act, pain=pain, choices=workout_choices(db, act))
+        wv = WV.build(db, act) if (act.planned_workout_id or act.stream or act.laps) else None
+        return render(request, "staff_run.html", user, a=a, act=act, pain=pain, choices=workout_choices(db, act), wv=wv)
 
     @app.post("/athletes/{athlete_id}/runs/{activity_id}")
     async def staff_run_save(request: Request, athlete_id: int, activity_id: int, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):

@@ -17,7 +17,7 @@
       <label>Date<input type="date" name="date" value="{{ edit.date.isoformat() if edit and not copying else today }}" required></label>
       <label style="flex:1">Name (optional)<input type="text" name="title" placeholder="Made from the parts if left empty" value="{{ edit.title if edit else '' }}" maxlength="120"></label>
     </div>
-    <table class="list compact parts"><thead><tr><th aria-label="Order"></th><th>Sets</th><th>Reps</th><th>Distance or time</th><th>Pace</th><th>Rest</th><th>Notes</th><th class="num">Points</th><th></th></tr></thead>
+    <table class="list compact parts"><thead><tr><th aria-label="Order"></th><th>Sets</th><th>Reps</th><th>Distance or time</th><th>Pace</th><th title="The heart-rate zone the coach wants for this part; the workout chart checks it">Heart rate</th><th>Rest</th><th>Notes</th><th class="num">Points</th><th></th></tr></thead>
       <tbody id="parts">
       {% for p in (edit_parts or [{"sets": 1, "reps": 6, "dist": 1000, "zone": "Interval", "rest": "2 min jog"}]) %}
         <tr class="part"><td class="drag nowrap"><span class="handle" title="Drag to move this part" aria-hidden="true">⋮⋮</span><button type="button" class="link move-up" aria-label="Move this part up">▲</button><button type="button" class="link move-down" aria-label="Move this part down">▼</button></td><td><input type="number" name="p_sets" min="1" max="10" value="{{ p.sets }}" required style="width:4em" aria-label="Sets"></td>
@@ -25,13 +25,14 @@
           <td class="nowrap"><input type="number" name="p_dist" min="{{ 0.25 if p.mins else 0.1 if p.mi else 50 }}" step="{{ 'any' if p.mins or p.mi else 1 }}" value="{{ p.mins or p.mi or p.dist }}" required style="width:6em" aria-label="Distance or minutes">
             <select name="p_unit" class="p-unit" aria-label="Meters, miles or minutes"><option value="m"{% if not p.mins and not p.mi %} selected{% endif %}>m</option><option value="mi"{% if p.mi %} selected{% endif %}>mi</option><option value="min"{% if p.mins %} selected{% endif %}>min</option></select></td>
           <td><select name="p_zone" aria-label="Pace">{% for z in zones %}<option{% if z == p.zone %} selected{% endif %}>{{ z }}</option>{% endfor %}</select></td>
+          <td><select name="p_hr" aria-label="Heart-rate zone"><option value=""{% if not p.hr %} selected{% endif %}>Same as pace</option>{% for z in hr_zones %}<option{% if p.hr == z %} selected{% endif %}>{{ z }}</option>{% endfor %}<option value="none"{% if p.hr == 'none' %} selected{% endif %}>Don’t check</option></select></td>
           <td><input type="text" name="p_rest" maxlength="60" value="{{ p.rest }}" placeholder="90 s jog" style="width:9em" aria-label="Rest"></td>
           <td><input type="text" name="p_note" maxlength="200" value="{{ p.note or '' }}" placeholder="On the grass loop" style="width:12em" aria-label="Notes"></td>
           <td class="num nowrap p-points" aria-live="polite"></td>
           <td><button type="button" class="link remove-part" aria-label="Remove this part">Remove</button></td></tr>
       {% endfor %}
       </tbody>
-      <tfoot><tr><td colspan="7" class="num small">Total at VDOT <input type="number" id="ref-vdot" value="{{ ref_vdot }}" min="30" max="85" style="width:4.5em" aria-label="VDOT for the points"></td>
+      <tfoot><tr><td colspan="8" class="num small">Total at VDOT <input type="number" id="ref-vdot" value="{{ ref_vdot }}" min="30" max="85" style="width:4.5em" aria-label="VDOT for the points"></td>
         <td class="num nowrap"><b id="p-total"></b></td><td></td></tr></tfoot>
     </table>
     <p class="small muted" style="margin:4px 0 0">Points: minutes × the zone’s rate ({% for z, r in rates.items() %}{{ z|lower }} {{ r }}{{ ', ' if not loop.last else '' }}{% endfor %} a minute). Timed parts are exact; distances turn into minutes at the VDOT above (the team’s middle VDOT to start), so faster runners earn a little less for the same distance.</p>

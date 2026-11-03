@@ -594,3 +594,16 @@ table.parts tr.dragging { opacity: .45; }
 .vdot-move .was { color: var(--color-muted, #888); }
 .zone-head { text-align: center; white-space: nowrap; }
 .zone-head .zone-name { font-weight: 700; }
+.wc-charts { min-height: 200px; }
+.wc-charts .wc-title { font-size: 13px; font-weight: 600; fill: var(--color-fg); }
+.wc-charts .wc-axis { font-size: 11px; fill: var(--color-muted, #6b6b6b); }
+.wc-charts .wc-rep { font-size: 11px; font-weight: 700; fill: var(--color-fg); }
+.wc-band { fill: color-mix(in srgb, var(--color-ok) 22%, transparent); }
+.wc-band.easy { fill: color-mix(in srgb, var(--cds-chart-reference) 16%, transparent); }
+.wc-key { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; }
+.wc-sw { display: inline-block; width: 14px; height: 10px; border-radius: 3px; vertical-align: -1px; margin-right: 4px; }
+.wc-sw.band { background: color-mix(in srgb, var(--color-ok) 30%, transparent); }
+.wc-sw.easy { background: color-mix(in srgb, var(--cds-chart-reference) 25%, transparent); }
+.wc-sw.pause { background: repeating-linear-gradient(45deg, var(--cds-chart-muted) 0 2px, transparent 2px 5px); }
+.run-link { text-decoration: none; color: inherit; }
+.run-link b { text-decoration: underline; text-decoration-style: dotted; text-underline-offset: 3px; }

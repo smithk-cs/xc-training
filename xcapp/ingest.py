@@ -64,6 +64,9 @@ def ingest(db: Session, athlete: Athlete, parsed: ParsedActivity, source: str) -
     existing = find_duplicate(db, athlete.id, parsed.external_id, start)
     if existing is not None:
         if SOURCE_RANK.get(source, 0) <= SOURCE_RANK.get(existing.source, 0):
+            if not existing.stream and (parsed.dist_samples or parsed.hr_samples):   # a copy sent again keeps its detail
+                from .workout_view import make_stream
+                existing.stream = make_stream(parsed.dist_samples, parsed.hr_samples)
             return existing, "duplicate"
         act, outcome = existing, "upgraded"
         act.laps.clear()
@@ -84,6 +87,9 @@ def ingest(db: Session, athlete: Athlete, parsed: ParsedActivity, source: str) -
     act.device = parsed.device
     if parsed.vo2_max is not None:  # an upgrade from a source without it keeps the earlier value
         act.vo2_max = parsed.vo2_max
+    if parsed.dist_samples or parsed.hr_samples:   # an upgrade without samples keeps the earlier detail
+        from .workout_view import make_stream
+        act.stream = make_stream(parsed.dist_samples, parsed.hr_samples)
 
     analysis = analyze(parsed.laps, parsed.hr_samples, parsed.start) if parsed.laps else []
     has_reps = any(a.is_rep for a in analysis)
