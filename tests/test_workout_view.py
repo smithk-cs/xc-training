@@ -76,6 +76,7 @@ def test_bands():
 def test_reps_found_across_pauses_strides_skipped(session):
     a, act = make(session)
     wv = WV.build(session, act)
+    assert (wv["vdot"], wv["hr_max"], wv["any_recovery"]) == (V, 200, True)
     reps = wv["reps"]
     assert len(reps) == 4 and all(r["found"] for r in reps) and wv["source"] == "pace"
     assert len(wv["pauses"]) == 3 and 265 <= wv["paused_secs"] <= 280
@@ -109,6 +110,7 @@ def test_page_and_week_link():
     week = c.get(f"/week?team=Boys&start={DAY - dt.timedelta(days=DAY.weekday())}").text
     assert f'href="/athletes/{aid}/runs/{rid}#workout"' in week
     assert "✓ Rests OK</a>" in week and "rest 1:31" in page
+    assert "Pace targets at VDOT 50." in page and "Heart-rate targets from a max of 200" in page and "No max heart rate" not in page
 
 
 def test_fit_file_keeps_its_detail_and_a_resent_copy_fills_it_in(session, athlete):
@@ -195,3 +197,24 @@ def test_summaries_and_week_line(session):
     assert first["label"] == "Rests OK" and json.loads(act.recovery_note)["for"] == act.planned_workout_id
     act.stream = ""                                                                   # saved: not worked out again
     assert WV.day_summary(session, act) == first
+
+
+def test_athlete_run_page_chart_after_folding_effort():
+    from xcapp.db import SessionLocal
+    from xcapp.web import create_app
+    db = SessionLocal()
+    a, act = make(db)
+    db.commit()
+    rid = act.id
+    db.close()
+    c = TestClient(create_app())
+    page = c.get(f"/a/t-wv/runs/{rid}").text
+    assert '<details class="panel fold" id="effort" open>' in page and "data-workout-chart" in page
+    assert page.index('id="effort"') < page.index("data-workout-chart")                 # the chart comes after the effort
+    assert "Workouts page" not in page and "set by your coach" in page                  # said to the athlete
+    db = SessionLocal()
+    db.get(Activity, rid).rpe, db.get(Activity, rid).feel = 6, "Normal"
+    db.commit()
+    db.close()
+    page = c.get(f"/a/t-wv/runs/{rid}").text
+    assert '<details class="panel fold" id="effort">' in page and "✓ Effort 6 · Normal" in page

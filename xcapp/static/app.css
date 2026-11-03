@@ -615,3 +615,6 @@ table.parts tr.dragging { opacity: .45; }
 .rec-pill { margin-top: 4px; font-size: 12px; text-decoration: none; }
 .wc-sum { margin: 12px 0 4px; }
 .wc-flag { margin: 2px 0; color: var(--color-bad); }
+#effort > form { display: flex; flex-direction: column; gap: 14px; margin-top: 10px; }
+#effort .effort-done { margin-left: auto; margin-right: 8px; color: var(--color-ok); font-weight: 600; }
+.wc-athlete > .card { border: 0; padding: 0; margin: 0; background: transparent; }

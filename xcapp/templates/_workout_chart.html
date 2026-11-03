@@ -1,0 +1,48 @@
+{# The run over its workout: chart, rep table and recovery. Needs wv; for_athlete=True words it for the athlete. #}
+{% set athlete_view = (for_athlete is defined and for_athlete) %}
+{% if wv %}
+{% macro tag(v) %}{% if v == 'on target' %}<span class="pill good">✓ on target</span>{% elif v in ('fast', 'high') %}<span class="pill warn">▲ {{ v }}</span>{% elif v in ('slow', 'low') %}<span class="pill warn">▼ {{ v }}</span>{% endif %}{% endmacro %}
+{% macro row(r, label) %}<tr>
+  <td>{{ label }}{% if r.rest %}<br><span class="small muted">rest {{ r.rest }}</span>{% endif %}</td>
+  {% if r.found is defined and not r.found %}<td colspan="8" class="muted">Not found in the run</td>
+  {% else %}<td class="nowrap">{{ fmt_secs(r.secs) if r.secs else '–' }}{% if r.dist %}<br><span class="small muted">{{ '%.0f m'|format(r.dist) if r.dist < 1609 else '%.2f mi'|format(r.dist / 1609.344) }}</span>{% endif %}</td>
+  <td class="nowrap"><b>{{ fmt_secs(r.pace) ~ '/mi' if r.pace else '–' }}</b><br>{{ tag(r.pace_verdict) }}</td>
+  <td class="nowrap small">{{ fmt_secs(r.pace_band[0]) ~ '–' ~ fmt_secs(r.pace_band[1]) if r.pace_band else '–' }}</td>
+  <td>{{ pct(r.pace_in) }}</td>
+  <td class="nowrap"><b>{{ r.hr|round|int if r.hr else '–' }}</b><br>{{ tag(r.hr_verdict) }}</td>
+  <td class="nowrap small">{{ (r.hr_band[0]|round|int) ~ '–' ~ (r.hr_band[1]|round|int) if r.hr_band else 'not checked' }}</td>
+  <td>{{ pct(r.hr_in) if r.hr_band else '–' }}</td>
+  <td class="nowrap rec">{% if r.found is not defined %}–{% elif r.rec_drop is not none %}{{ r.rec_end|round|int }} → {{ r.rec_60|round|int }} <b>(−{{ r.rec_drop|round|int }})</b>{% if r.rec_last %}<br><span class="small muted">after the last rep, not compared</span>{% elif wv.usual_recovery is not none and wv.usual_recovery - r.rec_drop >= 8 %} <span class="pill warn" title="Usual: {{ wv.usual_recovery|round|int }}">▼ small</span>{% endif %}{% elif r.rec_note %}<span class="muted small">{{ r.rec_note }}</span>{% else %}–{% endif %}
+    {% if r.rec_next %}<br><span class="small muted">next rep starts at {{ r.rec_next|round|int }}</span>{% endif %}
+    {% if r.rest_secs is not none %}<br><span class="small">rest {{ fmt_secs(r.rest_secs) }}{% if r.rest_verdict == 'short' %} <span class="pill warn">short</span>{% elif r.rest_verdict == 'long' %} <span class="pill warn">long</span>{% elif r.rest_verdict == 'ok' %} ✓{% endif %}</span>{% if r.rest_target %}<br><span class="small muted">{{ r.rest_target }}</span>{% endif %}{% endif %}
+    {% if r.ready_flag %}<br><span class="pill bad" title="{{ r.ready_flag }}">▲ {{ r.ready_flag.split(':')[0] }}</span>{% endif %}</td>{% endif %}
+</tr>{% endmacro %}
+{% macro pct(v) %}{{ '%.0f%%'|format(v) if v is not none else '–' }}{% endmacro %}
+<div class="card" id="workout">
+  <h2>{% if wv.workout %}Against the workout: {{ wv.workout.title }}{% else %}Pace and heart rate{% endif %}</h2>
+  <p class="small muted">
+    {% if wv.vdot %}Pace targets at VDOT {{ wv.vdot }}.{% else %}No VDOT, so no pace targets.{% endif %}
+    {% if wv.hr_max %}Heart-rate targets from a max of {{ wv.hr_max|round|int }} ({{ athlete_words(wv.hr_max_from) if athlete_view else wv.hr_max_from }}).{% else %}{% if athlete_view %}No max heart rate yet, so no heart-rate targets: your coach can set one.{% else %}No max heart rate yet: set one on the athlete’s page for heart-rate targets.{% endif %}{% endif %}
+    {% if wv.paused_secs >= 10 %}Watch paused {{ wv.pauses|length }} time{{ 's' if wv.pauses|length != 1 }}, {{ fmt_secs(wv.paused_secs) }} in all (hatched), not counted against any rep.{% endif %}
+    {% if not wv.has_stream %}This run has lap totals only, so each lap is drawn at its average; runs synced from now on show second by second.{% endif %}
+  </p>
+  <div class="wc" data-workout-chart>
+    <script type="application/json">{{ wv.chart|tojson }}</script>
+    <div class="wc-charts ac-chart"></div>
+    <p class="small muted wc-key"><span class="wc-sw band"></span> Target zone for each rep (numbered) <span class="wc-sw easy"></span> Easy zone (warm-up, cool-down) <span class="wc-sw pause"></span> Watch paused</p>
+  </div>
+  {% if wv.reps or wv.easy %}
+  <div class="scroll"><table class="list compact centered wc-table">
+    <thead><tr><th>Rep</th><th>Time · distance</th><th>Pace</th><th>Target pace</th><th>In pace zone</th><th>Heart rate</th><th>Target HR</th><th>In HR zone</th><th title="Heart rate at the end of the rep, 60 seconds later, and the drop; then where it was when the next rep started">Recovery (60 s)</th></tr></thead><tbody>
+    {% for x in wv.easy if x.label == 'Warm-up' %}{{ row(x, x.label) }}{% endfor %}
+    {% for r in wv.reps %}{{ row(r, loop.index ~ '. ' ~ r.label) }}{% endfor %}
+    {% for x in wv.easy if x.label != 'Warm-up' %}{{ row(x, x.label) }}{% endfor %}
+    </tbody></table></div>
+  {% if wv.summary %}<p class="wc-sum"><span class="pill {{ wv.summary.level }}">{{ wv.summary.label }}</span> <span class="small">{{ athlete_words(wv.summary.why) if athlete_view else wv.summary.why }}</span></p>{% endif %}
+  {% for r in wv.reps if r.ready_flag %}<p class="small wc-flag">Rep {{ loop.index }}: {{ r.ready_flag }}.</p>{% endfor %}
+  {% if wv.recovery_notes %}<div class="notice wc-rec"><span>{% for n in wv.recovery_notes %}{{ athlete_words(n) if athlete_view else n }}{% if not loop.last %}<br>{% endif %}{% endfor %}</span></div>{% endif %}
+  {% if wv.any_recovery %}<p class="small muted">Recovery: heart rate at the end of each rep (its highest in the last 10 s), one minute later, and the drop{% if wv.usual_recovery is not none %}; {{ 'your' if athlete_view else 'this athlete’s' }} usual drop over the past 8 weeks is {{ wv.usual_recovery|round|int }} beats, and a drop 8 or more below it is marked{% endif %}. {% if athlete_view %}Compare with your own usual, not with teammates: a normal drop varies a lot from runner to runner, and standing still recovers faster than jogging.{% else %}Compare an athlete with their own usual, not with teammates: a normal drop varies a lot from runner to runner, and standing still recovers faster than jogging.{% endif %} Rest is checked against the rest written on the workout, or Daniels’ guidance for the zone (threshold about 1 minute per 5 minutes run, interval about as long as the rep, repetition 2–3 times the rep). Going into the next rep, heart rate should be under {{ 70 }}% of max for repetition reps; for interval reps it should at least have come down {{ 10 }} beats (partial recovery is the point); threshold rests are short by design.</p>{% endif %}
+  <p class="small muted">Reps matched {{ 'from the rep laps' if wv.source == 'laps' else 'from pace (stretches clearly faster than easy)' }}, in order; extra efforts such as strides are left out. Heart rate skips each rep’s first 30 seconds while it rises. Heart-rate zones as a share of max (Daniels): easy 65–79%, moderate 80–90%, threshold 88–92%, interval 92–100% (Daniels’ 98–100% is reached late in 3–5 minute reps, so shorter reps average lower); none for repetition. {% if not athlete_view %}Each part’s heart-rate zone can be changed on the Workouts page.{% endif %}</p>
+  {% endif %}
+</div>
+{% endif %}

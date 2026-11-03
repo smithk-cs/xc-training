@@ -2,6 +2,7 @@
 {% block title %}Run on {{ act.local_date.strftime('%b %-d') }} · {{ team_name }}{% endblock %}
 {% block bodyclass %}athlete-page{% endblock %}
 {% block flashes %}{% endblock %}
+{% block head %}<script src="/static/d3.v7.9.0.min.js"></script><script src="/static/workout-chart.js?v={{ asset_v }}" defer></script>{% endblock %}
 {% block content %}
 {% with hero_title=act.local_date.strftime('%A, %b %-d'), hero_text=(act.planned.title if act.planned else None), back_url="/a/" ~ token ~ "/runs", back_label="My runs" %}{% include "_hero.html" %}{% endwith %}
 <div class="stack">
@@ -16,7 +17,7 @@
 {% if act.vo2_max %}<div><span class="k">Watch VO2 max</span><span class="big">{{ '%.1f' % act.vo2_max }}</span></div>{% endif %}
     </div>
     {% set reps = act.laps|selectattr('is_rep')|list %}
-    {% if reps %}
+    {% if reps and not (wv and wv.reps) %}
     <div class="scroll"><table class="list">
       <thead><tr><th>Rep</th><th class="num">Pace /mi</th><th class="num">Avg HR</th><th class="num">HR drop in 60 s</th></tr></thead>
       <tbody>{% for l in reps %}<tr><td>{{ l.rep_num }}</td><td class="num">{{ fmt_time(l.timer_s / l.distance_m * 1609.344)[:-2] }}</td><td class="num">{{ l.avg_hr|round|int if l.avg_hr else '' }}</td><td class="num">{{ l.hr_drop_60s|int if l.hr_drop_60s is not none else '' }}</td></tr>{% endfor %}</tbody>
@@ -25,9 +26,10 @@
     {% if act.device %}<p class="muted small">Recorded on {{ act.device }}.</p>{% endif %}
   </section>
 
-  <form method="post" action="/a/{{ token }}/runs/{{ act.id }}" class="panel" aria-labelledby="f-h">
+  <details class="panel fold" id="effort"{% if act.rpe is none %} open{% endif %}>
+  <summary><h2 id="f-h">How did it go?</h2>{% if act.rpe is not none %}<span class="small effort-done">✓ Effort {{ act.rpe }}{% if act.feel %} · {{ act.feel }}{% endif %}</span>{% endif %}</summary>
+  <form method="post" action="/a/{{ token }}/runs/{{ act.id }}" aria-labelledby="f-h">
     <input type="hidden" name="csrf" value="{{ csrf }}">
-    <h2 id="f-h">How did it go?</h2>
     <fieldset class="pick"><legend>Type of run</legend>
       <div class="chips">{% for t in RUN_TYPES %}<label class="chip"><input type="radio" name="run_type" value="{{ t }}" {% if run_type_of(act) == t %}checked{% endif %}><span>{{ t }}</span></label>{% endfor %}</div>
     </fieldset>
@@ -58,5 +60,7 @@
     <p class="muted small" style="margin:0">Only your coaches and athletic trainer see this.</p>
     <button type="submit" class="big-btn">Save</button>
   </form>
+  </details>
+  {% if wv %}<section class="panel wc-athlete">{% with for_athlete=True %}{% include "_workout_chart.html" %}{% endwith %}</section>{% endif %}
 </div>
 {% endblock %}

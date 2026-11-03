@@ -330,6 +330,18 @@ def old_style_items(db: Session, a: Athlete, pw) -> list[dict]:
     return [dict(base, rep=1, label=unit, open_count=True)]
 
 
+def athlete_words(text: str) -> str:
+    """Coach-facing lines from this module, said to the athlete."""
+    for a, b in (("this athlete’s usual", "your usual"), ("the athlete was tiring", "you were tiring"),
+                 ("Worth a check-in: sleep, illness, heat or a hard week can all do it.",
+                  "Sleep, illness, heat or a hard week can all do it: tell your coach how you feel."),
+                 ("set on the athlete’s page", "set by your coach"), ("the highest the watch has recorded in a year",
+                                                                      "the highest your watch has recorded in a year"),
+                 ("started before heart rate had come down", "started before your heart rate had come down")):
+        text = (text or "").replace(a, b)
+    return text
+
+
 # ---------- recovery between reps ----------
 
 RECOVERY_S = 60
@@ -450,7 +462,7 @@ def day_summary(db: Session, act: Activity) -> dict | None:
     return s
 
 
-SUMMARY_VERSION = 1
+SUMMARY_VERSION = 2   # 2: worked out again with max heart rate (missing in version 1)
 
 
 def usual_recovery(db: Session, a: Athlete, act: Activity) -> float | None:
@@ -556,7 +568,8 @@ def build(db: Session, act: Activity) -> dict:
             row.setdefault(k, None if k not in ("pace_verdict", "hr_verdict", "rest", "rec_note", "rest_verdict", "rest_target", "ready_flag") else "")
     return {
         "has_stream": bool(act.stream), "source": source, "usual_recovery": usual,
-        "recovery_notes": recovery_notes(found[:-1], usual),   # after the last rep the athlete stops: not comparable "any_recovery": any(r.get("rec_end") for r in found), "vdot": v, "hr_max": hmax, "hr_max_from": hmax_from,
+        "recovery_notes": recovery_notes(found[:-1], usual),   # after the last rep the athlete stops: not comparable
+        "any_recovery": any(r.get("rec_end") for r in found), "vdot": v, "hr_max": hmax, "hr_max_from": hmax_from,
         "reps": reps, "easy": easy, "pauses": [{"t0": a0, "t1": a1, "secs": a1 - a0} for a0, a1 in pauses],
         "paused_secs": sum(a1 - a0 for a0, a1 in pauses), "items": items, "workout": pw,
         "chart": {"t": [p[0] for p in points], "pace": [None if x is None else round(x, 1) for x in paces],

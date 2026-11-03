@@ -162,7 +162,7 @@ def create_app() -> FastAPI:
     # A fingerprint of the style sheet and scripts: links carry it (?v=...), so browsers load new ones after each deploy.
     import hashlib
     asset_v = hashlib.sha256(b"".join(f.read_bytes() for f in sorted((HERE / "static").glob("*.[cj]s*")))).hexdigest()[:10]
-    templates.env.globals.update(asset_v=asset_v, mmss=A.mmss_text, map_url=A.map_url, course_place=A.course_place, fmt_clock=A.fmt_clock, fmt_secs=A.fmt_secs, describe_weather=WX.describe, fmt_time=A.fmt_time, timedelta=dt.timedelta, now=A.team_today, EVENTS=list(A.EVENTS), GROUPS=GROUPS, team_name=s.team_name,
+    templates.env.globals.update(asset_v=asset_v, athlete_words=WV.athlete_words, mmss=A.mmss_text, map_url=A.map_url, course_place=A.course_place, fmt_clock=A.fmt_clock, fmt_secs=A.fmt_secs, describe_weather=WX.describe, fmt_time=A.fmt_time, timedelta=dt.timedelta, now=A.team_today, EVENTS=list(A.EVENTS), GROUPS=GROUPS, team_name=s.team_name,
                                  has_logo=has_logo, FEELS=FEELS, EFFORT_WORDS=EFFORT_WORDS, RUN_TYPES=A.RUN_TYPES,
                                  MISSED_REASONS=A.MISSED_REASONS, SIDES=A.SIDES, STARTED=A.STARTED, SEEN_BY=A.SEEN_BY,
                                  MORE_DAYS=A.MORE_DAYS, missed_label=A.missed_label,
@@ -2893,8 +2893,11 @@ def create_app() -> FastAPI:
         a = athlete_by_token(db, token)
         act = _own_run(db, a, activity_id)
         pain = next((p for p in a.pain_reports if p.activity_id == act.id), None)
+        wv = WV.build(db, act) if (act.planned_workout_id or act.stream or act.laps) else None
+        if wv is not None:
+            wv["summary"] = WV.summary(wv)
         return render(request, "athlete_run.html", None, a=a, act=act, pain=pain, token=token, areas=BODY_AREAS,
-                      choices=workout_choices(db, act))
+                      choices=workout_choices(db, act), wv=wv)
 
     @app.post("/a/{token}/runs/{activity_id}")
     async def athlete_run_save(request: Request, token: str, activity_id: int, db: Session = Depends(get_db, scope="function")):
