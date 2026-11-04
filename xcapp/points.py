@@ -106,7 +106,7 @@ def keep_pace(week: dict, today: dt.date) -> None:
     share = week.get("easy_share") or {"miles": 0, "points": 0, "days": 0}
     run_days = [d for d in week["days"] if d.get("kind", "easy") in ("workout", "easy")]
     per_day = goal_m / len(run_days) if goal_m and run_days else 0.0
-    week["miles_per_day"], week["miles_due"] = (per_day or None), None
+    week["miles_per_day"], week["miles_due"], week["points_due"] = (per_day or None), None, None
     cum_m = cum_p = due_wm = due_wp = 0.0
     week["miles_pct"] = week["points_pct"] = None
     week["why_miles"] = week["why_points"] = ""
@@ -133,6 +133,7 @@ def keep_pace(week: dict, today: dt.date) -> None:
                 d["why_points"] = f"{d['points']:.0f} of {due_p:.0f} pts ({how}): {d['points_pct']:.0f}%"
         week["miles_pct"], week["points_pct"] = _pct(cum_m, due_wm), _pct(cum_p, due_wp)
         week["miles_due"] = due_wm if goal_m else None
+        week["points_due"] = due_wp if target else None   # posted workouts through today (a day counts from 12 a.m.)
         through = "the whole week" if i == 7 else f"through {d['date']:%a}"
         if week["miles_pct"] is not None:
             week["why_miles"] = (f"{cum_m:.1f} of {due_wm:.1f} mi due {through} ({per_day:.1f} mi a day over {len(run_days)} run days, "

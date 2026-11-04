@@ -244,6 +244,10 @@ def test_keep_pace_colours():
     assert round(week["miles_pct"]) == 63 and P.pace_status(week["miles_pct"]) == "bad"
     assert week["why_miles"] == "11.0 of 17.5 mi due through Wed (5.8 mi a day over 6 run days, 35 for the week): 63%"
     assert week["miles_per_day"] == pytest.approx(35 / 6) and week["miles_due"] == pytest.approx(17.5)
+    assert week["points_due"] == pytest.approx(40)                                   # Mon 10 + Tue 10 + Wed's workout 20
+    P.keep_pace(week, MON - dt.timedelta(days=1))                                    # Sunday before: nothing due yet
+    assert week["miles_due"] is None and week["points_due"] is None
+    P.keep_pace(week, MON + dt.timedelta(days=2))                                    # back to Wednesday
     assert round(week["points_pct"]) == 75
     P.keep_pace(week, MON + dt.timedelta(days=5))            # Saturday: the whole goal is due already
     assert week["why_miles"] == "11.0 of 35.0 mi due through Sat (5.8 mi a day over 6 run days, 35 for the week): 31%"
