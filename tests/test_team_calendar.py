@@ -95,3 +95,42 @@ def test_charts_offer_adjusted_times():
     assert '<option value="adj">Adjusted for course and weather</option>' in c.get("/charts").text
     row = c.get("/api/charts/results.json").json()["results"][0]
     assert row["time_sec"] == 1000 and row["adjusted"] and row["time_adj_sec"] < 1000
+
+
+def test_meet_course_forecast_and_workouts():
+    import json
+
+    from xcapp.models import Course, MeetForecast, PlannedWorkout
+    db = SessionLocal()
+    db.add(StaffUser(username="coach1", role="coach", password_hash=hash_password("correct-horse-1")))
+    course = Course(name="Woodward Park", location="7775 N Friant Rd, Fresno, CA")
+    db.add(course)
+    db.flush()
+    soon = TODAY + dt.timedelta(days=3)
+    m = MeetEntry(name="Clovis Invitational", date=soon, location="Fresno", start_time="08:30", course_id=course.id)
+    m.forecast = MeetForecast(at=f"{soon.isoformat()}T08:00", temp_f=54, humidity_pct=70, wind_mph=6, rain_pct=20, summary="Partly cloudy")
+    db.add(m)
+    db.add(PlannedWorkout(date=TODAY + dt.timedelta(days=1), title="Girls tempo", rep_distance_m=0, groups="Gold,Silver", gender="Girls",
+                          parts=json.dumps([{"sets": 1, "reps": 4, "mins": 5, "zone": "Threshold", "rest": "1 min jog", "note": "On the grass"}])))
+    db.add(PlannedWorkout(date=TODAY + dt.timedelta(days=2), title="Easy day", rep_distance_m=0, groups="All",
+                          parts=json.dumps([{"sets": 1, "reps": 1, "mi": 5, "dist": 8047, "zone": "Easy"}])))
+    db.commit()
+    token = TC.token(db)
+    girls = [x["title"] for x in TC.items(db, TODAY, TODAY + dt.timedelta(days=7), "Girls")]
+    boys = [x["title"] for x in TC.items(db, TODAY, TODAY + dt.timedelta(days=7), "Boys")]
+    db.commit()   # keep the calendar link just made
+    db.close()
+    assert "Girls tempo" in girls and "Girls tempo" not in boys and "Easy day" in boys and "Easy day" in girls
+    from xcapp.web import create_app
+    app = create_app()
+    page = TestClient(app).get(f"/team-calendar/{token}?team=Girls").text
+    assert "<b>Woodward Park</b>" in page and "7775 N Friant Rd, Fresno, CA</a>" in page          # course and address
+    assert "54°F, partly cloudy, 70% humidity, 20% chance of rain, wind 6 mph" in page               # the meet's forecast
+    assert "Forecast at Woodward Park for 08:00" in page
+    assert '<span class="pill">Workout</span>' in page and "4 × 5 min Threshold (1 min jog rest) – On the grass" in page
+    assert "For Gold, Silver" in page and "At practice" in page and "5 mi Easy" in page
+    body = TestClient(app).get(f"/team-calendar/{token}/girls.ics").text
+    assert "SUMMARY:Workout: Girls tempo" in body and "LOCATION:Woodward Park\\, 7775 N Friant Rd\\, Fresno\\, CA" in body
+    assert "Girls tempo" not in TestClient(app).get(f"/team-calendar/{token}/boys.ics").text
+    c, _ = coach(app)
+    assert 'On the Workouts page</a>' in c.get("/calendar").text

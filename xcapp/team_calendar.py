@@ -11,14 +11,14 @@ from sqlalchemy.orm import Session
 
 from . import analysis as A
 from .config import settings
-from .models import CalendarEvent, MeetEntry, utcnow
+from .models import CalendarEvent, MeetEntry, PlannedWorkout, utcnow
 
 TEAMS = ("All", "Boys", "Girls")
 KINDS = ("Practice", "Event")
 WEEKDAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
 TOKEN_KEY = "calendar_token"
 FEED_PAST, FEED_AHEAD = 60, 400        # days of past and coming events in the subscribed feed
-DEFAULT_LENGTH = {"Practice": 120, "Event": 120, "Meet": 240}   # minutes, when no end time is given
+DEFAULT_LENGTH = {"Practice": 120, "Event": 120, "Meet": 240, "Workout": 120}   # minutes, when no end time is given
 
 
 def token(db: Session) -> str:
@@ -74,9 +74,21 @@ def items(db: Session, start: dt.date, end: dt.date, team: str = "All") -> list[
         if not for_team(t, team):
             continue
         c = course_for(db, m)
-        where = ", ".join(x for x in ((c.name if c else ""), m.location) if x and (not c or x != c.name)) or (c.name if c else "")
+        # The course and its address (the course's saved location, else the meet's), for the map link.
+        address = (c.location if c and c.location else m.location) or ""
+        where = ", ".join(x for x in ((c.name if c else ""), address if not c or address != c.name else "") if x)
         out.append({"uid": f"meet-{m.id}", "meet_id": m.id, "date": m.date, "start": m.start_time, "end": "", "title": m.name,
-                    "kind": "Meet", "team": t, "location": where, "notes": "", "repeats": False})
+                    "kind": "Meet", "team": t, "location": where, "course": c.name if c else "", "address": address,
+                    "notes": "", "repeats": False})
+    for w in db.scalars(select(PlannedWorkout).where(PlannedWorkout.date >= start, PlannedWorkout.date <= end)).all():
+        if not for_team(w.gender, team):
+            continue
+        groups = [g.strip() for g in (w.groups or "All").split(",") if g.strip() and g.strip() != "All"]
+        parts = [f"{A.part_label(p)} {p.get('zone', '')}".strip() + (f" ({p['rest']} rest)" if p.get("rest") else "")
+                 + (f" – {p['note']}" if p.get("note") else "") for p in w.part_list] or [w.distance_text]
+        out.append({"uid": f"workout-{w.id}", "workout_id": w.id, "date": w.date, "start": "", "end": "", "title": w.title,
+                    "kind": "Workout", "team": w.gender, "location": "", "parts": parts, "groups": groups,
+                    "notes": "; ".join(parts) + (f" (for {', '.join(groups)})" if groups else ""), "repeats": False})
     out.sort(key=lambda x: (x["date"], x["start"] or "00:00", x["title"]))
     return out
 
@@ -119,7 +131,7 @@ def ics(db: Session, team: str, team_name: str, today: dt.date) -> str:
             lines += [f"DTSTART:{start:%Y%m%dT%H%M%SZ}", f"DTEND:{end:%Y%m%dT%H%M%SZ}"]
         else:
             lines += [f"DTSTART;VALUE=DATE:{x['date']:%Y%m%d}", f"DTEND;VALUE=DATE:{x['date'] + dt.timedelta(days=1):%Y%m%d}"]
-        title = x["title"] if x["kind"] != "Meet" else f"Meet: {x['title']}"
+        title = f"{x['kind']}: {x['title']}" if x["kind"] in ("Meet", "Workout") else x["title"]
         lines.append(f"SUMMARY:{_esc(title + ('' if team != 'All' or not x['team'] else ' (' + x['team'] + ')'))}")
         if x["location"]:
             lines.append(f"LOCATION:{_esc(x['location'])}")

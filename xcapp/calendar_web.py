@@ -29,13 +29,23 @@ def links(base_url: str, token: str) -> dict[str, dict]:
 
 
 def with_weather(db: Session, its: list[dict], team: str, today: dt.date) -> list[dict]:
-    """Practices in the next two weeks get their saved forecast (temperature and sky only)."""
+    """Practices in the next two weeks get their saved forecast (temperature and sky only); meets get the forecast at
+    their course for the start time (also humidity, chance of rain and wind)."""
     from . import weather as WX
+    from .models import MeetEntry
     last = today + dt.timedelta(days=WX.FORECAST_DAYS)
     for x in its:
-        if x["kind"] == "Practice" and today <= x["date"] <= last:
+        if not today <= x["date"] <= last:
+            continue
+        if x["kind"] == "Practice":
             fc = WX.practice_forecast(db, x["date"], x["team"] or team)
             x["weather"] = WX.short(fc["forecast"]) if fc else None
+        elif x["kind"] == "Meet":
+            m = db.get(MeetEntry, x["meet_id"])
+            sky = WX.short(m.forecast) if m and m.forecast else None
+            if sky:
+                x["weather"] = {"icon": sky["icon"], "text": WX.describe(m.forecast, dew=False, humidity=True),
+                                "title": f"Forecast at {x.get('course') or 'the course'}" + (f" for {m.forecast.at[-5:]}" if m.forecast.at else "")}
     return its
 
 
