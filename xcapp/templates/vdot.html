@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}{{ team }} VDOT · {{ team_name }}{% endblock %}
 {% block content %}
-{% from '_icons.html' import arrows %}
+{% from '_icons.html' import arrows, group_up %}
 {# The same column widths in every group's table, so the columns line up down the page. #}
 {% set cols %}<colgroup><col class="name"><col class="v">{% for z in zones %}<col class="pace">{% endfor %}</colgroup>{% endset %}
 <div class="form-row" style="justify-content:space-between">

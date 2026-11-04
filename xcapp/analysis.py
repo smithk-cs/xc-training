@@ -686,7 +686,8 @@ def vdot_board(db: Session, as_of: dt.date, genders: tuple[str, ...] = ("Boys", 
     """The VDOT page: per gender with athletes, each group from fastest down with its VDOT range, easy and tempo pace
     ranges, weekly mileage goal and its athletes by VDOT; then athletes with no VDOT yet."""
     ab = abilities(db, as_of)
-    gains = vdot_gains(db, as_of)
+    moves = vdot_moves(db, as_of)
+    gains = {aid: m["gain"] for aid, m in moves.items()}
     groups = db.scalars(select(TrainingGroup).order_by(TrainingGroup.position)).all()
     people = db.scalars(select(Athlete).where(on_team()).order_by(Athlete.last_name, Athlete.first_name)).all()
     out = []
@@ -708,7 +709,7 @@ def vdot_board(db: Session, as_of: dt.date, genders: tuple[str, ...] = ("Boys", 
             rng = (f"{hi} and below" if bottom else f"{lo}-{hi}" if hi is not None and hi > lo else f"{lo} +" if hi is None else str(lo))
             sections.append({"group": g, "range": rng, "zones": zones, "miles": g.miles_goal(gender),
                              "single": hi is None or hi <= lo or bottom, "slower": bottom,
-                             "rows": [{"a": a, **ab[a.id], "plan": weekly_plan_text(a.weekly_plan), "gain": gains.get(a.id),
+                             "rows": [{"a": a, **ab[a.id], "plan": weekly_plan_text(a.weekly_plan), "gain": gains.get(a.id), "move": moves.get(a.id),
                                        "paces": training_paces(ab[a.id]["vdot"])} for a in members]})
         rest = [{"a": a, **ab.get(a.id, {}), "plan": weekly_plan_text(a.weekly_plan), "paces": []}
                 for a in mine if not ab.get(a.id, {}).get("group")]
@@ -820,21 +821,42 @@ def set_vdot(db: Session, a: Athlete, value: int | None, by: str, source: str) -
 
 
 def vdot_gains(db: Session, as_of: dt.date, days: int = 7) -> dict[int, int]:
-    """athlete id -> coach VDOT points gained over the past `days` (only gains; the arrows on the VDOT page)."""
+    """athlete id -> coach VDOT points gained over the past `days` (only gains; the green arrows)."""
+    return {aid: m["gain"] for aid, m in vdot_moves(db, as_of, days).items()}
+
+
+def vdot_moves(db: Session, as_of: dt.date, days: int = 7) -> dict[int, dict]:
+    """athlete id -> {"gain": VDOT points up, "from_group", "to_group"} for coach-set VDOT changes in the past `days`
+    that raised it; to_group is set when the new VDOT reaches a higher group than before (a group with a higher
+    minimum VDOT for the athlete's gender), except for athletes a coach pinned to a group."""
     since = as_of - dt.timedelta(days=days)
-    out = {}
-    changes = db.scalars(select(VdotChange).order_by(VdotChange.at)).all()
     by: dict[int, list[VdotChange]] = defaultdict(list)
-    for c in changes:
+    for c in db.scalars(select(VdotChange).order_by(VdotChange.at)).all():
         by[c.athlete_id].append(c)
+    if not by:
+        return {}
+    groups = db.scalars(select(TrainingGroup)).all()
+    ab = abilities(db, as_of)
+    out = {}
     for aid, cs in by.items():
-        recent = [c for c in cs if c.date > since]
+        recent = [c for c in cs if since < c.date <= as_of]
         if not recent or recent[-1].vdot is None:
             continue
         before = [c for c in cs if c.date <= since]
         start = before[-1].vdot if before else recent[0].previous
-        if start is not None and recent[-1].vdot > start:
-            out[aid] = recent[-1].vdot - start
+        if start is None:   # the coach's first VDOT for them: compare with the race VDOT
+            start = ab.get(aid, {}).get("race_vdot")
+        new = recent[-1].vdot
+        if start is None or new <= start:
+            continue
+        a = db.get(Athlete, aid)
+        if a is None:
+            continue
+        move = {"gain": new - start, "from_group": "", "to_group": ""}
+        old_g, new_g = group_for(start, a.gender, groups), group_for(new, a.gender, groups)
+        if old_g != new_g and new_g and not ab.get(aid, {}).get("override"):
+            move.update(from_group=old_g, to_group=new_g)
+        out[aid] = move
     return out
 
 
@@ -842,9 +864,12 @@ def achievements(db: Session, a: Athlete, as_of: dt.date) -> list[dict]:
     """Recent things to celebrate on an athlete's page: VDOT up this week, a new PR in the last two weeks, a team
     workout clearly faster than target this week, and a season-high training week without too big a jump."""
     out = []
-    gain = vdot_gains(db, as_of).get(a.id)
-    if gain:
-        out.append({"kind": "vdot", "title": f"VDOT up {gain}", "detail": f"Your coach raised your VDOT to {a.vdot_override} this week."})
+    move = vdot_moves(db, as_of).get(a.id)
+    if move:
+        out.append({"kind": "vdot", "title": f"VDOT up {move['gain']}", "detail": f"Your coach raised your VDOT to {a.vdot_override} this week."})
+        if move["to_group"]:
+            out.append({"kind": "vdot", "title": f"Up to {move['to_group']}",
+                        "detail": f"Your new VDOT moves you up {('from ' + move['from_group'] + ' ') if move['from_group'] else ''}to the {move['to_group']} group."})
     races = db.scalars(select(RaceResult).where(RaceResult.athlete_id == a.id, RaceResult.date <= as_of).order_by(RaceResult.date)).all()
     for r in [r for r in races if r.date > as_of - dt.timedelta(days=14)][::-1]:
         earlier = [x.time_s for x in races if x.date < r.date and abs(x.distance_m - r.distance_m) <= r.distance_m * 0.01]

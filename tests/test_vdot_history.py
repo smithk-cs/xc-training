@@ -51,7 +51,7 @@ def test_history_arrows_and_removing_mistakes(app):
     vd = c.get("/vdot").text
     assert vd.count('aria-label="VDOT up 2 this week"') == 2                                # the row and the changes list
     row = vd.split("Sam Lowry</a></td>")[1].split("</tr>")[0]
-    assert row.count("<svg") == 2                                                             # two arrows for two points
+    assert row[row.index('class="up-arrows"'):row.index("</span>", row.index('class="up-arrows"'))].count("<svg") == 2                                                             # two arrows for two points
     assert "VDOT changes in the last 30 days (2)" in vd
     page = c.get(f"/athletes/{aid}").text
     assert 'id="vdot-history"' in page and "up 2 this week" in page and "<path d=" in page and "VDOT up 2" in page

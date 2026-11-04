@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}{{ team }} week · {{ team_name }}{% endblock %}
 {% block content %}
+{% from '_icons.html' import arrows, group_up %}
 {% macro pace(pct) %}{% if pct is none %}none{% elif pct >= 90 %}good{% elif pct >= 80 %}warn{% else %}bad{% endif %}{% endmacro %}
 <div class="form-row title-row" style="margin-bottom:12px"><h1 style="margin:0">{{ team }} week</h1> <a class="pill" href="/calendar#seasons" title="Seasons are set on the Calendar page">{{ season.label }}</a>
   {% with base='/week', extra='&start=' ~ monday.isoformat() %}{% include "_team_switch.html" %}{% endwith %}</div>
@@ -25,7 +26,7 @@
     {% for ws in group_workouts.get(r.group_name, [[]] * 7) %}<td class="day d{{ loop.index0 }}">{% for w in ws %}<a class="tag" href="/workouts?edit={{ w.id }}#plan" title="Open {{ w.title }}">{{ w.title }}</a>{% endfor %}</td>{% endfor %}</tr>
   {% endif %}
   <tr>
-    <td class="who"><a href="/athletes/{{ r.a.id }}">{{ r.a.name }}</a>{% if r.vdot or r.a.experience in (1, 3) %}<br><span class="small muted">{% if r.vdot %}VDOT {{ r.vdot }}{% endif %}{% if r.a.experience == 1 %} · new runner −10%{% elif r.a.experience == 3 %} · experienced +10%{% endif %}</span>{% endif %}
+    <td class="who"><a href="/athletes/{{ r.a.id }}">{{ r.a.name }}</a>{% if r.vdot or r.a.experience in (1, 3) %}<br><span class="small muted">{% if r.vdot %}VDOT {{ r.vdot }}{{ arrows(moves.get(r.a.id, {}).get('gain')) }}{% endif %}{% if r.a.experience == 1 %} · new runner −10%{% elif r.a.experience == 3 %} · experienced +10%{% endif %}</span>{% endif %}{% if moves.get(r.a.id) %} {{ group_up(moves[r.a.id]) }}{% endif %}
       {% set wt = r.why_target %}{% if wt and r.target %}<div class="why why-target">
         <b>Target {{ '%.0f' % r.target }} pts:</b>
         {% for x in wt.workouts %}<br>{{ x.date.strftime('%a') }} {{ x.title }}: {{ '%.1f' % x.miles }} mi, {{ '%.1f' % x.points }} pts{% if x.not_counted %} <i>(also planned, not counted: {{ x.not_counted|join(', ') }})</i>{% endif %}{% endfor %}

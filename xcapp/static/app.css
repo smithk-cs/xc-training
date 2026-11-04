@@ -623,3 +623,6 @@ table.parts tr.dragging { opacity: .45; }
 .workouts-by-day .part-line + .part-line { border-top: 1px dashed var(--color-border-line); }
 .workouts-by-day .groups-col { width: 1%; white-space: nowrap; }
 .zone-line { display: inline-block; margin-top: 4px; font-size: 12px; font-weight: 600; text-decoration: none; white-space: nowrap; }
+.group-up { display: inline-flex; align-items: center; gap: 3px; font-size: 12px; white-space: nowrap; }
+.group-up svg { flex: none; }
+.hero .hero-move { display: inline-flex; align-items: center; gap: 6px; background: var(--color-panel); border-radius: 999px; padding: 4px 10px; }

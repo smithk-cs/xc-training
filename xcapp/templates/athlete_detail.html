@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block head %}<script src="/static/d3.v7.9.0.min.js"></script><script src="/static/athlete-charts.js?v={{ asset_v }}" defer></script>{% endblock %}
 {% block content %}
-{% from '_icons.html' import arrows, badges %}
+{% from '_icons.html' import arrows, badges, group_up %}
 {% if a.alumni %}<p class="notice"><span><b>Alumni{% if a.grad_year %}, class of {{ a.grad_year }}{% endif %}.</b> Kept as team history with all their records; off the roster. To bring them back for another season, change their class year below.</span></p>
 {% elif not a.active %}<p class="notice"><span><b>{{ a.name }} has left the team</b>{% if a.left_on %} ({{ a.left_on.strftime('%b %-d, %Y') }}). Their data is kept until {{ (a.left_on + timedelta(days=settings.retention_days)).strftime('%b %-d, %Y') }}, when the privacy policy says to delete it{% endif %}.</span></p>{% endif %}
 {% if a.is_test %}<p class="notice"><span><b>Test athlete.</b> Left out of team numbers, the watch list, the VDOT page and the AI briefing.</span></p>{% endif %}
@@ -20,7 +20,7 @@
     {% endif %}
     {% if user.role != 'trainer' %}<a class="small" href="/vdot">Open the VDOT page</a>{% endif %}
   </div>
-</details>
+</details>{{ group_up(move) }}
 </div>
 {{ badges(wins) }}
 <p class="muted">{{ a.gender }}, grade {{ a.grade }}{% if a.grad_year %} (class of {{ a.grad_year }}){% endif %}.{% if ability.group %} Ability group <b>{{ ability.group }}</b>{% if ability.vdot %} (VDOT {{ ability.vdot }}, {% if ability.vdot_set %}set by a coach{% else %}from {{ ability.source }}{% endif %}){% endif %}{% if ability.override %}, pinned by a coach{% endif %}.{% if ability.target_1600 %} Targets: 800 {{ ability.target_800 }}, 1600 {{ ability.target_1600 }}.{% endif %}{% endif %} Experience level {{ experience_labels[a.experience or 2] }}.

@@ -1,3 +1,4 @@
+{% from '_icons.html' import arrows, group_up %}
 <header class="hero{% if hero_compact is defined and hero_compact %} compact{% endif %}">
   <div class="team">{% if has_logo() %}<img src="/branding/logo" alt="">{% endif %}<span>{{ team_name }}</span>
     {% if hero_medals is defined and hero_medals %}<div class="medals">{% for m in hero_medals %}
@@ -22,7 +23,7 @@
         {% endif %}
         {% if hero_vo2 %}<div class="small" style="margin-top:8px"><b>Watch VO2 max: {{ '%.1f' % hero_vo2.vo2_max }}</b> ({{ hero_vo2.local_date.strftime('%b %-d') }}). Your Garmin’s own estimate. It doesn’t change your group.</div>{% endif %}
       </div>
-    </details>{% endif %}
+    </details>{% if hero_move is defined and hero_move %}<span class="hero-move">{{ arrows(hero_move.gain) }}{{ group_up(hero_move) }}</span>{% endif %}{% endif %}
   </div>
   {% if hero_text %}<p>{{ hero_text }}</p>{% endif %}
 </header>

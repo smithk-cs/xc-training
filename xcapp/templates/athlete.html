@@ -107,7 +107,7 @@
     {% endif %}
   {% if linked %}</details>{% else %}</section>{% endif %}
 {% endmacro %}
-{% with hero_title="Hi " ~ a.first_name, hero_text=None, hero_compact=True, back_url=None, hero_group=(ability if show_group else none), hero_vo2=vo2, hero_photo=('/a/' ~ token ~ '/photo?v=' ~ photo_v if photo_v else none), hero_name=a.name, hero_paces_link=paces_link, hero_medals=(medals.medals if medals else none) %}{% include "_hero.html" %}{% endwith %}
+{% with hero_title="Hi " ~ a.first_name, hero_text=None, hero_compact=True, back_url=None, hero_group=(ability if show_group else none), hero_vo2=vo2, hero_photo=('/a/' ~ token ~ '/photo?v=' ~ photo_v if photo_v else none), hero_name=a.name, hero_paces_link=paces_link, hero_medals=(medals.medals if medals else none), hero_move=(vdot_move if show_group else none) %}{% include "_hero.html" %}{% endwith %}
 <div class="stack">
   {% set rhr_n = rhr_cal.missing|length %}
   {% if messages or (medals and medals.note) or need or rhr_n %}<div class="alerts">

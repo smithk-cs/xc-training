@@ -433,7 +433,7 @@ def create_app() -> FastAPI:
         by_class: dict[int, list[Athlete]] = {}
         for a in alumni:
             by_class.setdefault(a.grad_year or 0, []).append(a)
-        return render(request, "athletes.html", user, athletes=rows, ab=A.abilities(db, today), ranks=ranks,
+        return render(request, "athletes.html", user, athletes=rows, ab=A.abilities(db, today), ranks=ranks, moves=A.vdot_moves(db, today),
                       photos=photo_versions(db), former=former, delete_by=lambda a: delete_by(a), alumni=by_class,
                       n_alumni=len(alumni), confirm=[x for x in CY.to_confirm(db, today) if team == "All" or x["athlete"].gender == team],
                       this_year=CY.school_year_end(today), dupes=dupes, team=team)
@@ -513,7 +513,7 @@ def create_app() -> FastAPI:
                       goal_v=A.goal_vdot(db, a.id, A.team_today()),
                       rhr=A.resting_hr(db, a.id, A.team_today()), photo_v=photo_versions(db).get(a.id),
                       vdot_changes=a.vdot_changes, vdot_chart=RP.vdot_history_chart(a.vdot_changes),
-                      wins=A.achievements(db, a, A.team_today()), gain=A.vdot_gains(db, A.team_today()).get(a.id),
+                      wins=A.achievements(db, a, A.team_today()), gain=A.vdot_gains(db, A.team_today()).get(a.id), move=A.vdot_moves(db, A.team_today()).get(a.id),
                       others=db.scalars(select(Athlete).where(Athlete.id != a.id).order_by(Athlete.last_name, Athlete.first_name)).all(),
                       merge_pick=request.query_params.get("merge", ""),
                       injuries=sorted(a.injuries, key=lambda i: i.onset_date, reverse=True),
@@ -1816,7 +1816,7 @@ def create_app() -> FastAPI:
                                                .order_by(CaptainPost.created_at.desc())).all() if a.is_captain else [],
                       miles_goal=A.mileage_goal(db, a.id, mine.get("group") or "", today, a.gender, a.experience) if show_group else None,
                       my_points=PT.team_week(db, A.week_monday(today), athletes=[a])[0] if show_group else None, rates=PT.RATES,
-                      medals=MD.summary(db, a, today) if show_group else None,
+                      medals=MD.summary(db, a, today) if show_group else None, vdot_move=A.vdot_moves(db, today).get(a.id),
                       notes=[n for n in db.scalars(select(Announcement).where(Announcement.start_date <= today, Announcement.end_date >= today)
                                                    .order_by(Announcement.start_date.desc(), Announcement.id.desc())).all()
                              if n.for_athlete(a.gender, mine.get("group") or "")], paces_link=f"/a/{token}/paces" if show_group and mine.get("vdot") else None,
@@ -2736,7 +2736,7 @@ def create_app() -> FastAPI:
                         except Exception as exc:   # one odd run must not break the Week page
                             log(db, "app", f"Recovery summary failed for run {act.id}: {exc}", "warn")
         return render(request, "week.html", user, team=team, rows=rows, monday=monday, today=today, group_workouts=group_workouts,
-                      recovery=recovery,
+                      recovery=recovery, moves=A.vdot_moves(db, today),
                       days=[monday + dt.timedelta(days=i) for i in range(7)], rates=PT.RATES,
                       target_days=target_days, min_minutes=min_minutes, rest_day=rest_day, weekdays=PT.WEEKDAYS,
                       season=SE.period_for(monday))
