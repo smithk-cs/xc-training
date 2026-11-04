@@ -236,7 +236,7 @@ td.num.slower { color: var(--color-bad); font-weight: 600; }
 .rhr-key .sw { display: inline-block; width: 14px; height: 14px; border-radius: 4px; border: 1px solid var(--color-ok); }
 .rhr-key .sw.done { background: var(--color-ok); }
 .rhr-key .sw.garmin { background: color-mix(in srgb, var(--color-ok) 22%, var(--color-panel)); }
-.vdot-board { display: flex; flex-direction: column; gap: 22px; max-width: 1240px; }
+.vdot-board { display: flex; flex-direction: column; gap: 22px; max-width: 1040px; }
 .vdot-group { width: 100%; border-collapse: collapse; background: color-mix(in srgb, var(--g) 38%, #FFFFFF); color: #1B1B1F; min-width: 560px; }
 .vdot-group th, .vdot-group td { border: 1px solid color-mix(in srgb, var(--g) 70%, #000000 12%); padding: 4px 10px; text-align: center; }
 .vdot-group thead th { background: var(--g); color: var(--g-ink); font-weight: 700; }
@@ -263,7 +263,7 @@ details.meet > summary h2::before { content: "▸ "; color: var(--brand-red); }
 details.meet[open] > summary h2::before { content: "▾ "; }
 details.meet[open] > summary { margin-bottom: 10px; }
 .vdot-group td.pace { font-variant-numeric: tabular-nums; }
-.vdot-group { table-layout: fixed; min-width: 960px; }
+.vdot-group { table-layout: fixed; min-width: 820px; }
 .vdot-group col.name { width: 21%; }
 .vdot-group col.v { width: 14%; }
 .vdot-group col.pace { width: 13%; }
@@ -342,6 +342,7 @@ details.panel.fold[open] > summary::after { content: "▾"; }
 details.panel.fold:not([open]) { gap: 0; }
 
 .up-arrows { display: inline-flex; align-items: center; gap: 0; margin-left: 4px; vertical-align: middle; }
+.up-arrows svg + svg { margin-left: -7px; }   /* several arrows sit close together */
 .up-arrows small { color: #1F9D55; font-weight: 700; margin-left: 2px; }
 .badges { display: flex; flex-wrap: wrap; gap: 8px; }
 .badge { display: inline-flex; align-items: center; gap: 8px; background: var(--color-panel); border: 1px solid var(--color-border-line); border-radius: 999px; padding: 6px 12px 6px 8px; }
@@ -623,6 +624,6 @@ table.parts tr.dragging { opacity: .45; }
 .workouts-by-day .part-line + .part-line { border-top: 1px dashed var(--color-border-line); }
 .workouts-by-day .groups-col { width: 1%; white-space: nowrap; }
 .zone-line { display: inline-block; margin-top: 4px; font-size: 12px; font-weight: 600; text-decoration: none; white-space: nowrap; }
-.group-up { display: inline-flex; align-items: center; gap: 3px; font-size: 12px; white-space: nowrap; }
+.group-up { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; font-weight: 800; letter-spacing: .06em; white-space: nowrap; padding: 1px 7px; }
 .group-up svg { flex: none; }
 .hero .hero-move { display: inline-flex; align-items: center; gap: 6px; background: var(--color-panel); border-radius: 999px; padding: 4px 10px; }

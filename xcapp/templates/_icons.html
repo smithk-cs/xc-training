@@ -8,7 +8,7 @@
 {%- if gain %}<span class="up-arrows" title="VDOT up {{ gain }} this week" aria-label="VDOT up {{ gain }} this week">{% for _ in range([gain, 5]|min) %}{{ icon('up', 16) }}{% endfor %}{% if gain > 5 %}<small>+{{ gain }}</small>{% endif %}</span>{% endif -%}
 {%- endmacro %}
 {% macro group_up(move) -%}
-{%- if move and move.to_group %}<span class="pill good group-up" title="Moved up {{ ('from ' ~ move.from_group ~ ' ') if move.from_group else '' }}to {{ move.to_group }} this week">{{ icon('up', 14) }} {{ move.to_group }}</span>{% endif -%}
+{%- if move and move.to_group %}<span class="pill good group-up" title="New group this week: {{ move.to_group }}{{ (', up from ' ~ move.from_group) if move.from_group else '' }}" aria-label="New group this week: {{ move.to_group }}">NEW</span>{% endif -%}
 {%- endmacro %}
 {% macro badges(list) -%}
 {%- if list %}<div class="badges">{% for b in list %}<span class="badge badge-{{ b.kind }}" title="{{ b.detail }}">{{ icon('up' if b.kind == 'vdot' else b.kind) }}<span><b>{{ b.title }}</b><small>{{ b.detail }}</small></span></span>{% endfor %}</div>{% endif -%}
