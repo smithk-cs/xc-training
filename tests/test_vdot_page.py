@@ -76,7 +76,7 @@ def test_vdot_page_and_editing(app):
     assert "long run" not in page and "tempo:" not in page and "Paste a VDOT list" not in page
     sam_paces = [A.fmt_time(z["mile"])[:-2] for z in A.training_paces(A.abilities(SessionLocal(), A.team_today())[sam]["vdot"])]
     assert "".join(f'<td class="pace">{x}</td>' for x in sam_paces) in page          # each athlete's own paces
-    assert "<th>VDOT 73 +</th>" in page and "<th>VDOT 48 and below</th>" in page and "or slower" in page
+    assert "<th>VDOT 73 +</th>" in page and "<th>VDOT 48<br><span class=\"small\">and below</span></th>" in page and "or slower" in page
     assert page.index("Platinum") < page.index("Gold") < page.index("Silver")
     assert "No VDOT yet" in page and "Pat Reed" in page
     edit = c.get("/vdot?edit=1").text

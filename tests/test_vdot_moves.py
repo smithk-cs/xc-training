@@ -40,7 +40,7 @@ def test_moves_count_the_gain_and_a_new_group():
     csrf = re.search(r'name="csrf" value="([^"]+)"', c.get("/login").text).group(1)
     c.post("/login", data={"csrf": csrf, "username": "coach1", "password": "correct-horse-1"})
     week = c.get("/week?team=Boys").text
-    assert 'title="VDOT up 2 this week"' in week and f"to {high.name} this week" in week
+    assert 'title="VDOT up 2 this week"' in week and f"New group this week: {high.name}" in week and ">NEW</span>" in week
     for page in (c.get("/athletes").text, c.get("/vdot").text, c.get(f"/athletes/{aid}").text):
         assert 'title="VDOT up 2 this week"' in page and 'class="pill good group-up"' in page
     me = TestClient(create_app()).get("/a/t-up").text

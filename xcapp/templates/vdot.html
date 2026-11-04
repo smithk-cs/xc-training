@@ -15,7 +15,7 @@
 <div class="vdot-board">
 {% for s in b.sections %}{% set c = s.group.color or '#E5E4E2' %}
 <div class="scroll"><table class="vdot-group" style="--g: {{ c }}; --g-ink: {{ ink(c) }}">{{ cols }}
-  <thead><tr><th class="name">{{ s.group.name }}{% if s.miles %}<br><span class="small" style="font-weight:400">{{ '%g' % s.miles }} mi a week</span>{% endif %}</th><th>VDOT {{ s.range }}</th>
+  <thead><tr><th class="name">{{ s.group.name }}{% if s.miles %}<br><span class="small" style="font-weight:400">{{ '%g' % s.miles }} mi a week</span>{% endif %}</th><th>{% if s.range.endswith(' and below') %}VDOT {{ s.range[:-10] }}<br><span class="small">and below</span>{% else %}VDOT {{ s.range }}{% endif %}</th>
     {% for z in s.zones %}<th class="small zone-head"><span class="zone-name">{{ z.name }}</span><br>{{ fmt_time(z.fast)[:-2] }}{% if s.slower %} or slower{% elif not s.single %}-{{ fmt_time(z.slow)[:-2] }}{% endif %}</th>{% endfor %}</tr></thead>
   <tbody>
   {% for r in s.rows %}{% include "_vdot_row.html" %}{% else %}<tr><td colspan="{{ zones|length + 2 }}" class="small">Nobody yet.</td></tr>{% endfor %}
