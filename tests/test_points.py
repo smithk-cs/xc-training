@@ -188,7 +188,7 @@ def test_week_page_and_athlete_panel():
     c.post("/login", data={"csrf": csrf, "username": "coach1", "password": "correct-horse-1"})
     girls = c.get(f"/week?team=Girls&start={monday.isoformat()}").text
     assert "Girls week" in girls and f'href="/athletes/{aid}">Ava Doyle</a>' in girls and "Sam Lowry" not in girls
-    assert re.search(r"<b>\d+%</b>", girls) and "of 30" in girls and "Effort" not in girls
+    assert re.search(r"<b>\d+%</b>", girls) and "5.0/day" in girls and "Effort" not in girls
     boys = c.get("/week?team=Boys").text
     assert "Boys week" in boys and "Sam Lowry" in boys and "No score (–)" in boys   # no workout posted for the boys
     csrf = re.search(r'name="csrf" value="([^"]+)"', girls).group(1)
@@ -204,7 +204,8 @@ def test_week_page_and_athlete_panel():
     assert '<option value="2" selected>2: usual</option>' in page
     c.post(f"/athletes/{aid}/edit", data={"csrf": csrf, "grade": "11", "experience": "3"})
     assert "Experience level 3: experienced (10% more miles)." in c.get(f"/athletes/{aid}").text
-    assert "experienced +10%" in c.get(f"/week?team=Girls&start={monday.isoformat()}").text and "of 33" in c.get(f"/week?team=Girls&start={monday.isoformat()}").text
+    wk = c.get(f"/week?team=Girls&start={monday.isoformat()}").text
+    assert "experienced +10%" in wk and "6.6/day" in wk                    # 33 miles over the 5 run days set above
 
 
 def test_experience_changes_the_miles_goal_and_target(session):
@@ -239,11 +240,13 @@ def test_keep_pace_colours():
     assert days[2]["why_miles"] == "5.0 of 5.0 mi (planned for the workout): 100%"
     assert days[1]["why_points"] == "10 of 10 pts (easy day: the miles the workouts leave ÷ 5 easy days): 100%"
     # The week so far: 11 of 17 mi due through Wednesday (6 + 6 + 5), 30 of 40 points
-    assert round(week["miles_pct"]) == 65 and P.pace_status(week["miles_pct"]) == "bad"
-    assert week["why_miles"] == "11.0 of 17.0 mi due through Wed (of 35): 65%"
+    # Miles: 35 over 6 run days is 5.8 a day, so 17.5 are due by Wednesday
+    assert round(week["miles_pct"]) == 63 and P.pace_status(week["miles_pct"]) == "bad"
+    assert week["why_miles"] == "11.0 of 17.5 mi due through Wed (5.8 mi a day over 6 run days, 35 for the week): 63%"
+    assert week["miles_per_day"] == pytest.approx(35 / 6) and week["miles_due"] == pytest.approx(17.5)
     assert round(week["points_pct"]) == 75
     P.keep_pace(week, MON + dt.timedelta(days=5))            # Saturday: the whole goal is due already
-    assert week["why_miles"] == "11.0 of 35.0 mi due through Sat (of 35): 31%"
+    assert week["why_miles"] == "11.0 of 35.0 mi due through Sat (5.8 mi a day over 6 run days, 35 for the week): 31%"
     days[6].update(miles=6, points=10)                        # a run on the rest day is compared with an easy day
     P.keep_pace(week, MON + dt.timedelta(days=6))
     assert round(days[6]["miles_pct"]) == 100 and "rest day" in days[6]["why_miles"]

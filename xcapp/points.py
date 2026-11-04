@@ -99,16 +99,21 @@ def keep_pace(week: dict, today: dt.date) -> None:
     """Colours, each with the reason behind it ('why_miles', 'why_points'), from what each day asks for (plan_days):
     - each day on its own: a workout day against its workout, an easy day against its share of the easy miles and
       points (a run on a rest day too);
-    - the week's totals against what the days through today ask for, or the whole goals once the week is past."""
+    - the week's totals against what the days through today ask for, or the whole goals once the week is past.
+      Miles: the weekly goal spread evenly over the run days (miles per day), adding up day by day to the goal on
+      the last run day; the rest day adds nothing."""
     goal_m, target = week["goal_miles"] or 0, week["target"] or 0
     share = week.get("easy_share") or {"miles": 0, "points": 0, "days": 0}
+    run_days = [d for d in week["days"] if d.get("kind", "easy") in ("workout", "easy")]
+    per_day = goal_m / len(run_days) if goal_m and run_days else 0.0
+    week["miles_per_day"], week["miles_due"] = (per_day or None), None
     cum_m = cum_p = due_wm = due_wp = 0.0
     week["miles_pct"] = week["points_pct"] = None
     week["why_miles"] = week["why_points"] = ""
     for i, d in enumerate(week["days"], 1):
         cum_m += d["miles"]
         cum_p += d["points"]
-        due_wm += d.get("due_m", 0)
+        due_wm += per_day if d.get("kind", "easy") in ("workout", "easy") else 0.0
         due_wp += d.get("due_p", 0)
         d["miles_pct"] = d["points_pct"] = None
         d["why_miles"] = d["why_points"] = ""
@@ -127,9 +132,11 @@ def keep_pace(week: dict, today: dt.date) -> None:
             if d["points_pct"] is not None:
                 d["why_points"] = f"{d['points']:.0f} of {due_p:.0f} pts ({how}): {d['points_pct']:.0f}%"
         week["miles_pct"], week["points_pct"] = _pct(cum_m, due_wm), _pct(cum_p, due_wp)
+        week["miles_due"] = due_wm if goal_m else None
         through = "the whole week" if i == 7 else f"through {d['date']:%a}"
         if week["miles_pct"] is not None:
-            week["why_miles"] = f"{cum_m:.1f} of {due_wm:.1f} mi due {through} (of {goal_m:g}): {week['miles_pct']:.0f}%"
+            week["why_miles"] = (f"{cum_m:.1f} of {due_wm:.1f} mi due {through} ({per_day:.1f} mi a day over {len(run_days)} run days, "
+                                 f"{goal_m:g} for the week): {week['miles_pct']:.0f}%")
         if week["points_pct"] is not None:
             week["why_points"] = f"{cum_p:.0f} of {due_wp:.0f} pts due {through} (of {target:.0f}): {week['points_pct']:.0f}%"
 
