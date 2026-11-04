@@ -38,6 +38,17 @@ Cost: Cloudflare's Workers Paid plan ($5/month, includes some container time). S
 
 The app creates its own tables the first time it starts.
 
+### Supabase security (Data API off, row level security on)
+
+The app talks to the database directly with `DATABASE_URL`; it never uses Supabase's web API (the "Data API").
+To keep that side door shut:
+
+- In Supabase, **Project Settings → Data API**: turn the Data API off (or remove `public` from **Exposed schemas**).
+- The app turns on row level security for every one of its tables each time it starts, with no access rules, and
+  removes the web API roles' (`anon`, `authenticated`) access. The app is unaffected: it connects as the tables'
+  owner, which row level security doesn't restrict. Supabase's Security Advisor should then show no "RLS Disabled
+  in Public" errors (press **Rerun linter** there after the app has started).
+
 ## 3. The app's own keys
 
 Run `python -m xcapp.cli gen-keys` (or ask whoever set this up to generate them for you). It prints five lines:

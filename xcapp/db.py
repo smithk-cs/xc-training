@@ -93,6 +93,33 @@ ADDED_COLUMNS = {
 }
 
 
+API_ROLES = ("anon", "authenticated")   # Supabase's web API (PostgREST) roles; the app never uses them
+
+
+def lock_down(conn) -> None:
+    """Close Supabase's web API (the Data API) to the app's tables: row level security on every table the app owns,
+    with no policies, so the API's roles can read and change nothing; and those roles' grants removed. The app
+    connects as the tables' owner, which row level security doesn't restrict, so the app is unaffected. Each step
+    runs in its own savepoint: one that isn't allowed is skipped and never stops the app from starting."""
+    from sqlalchemy import text
+    owned = conn.execute(text("SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace "
+                              "WHERE n.nspname = 'public' AND c.relkind = 'r' AND NOT c.relrowsecurity "
+                              "AND pg_get_userbyid(c.relowner) = current_user")).scalars().all()
+    steps = [f'ALTER TABLE public."{name}" ENABLE ROW LEVEL SECURITY' for name in owned]
+    roles = conn.execute(text("SELECT rolname FROM pg_roles WHERE rolname = ANY(:r)"), {"r": list(API_ROLES)}).scalars().all()
+    for role in roles:
+        steps += [f"REVOKE ALL ON ALL TABLES IN SCHEMA public FROM {role}",
+                  f"REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM {role}",
+                  f"ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM {role}",
+                  f"ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON SEQUENCES FROM {role}"]
+    for sql in steps:
+        try:
+            with conn.begin_nested():
+                conn.execute(text(sql))
+        except Exception as exc:   # not allowed here: leave it, the app still runs
+            print(f"Database lock-down step skipped ({sql}): {exc}")
+
+
 def create_all():
     from sqlalchemy import inspect, text
     from . import models  # noqa: F401  (register tables)
@@ -107,6 +134,7 @@ def create_all():
                     conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}"))
         if eng.dialect.name == "postgresql":  # room for the notes of merged same-day pain reports (SQLite has no limit)
             conn.execute(text("ALTER TABLE pain_reports ALTER COLUMN note TYPE VARCHAR(1000)"))
+            lock_down(conn)
         # Staff names saved as one "full name": split at the last space into first and last name (coaches can correct it).
         for uid, full in conn.execute(text("SELECT id, full_name FROM staff_users WHERE full_name <> '' "
                                            "AND COALESCE(first_name, '') = '' AND COALESCE(last_name, '') = ''")).all():
