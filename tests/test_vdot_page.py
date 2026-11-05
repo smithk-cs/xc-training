@@ -199,3 +199,39 @@ def test_boys_and_girls_pages(app):
     assert A.mileage_goal(db, ava_id, "Silver", A.team_today(), "Boys")["goal"] == 40
     assert A.mileage_goal(db, ava_id, "Gold", A.team_today(), "Girls") is None         # no girls' goal for Gold
     db.close()
+
+
+def test_season_best_column():
+    from xcapp.models import TrainingGroup
+    db = SessionLocal()
+    db.add(StaffUser(username="coach2", role="coach", password_hash=hash_password("correct-horse-1")))
+    today = A.team_today()
+    start = A.season_range(today)[0]
+    this_season, last_season = min(today, start + dt.timedelta(days=3)), start - dt.timedelta(days=40)
+    kim = Athlete(first_name="Kim", last_name="Best", gender="Girls", grade=11, group="Varsity", link_token="t-kim")
+    lee = Athlete(first_name="Lee", last_name="Old", gender="Girls", grade=11, group="Varsity", link_token="t-lee")
+    db.add_all([kim, lee])
+    db.flush()
+    db.add(Result(athlete_id=kim.id, date=last_season, event="5K", time_s=17 * 60, kind="race", season=A.season_for(last_season)))  # fastest
+    db.add(Result(athlete_id=kim.id, date=this_season, event="5K", time_s=18 * 60, kind="race", season=A.season_for(this_season)))
+    db.add(Result(athlete_id=lee.id, date=last_season, event="5K", time_s=19 * 60, kind="race", season=A.season_for(last_season)))
+    for g in db.query(TrainingGroup).all():
+        g.min_vdot_girls = 0 if g.name == "Ivory" else g.min_vdot_girls
+    db.commit()
+    targets = A.vdot_targets(db)
+    want_now, want_season = A.team_vdot(A.vdot(5000, 17 * 60), targets), A.team_vdot(A.vdot(5000, 18 * 60), targets)
+    board = A.vdot_board(db, today, ("Girls",))[0]
+    rows = {r["a"].first_name: r for s in board["sections"] for r in s["rows"]}
+    assert rows["Kim"]["vdot"] == want_now and rows["Kim"]["season_vdot"] == want_season < want_now   # best run this season
+    assert rows["Kim"]["season_source"].startswith("5K 18:00.0") and rows["Lee"]["season_vdot"] is None
+    kid = kim.id
+    db.close()
+    from xcapp.web import create_app
+    c = TestClient(create_app(), follow_redirects=False)
+    csrf = re.search(r'name="csrf" value="([^"]+)"', c.get("/login").text).group(1)
+    c.post("/login", data={"csrf": csrf, "username": "coach2", "password": "correct-horse-1"})
+    page = c.get("/vdot?team=Girls").text
+    assert "Season<br>best</th>" in page and f'<td class="sb" title="Best race this season: 5K 18:00.0' in page
+    assert f">{want_season}</td>" in page and '<td class="sb"><span class="muted">–</span></td>' in page
+    edit = c.get("/vdot?team=Girls&edit=1").text
+    assert f'name="vdot_{kid}"' in edit and '<td class="sb" title=' in edit                          # shown while editing too
