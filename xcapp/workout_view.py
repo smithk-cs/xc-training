@@ -536,11 +536,18 @@ def build(db: Session, act: Activity) -> dict:
     hard = [x for x in items if x["hard"]]
     efforts = efforts_from_laps(act)
     source = "laps"
-    if len(efforts) < max(1, len(hard) // 2) and points and v:
-        hard_paces = [pace_band(x["zone"], v)[1] for x in hard if pace_band(x["zone"], v)]
-        if hard_paces:
-            threshold = (A.pace_at(v, A.EASY_PCT) + max(hard_paces)) / 2
-            efforts, source = efforts_from_stream(points, paces, threshold), "pace"
+    hard_paces = [pace_band(x["zone"], v)[1] for x in hard if pace_band(x["zone"], v)] if v else []
+    if points and hard_paces:
+        threshold = (A.pace_at(v, A.EASY_PCT) + max(hard_paces)) / 2
+        # A lap marked as a rep must have been run fast. Laps pressed at the start of each jog (or a watch workout
+        # whose steps don't line up with what was run) make the jogs look like the reps: then the pace finds them.
+        slow = [e for e in efforts if e.get("dist") and e.get("secs") and e["secs"] / e["dist"] * A.METERS_PER_MILE > threshold]
+        if len(efforts) < max(1, len(hard) // 2) or slow:
+            from_pace = efforts_from_stream(points, paces, threshold)
+            if len(efforts) < max(1, len(hard) // 2) or len(from_pace) >= max(1, len(hard) // 2):
+                efforts, source = from_pace, "pace"
+            else:
+                efforts = [e for e in efforts if e not in slow]
     if old_style and hard and hard[0].get("open_count"):   # the title doesn't say how many: one per effort of about that size
         want = hard[0]["dist"]
         hard = [dict(hard[0], rep=i + 1, label=f"{hard[0]['unit']} · rep {i + 1}") for i, e in enumerate(
