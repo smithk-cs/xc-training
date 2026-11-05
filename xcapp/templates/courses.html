@@ -12,7 +12,7 @@
   {% for c in courses %}{% set tier = CS.hill_tier(c) %}
   <tr><td><b>{{ c.name }}</b>{% if c.map_url %} <a class="small" href="{{ c.map_url }}" target="_blank" rel="noopener">map</a>{% endif %}{% if c.video_url %} <a class="small" href="{{ c.video_url }}" target="_blank" rel="noopener">video</a>{% endif %}</td>
     <td class="small">{{ c.location }}</td>
-    <td class="num">{% if c.distances %}{% for d in c.distances.split(',') %}<span class="tag">{{ d }}</span> {% endfor %}{% else %}{{ CS.distance_label(c.distance_m) }}{% endif %}</td>
+    <td class="num">{% if c.distances %}{% set vids = c.videos %}{% for d in c.distances.split(',') %}{% if vids.get(d) %}<a class="tag video-tag" href="{{ vids[d] }}" target="_blank" rel="noopener" title="Watch the {{ d }} course video">▶ {{ d }}</a>{% else %}<span class="tag">{{ d }}</span>{% endif %} {% endfor %}{% else %}{{ CS.distance_label(c.distance_m) }}{% endif %}</td>
     <td>{{ c.surface }}</td>
     <td class="num">{{ '%g ft' % c.elevation_gain_ft if c.elevation_gain_ft is not none else '' }}</td>
     <td class="num">{% if tier %}{{ tier }}{% if not c.hill_tier %} <span class="small muted">(from climb)</span>{% endif %}{% endif %}</td>
@@ -47,6 +47,26 @@
       {% if older %}<div class="dist-row"><span class="small muted">Saved before</span><div class="chips">{% for k in older %}<label class="chip"><input type="checkbox" name="dist_{{ k }}" checked><span>{{ k }}</span></label>{% endfor %}</div></div>{% endif %}
       <p class="small muted" style="margin:4px 0 0">Tick every distance run here (most courses have several). The total climb is measured over the main one: 5K when it’s raced here, otherwise the longest.</p>
     </fieldset>
+    {% set vids = edit.videos if edit else {} %}
+    <fieldset class="pick course-videos" id="course-videos"><legend>Course video for each distance (YouTube)</legend>
+      {% for k in CS.KM_DISTANCES|list + CS.MILE_DISTANCES|list + older %}
+      <label class="video-row" data-dist="{{ k }}"{% if k not in raced %} hidden{% endif %}><span class="dist">{{ k }}</span><input type="url" name="video_{{ k }}" value="{{ vids.get(k, '') }}" maxlength="500" placeholder="https://youtu.be/..." aria-label="{{ k }} course video"></label>
+      {% endfor %}
+      <p class="small muted no-dist"{% if raced %} hidden{% endif %} style="margin:0">Tick a distance above to add its video.</p>
+      <p class="small muted" style="margin:4px 0 0">Athletes see the video for the distance they’re entered in, or the course video below when there’s none for their distance.</p>
+    </fieldset>
+    <script>(function () {
+      var form = document.getElementById('course-videos'); if (!form) return;
+      function sync() {
+        var any = false;
+        form.querySelectorAll('.video-row').forEach(function (row) {
+          var box = document.querySelector('input[name="dist_' + row.dataset.dist + '"]'), on = box && box.checked;
+          row.hidden = !on; any = any || on;
+        });
+        form.querySelector('.no-dist').hidden = any;
+      }
+      document.querySelectorAll('.course-distances input[type=checkbox]').forEach(function (b) { b.addEventListener('change', sync); });
+    })();</script>
     <div class="form-row">
       <label>Surface<select name="surface">{% for s in CS.SURFACES %}<option{% if (edit.surface if edit else 'Firm grass') == s %} selected{% endif %}>{{ s }}</option>{% endfor %}</select></label>
       <label>Turns<select name="turns">{% for t in CS.TURNS %}<option{% if (edit.turns if edit else 'Some') == t %} selected{% endif %}>{{ t }}</option>{% endfor %}</select></label>
@@ -57,7 +77,7 @@
     <div class="form-row">
       <label>Course adjustment (s/mile)<input type="number" name="adjust_s_per_mile" value="{{ '%g' % edit.adjust_s_per_mile if edit and edit.adjust_s_per_mile is not none else '' }}" step="1" min="-30" max="120" placeholder="worked out" style="width:8em"></label>
       <label style="flex:1">Map link<input type="url" name="map_url" value="{{ edit.map_url if edit else '' }}" maxlength="500" placeholder="https://www.strava.com/routes/..."></label>
-      <label style="flex:1">Course video (YouTube)<input type="url" name="video_url" value="{{ edit.video_url if edit else '' }}" maxlength="500" placeholder="https://youtu.be/..."></label>
+      <label style="flex:1">Course video, any distance (YouTube)<input type="url" name="video_url" value="{{ edit.video_url if edit else '' }}" maxlength="500" placeholder="https://youtu.be/..."></label>
     </div>
     <div class="form-row" style="align-items:flex-end">
       <label>Latitude<input type="number" name="latitude" step="0.00001" min="-90" max="90" value="{{ '%g' % edit.latitude if edit and edit.latitude is not none else '' }}" style="width:9em" placeholder="38.71234"></label>

@@ -162,7 +162,7 @@ def create_app() -> FastAPI:
     # A fingerprint of the style sheet and scripts: links carry it (?v=...), so browsers load new ones after each deploy.
     import hashlib
     asset_v = hashlib.sha256(b"".join(f.read_bytes() for f in sorted((HERE / "static").glob("*.[cj]s*")))).hexdigest()[:10]
-    templates.env.globals.update(asset_v=asset_v, athlete_words=WV.athlete_words, mmss=A.mmss_text, map_url=A.map_url, course_place=A.course_place, fmt_clock=A.fmt_clock, fmt_secs=A.fmt_secs, describe_weather=WX.describe, fmt_time=A.fmt_time, timedelta=dt.timedelta, now=A.team_today, EVENTS=list(A.EVENTS), GROUPS=GROUPS, team_name=s.team_name,
+    templates.env.globals.update(asset_v=asset_v, athlete_words=WV.athlete_words, mmss=A.mmss_text, map_url=A.map_url, course_place=A.course_place, race_videos=CS.race_videos, fmt_clock=A.fmt_clock, fmt_secs=A.fmt_secs, describe_weather=WX.describe, fmt_time=A.fmt_time, timedelta=dt.timedelta, now=A.team_today, EVENTS=list(A.EVENTS), GROUPS=GROUPS, team_name=s.team_name,
                                  has_logo=has_logo, FEELS=FEELS, EFFORT_WORDS=EFFORT_WORDS, RUN_TYPES=A.RUN_TYPES,
                                  MISSED_REASONS=A.MISSED_REASONS, SIDES=A.SIDES, STARTED=A.STARTED, SEEN_BY=A.SEEN_BY,
                                  MORE_DAYS=A.MORE_DAYS, missed_label=A.missed_label,
@@ -893,6 +893,15 @@ def create_app() -> FastAPI:
         if video and not video.startswith("https://"):
             raise ValueError("The video link should start with https:// (copy it from YouTube's Share button).")
         c.video_url = video
+        per = {}   # a video for each distance ticked
+        for k in raced:
+            v = str(f.get(f"video_{k}", "")).strip()[:500]
+            if v and not v.startswith("https://"):
+                raise ValueError(f"The {k} video link should start with https:// (copy it from YouTube's Share button).")
+            if v:
+                per[k] = v
+        import json as _json
+        c.distance_videos = _json.dumps(per) if per else ""
         c.notes = str(f.get("notes", "")).strip()[:4000]
         c.latitude = num("latitude", -90, 90, "Latitude")
         c.longitude = num("longitude", -180, 180, "Longitude")

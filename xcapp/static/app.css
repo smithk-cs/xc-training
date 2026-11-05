@@ -630,3 +630,12 @@ table.parts tr.dragging { opacity: .45; }
 /* Team calendar: a workout's parts, one per line. */
 .cal-parts { list-style: none; margin: 2px 0 0; padding: 0; }
 .cal-item.kind-workout .cal-time { color: var(--color-fg-muted); }
+/* Courses: a YouTube link box for each distance ticked, and distance tags that open their video. */
+.course-videos { border: 0; padding: 0; margin: 0 0 10px; display: flex; flex-direction: column; gap: 6px; }
+.course-videos legend { font-weight: 600; margin-bottom: 6px; }
+fieldset.course-videos label.video-row { display: flex; flex-direction: row; align-items: center; justify-content: flex-start; gap: 10px; text-align: left; }
+.course-videos .video-row[hidden] { display: none; }
+.course-videos .video-row .dist { width: 5.5rem; font-weight: 600; }
+.course-videos .video-row input { flex: 1; max-width: 32rem; }
+a.tag.video-tag { text-decoration: none; }
+a.tag.video-tag:hover { text-decoration: underline; }
