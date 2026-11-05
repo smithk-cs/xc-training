@@ -1,0 +1,2 @@
+{# The VDOT of the athlete's best race this season, with the race in the tooltip. #}
+<td class="sb"{% if r.season_source %} title="Best race this season: {{ r.season_source }}"{% endif %}>{% if r.season_vdot %}{{ r.season_vdot }}{% else %}<span class="muted">–</span>{% endif %}</td>

@@ -686,8 +686,12 @@ def weekly_plan_text(plan: str) -> str:
 
 def vdot_board(db: Session, as_of: dt.date, genders: tuple[str, ...] = ("Boys", "Girls")) -> list[dict]:
     """The VDOT page: per gender with athletes, each group from fastest down with its VDOT range, easy and tempo pace
-    ranges, weekly mileage goal and its athletes by VDOT; then athletes with no VDOT yet."""
+    ranges, weekly mileage goal and its athletes by VDOT; then athletes with no VDOT yet. Each athlete also has the VDOT
+    of their best race this season (season_vdot, from season_source), whatever their VDOT is set from."""
     ab = abilities(db, as_of)
+    targets = vdot_targets(db)
+    season_best = {aid: (team_vdot(v, targets), text) for aid, (v, text, _day) in latest_races(db, season_range(as_of)[0], as_of).items()}
+    best = lambda a: {"season_vdot": season_best.get(a.id, (None, ""))[0], "season_source": season_best.get(a.id, (None, ""))[1]}  # noqa: E731
     moves = vdot_moves(db, as_of)
     gains = {aid: m["gain"] for aid, m in moves.items()}
     groups = db.scalars(select(TrainingGroup).order_by(TrainingGroup.position)).all()
@@ -711,9 +715,9 @@ def vdot_board(db: Session, as_of: dt.date, genders: tuple[str, ...] = ("Boys", 
             rng = (f"{hi} and below" if bottom else f"{lo}-{hi}" if hi is not None and hi > lo else f"{lo} +" if hi is None else str(lo))
             sections.append({"group": g, "range": rng, "zones": zones, "miles": g.miles_goal(gender),
                              "single": hi is None or hi <= lo or bottom, "slower": bottom,
-                             "rows": [{"a": a, **ab[a.id], "plan": weekly_plan_text(a.weekly_plan), "gain": gains.get(a.id), "move": moves.get(a.id),
-                                       "paces": training_paces(ab[a.id]["vdot"])} for a in members]})
-        rest = [{"a": a, **ab.get(a.id, {}), "plan": weekly_plan_text(a.weekly_plan), "paces": []}
+                             "rows": [{"a": a, **ab[a.id], **best(a), "plan": weekly_plan_text(a.weekly_plan), "gain": gains.get(a.id),
+                                       "move": moves.get(a.id), "paces": training_paces(ab[a.id]["vdot"])} for a in members]})
+        rest = [{"a": a, **ab.get(a.id, {}), **best(a), "plan": weekly_plan_text(a.weekly_plan), "paces": []}
                 for a in mine if not ab.get(a.id, {}).get("group")]
         out.append({"gender": gender, "sections": sections, "rest": rest})
     return out

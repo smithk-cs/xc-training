@@ -2797,7 +2797,7 @@ def create_app() -> FastAPI:
         return render(request, "vdot.html", user, board=A.vdot_board(db, A.team_today(), (team,)), team=team,
                       edit=bool(edit) and user.role != "trainer",
                       changes=changes, open_changes=request.query_params.get("changes") == "1",
-                      zones=A.PACE_ZONES, vdot_limits=(A.VDOT_MIN, A.VDOT_MAX))
+                      zones=A.PACE_ZONES, vdot_limits=(A.VDOT_MIN, A.VDOT_MAX), season=A.season_for(A.team_today()))
 
     @app.post("/vdot")
     async def vdot_save(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
