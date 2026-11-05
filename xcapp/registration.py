@@ -146,7 +146,8 @@ def as_text(meet: MeetEntry, divisions: list[dict], team: str, coach: str, coach
     lines = [f"{team}: entries for {meet.name}", f"{meet.date:%A, %B %-d, %Y}" + (f" · {meet.location}" if meet.location else ""), ""]
     for d in divisions:
         div = d["division"]
-        lines.append(f"{div.name}{' · ' + div.distance if div.distance else ''} ({len(d['rows'])} athletes)")
+        lines.append(f"{div.name}{' · ' + div.distance if div.distance else ''}{' · ' + A.fmt_clock(div.start_time) if div.start_time else ''}"
+                     f" ({len(d['rows'])} athletes)")
         for i, r in enumerate(d["rows"], 1):
             lines.append(f"  {i}. {r['athlete'].name}, grade {r['grade']}" + (f", season best {A.fmt_time(r['seed'])}" if r["seed"] else ""))
         lines.append("")
@@ -263,7 +264,7 @@ def as_pdf(meet: MeetEntry, divisions: list[dict], team: str, coach: str, coach_
             pdf.add_page()
         pdf.set_font("Barlow", size=15)
         pdf.set_text_color(*RED)
-        pdf.cell(w * 0.7, 22, div.name + (f"  ·  {div.distance}" if div.distance else ""))
+        pdf.cell(w * 0.7, 22, div.name + (f"  ·  {div.distance}" if div.distance else "") + (f"  ·  {A.fmt_clock(div.start_time)}" if div.start_time else ""))
         pdf.set_font("Inter", size=10)
         pdf.set_text_color(*MUTED)
         pdf.cell(w * 0.3, 22, f"{len(d['rows'])} athlete{'' if len(d['rows']) == 1 else 's'}", align="R", new_x="LMARGIN", new_y="NEXT")
