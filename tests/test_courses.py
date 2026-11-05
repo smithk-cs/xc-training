@@ -238,3 +238,57 @@ def test_three_point_two_k_course_distance():
     from xcapp import courses as C
     assert list(C.KM_DISTANCES) == ["2K", "3K", "3.2K", "4K", "5K"]
     assert C.distance_label(3200) == "3.2K" and C.main_distance(["3.2K", "3K"], None) == 3200   # the longest when 5K isn't raced
+
+
+def test_a_video_for_each_distance():
+    import re
+
+    from fastapi.testclient import TestClient
+
+    from xcapp import analysis as A
+    from xcapp.db import SessionLocal
+    from xcapp.models import Athlete, DivisionAthlete, MeetDivision, MeetEntry, StaffUser
+    from xcapp.security import hash_password
+    db = SessionLocal()
+    db.add(StaffUser(username="coach1", role="coach", password_hash=hash_password("correct-horse-1")))
+    ava = Athlete(first_name="Ava", last_name="Doyle", gender="Girls", grade=11, group="Varsity", link_token="t-ava")
+    bea = Athlete(first_name="Bea", last_name="Lane", gender="Girls", grade=9, group="JV", link_token="t-bea")
+    db.add_all([ava, bea])
+    db.commit()
+    db.close()
+    from xcapp.web import create_app
+    app = create_app()
+    c = TestClient(app, follow_redirects=False)
+    csrf = re.search(r'name="csrf" value="([^"]+)"', c.get("/login").text).group(1)
+    c.post("/login", data={"csrf": csrf, "username": "coach1", "password": "correct-horse-1"})
+    csrf = re.search(r'name="csrf" value="([^"]+)"', c.get("/courses").text).group(1)
+    form = {"csrf": csrf, "name": "Woodward Park", "surface": "Firm grass", "turns": "Some", "dist_5K": "on", "dist_2 mi": "on",
+            "video_5K": "https://youtu.be/five", "video_2 mi": "http://youtu.be/two", "video_3 mi": "https://youtu.be/not-ticked"}
+    c.post("/courses", data=form)
+    assert "The 2 mi video link should start with https://" in c.get("/courses").text
+    c.post("/courses", data={**form, "video_2 mi": "https://youtu.be/two"})
+    db = SessionLocal()
+    course = db.query(Course).one()
+    assert course.videos == {"5K": "https://youtu.be/five", "2 mi": "https://youtu.be/two"}        # 3 mi wasn't ticked
+    cid = course.id
+    soon = A.team_today() + dt.timedelta(days=5)
+    m = MeetEntry(name="Clovis Invite", date=soon, location="Fresno", course_id=cid)
+    d5 = MeetDivision(name="Girls Varsity", gender="Girls", level="Varsity", distance="5K", position=0)
+    m.divisions.append(d5)
+    db.add(m)
+    db.flush()
+    d5.entries.append(DivisionAthlete(athlete_id=db.query(Athlete).filter_by(first_name="Ava").one().id, position=0))
+    db.commit()
+    db.close()
+    page = c.get("/courses").text
+    assert '<a class="tag video-tag" href="https://youtu.be/five"' in page and "▶ 2 mi</a>" in page
+    edit = c.get(f"/courses?edit={cid}").text
+    assert 'name="video_5K" value="https://youtu.be/five"' in edit and '<label class="video-row" data-dist="3 mi" hidden>' in edit
+    ava_page = TestClient(app).get("/a/t-ava").text                                          # entered in the 5K
+    assert 'href="https://youtu.be/five" target="_blank" rel="noopener">▶ 5K course video: Woodward Park</a>' in ava_page
+    assert "youtu.be/two" not in ava_page
+    bea_page = TestClient(app).get("/a/t-bea").text                                          # not entered yet: every distance
+    assert "▶ 5K course video</a>" in bea_page and "▶ 2 mi course video</a>" in bea_page
+    c.post("/courses", data={**form, "cid": str(cid), "video_2 mi": "https://youtu.be/two", "video_url": "https://youtu.be/whole"})
+    bea_page = TestClient(app).get("/a/t-bea").text                                          # the course video when no distance fits
+    assert "▶ Course video: Woodward Park</a>" in bea_page and "youtu.be/two" not in bea_page

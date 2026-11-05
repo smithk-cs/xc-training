@@ -527,10 +527,32 @@ class Course(Base):
     adjust_s_per_mile: Mapped[float | None] = mapped_column(Float, nullable=True)  # coach's own course adjustment, if set
     map_url: Mapped[str] = mapped_column(String(500), default="")
     video_url: Mapped[str] = mapped_column(String(500), default="")   # a YouTube video of the course, for athletes
+    distance_videos: Mapped[str] = mapped_column(Text, default="")   # a video per distance, as JSON: {"5K": "https://youtu.be/..."}
     latitude: Mapped[float | None] = mapped_column(Float, nullable=True)    # where it is, for the weather
     longitude: Mapped[float | None] = mapped_column(Float, nullable=True)
     notes: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
+
+    @property
+    def videos(self) -> dict[str, str]:
+        """The video for each distance raced here, in the order of the distances."""
+        import json
+        try:
+            saved = json.loads(self.distance_videos) if self.distance_videos else {}
+        except ValueError:
+            saved = {}
+        order = [d for d in (self.distances or "").split(",") if d]
+        return {d: saved[d] for d in order if saved.get(d)}
+
+    def videos_for(self, distance: str = "") -> list[tuple[str, str]]:
+        """The videos an athlete running `distance` (such as '5K') should see: that distance's video, else the course
+        video, else every distance's video. [(label, url), ...]"""
+        vids = self.videos
+        if distance and vids.get(distance):
+            return [(distance, vids[distance])]
+        if self.video_url:
+            return [("", self.video_url)]
+        return list(vids.items())
 
 
 class RaceTeamResult(Base):

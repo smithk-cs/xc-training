@@ -31,6 +31,21 @@ def main_distance(raced: list[str], current: float | None) -> float | None:
     return DISTANCES["5K"] if "5K" in raced else max(DISTANCES[k] for k in raced)
 
 
+def race_videos(course, race_distance: str = "") -> list[tuple[str, str]]:
+    """The course videos for an athlete entered at a race distance (as written on the meet, such as '5K' or '2 Miles'):
+    that distance's video, else the course video, else each distance's. [(label, url), ...]"""
+    if course is None:
+        return []
+    label = ""
+    if race_distance:
+        from .imports import parse_distance
+        try:
+            label = distance_label(parse_distance(race_distance))
+        except ValueError:
+            label = ""
+    return course.videos_for(label)
+
+
 def distance_label(meters: float | None) -> str:
     """'5K' or '3 mi' for a standard distance, else '3.11 mi'."""
     if not meters:
