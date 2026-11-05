@@ -639,3 +639,13 @@ fieldset.course-videos label.video-row { display: flex; flex-direction: row; ali
 .course-videos .video-row input { flex: 1; max-width: 32rem; }
 a.tag.video-tag { text-decoration: none; }
 a.tag.video-tag:hover { text-decoration: underline; }
+/* Athlete page: the week's miles and points as compact panels. */
+.week-panel { padding: 12px 14px; gap: 8px; }
+.week-panel h2 { font-size: 18px; margin: 0; }
+.week-panel .miles-bar.big { height: 8px; margin: 0; }
+.week-panel .facts { gap: 6px; }
+.week-panel .facts > div { padding: 6px 8px; gap: 1px; border-radius: 10px; }
+.week-panel .facts .k { font-size: 10.5px; }
+.week-panel .facts .big { font-size: 20px; }
+.week-panel .facts .small { font-size: 12px; line-height: 1.3; }
+.week-panel > p.small, .week-panel .how-points { margin: 0; font-size: 12px; }
