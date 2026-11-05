@@ -132,7 +132,7 @@
     </div>
     <div class="form-row">
       <label>Strides after the run<select name="strides"><option value="0">None</option>{% for n in (4, 5, 6, 8, 10) %}<option value="{{ n }}">{{ n }}</option>{% endfor %}</select></label>
-      <label>Kind<select name="stride_kind"><option value="flat">100 m strides</option><option value="hill">Hill strides (about 15 s)</option></select></label>
+      <label>Kind<select name="stride_kind"><option value="flat">100 m strides</option><option value="hill">100 m hill strides</option></select></label>
       <span class="small muted">For every athlete: fast and relaxed, about mile race pace, with a walk back (or jog down the hill) between.</span>
       <button type="submit">Create easy runs</button>
     </div>
