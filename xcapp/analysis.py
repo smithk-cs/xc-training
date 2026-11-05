@@ -540,8 +540,10 @@ def workout_summary(parts: list[dict]) -> str:
 
 
 def main_part(parts: list[dict]) -> dict | None:
-    """The hardest part (the one rep-matching and targets use)."""
+    """The hardest part (the one rep-matching and targets use). Strides added to an easy run don't count: the run stays
+    the main part."""
     parts = [p for p in parts if not p.get("fill")]
+    parts = [p for p in parts if not p.get("strides")] or parts
     return max(parts, key=lambda p: WORKOUT_ZONES.get(p["zone"], 0)) if parts else None
 
 
