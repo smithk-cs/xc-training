@@ -1441,11 +1441,11 @@ def create_app() -> FastAPI:
             flash(request, "Pick a date and the number of running days.", "error")
             return back("/workouts#easy")
         teams = [t for t in ("Boys", "Girls") if f.get(f"easy_{t}")] or ["Boys", "Girls"]
-        strides = None   # strides for everyone after the easy run: 100 m at repetition pace, or about 15 s up a hill
+        strides = None   # strides for everyone after the easy run: 100 m at repetition pace, on the flat or up a hill
         n_str = int(f.get("strides", 0) or 0) if str(f.get("strides", "0")).isdigit() else 0
         if 1 <= n_str <= 20:
             if f.get("stride_kind") == "hill":
-                strides = {"sets": 1, "reps": n_str, "mins": 0.25, "zone": "Repetition", "rest": "jog down", "note": "Hill strides",
+                strides = {"sets": 1, "reps": n_str, "dist": 100, "zone": "Repetition", "rest": "jog down", "note": "Hill strides",
                            "strides": True}
             else:
                 strides = {"sets": 1, "reps": n_str, "dist": 100, "zone": "Repetition", "rest": "walk back", "note": "Strides",
@@ -1471,7 +1471,7 @@ def create_app() -> FastAPI:
                 part = {"sets": 1, "reps": 1, "dist": m, "mi": mi, "zone": "Easy", "rest": "", "note": ""}
                 parts = [part] + ([strides] if strides else [])
                 if strides:
-                    title += f" + {n_str} {'hill strides' if 'mins' in strides else 'strides'}"
+                    title += f" + {n_str} {'hill strides' if strides['note'] == 'Hill strides' else 'strides'}"
                 db.add(PlannedWorkout(date=d, title=title, groups=g.name, gender=t, parts=json.dumps(parts), rep_distance_m=float(m),
                                       pace_event="5K", pace_factor=1.0, distance_unit="m"))
                 made.append(f"{g.name}{' ' + t if t else ''} {mi:g} mi")

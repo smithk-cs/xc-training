@@ -297,7 +297,7 @@ def test_easy_runs_with_strides(app):
     db.close()
     c, csrf = login(app)
     page = c.get("/workouts").text
-    assert 'name="strides"' in page and "Hill strides (about 15 s)" in page
+    assert 'name="strides"' in page and "100 m hill strides" in page
     day = A.team_today() + dt.timedelta(days=1)
     c.post("/workouts/easy-day", data={"csrf": csrf, "date": day.isoformat(), "days": "6", "strides": "6", "stride_kind": "flat"})
     c.post("/workouts/easy-day", data={"csrf": csrf, "date": (day + dt.timedelta(days=1)).isoformat(), "days": "6",
@@ -308,7 +308,8 @@ def test_easy_runs_with_strides(app):
     assert flat.title.endswith(" + 6 strides") and hill.title.endswith(" + 4 hill strides")
     run, strides = flat.part_list
     assert run["zone"] == "Easy" and (strides["reps"], strides["dist"], strides["zone"], strides["rest"]) == (6, 100, "Repetition", "walk back")
-    assert (hill.part_list[1]["reps"], hill.part_list[1]["mins"], hill.part_list[1]["rest"]) == (4, 0.25, "jog down")
+    assert (hill.part_list[1]["reps"], hill.part_list[1]["dist"], hill.part_list[1]["rest"]) == (4, 100, "jog down")
+    assert "mins" not in hill.part_list[1] and A.workout_summary(hill.part_list).endswith("+ 4 × 100 m Repetition")
     assert A.main_part(flat.part_list)["zone"] == "Easy"                     # the easy run stays the main part
     assert A.workout_summary(flat.part_list).endswith("+ 6 × 100 m Repetition")
     fid, miles = flat.id, run["mi"]
