@@ -286,3 +286,42 @@ def test_easy_runs_skip_groups_that_already_have_a_workout(app):
     titles = {w.title for w in db.query(PlannedWorkout).filter_by(date=day).all()}
     assert "Easy run · Gold" not in titles and "Easy run · Silver" in titles
     db.close()
+
+
+def test_easy_runs_with_strides(app):
+    from xcapp.models import TrainingGroup
+    db = SessionLocal()
+    for g in db.query(TrainingGroup).all():
+        g.weekly_miles, g.weekly_miles_girls = 30, 30
+    db.commit()
+    db.close()
+    c, csrf = login(app)
+    page = c.get("/workouts").text
+    assert 'name="strides"' in page and "Hill strides (about 15 s)" in page
+    day = A.team_today() + dt.timedelta(days=1)
+    c.post("/workouts/easy-day", data={"csrf": csrf, "date": day.isoformat(), "days": "6", "strides": "6", "stride_kind": "flat"})
+    c.post("/workouts/easy-day", data={"csrf": csrf, "date": (day + dt.timedelta(days=1)).isoformat(), "days": "6",
+                                       "strides": "4", "stride_kind": "hill"})
+    db = SessionLocal()
+    flat = db.query(PlannedWorkout).filter_by(date=day).first()
+    hill = db.query(PlannedWorkout).filter_by(date=day + dt.timedelta(days=1)).first()
+    assert flat.title.endswith(" + 6 strides") and hill.title.endswith(" + 4 hill strides")
+    run, strides = flat.part_list
+    assert run["zone"] == "Easy" and (strides["reps"], strides["dist"], strides["zone"], strides["rest"]) == (6, 100, "Repetition", "walk back")
+    assert (hill.part_list[1]["reps"], hill.part_list[1]["mins"], hill.part_list[1]["rest"]) == (4, 0.25, "jog down")
+    assert A.main_part(flat.part_list)["zone"] == "Easy"                     # the easy run stays the main part
+    assert A.workout_summary(flat.part_list).endswith("+ 6 × 100 m Repetition")
+    fid, miles = flat.id, run["mi"]
+    db.close()
+    c.post("/workouts", data={"csrf": csrf, "wid": str(fid), "date": day.isoformat(), "title": "Easy + strides", "p_sets": ["1", "1"],
+                              "p_reps": ["1", "6"], "p_dist": [str(miles), "100"], "p_unit": ["mi", "m"], "p_zone": ["Easy", "Repetition"],
+                              "p_rest": ["", "walk back"], "p_note": ["", "Strides"]})
+    db = SessionLocal()
+    edited = db.get(PlannedWorkout, fid)
+    assert edited.title == "Easy + strides" and A.main_part(edited.part_list)["zone"] == "Easy"   # still the easy run after an edit
+    db.close()
+    c.post("/workouts/easy-day", data={"csrf": csrf, "date": (day + dt.timedelta(days=2)).isoformat(), "days": "6", "strides": "0"})
+    db = SessionLocal()
+    plain = db.query(PlannedWorkout).filter_by(date=day + dt.timedelta(days=2)).first()
+    assert len(plain.part_list) == 1 and "strides" not in plain.title                # None: just the easy run
+    db.close()

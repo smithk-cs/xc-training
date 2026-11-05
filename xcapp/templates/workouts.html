@@ -122,13 +122,20 @@
 {% if user.role != 'trainer' %}
 <details class="card fold-card" id="easy"><summary><h2>Easy runs for the whole team</h2></summary>
   <p class="small muted">One easy run per training group on the day you pick. Each group’s distance is its weekly miles goal (Groups page) divided by the week’s running days, to the nearest half mile; every athlete sees their own easy pace from their VDOT. Groups without a weekly miles goal are skipped.</p>
-  <form method="post" action="/workouts/easy-day" class="form-row">
+  <form method="post" action="/workouts/easy-day">
     <input type="hidden" name="csrf" value="{{ csrf }}">
-    <label>Day<input type="date" name="date" value="{{ today }}" required></label>
-    <label>Running days this week<select name="days">{% for n in (5, 6, 7) %}<option{% if n == 6 %} selected{% endif %}>{{ n }}</option>{% endfor %}</select></label>
-    {% for g in ('Boys', 'Girls') %}<label class="check"><input type="checkbox" name="easy_{{ g }}"> {{ g }}</label>{% endfor %}
-    <span class="small muted">Leave both unticked for boys and girls.</span>
-    <button type="submit">Create easy runs</button>
+    <div class="form-row">
+      <label>Day<input type="date" name="date" value="{{ today }}" required></label>
+      <label>Running days this week<select name="days">{% for n in (5, 6, 7) %}<option{% if n == 6 %} selected{% endif %}>{{ n }}</option>{% endfor %}</select></label>
+      {% for g in ('Boys', 'Girls') %}<label class="check"><input type="checkbox" name="easy_{{ g }}"> {{ g }}</label>{% endfor %}
+      <span class="small muted">Leave both unticked for boys and girls.</span>
+    </div>
+    <div class="form-row">
+      <label>Strides after the run<select name="strides"><option value="0">None</option>{% for n in (4, 5, 6, 8, 10) %}<option value="{{ n }}">{{ n }}</option>{% endfor %}</select></label>
+      <label>Kind<select name="stride_kind"><option value="flat">100 m strides</option><option value="hill">Hill strides (about 15 s)</option></select></label>
+      <span class="small muted">For every athlete: fast and relaxed, about mile race pace, with a walk back (or jog down the hill) between.</span>
+      <button type="submit">Create easy runs</button>
+    </div>
   </form>
   {% if easy_groups %}<p class="small muted" style="margin-top:6px">At 6 days: {% for g in easy_groups %}{{ g.name }} {{ '%g' % ((g.miles_goal('Boys') / 6 * 2)|round / 2) }} mi{% if g.miles_goal('Girls') != g.miles_goal('Boys') %} (girls {{ '%g' % ((g.miles_goal('Girls') / 6 * 2)|round / 2) }}){% endif %}{{ ' · ' if not loop.last }}{% endfor %}</p>{% endif %}
 </details>

@@ -1359,6 +1359,8 @@ def create_app() -> FastAPI:
                 note = str(notes[i]).strip()[:200] if i < len(notes) else ""
                 if note:
                     p["note"] = note
+                if note.lower() in ("strides", "hill strides"):   # strides added to an easy run stay extras when it's edited
+                    p["strides"] = True
                 hr = str(hrs[i]) if i < len(hrs) else ""
                 if hr in WV.HR_CHOICES or hr == "none":   # empty: the heart-rate zone follows the pace zone
                     p["hr"] = hr
@@ -1439,6 +1441,15 @@ def create_app() -> FastAPI:
             flash(request, "Pick a date and the number of running days.", "error")
             return back("/workouts#easy")
         teams = [t for t in ("Boys", "Girls") if f.get(f"easy_{t}")] or ["Boys", "Girls"]
+        strides = None   # strides for everyone after the easy run: 100 m at repetition pace, or about 15 s up a hill
+        n_str = int(f.get("strides", 0) or 0) if str(f.get("strides", "0")).isdigit() else 0
+        if 1 <= n_str <= 20:
+            if f.get("stride_kind") == "hill":
+                strides = {"sets": 1, "reps": n_str, "mins": 0.25, "zone": "Repetition", "rest": "jog down", "note": "Hill strides",
+                           "strides": True}
+            else:
+                strides = {"sets": 1, "reps": n_str, "dist": 100, "zone": "Repetition", "rest": "walk back", "note": "Strides",
+                           "strides": True}
         that_day = db.scalars(select(PlannedWorkout).where(PlannedWorkout.date == d)).all()
         made, skipped, existing = [], [], {(w.title, w.gender) for w in that_day}
         for g in db.scalars(select(TrainingGroup).order_by(TrainingGroup.position)).all():
@@ -1458,7 +1469,10 @@ def create_app() -> FastAPI:
                     continue
                 m = round(mi * A.METERS_PER_MILE)
                 part = {"sets": 1, "reps": 1, "dist": m, "mi": mi, "zone": "Easy", "rest": "", "note": ""}
-                db.add(PlannedWorkout(date=d, title=title, groups=g.name, gender=t, parts=json.dumps([part]), rep_distance_m=float(m),
+                parts = [part] + ([strides] if strides else [])
+                if strides:
+                    title += f" + {n_str} {'hill strides' if 'mins' in strides else 'strides'}"
+                db.add(PlannedWorkout(date=d, title=title, groups=g.name, gender=t, parts=json.dumps(parts), rep_distance_m=float(m),
                                       pace_event="5K", pace_factor=1.0, distance_unit="m"))
                 made.append(f"{g.name}{' ' + t if t else ''} {mi:g} mi")
         db.flush()
