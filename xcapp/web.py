@@ -2451,14 +2451,21 @@ def create_app() -> FastAPI:
         limit = int(raw) if raw.isdigit() and int(raw) > 0 else None
         d.gender, d.level, d.name, d.max_entries = gender, level, f"{gender} {level}", limit
         d.distance = str(f.get("distance", d.distance or "")).strip()[:40]
+        t = str(f.get("start_time", d.start_time or "")).strip()
+        d.start_time = t if re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", t) else ""
+        times = [x.start_time for x in d.meet.divisions if x.start_time] if d.meet else []
+        if d.start_time and d.meet and d.start_time not in times:
+            times.append(d.start_time)
+        if times:   # the meet's first race (used for the weather) is the earliest race time
+            d.meet.start_time = min(times)
 
     @app.post("/registrations/{mid}/divisions")
     async def division_add(request: Request, mid: int, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
         f = await form_checked(request)
         m = get_meet(db, mid)
         d = MeetDivision(position=len(m.divisions), distance="")
-        division_fields(f, d)
         m.divisions.append(d)
+        division_fields(f, d)
         flash(request, f"Added {d.name}" + (f" (up to {d.max_entries})" if d.max_entries else "") + ".")
         return back(f"/registrations/{mid}#div-new")
 

@@ -209,3 +209,44 @@ def test_distance_dropdown_and_close_distance(app):
     assert REG.close_distance(times, [i["Sam"], i["José"]], 1609.344) == 5000.0
     assert REG.close_distance(times, [i["Sam"], i["Ivy"]], 1609.344) is None                      # nothing over 75%
     db.close()
+
+
+def test_race_start_times(app):
+    from xcapp import registration as REG
+    from xcapp import team_calendar as TC
+    c = login(app)
+    mid, d1, d2, csrf = new_meet(c)
+    db = SessionLocal()
+    starters = {d.id: (d.gender, d.level) for d in db.get(MeetEntry, mid).divisions}
+    db.close()
+    g1, l1 = starters[d1]
+    c.post(f"/registrations/{mid}/divisions/{d1}", data={"csrf": csrf, "gender": g1, "level": l1, "distance": "5K", "max_entries": "",
+                                                       "start_time": "09:30"})
+    c.post(f"/registrations/{mid}/divisions", data={"csrf": csrf, "gender": g1, "level": "JV", "distance": "5K", "max_entries": "",
+                                                  "start_time": "08:45"})
+    g2, l2 = starters[d2]
+    c.post(f"/registrations/{mid}/divisions/{d2}", data={"csrf": csrf, "gender": g2, "level": l2, "distance": "5K", "max_entries": "",
+                                                       "start_time": "9am"})        # not a time: left empty
+    db = SessionLocal()
+    m = db.get(MeetEntry, mid)
+    times = {d.id: d.start_time for d in m.divisions}
+    jv = max(m.divisions, key=lambda d: d.id)                                           # the race just added
+    assert (times[d1], times[d2], jv.start_time) == ("09:30", "", "08:45")
+    assert m.start_time == "08:45"                                                      # the first race, for the weather
+    first = next(d for d in m.divisions if d.id == d1)
+    runner = db.query(Athlete).filter_by(gender=g1).first()
+    first.entries.append(DivisionAthlete(athlete_id=runner.id, position=0))
+    db.commit()
+    text = REG.as_text(m, REG.report(db, m), "XC", "Coach", "c@example.org")
+    assert f"{first.name} · 5K · 9:30 AM" in text and f"{jv.name} · 5K · 8:45 AM" in text
+    assert TC.race_times(m, g1) == f"{jv.name} 8:45 AM · {first.name} 9:30 AM" and TC.race_times(m, "Girls" if g1 == "Boys" else "Boys") == ""
+    token, name = runner.link_token, first.name
+    db.close()
+    page = c.get(f"/registrations/{mid}").text
+    assert f"{name} · 5K · 9:30 AM</h2>" in page and 'name="start_time" value="09:30"' in page
+    assert f"You’re entered in {name} 5K at <b>9:30 AM</b>" in TestClient(app).get(f"/a/{token}").text
+    c.post(f"/registrations/{mid}/divisions/{d2}", data={"csrf": csrf, "gender": g2, "level": l2, "distance": "5K", "max_entries": "",
+                                                       "start_time": "08:00"})
+    db = SessionLocal()
+    assert db.get(MeetEntry, mid).start_time == "08:00"                                  # an earlier race moves the first race
+    db.close()

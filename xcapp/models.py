@@ -376,6 +376,7 @@ class MeetDivision(Base):
     gender: Mapped[str] = mapped_column(String(10), default="Boys")      # Boys | Girls
     level: Mapped[str] = mapped_column(String(20), default="Varsity")    # Varsity | JV | Frosh/Soph | Freshman | Sophomore
     max_entries: Mapped[int | None] = mapped_column(Integer, nullable=True)  # the meet's limit for this race, if any
+    start_time: Mapped[str] = mapped_column(String(5), default="", server_default="")   # "HH:MM" when this race starts
     position: Mapped[int] = mapped_column(Integer, default=0)
     meet: Mapped[MeetEntry] = relationship(back_populates="divisions")
     entries: Mapped[list["DivisionAthlete"]] = relationship(back_populates="division", cascade="all, delete-orphan",

@@ -27,6 +27,7 @@
   <label>Division<select name="level">{% for l in levels %}<option{% if div and div.level == l %} selected{% endif %}>{{ l }}</option>{% endfor %}</select></label>
   {% set cur = div.distance if div else '5K' %}
   <label>Distance<select name="distance">{% for n in distances %}<option{% if n == cur %} selected{% endif %}>{{ n }}</option>{% endfor %}{% if cur and cur not in distances %}<option selected>{{ cur }}</option>{% endif %}</select></label>
+  <label>Starts<input type="time" name="start_time" value="{{ div.start_time if div else '' }}" style="width:8em"></label>
   <label>Entry limit<input type="number" name="max_entries" min="1" max="500" value="{{ div.max_entries if div and div.max_entries else '' }}" placeholder="none" style="width:6em" class="limit-input"></label>
 {% endmacro %}
 {% macro reply(aid) %}{% set r = responses.get(aid) %}{% if r and r.status == 'attending' %}<span class="pill good">Confirmed</span>{% else %}<span class="small muted">No reply</span>{% endif %}{% endmacro %}
@@ -34,7 +35,7 @@
 {% for d in divisions %}{% set div = d.division %}{% set entered_ids = d.rows|map(attribute='athlete')|map(attribute='id')|list %}
 <div class="card" id="div-{{ div.id }}">
   <div class="form-row" style="justify-content:space-between">
-    <h2 style="margin:0">{{ div.name }}{% if div.distance %} · {{ div.distance }}{% endif %}</h2>
+    <h2 style="margin:0">{{ div.name }}{% if div.distance %} · {{ div.distance }}{% endif %}{% if div.start_time %} · {{ fmt_clock(div.start_time) }}{% endif %}</h2>
     <span class="muted">{{ d.rows|length }}{% if div.max_entries %} of {{ div.max_entries }}{% endif %} entered</span>
   </div>
   {% if d.rows %}<ol class="entries">{% for r in d.rows %}<li>{{ r.athlete.name }} <span class="small muted">grade {{ r.grade }}{% if r.seed %} · season best {{ fmt_time(r.seed) }}{% endif %}</span></li>{% endfor %}</ol>{% endif %}

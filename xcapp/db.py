@@ -82,7 +82,7 @@ ADDED_COLUMNS = {
     "meet_entries": [("course_id", "INTEGER"), ("start_time", "VARCHAR(5) DEFAULT ''")],
     "courses": [("video_url", "VARCHAR(500) DEFAULT ''"), ("distances", "VARCHAR(200) DEFAULT ''"), ("distance_videos", "TEXT DEFAULT ''"), ("latitude", "FLOAT"),
                 ("longitude", "FLOAT")],
-    "meet_divisions": [("gender", "VARCHAR(10) DEFAULT 'Boys'"), ("level", "VARCHAR(20) DEFAULT 'Varsity'"), ("max_entries", "INTEGER")],
+    "meet_divisions": [("gender", "VARCHAR(10) DEFAULT 'Boys'"), ("level", "VARCHAR(20) DEFAULT 'Varsity'"), ("max_entries", "INTEGER"), ("start_time", "VARCHAR(5) DEFAULT ''")],
     "race_results": [("points", "FLOAT")],
     "planned_workouts": [("distance_unit", "VARCHAR(2) DEFAULT 'm'"), ("parts", "TEXT DEFAULT ''"), ("gender", "VARCHAR(10) DEFAULT ''")],
     "training_groups": [("color", "VARCHAR(7) DEFAULT ''"), ("weekly_miles", "FLOAT DEFAULT 0"), ("weekly_miles_girls", "FLOAT")],

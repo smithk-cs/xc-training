@@ -58,6 +58,12 @@ def meet_team(m: MeetEntry) -> str:
     return next(iter(genders)) if len(genders) == 1 else ""
 
 
+def race_times(m: MeetEntry, team: str = "All") -> str:
+    """'Boys Varsity 8:30 AM · Girls Varsity 9:00 AM': the meet's races with a start time, for a team, earliest first."""
+    races = sorted((d for d in m.divisions if d.start_time and for_team(d.gender, team)), key=lambda d: (d.start_time, d.position))
+    return " · ".join(f"{d.name} {A.fmt_clock(d.start_time)}" for d in races)
+
+
 def items(db: Session, start: dt.date, end: dt.date, team: str = "All") -> list[dict]:
     """Everything on the calendar between start and end for a team, in order."""
     from .weather import course_for
@@ -79,7 +85,7 @@ def items(db: Session, start: dt.date, end: dt.date, team: str = "All") -> list[
         where = ", ".join(x for x in ((c.name if c else ""), address if not c or address != c.name else "") if x)
         out.append({"uid": f"meet-{m.id}", "meet_id": m.id, "date": m.date, "start": m.start_time, "end": "", "title": m.name,
                     "kind": "Meet", "team": t, "location": where, "course": c.name if c else "", "address": address,
-                    "notes": "", "repeats": False})
+                    "notes": race_times(m, team), "repeats": False})
     for w in db.scalars(select(PlannedWorkout).where(PlannedWorkout.date >= start, PlannedWorkout.date <= end)).all():
         if not for_team(w.gender, team):
             continue

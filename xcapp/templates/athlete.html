@@ -162,7 +162,7 @@
     {% for x in meets %}{% set m = x.meet %}{% set r = x.response %}
     <div class="wpace">
       <div class="d">{{ m.name }}</div>
-      <div class="small muted">{{ m.date.strftime('%a, %b %-d') }}{% set pl = course_place(x.course, m.location) %}{% if pl %} · <a class="map-link" href="{{ pl.url }}" target="_blank" rel="noopener" title="Open in Google Maps">📍 {{ pl.text }}</a>{% endif %}{% if x.race %} · You’re entered in {{ x.race.name }}{% if x.race.distance %} {{ x.race.distance }}{% endif %}{% endif %}</div>
+      <div class="small muted">{{ m.date.strftime('%a, %b %-d') }}{% set pl = course_place(x.course, m.location) %}{% if pl %} · <a class="map-link" href="{{ pl.url }}" target="_blank" rel="noopener" title="Open in Google Maps">📍 {{ pl.text }}</a>{% endif %}{% if x.race %} · You’re entered in {{ x.race.name }}{% if x.race.distance %} {{ x.race.distance }}{% endif %}{% if x.race.start_time %} at <b>{{ fmt_clock(x.race.start_time) }}</b>{% endif %}{% endif %}</div>
       {% if m.forecast and m.forecast.temp_f is not none %}<p class="small" style="margin:6px 0 0">🌤 <b>Forecast{% if m.start_time %} for {{ m.start_time }}{% endif %}:</b> {{ describe_weather(m.forecast, dew=False, humidity=True) }}</p>{% endif %}
       {% set vids = race_videos(x.course, x.race.distance if x.race else '') %}
       {% if vids %}<p class="form-row" style="margin:8px 0">{% for label, url in vids %}<a class="button secondary" href="{{ url }}" target="_blank" rel="noopener">▶ {{ label ~ ' course video' if label else 'Course video' }}{{ (': ' ~ x.course.name) if vids|length == 1 else '' }}</a>{% endfor %}</p>{% endif %}
