@@ -220,3 +220,63 @@ def test_athlete_run_page_chart_after_folding_effort():
     db.close()
     page = c.get(f"/a/t-wv/runs/{rid}").text
     assert '<details class="panel fold" id="effort">' in page and "✓ Effort 6 · Normal" in page
+
+
+def test_reps_are_the_fast_running_not_laps_on_the_jogs(session):
+    """2 x 400, 3 x 800, 2 x 400 with jogs between, where the watch's 'rep' laps sit on the jogs: the reps are found
+    from the pace, on the fast running."""
+    from xcapp.models import Lap
+    easy = A.pace_at(V, A.EASY_PCT) / A.METERS_PER_MILE
+    fast = A.pace_at(V, A.INTERVAL_PCT) / A.METERS_PER_MILE
+    jog = easy * 1.15
+    t, d, dist, hrs, fast_spans, jog_spans = 0.0, 0.0, [], [], [], []
+
+    def run(secs, sec_per_m, hr):
+        nonlocal t, d
+        start = t
+        for _ in range(int(secs)):
+            dist.append((t, d))
+            hrs.append((t, hr))
+            t += 1
+            d += 1 / sec_per_m
+        return start, t
+    run(900, easy, 140)
+    for meters, jog_s in ((400, 90), (400, 180), (800, 120), (800, 120), (800, 180), (400, 90), (400, 0)):
+        fast_spans.append(run(meters * fast, fast, 180))
+        if jog_s:
+            jog_spans.append(run(jog_s, jog, 150))
+    run(600, easy, 140)
+    a = Athlete(first_name="Ava", last_name="Doyle", gender="Girls", grade=12, group="Varsity", link_token="t-jog",
+                vdot_override=V, hr_max=200)
+    session.add(a)
+    session.flush()
+    pw = PlannedWorkout(date=DAY, title="Ladder", rep_distance_m=800, groups="All", parts=json.dumps([
+        {"sets": 1, "reps": 2, "dist": 400, "zone": "Interval", "rest": "90 s jog"},
+        {"sets": 1, "reps": 3, "dist": 800, "zone": "Interval", "rest": "2 min jog"},
+        {"sets": 1, "reps": 2, "dist": 400, "zone": "Interval", "rest": "90 s jog"}]))
+    session.add(pw)
+    session.flush()
+    act = Activity(athlete_id=a.id, source="garmin_file", external_id="jog1", start_utc=dt.datetime(2026, 10, 20, 22), local_date=DAY,
+                   duration_s=t, distance_m=d, sport="running", planned_workout_id=pw.id, stream=WV.make_stream(dist, hrs), zone_vdot=V)
+    for i, (j0, j1) in enumerate(jog_spans):   # the watch marked the jogs as the reps
+        act.laps.append(Lap(idx=i, start_offset_s=j0, elapsed_s=j1 - j0, timer_s=j1 - j0, distance_m=(j1 - j0) / jog, is_rep=True))
+    session.add(act)
+    session.flush()
+    wv = WV.build(session, act)
+    assert wv["source"] == "pace"
+    found = [r for r in wv["reps"] if r["found"]]
+    assert len(found) == 7
+    for r, (f0, f1) in zip(found, fast_spans):
+        assert abs(r["t0"] - f0) <= 12 and abs(r["t1"] - f1) <= 12        # on the fast running, not the jogs
+    assert [round(r["dist"], -2) for r in found] == [400, 400, 800, 800, 800, 400, 400]
+
+
+def test_rep_laps_that_were_run_fast_are_still_used(session):
+    a, act = make(session)
+    from xcapp.models import Lap
+    wv = WV.build(session, act)
+    reps = [r for r in wv["reps"] if r["found"]]
+    for i, r in enumerate(reps):   # laps on the real reps
+        act.laps.append(Lap(idx=i, start_offset_s=r["t0"], elapsed_s=r["t1"] - r["t0"], timer_s=r["t1"] - r["t0"], distance_m=400, is_rep=True))
+    session.flush()
+    assert WV.build(session, act)["source"] == "laps"
