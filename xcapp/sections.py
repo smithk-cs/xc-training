@@ -18,6 +18,7 @@ SECTIONS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("week", "Week", ("/week",)),
     ("squads", "Squads", ("/squads",)),
     ("calendar", "Calendar", ("/calendar",)),
+    ("raceday", "Race Day", ("/race-day",)),
     ("vdot", "VDOT", ("/vdot",)),
     ("reports", "Reports", ("/reports",)),
     ("newsletter", "Newsletter", ("/newsletter",)),

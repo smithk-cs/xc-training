@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#14181b">
+<title>{{ board.label }} · Race Day</title>
+<link rel="stylesheet" href="/static/raceday.css?v={{ asset_v }}">
+</head>
+<body class="rd-{{ mode }}">
+<header class="rd-head">
+  <div class="wrap">
+    <div class="bar"><span class="racename" id="raceName">{{ board.label }}</span><span class="sync" id="sync">Connecting…</span></div>
+    <div class="clock" id="clock">0:00<small>.0</small></div>
+    <div class="clocksub" id="clockSub">Waiting for the start</div>
+  </div>
+  {% if mode == 'tap' %}
+  <nav class="wrap views" aria-label="Views">
+    <a href="#tap" data-v="tap">Tap</a>
+    <a href="#scores" data-v="scores">Scores</a>
+    <a href="#start" data-v="start">Start</a>
+    <a href="#setup" data-v="setup">Setup</a>
+  </nav>
+  {% endif %}
+</header>
+<section class="wrap" id="cam" hidden>
+  <div class="camwrap"><video id="camVideo" playsinline muted autoplay></video><canvas id="camCanvas" hidden></canvas>
+    <span class="recdot" id="recDot" hidden>REC <span id="recTime">0:00</span></span></div>
+  <div class="row camrow">
+    <button id="recBtn" class="primary">Start recording</button>
+    <button id="camFlip">Switch camera</button>
+    <button id="camOff">Camera off</button>
+  </div>
+  <div id="camSaved"></div>
+</section>
+<main class="wrap" id="main"><p class="muted">Loading…</p></main>
+<script type="application/json" id="rd-cfg">{{ cfg|tojson }}</script>
+<script type="application/json" id="rd-csrf">{{ csrf|tojson }}</script>
+<script src="/static/raceday-score.js?v={{ asset_v }}"></script>
+<script src="/static/raceday.js?v={{ asset_v }}"></script>
+</body>
+</html>

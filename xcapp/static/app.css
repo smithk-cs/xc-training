@@ -656,3 +656,8 @@ a.tag.video-tag:hover { text-decoration: underline; }
 .route-list { list-style: none; padding: 0; margin: 0 0 10px; display: flex; flex-direction: column; gap: 6px; }
 .route-list .dist { display: inline-block; width: 5.5rem; font-weight: 600; }
 a.route-link { white-space: nowrap; }
+
+/* Race Day boards (coach page) */
+.rd-board { display: grid; gap: 10px; }
+.rd-links { display: grid; gap: 10px; }
+.rd-url { width: min(100%, 30em); font-size: 13px; padding: 4px 6px; }
