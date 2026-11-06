@@ -153,7 +153,11 @@ function tick(){
   if (sub.textContent !== subText) sub.textContent = subText;
   const ov = document.getElementById("ovClock");
   if (ov){ const s = start ? fmt(sNow() - start, false) : "0:00"; if (ov.textContent !== s) ov.textContent = s; }
-  if (recording) drawFrame();
+  if (recording){
+    drawFrame();
+    const cc = $("#camClock"), c = start ? fmt(sNow() - start) : "0:00.0"; if (cc.textContent !== c) cc.textContent = c;
+    const rt = $("#camRecTime"), r = fmt(Date.now() - recStart, false); if (rt.textContent !== r) rt.textContent = r;
+  }
   requestAnimationFrame(tick);
 }
 
@@ -379,6 +383,7 @@ function render(force){
     : ({ tap: renderTap, scores: renderScores, start: renderStart, setup: renderSetup, watch: renderWatch }[v])();
   if (html !== lastHtml || force){ $("#main").innerHTML = html; lastHtml = html; }
   if (v === "tap") updateGps();
+  renderCamPads();
   gpsWanted(v === "tap" && race?.current && pinned());
 }
 
@@ -516,6 +521,7 @@ function recStart_(){
   recorder.onstop = () => saveRecording(recorder.mimeType || mime || "video/webm");
   recorder.start(1000);
   recording = true; recStart = Date.now();
+  document.body.classList.add("recfull"); camPadsHtml = ""; renderCamPads();
   $("#recDot").hidden = false; $("#recBtn").textContent = "Stop recording"; $("#camFlip").disabled = true;
   wake();
 }
@@ -523,6 +529,7 @@ function recStop(){
   if (!recording) return;
   recording = false;
   try { recorder.stop(); } catch(e){}
+  document.body.classList.remove("recfull");
   $("#recDot").hidden = true; $("#recBtn").textContent = "Start recording"; $("#camFlip").disabled = false;
 }
 function saveRecording(type){
@@ -535,12 +542,31 @@ function saveRecording(type){
   const file = typeof File !== "undefined" ? new File([blob], name, { type }) : null;
   const canShare = file && navigator.canShare && navigator.canShare({ files: [file] });
   const mb = blob.size < 1048576 ? "under 1" : (blob.size / 1048576).toFixed(0);
+  const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
   const el = document.createElement("div"); el.className = "saved panel";
-  el.innerHTML = `<span><b>Video ready</b> · ${mb} MB${ext === "webm" ? " (WebM: YouTube takes it as is)" : ""}</span>
-    <a class="btn primary" href="${url}" download="${esc(name)}">Save video</a>${canShare ? `<button data-share>Share…</button>` : ""}`;
+  el.innerHTML = `<span><b>Video ready</b> · ${mb} MB${ext === "webm" ? " (WebM: YouTube takes it as is)" : ""}</span>`
+    + (canShare ? `<button class="primary" data-share>${ios ? "Save to Photos" : "Share or save…"}</button><a class="btn" href="${url}" download="${esc(name)}">Save as a file</a>`
+                : `<a class="btn primary" href="${url}" download="${esc(name)}">Save video</a>`)
+    + (canShare && ios ? `<span class="savehint">Tap Save to Photos, then choose <b>Save Video</b>. It goes to your camera roll.</span>` : "");
   if (canShare) el.querySelector("[data-share]").addEventListener("click", () => navigator.share({ files: [file], title: name }).catch(() => {}));
   $("#camSaved").prepend(el);
-  toast("Video ready. Tap Save video before closing this page.", true);
+  toast(canShare && ios ? "Video ready. Tap Save to Photos before closing this page." : "Video ready. Save it before closing this page.", true);
+}
+
+let camPadsHtml = "";
+function renderCamPads(){
+  if (!recording) return;
+  const cps = race?.checkpoints || [];
+  $("#camSpot").textContent = myCp != null && cps[myCp] ? cps[myCp] : "No spot";
+  let html;
+  if (!race?.current || myCp == null || myCp >= cps.length) html = `<div class="nospot">Pick your spot on the Tap screen to tap runners while recording.</div>`;
+  else {
+    const mine = local.logs[myCp] || [], counts = {};
+    for (const x of mine) counts[x.team] = (counts[x.team] || 0) + 1;
+    html = (race.teams || []).map(t => `<button class="pad" data-team="${esc(t.id)}" style="background:${esc(t.color)};color:${textOn(t.color)}"><span class="pn">${esc(t.name)}</span><span class="pc">${counts[t.id] || 0}</span></button>`).join("")
+      + `<button class="pad other" data-team="${OTHER}"><span class="pn">Other</span><span class="pc">${counts[OTHER] || 0}</span></button>`;
+  }
+  if (html !== camPadsHtml){ $("#camPads").innerHTML = html; camPadsHtml = html; }
 }
 
 // ---------- actions ----------
@@ -552,8 +578,7 @@ function addTap(team){
   (local.logs[myCp] ||= []).push({ id: rid(), at, team });
   saveLocal(); dirty.add(local.raceId + "|" + myCp); flush(); render();
   if (recording){ const n = local.logs[myCp].length; lastTapFlash = { team, t: Date.now(), n, time: race.start_at ? fmt(at - race.start_at) : "" }; }
-  const el = document.querySelector(`.pad[data-team="${CSS.escape(team)}"]`);
-  if (el){ el.classList.add("flash"); setTimeout(() => el.classList.remove("flash"), 180); }
+  document.querySelectorAll(`.pad[data-team="${CSS.escape(team)}"]`).forEach(el => { el.classList.add("flash"); setTimeout(() => el.classList.remove("flash"), 180); });
   try { navigator.vibrate?.(30); } catch(e){}
 }
 function delTap(id){
@@ -610,6 +635,8 @@ document.addEventListener("click", async e => {
   if (t.id === "camOn"){ camStart(); return; }
   if (t.id === "camOff"){ camStop(); render(true); return; }
   if (t.id === "camFlip"){ camFacing = camFacing === "environment" ? "user" : "environment"; camStart(); return; }
+  if (t.id === "recStop"){ recStop(); return; }
+  if (t.id === "camUndo"){ const arr = [...(local.logs[myCp] || [])].sort((a, b) => a.at - b.at); if (arr.length) delTap(arr[arr.length - 1].id); return; }
   if (t.id === "recBtn"){ recording ? recStop() : recStart_(); return; }
   if (t.id === "go"){ const at = sNow(); race.start_at = at; render(); clock({ action: "start", at }); return; }
   if (t.dataset.nudge){ race.start_at += Number(t.dataset.nudge); render(); clock({ action: "nudge", ms: Number(t.dataset.nudge) }); return; }

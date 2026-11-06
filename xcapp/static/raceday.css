@@ -145,3 +145,29 @@ body.ov main{padding:0;max-width:none}
 .ov-pill b{color:#ffffff;background:rgba(255,255,255,.15);padding:0 .3em;border-radius:3px;font-variant-numeric:tabular-nums}
 .ov-wait{font-size:clamp(14px,2vw,32px);opacity:.8}
 @media (prefers-reduced-motion: reduce){.pad{transition:none}.ov-ctl{transition:none}}
+/* Recording: the camera fills the screen, with the race clock on top and the tap buttons over the picture. */
+.camtop,.campads{display:none}
+body.recfull{overflow:hidden}
+body.recfull #cam{position:fixed;inset:0;z-index:40;background:#000;padding:0;max-width:none;display:block}
+body.recfull .camwrap{position:absolute;inset:0;border-radius:0;aspect-ratio:auto}
+body.recfull .camwrap video{object-fit:contain}
+body.recfull .camrow,body.recfull #camSaved,body.recfull .recdot{display:none!important}
+body.recfull .camtop{display:flex;position:absolute;top:calc(env(safe-area-inset-top,0px) + 8px);left:calc(env(safe-area-inset-left,0px) + 12px);right:calc(env(safe-area-inset-right,0px) + 12px);justify-content:space-between;align-items:flex-start;gap:10px;color:#fff;text-shadow:0 1px 4px rgba(0,0,0,.8)}
+.camclock{font-family:var(--display);font-weight:700;font-size:clamp(40px,11vw,72px);line-height:1;font-variant-numeric:tabular-nums}
+.camspot{font-size:14px;font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+.recmark{color:#ff4d4d}
+.camtop-btns{display:flex;gap:8px}
+.camtop-btns button{min-height:44px;background:rgba(0,0,0,.55);color:#fff;border:1px solid rgba(255,255,255,.5);text-shadow:none}
+.camtop-btns .stop{background:#c00;border-color:#c00}
+body.recfull .campads{display:grid;position:absolute;left:calc(env(safe-area-inset-left,0px) + 8px);right:calc(env(safe-area-inset-right,0px) + 8px);bottom:calc(env(safe-area-inset-bottom,0px) + 8px);grid-template-columns:repeat(auto-fit,minmax(88px,1fr));gap:8px}
+.campads .pad{min-height:68px;opacity:.88;border-color:rgba(255,255,255,.6)}
+.campads .pad .pn{font-size:19px}
+.campads .pad .pc{font-size:13px}
+.campads .pad.other{background:rgba(255,255,255,.85);color:#111}
+.campads .nospot{grid-column:1/-1;background:rgba(0,0,0,.6);color:#fff;padding:10px;border-radius:8px;text-align:center}
+@media (orientation: landscape){
+  body.recfull .campads{left:auto;top:calc(env(safe-area-inset-top,0px) + 8px);width:min(200px,28vw);grid-template-columns:1fr;align-content:end;overflow:auto}
+  body.recfull .camtop{right:calc(min(200px,28vw) + 24px)}
+  .campads .pad{min-height:56px}
+}
+.savehint{flex-basis:100%;font-size:13px;color:var(--muted)}

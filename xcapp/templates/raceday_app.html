@@ -27,7 +27,12 @@
 </header>
 <section class="wrap" id="cam" hidden>
   <div class="camwrap"><video id="camVideo" playsinline muted autoplay></video><canvas id="camCanvas" hidden></canvas>
-    <span class="recdot" id="recDot" hidden>REC <span id="recTime">0:00</span></span></div>
+    <span class="recdot" id="recDot" hidden>REC <span id="recTime">0:00</span></span>
+    <div class="camtop">
+      <div><div class="camclock" id="camClock">0:00.0</div><div class="camspot"><span id="camSpot"></span> · <span class="recmark">● REC</span> <span id="camRecTime">0:00</span></div></div>
+      <div class="camtop-btns"><button id="camUndo" type="button">Undo</button><button id="recStop" type="button" class="stop">Stop</button></div>
+    </div>
+    <div class="campads" id="camPads"></div></div>
   <div class="row camrow">
     <button id="recBtn" class="primary">Start recording</button>
     <button id="camFlip">Switch camera</button>
