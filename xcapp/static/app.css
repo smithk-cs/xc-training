@@ -626,3 +626,8 @@ table.parts tr.dragging { opacity: .45; }
 .group-up { display: inline-flex; align-items: center; gap: 3px; font-size: 12px; white-space: nowrap; }
 .group-up svg { flex: none; }
 .hero .hero-move { display: inline-flex; align-items: center; gap: 6px; background: var(--color-panel); border-radius: 999px; padding: 4px 10px; }
+
+/* Race Day boards (coach page) */
+.rd-board { display: grid; gap: 10px; }
+.rd-links { display: grid; gap: 10px; }
+.rd-url { width: min(100%, 30em); font-size: 13px; padding: 4px 6px; }

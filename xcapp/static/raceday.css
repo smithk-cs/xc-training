@@ -1,0 +1,147 @@
+/* Race Day pages (coach tap screen, family watch page, livestream scoreboard). Built for a phone held outdoors. */
+@font-face { font-family: "Inter"; font-weight: 400; font-style: normal; font-display: swap; src: url("fonts/inter-latin-400-normal.woff2") format("woff2"); }
+@font-face { font-family: "Inter"; font-weight: 600; font-style: normal; font-display: swap; src: url("fonts/inter-latin-600-normal.woff2") format("woff2"); }
+@font-face { font-family: "Barlow Semi Condensed"; font-weight: 700; font-style: normal; font-display: swap; src: url("fonts/barlow-semi-condensed-latin-700-normal.woff2") format("woff2"); }
+:root{
+  --bg:#f4f4f2; --surface:#ffffff; --fg:#1b1b1f; --muted:#5d5f66; --line:#d9d9d6;
+  --accent:#a6192e; --accent-fg:#ffffff; --go:#c99a2e; --go-fg:#1b1b1f; --warn:#9a5b00; --bad:#b3261e; --ok:#1d6a47;
+  --clock-bg:#14181b; --clock-fg:#f4f4f2;
+  --display:"Barlow Semi Condensed","Arial Narrow",system-ui,sans-serif;
+  --body:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#101214; --surface:#1a1d20; --fg:#e9e9e6; --muted:#a0a3a8; --line:#2e3236;
+  --accent:#e0566a; --accent-fg:#14070a; --go:#f3d58a; --go-fg:#1b1b1f; --warn:#f0a640; --bad:#ff8a80; --ok:#5cc59a;
+  --clock-bg:#000000; --clock-fg:#e9e9e6; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#101214; --surface:#1a1d20; --fg:#e9e9e6; --muted:#a0a3a8; --line:#2e3236;
+  --accent:#e0566a; --accent-fg:#14070a; --go:#f3d58a; --go-fg:#1b1b1f; --warn:#f0a640; --bad:#ff8a80; --ok:#5cc59a;
+  --clock-bg:#000000; --clock-fg:#e9e9e6; color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--body);font-size:16px;line-height:1.45}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--clock-bg)}
+.wrap{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));max-width:760px;margin:0 auto}
+.rd-head{position:sticky;top:0;padding-top:env(safe-area-inset-top,0px);z-index:5;background:var(--clock-bg);color:var(--clock-fg)}
+.bar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-block:8px 6px}
+.racename{font-family:var(--display);font-weight:700;font-size:15px;letter-spacing:.06em;text-transform:uppercase;opacity:.8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.sync{font-size:12px;font-weight:600;white-space:nowrap;padding:2px 8px;border-radius:99px;background:rgba(127,127,127,.25)}
+.sync.bad{background:var(--bad);color:#fff}
+.clock{font-family:var(--display);font-weight:700;font-size:clamp(56px,19vw,104px);line-height:.95;font-variant-numeric:tabular-nums}
+.clock small{font-size:.45em;opacity:.7}
+.clocksub{font-size:13px;opacity:.75;padding-bottom:6px}
+.views{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid rgba(127,127,127,.3)}
+.views a{color:inherit;text-decoration:none;text-align:center;padding:10px 4px;font-family:var(--display);font-weight:700;letter-spacing:.08em;text-transform:uppercase;font-size:15px;opacity:.65;border-bottom:3px solid transparent}
+.views a[aria-current="page"]{opacity:1;border-bottom-color:var(--go)}
+a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid var(--go);outline-offset:2px}
+main{padding-block:16px 48px;display:grid;gap:16px}
+h2{font-family:var(--display);font-weight:700;font-size:22px;letter-spacing:.04em;text-transform:uppercase;margin:0;text-wrap:balance}
+h3{font-size:15px;margin:0}
+p{margin:0}
+a{color:var(--accent)}
+.muted{color:var(--muted)}
+.small{font-size:14px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px;display:grid;gap:12px;min-width:0}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+label{font-size:13px;font-weight:600;color:var(--muted);display:grid;gap:4px}
+input,select,textarea{font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px;min-width:0;width:100%}
+input[type=color]{padding:2px;width:48px;height:44px;flex:none}
+button,.btn{font:inherit;font-weight:600;cursor:pointer;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--fg);padding:10px 14px;min-height:44px;text-decoration:none;display:inline-flex;align-items:center;justify-content:center}
+button.primary,.btn.primary{background:var(--accent);color:var(--accent-fg);border-color:transparent}
+button.danger{color:var(--bad)}
+button.danger.armed{background:var(--bad);color:#fff;border-color:transparent}
+button:disabled{opacity:.45;cursor:default}
+.banner{border-radius:10px;padding:10px 14px;font-size:14px;display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;background:var(--surface);border:1px dashed var(--warn)}
+.banner b{color:var(--warn)}
+/* Tap view */
+.cpbar{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.cpname{font-family:var(--display);font-weight:700;font-size:28px;text-transform:uppercase;letter-spacing:.03em}
+.pads{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.pad{min-height:96px;border-radius:12px;border:2px solid rgba(0,0,0,.25);display:grid;align-content:center;justify-items:center;gap:2px;padding:8px;font-family:var(--display);text-transform:uppercase;touch-action:manipulation;-webkit-user-select:none;user-select:none;transition:transform .06s}
+.pad:active{transform:scale(.96)}
+.pad .pn{font-size:24px;font-weight:700;line-height:1.05;text-align:center;overflow-wrap:anywhere}
+.pad .pc{font-size:15px;font-weight:700;opacity:.85;font-variant-numeric:tabular-nums}
+.pad .pd{font-family:var(--body);text-transform:none;font-size:13px;opacity:.8}
+.pad.other{background:var(--surface);color:var(--fg);border-style:dashed;border-color:var(--muted)}
+.pad.near{border:3px solid var(--ok);border-style:solid}
+.pad.flash{outline:4px solid var(--go)}
+.recent{display:grid;gap:4px}
+.tap{display:grid;grid-template-columns:2.4em 14px 1fr auto auto;gap:10px;align-items:center;font-variant-numeric:tabular-nums;padding:4px 0;border-bottom:1px solid var(--line)}
+.tap:last-child{border-bottom:0}
+.sw{width:14px;height:14px;border-radius:3px;border:1px solid rgba(0,0,0,.3);display:inline-block;flex:none}
+.tap .x{min-height:32px;padding:2px 10px}
+.tap .tm{font-family:var(--display);font-weight:700;font-size:18px}
+/* GPS check */
+.gps{border-radius:10px;padding:10px 14px;font-size:15px;display:grid;grid-template-columns:1fr auto;gap:4px 12px;align-items:center;border:2px solid var(--line);background:var(--surface)}
+.gps b{font-size:17px}
+.gps.ok{border-color:var(--ok)} .gps.ok b{color:var(--ok)}
+.gps.near{border-color:var(--warn)} .gps.near b{color:var(--warn)}
+.gps.far{border-color:var(--bad)} .gps.far b{color:var(--bad)}
+.gps svg{grid-row:span 3;width:120px;height:90px;border-radius:6px;background:var(--bg)}
+.gps .acts{grid-column:1;display:flex;gap:8px;flex-wrap:wrap}
+.gps .acts button{min-height:36px;padding:4px 10px;font-size:14px}
+.pinline{display:flex;gap:6px;flex-wrap:wrap;align-items:center;font-size:13px}
+.pinline button{min-height:34px;padding:4px 10px;font-size:13px}
+.pinline input{flex:1;min-width:10em;padding:6px 8px;font-size:13px}
+.pinline .ok{color:var(--ok);font-weight:600}
+/* Camera */
+#cam{padding-top:12px;display:grid;gap:8px}
+.camwrap{position:relative;border-radius:10px;overflow:hidden;background:#000;aspect-ratio:16/9}
+.camwrap video{width:100%;height:100%;object-fit:cover;display:block}
+.recdot{position:absolute;top:8px;left:8px;background:#c00;color:#fff;font-weight:700;font-size:13px;padding:2px 8px;border-radius:99px;font-variant-numeric:tabular-nums}
+.camrow button{flex:1}
+.saved{display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:14px}
+/* Scores */
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{padding:6px 12px;min-height:36px;border-radius:99px;font-size:14px}
+.chip[aria-pressed="true"]{background:var(--fg);color:var(--bg);border-color:transparent}
+.tablewrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums;font-size:15px}
+th{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:8px;border-bottom:1px solid var(--line);vertical-align:middle;white-space:nowrap}
+td.big{font-family:var(--display);font-weight:700;font-size:24px}
+td.pl{white-space:normal;min-width:120px}
+td .places{font-size:14px}
+td .places s{opacity:.6;text-decoration:none}
+td .places s::before{content:"("} td .places s::after{content:")"}
+.teamcell{display:flex;align-items:center;gap:8px;font-weight:600}
+.empty{text-align:center;padding:24px 12px;display:grid;gap:10px;justify-items:center}
+.order{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:4px 12px;font-variant-numeric:tabular-nums;font-size:14px}
+.order div{display:flex;gap:8px;align-items:center}
+.order .np{opacity:.5}
+/* Start */
+.startbtn{width:100%;min-height:140px;font-family:var(--display);font-size:44px;font-weight:700;letter-spacing:.06em;background:var(--go);color:var(--go-fg);border:0;border-radius:14px}
+.nudges{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.teamrow{display:flex;gap:8px;align-items:center}
+.teamrow input[type=text]{flex:1}
+.spotrow{display:grid;gap:6px;padding:8px 0;border-bottom:1px solid var(--line)}
+.spotrow:last-child{border-bottom:0}
+.spotrow .top{display:flex;gap:8px;align-items:center}
+.rules{font-size:14px;display:grid;gap:6px;padding-left:18px;margin:0}
+/* Family watch page */
+.stream{position:relative;aspect-ratio:16/9;border-radius:10px;overflow:hidden;background:#000}
+.stream iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+/* Livestream scoreboard: a fixed look (keyed or captured over video), so its colors are set explicitly. */
+body.ov{background:#00b140}
+body.ov .rd-head,body.ov::before,body.ov #cam{display:none!important}
+body.ov main{padding:0;max-width:none}
+.ov-stage{position:fixed;inset:0;font-family:var(--display);color:#ffffff;overflow:hidden}
+.ov-ctl{position:absolute;top:12px;right:12px;left:12px;display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;transition:opacity .3s;font-family:var(--body)}
+.ov-ctl.hide{opacity:0;pointer-events:none}
+.ov-ctl button,.ov-ctl .btn{background:#ffffff;color:#14181b;border:0;min-height:36px;padding:6px 12px;font-size:14px}
+.ov-ctl button[aria-pressed="true"]{background:#14181b;color:#ffffff}
+.ov-ctl .tip{background:rgba(20,24,27,.85);color:#ffffff;border-radius:8px;padding:6px 10px;font-size:13px;flex-basis:100%;text-align:right}
+.ov-third{position:absolute;left:4vw;right:4vw;bottom:5vh;display:flex;align-items:stretch;flex-wrap:wrap;filter:drop-shadow(0 4px 14px rgba(0,0,0,.45))}
+.ov-clockbox{background:#14181b;padding:1.2vh 2vw;display:grid;align-content:center;border-left:.6vw solid #a6192e}
+.ov-race{font-size:clamp(12px,1.6vw,24px);font-weight:700;letter-spacing:.08em;text-transform:uppercase;opacity:.8;white-space:nowrap}
+.ov-clock{font-size:clamp(40px,7vw,120px);font-weight:700;line-height:.95;font-variant-numeric:tabular-nums}
+.ov-scores{background:rgba(20,24,27,.88);padding:1.2vh 2vw;display:grid;align-content:center;gap:.6vh;flex:1;min-width:0}
+.ov-cp{font-size:clamp(12px,1.6vw,24px);font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#f3d58a}
+.ov-pills{display:flex;gap:1.4vw;flex-wrap:wrap;align-items:center}
+.ov-pill{display:flex;align-items:center;gap:.6vw;font-size:clamp(16px,2.6vw,44px);font-weight:700;text-transform:uppercase;white-space:nowrap}
+.ov-pill .pl{opacity:.6;font-size:.7em}
+.ov-pill .sq{width:.7em;height:.7em;border-radius:2px;border:2px solid rgba(255,255,255,.7)}
+.ov-pill b{color:#ffffff;background:rgba(255,255,255,.15);padding:0 .3em;border-radius:3px;font-variant-numeric:tabular-nums}
+.ov-wait{font-size:clamp(14px,2vw,32px);opacity:.8}
+@media (prefers-reduced-motion: reduce){.pad{transition:none}.ov-ctl{transition:none}}

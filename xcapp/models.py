@@ -7,7 +7,7 @@ from __future__ import annotations
 import datetime as dt
 
 from sqlalchemy import (
-    Boolean, Date, DateTime, Float, ForeignKey, Integer, LargeBinary, String, Text, UniqueConstraint,
+    BigInteger, Boolean, Date, DateTime, Float, ForeignKey, Integer, LargeBinary, String, Text, UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -842,3 +842,51 @@ class SeasonPeriod(Base):
     name: Mapped[str] = mapped_column(String(40))
     start_date: Mapped[dt.date] = mapped_column(Date)
     end_date: Mapped[dt.date] = mapped_column(Date)
+
+
+class RaceBoard(Base):
+    """Race Day: the live clock, tap screens and team scores for a meet. Coaches at the course spots open it with the
+    tap code, families with the watch code (read only). It holds the current race; earlier races are RaceBoardRun."""
+    __tablename__ = "race_boards"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    label: Mapped[str] = mapped_column(String(120))                       # such as "Sac-Joaquin Section Finals"
+    tap_code: Mapped[str] = mapped_column(String(24), unique=True)
+    watch_code: Mapped[str] = mapped_column(String(24), unique=True)
+    race_id: Mapped[str] = mapped_column(String(24), default="")           # changes with each new race
+    race_name: Mapped[str] = mapped_column(String(160), default="")
+    teams: Mapped[str] = mapped_column(Text, default="[]")                 # [{"id", "name", "color"}]
+    checkpoints: Mapped[str] = mapped_column(Text, default="[]")           # ["1 Mile", "2 Mile", "Finish"]
+    pins: Mapped[str] = mapped_column(Text, default="[]")                  # GPS pin per spot: [{"lat", "lon"} or null]
+    course_id: Mapped[int | None] = mapped_column(ForeignKey("courses.id", ondelete="SET NULL"), nullable=True)
+    start_at: Mapped[int | None] = mapped_column(BigInteger, nullable=True)   # epoch ms, server clock
+    stream_url: Mapped[str] = mapped_column(String(300), default="")       # the YouTube livestream, for families
+    updated_ms: Mapped[int] = mapped_column(BigInteger, default=0)
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class RaceBoardRun(Base):
+    """An earlier race on a board (kept when the coach starts the next race of the day)."""
+    __tablename__ = "race_board_runs"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    board_id: Mapped[int] = mapped_column(ForeignKey("race_boards.id", ondelete="CASCADE"), index=True)
+    race_id: Mapped[str] = mapped_column(String(24))
+    name: Mapped[str] = mapped_column(String(160), default="")
+    teams: Mapped[str] = mapped_column(Text, default="[]")
+    checkpoints: Mapped[str] = mapped_column(Text, default="[]")
+    start_at: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class RaceBoardLog(Base):
+    """One phone's taps at one spot in one race, replaced whole on each sync (so repeats are safe and phones never
+    overwrite each other): [{"id", "at" (epoch ms, server clock), "team"}]."""
+    __tablename__ = "race_board_logs"
+    __table_args__ = (UniqueConstraint("race_id", "cp", "device"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    board_id: Mapped[int] = mapped_column(ForeignKey("race_boards.id", ondelete="CASCADE"), index=True)
+    race_id: Mapped[str] = mapped_column(String(24), index=True)
+    cp: Mapped[int] = mapped_column(Integer)
+    device: Mapped[str] = mapped_column(String(40))
+    coach: Mapped[str] = mapped_column(String(60), default="")
+    taps: Mapped[str] = mapped_column(Text, default="[]")
+    updated_ms: Mapped[int] = mapped_column(BigInteger, default=0)

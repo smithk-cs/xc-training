@@ -2211,11 +2211,13 @@ def create_app() -> FastAPI:
         return None
 
     from types import SimpleNamespace
-    from . import calendar_web, newsletter_web, squads_web
+    from . import calendar_web, newsletter_web, raceday_web, squads_web
     calendar_web.register(app, SimpleNamespace(render=render, flash=flash, back=back, form_checked=form_checked, any_staff=any_staff,
                                                coach_or_admin=coach_or_admin, get_db=get_db, settings=s))
     squads_web.register(app, SimpleNamespace(render=render, flash=flash, back=back, form_checked=form_checked, any_staff=any_staff,
                                              coach_or_admin=coach_or_admin, get_db=get_db))
+    raceday_web.register(app, SimpleNamespace(render=render, flash=flash, back=back, form_checked=form_checked, any_staff=any_staff,
+                                              coach_or_admin=coach_or_admin, get_db=get_db))
     newsletter_web.register(app, SimpleNamespace(render=render, flash=flash, back=back, form_checked=form_checked, any_staff=any_staff,
                                                  coach_or_admin=coach_or_admin, get_db=get_db, logo_bytes=logo_bytes, settings=s,
                                                  templates=templates))
