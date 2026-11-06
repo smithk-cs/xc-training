@@ -292,3 +292,78 @@ def test_a_video_for_each_distance():
     c.post("/courses", data={**form, "cid": str(cid), "video_2 mi": "https://youtu.be/two", "video_url": "https://youtu.be/whole"})
     bea_page = TestClient(app).get("/a/t-bea").text                                          # the course video when no distance fits
     assert "▶ Course video: Woodward Park</a>" in bea_page and "youtu.be/two" not in bea_page
+
+
+def test_route_map_pdfs_for_each_distance():
+    import re
+
+    from fastapi.testclient import TestClient
+
+    from xcapp import analysis as A
+    from xcapp.db import SessionLocal
+    from xcapp.models import Athlete, CourseRoute, DivisionAthlete, MeetDivision, MeetEntry, StaffUser
+    from xcapp.security import hash_password
+    db = SessionLocal()
+    db.add(StaffUser(username="coach1", role="coach", password_hash=hash_password("correct-horse-1")))
+    db.add_all([Athlete(first_name="Ava", last_name="Doyle", gender="Girls", grade=11, group="Varsity", link_token="t-ava"),
+                Athlete(first_name="Bea", last_name="Lane", gender="Girls", grade=9, group="JV", link_token="t-bea")])
+    course = Course(name="Woodward Park", distances="5K,2 mi")
+    db.add(course)
+    db.commit()
+    cid = course.id
+    db.close()
+    from xcapp.web import create_app
+    app = create_app()
+    c = TestClient(app, follow_redirects=False)
+    csrf = re.search(r'name="csrf" value="([^"]+)"', c.get("/login").text).group(1)
+    c.post("/login", data={"csrf": csrf, "username": "coach1", "password": "correct-horse-1"})
+    edit = c.get(f"/courses?edit={cid}").text
+    csrf = re.search(r'name="csrf" value="([^"]+)"', edit).group(1)
+    assert 'id="routes"' in edit and 'enctype="multipart/form-data"' in edit and "No route maps yet." in edit
+
+    def up(dist, name, data):
+        return c.post(f"/courses/{cid}/routes", data={"csrf": csrf, "distance": dist}, files={"file": (name, data, "application/pdf")})
+
+    pdf = b"%PDF-1.4\n% five k\n%%EOF\n"
+    assert up("5K", "map.png", b"\x89PNG not a pdf").status_code == 303
+    assert "That isn’t a PDF." in c.get("/courses").text
+    up("3 mi", "map.pdf", pdf)                                                 # not raced on this course
+    assert "Pick the distance this route map is for." in c.get("/courses").text
+    up("5K", "old.pdf", b"%PDF-1.4 old")
+    up("5K", "Woodward 5K.pdf", pdf)                                           # replaces the first
+    assert "Saved the 5K route map for Woodward Park." in c.get("/courses").text
+    up("2 mi", "two.pdf", b"%PDF-1.4 two miles")
+    db = SessionLocal()
+    routes = {r.distance: r for r in db.query(CourseRoute).all()}
+    assert set(routes) == {"5K", "2 mi"} and routes["5K"].filename == "Woodward 5K.pdf" and routes["5K"].uploaded_by == "coach1"
+    r5, r2 = routes["5K"].id, routes["2 mi"].id
+    m = MeetEntry(name="Clovis Invite", date=A.team_today() + dt.timedelta(days=5), location="Fresno", course_id=cid)
+    d5 = MeetDivision(name="Girls Varsity", gender="Girls", level="Varsity", distance="5K", position=0)
+    m.divisions.append(d5)
+    db.add(m)
+    db.flush()
+    d5.entries.append(DivisionAthlete(athlete_id=db.query(Athlete).filter_by(first_name="Ava").one().id, position=0))
+    db.commit()
+    db.close()
+    page = c.get("/courses").text
+    assert f'href="/courses/{cid}/routes/{r5}.pdf"' in page and "📄 2 mi route</a>" in page
+    got = c.get(f"/courses/{cid}/routes/{r5}.pdf")
+    assert got.status_code == 200 and got.content == pdf and got.headers["content-type"] == "application/pdf"
+    assert got.headers["content-disposition"] == 'inline; filename="Woodward 5K.pdf"'
+    assert c.get(f"/courses/{cid + 1}/routes/{r5}.pdf").status_code == 404
+    anon = TestClient(app, follow_redirects=False)
+    assert anon.get(f"/courses/{cid}/routes/{r5}.pdf").status_code in (303, 401, 403)   # staff only
+    ava = anon.get("/a/t-ava").text                                            # entered in the 5K: just its map
+    assert f'href="/a/t-ava/routes/{r5}.pdf"' in ava and "📄 5K route map</a>" in ava and "2 mi route map" not in ava
+    bea = anon.get("/a/t-bea").text                                            # not entered yet: every map
+    assert "📄 5K route map</a>" in bea and "📄 2 mi route map</a>" in bea
+    assert anon.get(f"/a/t-ava/routes/{r5}.pdf").content == pdf
+    assert anon.get(f"/a/not-a-token/routes/{r5}.pdf").status_code in (403, 404)
+    c.post(f"/courses/{cid}/routes/{r2}/delete", data={"csrf": csrf})
+    assert "Removed the 2 mi route map." in c.get("/courses").text
+    assert "2 mi route map" not in anon.get("/a/t-bea").text
+    db = SessionLocal()
+    db.delete(db.get(Course, cid))                                             # the maps go with the course
+    db.commit()
+    assert db.query(CourseRoute).count() == 0
+    db.close()

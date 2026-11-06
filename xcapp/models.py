@@ -534,6 +534,8 @@ class Course(Base):
     notes: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
 
+    routes: Mapped[list["CourseRoute"]] = relationship(cascade="all, delete-orphan", order_by="CourseRoute.distance")
+
     @property
     def videos(self) -> dict[str, str]:
         """The video for each distance raced here, in the order of the distances."""
@@ -555,6 +557,18 @@ class Course(Base):
             return [("", self.video_url)]
         return list(vids.items())
 
+
+class CourseRoute(Base):
+    """A route map (PDF) for one distance raced on a course, uploaded by a coach for athletes to look at."""
+    __tablename__ = "course_routes"
+    __table_args__ = (UniqueConstraint("course_id", "distance"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    course_id: Mapped[int] = mapped_column(ForeignKey("courses.id", ondelete="CASCADE"), index=True)
+    distance: Mapped[str] = mapped_column(String(20))           # as on the course, such as "5K" or "2 mi"
+    filename: Mapped[str] = mapped_column(String(200), default="")
+    data: Mapped[bytes] = mapped_column(LargeBinary, deferred=True)   # loaded only when the PDF is opened
+    uploaded_by: Mapped[str] = mapped_column(String(80), default="")
+    uploaded_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
 
 class RaceTeamResult(Base):
     """How the team did in one race at a meet (such as Boys Frosh/Soph): its place among the teams and its score."""
