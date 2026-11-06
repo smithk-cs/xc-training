@@ -162,7 +162,7 @@ def create_app() -> FastAPI:
     # A fingerprint of the style sheet and scripts: links carry it (?v=...), so browsers load new ones after each deploy.
     import hashlib
     asset_v = hashlib.sha256(b"".join(f.read_bytes() for f in sorted((HERE / "static").glob("*.[cj]s*")))).hexdigest()[:10]
-    templates.env.globals.update(asset_v=asset_v, athlete_words=WV.athlete_words, mmss=A.mmss_text, map_url=A.map_url, course_place=A.course_place, race_videos=CS.race_videos, fmt_clock=A.fmt_clock, fmt_secs=A.fmt_secs, describe_weather=WX.describe, fmt_time=A.fmt_time, timedelta=dt.timedelta, now=A.team_today, EVENTS=list(A.EVENTS), GROUPS=GROUPS, team_name=s.team_name,
+    templates.env.globals.update(asset_v=asset_v, athlete_words=WV.athlete_words, mmss=A.mmss_text, map_url=A.map_url, course_place=A.course_place, race_videos=CS.race_videos, race_routes=CS.race_routes, fmt_clock=A.fmt_clock, fmt_secs=A.fmt_secs, describe_weather=WX.describe, fmt_time=A.fmt_time, timedelta=dt.timedelta, now=A.team_today, EVENTS=list(A.EVENTS), GROUPS=GROUPS, team_name=s.team_name,
                                  has_logo=has_logo, FEELS=FEELS, EFFORT_WORDS=EFFORT_WORDS, RUN_TYPES=A.RUN_TYPES,
                                  MISSED_REASONS=A.MISSED_REASONS, SIDES=A.SIDES, STARTED=A.STARTED, SEEN_BY=A.SEEN_BY,
                                  MORE_DAYS=A.MORE_DAYS, missed_label=A.missed_label,
@@ -942,6 +942,72 @@ def create_app() -> FastAPI:
             return back(f"/courses?edit={cid}#course-form" if cid.isdigit() else "/courses#course-form")
         flash(request, f"{'Added' if new else 'Saved'} {c.name}.")
         return back("/courses")
+
+    # ---------- route maps (PDF) for each distance on a course ----------
+
+    def route_pdf(r) -> Response:
+        name = re.sub(r"[^A-Za-z0-9 ._-]", "", r.filename or "")[:80] or f"route-{r.distance}.pdf"
+        return Response(r.data, media_type="application/pdf",
+                        headers={"Content-Disposition": f'inline; filename="{name}"', "X-Content-Type-Options": "nosniff",
+                                 "Cache-Control": "private, max-age=300"})
+
+    @app.post("/courses/{cid}/routes")
+    async def course_route_upload(request: Request, cid: int, user=Depends(coach_or_admin, scope="function"),
+                                  db: Session = Depends(get_db, scope="function")):
+        from .models import CourseRoute
+        f = await form_checked(request)
+        c = db.get(Course, cid)
+        if c is None:
+            raise HTTPException(404, "Course not found.")
+        dist = str(f.get("distance", ""))
+        allowed = [d for d in (c.distances or "").split(",") if d] or list(CS.DISTANCES)
+        up = f.get("file")
+        if dist not in allowed:
+            flash(request, "Pick the distance this route map is for.", "error")
+        elif not up or not getattr(up, "filename", ""):
+            flash(request, "Choose a PDF first.", "error")
+        else:
+            data = await up.read(CS.MAX_ROUTE_BYTES + 1)
+            if len(data) > CS.MAX_ROUTE_BYTES:
+                flash(request, "That file is larger than 10 MB.", "error")
+            elif not data.startswith(b"%PDF-"):
+                flash(request, "That isn’t a PDF. Save the route map as a PDF and upload it again.", "error")
+            else:
+                r = next((x for x in c.routes if x.distance == dist), None)
+                if r is None:
+                    r = CourseRoute(distance=dist)
+                    c.routes.append(r)
+                r.data, r.filename, r.uploaded_by, r.uploaded_at = data, str(up.filename)[:200], user.username, utcnow()
+                flash(request, f"Saved the {dist} route map for {c.name}.")
+        return back(f"/courses?edit={cid}#routes")
+
+    @app.post("/courses/{cid}/routes/{rid}/delete")
+    async def course_route_delete(request: Request, cid: int, rid: int, user=Depends(coach_or_admin, scope="function"),
+                                  db: Session = Depends(get_db, scope="function")):
+        from .models import CourseRoute
+        await form_checked(request)
+        r = db.get(CourseRoute, rid)
+        if r is not None and r.course_id == cid:
+            flash(request, f"Removed the {r.distance} route map.")
+            db.delete(r)
+        return back(f"/courses?edit={cid}#routes")
+
+    @app.get("/courses/{cid}/routes/{rid}.pdf")
+    def course_route_view(cid: int, rid: int, user=Depends(any_staff, scope="function"), db: Session = Depends(get_db, scope="function")):
+        from .models import CourseRoute
+        r = db.get(CourseRoute, rid)
+        if r is None or r.course_id != cid:
+            raise HTTPException(404, "Route map not found.")
+        return route_pdf(r)
+
+    @app.get("/a/{token}/routes/{rid}.pdf")
+    def athlete_route_view(token: str, rid: int, db: Session = Depends(get_db, scope="function")):
+        from .models import CourseRoute
+        athlete_by_token(db, token)   # athletes and families with the athlete's own link
+        r = db.get(CourseRoute, rid)
+        if r is None:
+            raise HTTPException(404, "Route map not found.")
+        return route_pdf(r)
 
     @app.post("/courses/{cid}/delete")
     async def courses_delete(request: Request, cid: int, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):

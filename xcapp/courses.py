@@ -31,6 +31,29 @@ def main_distance(raced: list[str], current: float | None) -> float | None:
     return DISTANCES["5K"] if "5K" in raced else max(DISTANCES[k] for k in raced)
 
 
+MAX_ROUTE_BYTES = 10 * 1024 * 1024   # a route map PDF
+
+
+def race_label(race_distance: str) -> str:
+    """'5K' or '2 mi' for a distance as written on a meet ('5,000 Meters', '2 Miles'); '' when it can't be read."""
+    if not race_distance:
+        return ""
+    from .imports import parse_distance
+    try:
+        return distance_label(parse_distance(race_distance))
+    except ValueError:
+        return ""
+
+
+def race_routes(course, race_distance: str = "") -> list:
+    """The route maps an athlete entered at a race distance should see: that distance's, else every distance's."""
+    if course is None:
+        return []
+    label = race_label(race_distance)
+    mine = [r for r in course.routes if r.distance == label]
+    return mine or list(course.routes)
+
+
 def race_videos(course, race_distance: str = "") -> list[tuple[str, str]]:
     """The course videos for an athlete entered at a race distance (as written on the meet, such as '5K' or '2 Miles'):
     that distance's video, else the course video, else each distance's. [(label, url), ...]"""

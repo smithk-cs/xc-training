@@ -10,7 +10,7 @@
   <thead><tr><th>Course</th><th>Location</th><th class="num">Distance</th><th>Surface</th><th class="num">Climb</th><th class="num">Hills</th><th>Turns</th><th class="num">Altitude</th><th class="num">Adds</th><th class="num">Meets</th>{% if user.role != 'trainer' %}<th></th>{% endif %}</tr></thead>
   <tbody>
   {% for c in courses %}{% set tier = CS.hill_tier(c) %}
-  <tr><td><b>{{ c.name }}</b>{% if c.map_url %} <a class="small" href="{{ c.map_url }}" target="_blank" rel="noopener">map</a>{% endif %}{% if c.video_url %} <a class="small" href="{{ c.video_url }}" target="_blank" rel="noopener">video</a>{% endif %}</td>
+  <tr><td><b>{{ c.name }}</b>{% if c.map_url %} <a class="small" href="{{ c.map_url }}" target="_blank" rel="noopener">map</a>{% endif %}{% if c.video_url %} <a class="small" href="{{ c.video_url }}" target="_blank" rel="noopener">video</a>{% endif %}{% for r in c.routes %} <a class="small route-link" href="/courses/{{ c.id }}/routes/{{ r.id }}.pdf" target="_blank" rel="noopener" title="Open the {{ r.distance }} route map (PDF)">📄 {{ r.distance }} route</a>{% endfor %}</td>
     <td class="small">{{ c.location }}</td>
     <td class="num">{% if c.distances %}{% set vids = c.videos %}{% for d in c.distances.split(',') %}{% if vids.get(d) %}<a class="tag video-tag" href="{{ vids[d] }}" target="_blank" rel="noopener" title="Watch the {{ d }} course video">▶ {{ d }}</a>{% else %}<span class="tag">{{ d }}</span>{% endif %} {% endfor %}{% else %}{{ CS.distance_label(c.distance_m) }}{% endif %}</td>
     <td>{{ c.surface }}</td>
@@ -91,6 +91,23 @@
   </form>
   {% if missing %}<datalist id="course-names">{% for m in missing %}<option value="{{ m }}">{% endfor %}</datalist>{% endif %}
   {% if edit %}
+  <section class="course-routes" id="routes" aria-labelledby="routes-h">
+    <h3 id="routes-h">Route maps (PDF)</h3>
+    <p class="small muted" style="margin:0 0 8px">Upload the meet’s course map for each distance. Athletes see a route map button on their upcoming meets here: the one for the distance they’re entered in, or every map when there’s none for their distance. Uploading again for a distance replaces its map. Up to 10 MB each.</p>
+    {% if edit.routes %}<ul class="route-list">{% for r in edit.routes %}
+      <li><span class="dist">{{ r.distance }}</span> <a href="/courses/{{ edit.id }}/routes/{{ r.id }}.pdf" target="_blank" rel="noopener">📄 {{ r.filename or 'route map.pdf' }}</a>
+        <span class="small muted">{{ r.uploaded_at.strftime('%b %-d, %Y') if r.uploaded_at else '' }}{{ (' by ' ~ r.uploaded_by) if r.uploaded_by else '' }}</span>
+        <form method="post" action="/courses/{{ edit.id }}/routes/{{ r.id }}/delete" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="link" type="submit" onclick="return confirm('Remove the {{ r.distance }} route map?')">Remove</button></form></li>
+    {% endfor %}</ul>{% else %}<p class="small muted" style="margin:0 0 8px">No route maps yet.</p>{% endif %}
+    {% set route_dists = edit.distances.split(',') if edit.distances else CS.KM_DISTANCES.keys()|list + CS.MILE_DISTANCES.keys()|list %}
+    <form method="post" action="/courses/{{ edit.id }}/routes" enctype="multipart/form-data" class="form-row">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <label>Distance<select name="distance" required>{% if route_dists|length > 1 %}<option value="">Pick one</option>{% endif %}{% for d in route_dists %}<option>{{ d }}</option>{% endfor %}</select></label>
+      <label style="flex:1">Route map<input type="file" name="file" accept=".pdf,application/pdf" required></label>
+      <button type="submit">Upload route map</button>
+    </form>
+    {% if not edit.distances %}<p class="small muted" style="margin:4px 0 0">Tick the distances raced here (above) and save to narrow this list.</p>{% endif %}
+  </section>
   <form method="post" action="/courses/{{ edit.id }}/delete" class="form-row" style="margin-top:8px"><input type="hidden" name="csrf" value="{{ csrf }}">
     <button class="danger" type="submit" onclick="return confirm('Delete {{ edit.name }}? Race results keep their course name.')">Delete course</button></form>
   {% endif %}
