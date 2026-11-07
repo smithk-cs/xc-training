@@ -182,3 +182,7 @@ body.recfull .campads{display:grid;position:absolute;left:calc(env(safe-area-ins
 .live-panel.onair{border:2px solid #d00}
 .live-panel.onair h3{color:#d00}
 @media (max-width: 380px){ .views a{font-size:13px;letter-spacing:.04em} }
+/* Setup: coach per spot, and moving spots */
+.coachline{font-size:13px}
+.coachline input{padding:8px;font-size:15px}
+.spotrow .top .x{min-width:40px;padding:6px 8px}

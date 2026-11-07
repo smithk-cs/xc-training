@@ -894,6 +894,8 @@ class RaceBoard(Base):
     teams: Mapped[str] = mapped_column(Text, default="[]")                 # [{"id", "name", "color"}]
     checkpoints: Mapped[str] = mapped_column(Text, default="[]")           # ["1 Mile", "2 Mile", "Finish"]
     pins: Mapped[str] = mapped_column(Text, default="[]")                  # GPS pin per spot: [{"lat", "lon"} or null]
+    coaches: Mapped[str] = mapped_column(Text, default="[]")               # coach assigned to each spot ("" if none)
+    spot_order: Mapped[str] = mapped_column(Text, default="")              # spot numbers in the order shown (see raceday.state)
     course_id: Mapped[int | None] = mapped_column(ForeignKey("courses.id", ondelete="SET NULL"), nullable=True)
     start_at: Mapped[int | None] = mapped_column(BigInteger, nullable=True)   # epoch ms, server clock
     stream_url: Mapped[str] = mapped_column(String(300), default="")       # the YouTube livestream, for families
@@ -916,6 +918,7 @@ class RaceBoardRun(Base):
     name: Mapped[str] = mapped_column(String(160), default="")
     teams: Mapped[str] = mapped_column(Text, default="[]")
     checkpoints: Mapped[str] = mapped_column(Text, default="[]")
+    spot_order: Mapped[str] = mapped_column(Text, default="")
     start_at: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
 

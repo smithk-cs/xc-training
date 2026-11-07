@@ -25,6 +25,7 @@ from .models import RaceBoard, RaceBoardLog, RaceBoardRun
 
 OTHER = "_other"
 MAX_TEAMS, MAX_SPOTS, MAX_TAPS = 16, 10, 1500
+MAX_INDEX = 20     # spot numbers in use (shown and hidden); a spot keeps its number for the whole race
 ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,40}$")
 COLOR_RE = re.compile(r"^#[0-9A-Fa-f]{6}$")
 
@@ -66,19 +67,29 @@ def clean_race(data: dict) -> dict:
             continue
         seen.add(tid)
         teams.append({"id": tid, "name": tname, "color": color if COLOR_RE.match(color) else "#888888"})
-    spots = [str(c).strip()[:40] for c in (data.get("checkpoints") or []) if str(c).strip()][:MAX_SPOTS]
+    raw = data.get("spots")
+    if not isinstance(raw, list):   # the older form: names and pins, in order
+        names, pins_in = data.get("checkpoints") or [], list(data.get("pins") or [])
+        raw = [{"idx": i, "name": c, "pin": pins_in[i] if i < len(pins_in) else None} for i, c in enumerate(names)]
+    spots, used = [], set()
+    for x in raw:
+        if not isinstance(x, dict) or not str(x.get("name") or "").strip():
+            continue
+        idx = x.get("idx")
+        idx = idx if isinstance(idx, int) and not isinstance(idx, bool) and 0 <= idx < MAX_INDEX and idx not in used else None
+        if idx is not None:
+            used.add(idx)
+        spots.append({"idx": idx, "name": str(x["name"]).strip()[:40], "pin": clean_pin(x.get("pin")),
+                      "coach": str(x.get("coach") or "").strip()[:60]})
+    spots = spots[:MAX_SPOTS]
     if not teams or not spots:
         raise ValueError("Add at least one team and one coach spot.")
-    pins = []
-    for p in list(data.get("pins") or [])[:len(spots)]:
-        pins.append(clean_pin(p))
-    pins += [None] * (len(spots) - len(pins))
     cid = data.get("course_id")
     url = str(data.get("stream_url") or "").strip()
     if url:
         from .analysis import youtube_url
         url = youtube_url(url)   # raises ValueError for anything but a YouTube link
-    return {"name": name, "teams": teams, "checkpoints": spots, "pins": pins, "stream_url": url,
+    return {"name": name, "teams": teams, "spots": spots, "stream_url": url,
             "course_id": cid if isinstance(cid, int) and not isinstance(cid, bool) and cid > 0 else None}
 
 
@@ -108,17 +119,28 @@ def clean_taps(taps) -> list[dict]:
     return out
 
 
+def spot_order(checkpoints: list, order_text: str) -> list[int]:
+    """The spots in the order shown (their numbers); every spot, in number order, if no order was saved."""
+    order = [i for i in loads(order_text, []) if isinstance(i, int) and 0 <= i < len(checkpoints)]
+    return list(dict.fromkeys(order)) if order else list(range(len(checkpoints)))
+
+
 def state(db: Session, board: RaceBoard, race_id: str | None = None) -> dict:
-    """What a page needs: the race (current, or an earlier one by its id) and every phone's taps for it."""
+    """What a page needs: the race (current, or an earlier one by its id) and every phone's taps for it.
+    Spots are listed by number (checkpoints, pins, coaches); "order" is the order they're shown in. A spot keeps its
+    number when the order changes, so taps already sent stay with the right spot; a removed spot is just left out."""
+    cps = loads(board.checkpoints, [])
     race = {"race_id": board.race_id, "name": board.race_name, "teams": loads(board.teams, []),
-            "checkpoints": loads(board.checkpoints, []), "pins": loads(board.pins, []), "start_at": board.start_at,
+            "checkpoints": cps, "pins": loads(board.pins, []), "coaches": loads(board.coaches, []),
+            "order": spot_order(cps, board.spot_order), "start_at": board.start_at,
             "stream_url": board.stream_url, "course": course_info(db, board.course_id), "current": True}
     if race_id and race_id != board.race_id:
         run = db.scalar(select(RaceBoardRun).where(RaceBoardRun.board_id == board.id, RaceBoardRun.race_id == race_id))
         if run is not None:
-            race = {"race_id": run.race_id, "name": run.name, "teams": loads(run.teams, []),
-                    "checkpoints": loads(run.checkpoints, []), "pins": [], "start_at": run.start_at, "stream_url": "",
-                    "course": None, "current": False}
+            rcps = loads(run.checkpoints, [])
+            race = {"race_id": run.race_id, "name": run.name, "teams": loads(run.teams, []), "checkpoints": rcps,
+                    "pins": [], "coaches": [], "order": spot_order(rcps, run.spot_order), "start_at": run.start_at,
+                    "stream_url": "", "course": None, "current": False}
     logs = db.scalars(select(RaceBoardLog).where(RaceBoardLog.board_id == board.id, RaceBoardLog.race_id == race["race_id"])
                       .order_by(RaceBoardLog.cp, RaceBoardLog.id)).all() if race["race_id"] else []
     return {"race": race, "logs": [{"cp": lg.cp, "device": lg.device, "coach": lg.coach, "taps": loads(lg.taps, []),
@@ -136,11 +158,27 @@ def save_race(db: Session, board: RaceBoard, data: dict, fresh: bool) -> None:
     r = clean_race(data)
     if fresh and board.race_id:
         db.add(RaceBoardRun(board_id=board.id, race_id=board.race_id, name=board.race_name, teams=board.teams,
-                            checkpoints=board.checkpoints, start_at=board.start_at))
-    if fresh or not board.race_id:
+                            checkpoints=board.checkpoints, spot_order=board.spot_order, start_at=board.start_at))
+    renumber = fresh or not board.race_id
+    if renumber:
         board.race_id, board.start_at = new_race_id(), None
-    board.race_name, board.teams, board.checkpoints = r["name"], json.dumps(r["teams"]), json.dumps(r["checkpoints"])
-    board.stream_url, board.pins = r["stream_url"], json.dumps(r["pins"])
+        names, pins, coaches = [], [], []
+    else:   # the same race: spots keep their numbers (phones and taps use them); new ones get the next free number
+        names = loads(board.checkpoints, [])
+        pins = (loads(board.pins, []) + [None] * len(names))[:len(names)]
+        coaches = (loads(board.coaches, []) + [""] * len(names))[:len(names)]
+    order = []
+    for sp in r["spots"]:
+        idx = sp["idx"] if not renumber and sp["idx"] is not None and sp["idx"] < len(names) else None
+        if idx is None:
+            if len(names) >= MAX_INDEX:
+                raise ValueError("Too many spots for this race. Use New race, same teams to start over.")
+            idx = len(names)
+            names.append(""), pins.append(None), coaches.append("")
+        names[idx], pins[idx], coaches[idx] = sp["name"], sp["pin"], sp["coach"]
+        order.append(idx)
+    board.race_name, board.teams, board.checkpoints = r["name"], json.dumps(r["teams"]), json.dumps(names)
+    board.stream_url, board.pins, board.coaches, board.spot_order = r["stream_url"], json.dumps(pins), json.dumps(coaches), json.dumps(order)
     from .models import Course
     board.course_id = r["course_id"] if r["course_id"] and db.get(Course, r["course_id"]) else None
     board.updated_ms = now_ms()
@@ -152,7 +190,7 @@ def save_log(db: Session, board: RaceBoard, data: dict) -> None:
     if not race_id or race_id not in known:
         raise ValueError("That race isn't on this board any more.")
     device, cp = str(data.get("device") or ""), data.get("cp")
-    if not ID_RE.match(device) or not isinstance(cp, int) or not 0 <= cp < MAX_SPOTS:
+    if not ID_RE.match(device) or not isinstance(cp, int) or not 0 <= cp < MAX_INDEX:
         raise ValueError("Bad spot or phone.")
     taps = clean_taps(data.get("taps"))
     row = db.scalar(select(RaceBoardLog).where(RaceBoardLog.race_id == race_id, RaceBoardLog.cp == cp,

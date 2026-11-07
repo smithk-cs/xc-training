@@ -33,7 +33,9 @@ function paintScores(){
   if (!race?.race_id){ return; }
   // The latest spot with team scores, from the phone with the most taps there
   let shown = null;
-  (race.checkpoints || []).forEach((name, cp) => {
+  const n = (race.checkpoints || []).length;
+  const order = (race.order?.length ? race.order : [...Array(n).keys()]).filter(i => i < n);
+  order.forEach(cp => { const name = race.checkpoints[cp];
     const logs = (st.logs || []).filter(l => l.cp === cp);
     if (!logs.length) return;
     const best = logs.reduce((a, b) => b.taps.length > a.taps.length ? b : a);

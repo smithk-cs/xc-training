@@ -53,7 +53,9 @@ def register(app, h: SimpleNamespace) -> None:
         runs = {b.id: db.scalars(select(RaceBoardRun).where(RaceBoardRun.board_id == b.id).order_by(RaceBoardRun.id.desc())).all()
                 for b in boards}
         base = str(request.base_url).rstrip("/")
-        return render(request, "raceday_admin.html", user, boards=boards, runs=runs, base=base, loads=RD.loads)
+        spots = {b.id: [(RD.loads(b.checkpoints, [])[i], (RD.loads(b.coaches, []) + [""] * 20)[i])
+                        for i in RD.spot_order(RD.loads(b.checkpoints, []), b.spot_order)] for b in boards}
+        return render(request, "raceday_admin.html", user, boards=boards, runs=runs, base=base, loads=RD.loads, spots=spots)
 
     @app.post("/race-day/new")
     async def raceday_new(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
@@ -94,6 +96,7 @@ def register(app, h: SimpleNamespace) -> None:
                    for c in db.scalars(select(Course).order_by(Course.name)).all()] if m else []
         cfg = {"mode": mode, "api": f"/rw/{board.watch_code}" if mode == "watch" else f"/rd/{board.tap_code}",
                "canManage": m is not None, "label": board.label, "courses": courses,
+               "staff": sorted({u.display_name for u in db.scalars(select(StaffUser)).all()}) if m else [],
                "watchLink": f"/rw/{board.watch_code}" if m else ""}
         resp = render(request, "raceday_app.html", None, board=board, mode=mode, cfg=cfg)
         resp.headers["Content-Security-Policy"] = RACE_CSP

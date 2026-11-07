@@ -29,7 +29,10 @@
 {% for b in boards %}
 <section class="card rd-board">
   <h2>{{ b.label }}</h2>
-  <p class="small muted">{% if b.race_id %}Now: <b>{{ b.race_name }}</b> · {{ loads(b.checkpoints, [])|length }} spot{{ 's' if loads(b.checkpoints, [])|length != 1 }} · {{ loads(b.teams, [])|length }} team{{ 's' if loads(b.teams, [])|length != 1 }}{% if b.start_at %} · clock running{% endif %}{% else %}No race set up yet.{% endif %}</p>
+  <p class="small muted">{% if b.race_id %}Now: <b>{{ b.race_name }}</b> · {{ spots[b.id]|length }} spot{{ 's' if spots[b.id]|length != 1 }} · {{ loads(b.teams, [])|length }} team{{ 's' if loads(b.teams, [])|length != 1 }}{% if b.start_at %} · clock running{% endif %}{% else %}No race set up yet.{% endif %}</p>
+  {% if b.race_id and spots[b.id] %}
+  <p class="small rd-spots"><b>Spots:</b> {% for name, coach in spots[b.id] %}{{ name }}{% if coach %}: {{ coach }}{% else %} <span class="muted">(no coach yet)</span>{% endif %}{% if not loop.last %} · {% endif %}{% endfor %}</p>
+  {% endif %}
   <div class="rd-links">
     <div><b>Coach tap screen</b> <span class="small muted">(coaches at the course)</span><br>
       <a href="/rd/{{ b.tap_code }}" target="_blank" rel="noopener">Open</a> · <input class="rd-url" readonly value="{{ base }}/rd/{{ b.tap_code }}" aria-label="Coach tap link" onclick="this.select()"></div>

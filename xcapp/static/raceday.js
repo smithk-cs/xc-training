@@ -166,6 +166,14 @@ function tick(){
 // ---------- views ----------
 const VIEWS = WATCH ? ["watch"] : ["tap", "scores", "start", "setup", "live", "overlay"];
 const view = () => { const h = location.hash.slice(1); return VIEWS.includes(h) ? h : (PAST ? "scores" : VIEWS[0]); };
+// Spots keep their number for the whole race (taps are filed by it); race.order is the order they're shown in
+function shown(){
+  const n = (race?.checkpoints || []).length;
+  const o = (race?.order?.length ? race.order : [...Array(n).keys()]).filter(i => i < n);
+  return [...new Set(o)];
+}
+const coachOf = i => (race?.coaches || [])[i] || "";
+const sameName = (a, b) => a && b && a.trim().toLowerCase() === b.trim().toLowerCase();
 function teamById(id){ return id === OTHER ? { id: OTHER, name: "Other", color: "#9aa39e" } : (race?.teams || []).find(t => t.id === id) || { id, name: "?", color: "#888888" }; }
 function swatch(id){ return `<span class="sw" style="background:${esc(teamById(id).color)}"></span>`; }
 function signIn(what){ return `<div class="panel empty"><h2>Coaches only</h2><p class="muted">Only a coach signed in to the team app can ${what}.</p><a class="btn primary" href="/login">Sign in</a></div>`; }
@@ -182,12 +190,14 @@ function renderTap(){
   if (!race) return noRace();
   if (!race.current) return pastBanner();
   const cps = race.checkpoints || [];
-  if (myCp == null || myCp >= cps.length){
+  if (myCp == null || !shown().includes(myCp)){
     const near = nearestSpot();
+    const mineIs = shown().find(i => sameName(coachOf(i), coachName));
     return `<div class="panel"><h2>Where are you standing?</h2>
       <label>Your name<input id="coachName" type="text" autocomplete="name" placeholder="Coach Smith" value="${esc(coachName)}"></label>
-      <div class="pads">${cps.map((c, i) => { const d = spotDist(i);
-        return `<button class="pad other${near && near.i === i && near.d < 200 ? " near" : ""}" data-cp="${i}"><span class="pn">${esc(c)}</span>${d != null ? `<span class="pd">${dist(d)} away${near && near.i === i ? " · nearest" : ""}</span>` : ""}</button>`; }).join("")}</div>
+      <div class="pads">${shown().map(i => { const c = cps[i], d = spotDist(i), who = coachOf(i);
+        const hint = [who ? (i === mineIs ? "Your spot · " : "") + who : "", d != null ? `${dist(d)} away${near && near.i === i ? " · nearest" : ""}` : ""].filter(Boolean).join(" · ");
+        return `<button class="pad other${(near && near.i === i && near.d < 200) || i === mineIs ? " near" : ""}" data-cp="${i}"><span class="pn">${esc(c)}</span>${hint ? `<span class="pd">${esc(hint)}</span>` : ""}</button>`; }).join("")}</div>
       ${pinned() ? `<p class="small muted">${gpsPos ? "Distances use this phone's location." : gpsErr ? esc(gpsErr) : "Finding your location…"}</p>` : ""}</div>`;
   }
   const mine = local.logs[myCp] || [];
@@ -220,7 +230,8 @@ function logsForCp(cp){
 function pickLog(cp, logs){ return logs.find(l => l.id === scorePick[cp]) || logs.reduce((a, b) => b.taps.length > a.taps.length ? b : a); }
 function scoreBlocks(){
   const teams = race.teams || [];
-  return (race.checkpoints || []).map((name, cp) => {
+  return shown().map(cp => {
+    const name = race.checkpoints[cp];
     const logs = logsForCp(cp);
     if (!logs.length) return `<div class="panel"><h2>${esc(name)}</h2><p class="muted">No taps yet from this spot.</p></div>`;
     const pick = pickLog(cp, logs);
@@ -274,9 +285,12 @@ function pinHtml(p){
   return p ? `<span class="ok">Pinned</span> <a href="https://www.google.com/maps/search/?api=1&query=${p.lat},${p.lon}" target="_blank" rel="noopener">${p.lat.toFixed(5)}, ${p.lon.toFixed(5)}</a> <button type="button" data-unpin>Clear pin</button>`
            : `<span class="muted">No GPS pin</span>`;
 }
-function spotRow(name, pin){
-  return `<div class="spotrow" data-pin="${esc(pin ? JSON.stringify(pin) : "")}">
-    <div class="top"><input type="text" class="spotname" placeholder="Such as 1 Mile" value="${esc(name)}" aria-label="Spot name"><button type="button" class="x danger" data-rmspot aria-label="Remove spot">✕</button></div>
+function spotRow(name, pin, coach, idx){
+  return `<div class="spotrow" data-idx="${idx == null ? "" : idx}" data-pin="${esc(pin ? JSON.stringify(pin) : "")}">
+    <div class="top"><input type="text" class="spotname" placeholder="Such as 1 Mile" value="${esc(name)}" aria-label="Spot name">
+      <button type="button" class="x" data-up aria-label="Move up">↑</button><button type="button" class="x" data-down aria-label="Move down">↓</button>
+      <button type="button" class="x danger" data-rmspot aria-label="Remove spot">✕</button></div>
+    <label class="coachline">Coach at this spot<input type="text" class="spotcoach" list="staffNames" maxlength="60" placeholder="Optional" value="${esc(coach || "")}"></label>
     <div class="pinline"><span class="pinstate">${pinHtml(pin)}</span>
       <button type="button" data-pinhere>Pin this spot here</button>
       <input type="text" data-pinpaste placeholder="Or paste a Google Maps link or coordinates" aria-label="Google Maps link or coordinates"></div></div>`;
@@ -284,7 +298,7 @@ function spotRow(name, pin){
 function renderSetup(){
   if (!loaded) return `<p class="muted">Loading…</p>`;
   if (!canManage) return signIn("set up races");
-  const r = race && race.current ? race : { name: "", teams: [], checkpoints: ["1 Mile", "2 Mile", "Finish"], pins: [], stream_url: "", course: null };
+  const r = race && race.current ? race : { name: "", teams: [], checkpoints: ["1 Mile", "2 Mile", "Finish"], pins: [], coaches: [], order: [], stream_url: "", course: null };
   const teams = r.teams?.length ? r.teams : [{ id: "t" + rid(), name: "", color: "#a6192e" }, { id: "t" + rid(), name: "", color: "#1b4fa0" }];
   const courses = cfg.courses || [];
   const cid = r.course?.id || "";
@@ -299,8 +313,9 @@ function renderSetup(){
       <input type="color" value="${esc(t.color)}" aria-label="Jersey color"><input type="text" maxlength="40" placeholder="School name" value="${esc(t.name)}" aria-label="School name">
       <button type="button" class="x danger" data-rmteam aria-label="Remove team">✕</button></div>`).join("")}</div>
     <div><button id="addTeam">Add a team</button></div></div>
-  <div class="panel"><h2>Coach spots</h2><p class="muted">In course order, finish last. Pin each spot so phones can check their coach is in the right place: stand at the marker on a course walk and tap <b>Pin this spot here</b>, or paste a Google Maps link (long-press the spot in Google Maps, then share or copy).</p>
-    <div id="spotList">${(r.checkpoints || []).map((c, i) => spotRow(c, (r.pins || [])[i] || null)).join("")}</div>
+  <div class="panel"><h2>Coach spots</h2><p class="muted">In course order, finish last (use ↑ ↓ to move a spot). Add the coach for each spot: their phone shows "Your spot". Pin each spot so phones can check their coach is in the right place: stand at the marker on a course walk and tap <b>Pin this spot here</b>, or paste a Google Maps link (long-press the spot in Google Maps, then share or copy).</p>
+    <div id="spotList">${(race && race.current ? shown() : r.checkpoints.map((_, i) => i)).map(i => spotRow(r.checkpoints[i], (r.pins || [])[i] || null, (r.coaches || [])[i], race && race.current ? i : null)).join("")}</div>
+    <datalist id="staffNames">${(cfg.staff || []).map(n => `<option value="${esc(n)}">`).join("")}</datalist>
     <div><button id="addSpot">Add a spot</button></div></div>
   <div class="row"><button class="primary" id="saveSetup">${race ? "Save changes" : "Create race"}</button>
     ${race ? `<button class="danger ${armed === "newrace" ? "armed" : ""}" id="newRace">${armed === "newrace" ? "Tap again: start the next race" : "New race, same teams"}</button>` : ""}</div>
@@ -348,26 +363,27 @@ function ovPoke(){
   ovTimer = setTimeout(() => { ovHidden = true; $("#ovCtl")?.classList.add("hide"); }, 3000);
 }
 function renderOverlay(){
-  const cps = race?.checkpoints || [], teams = race?.teams || [];
-  const results = cps.map((name, cp) => { const logs = logsForCp(cp); return logs.length ? { name, r: S.score(pickLog(cp, logs).taps, teams) } : null; });
-  let shown = null;
-  if (ovCp === "auto"){ for (let i = results.length - 1; i >= 0; i--) if (results[i]?.r.standings.length){ shown = results[i]; break; } }
-  else shown = results[Number(ovCp)] || { name: cps[Number(ovCp)] || "", r: { standings: [] } };
-  const pills = (shown?.r.standings || []).map((s, i) => { const t = teamById(s.id);
+  const cps = race?.checkpoints || [], teams = race?.teams || [], order = race ? shown() : [];
+  const results = {};
+  for (const cp of order){ const logs = logsForCp(cp); results[cp] = logs.length ? { name: cps[cp], r: S.score(pickLog(cp, logs).taps, teams) } : null; }
+  let pick = null;
+  if (ovCp === "auto"){ for (const cp of [...order].reverse()) if (results[cp]?.r.standings.length){ pick = results[cp]; break; } }
+  else pick = results[Number(ovCp)] || { name: cps[Number(ovCp)] || "", r: { standings: [] } };
+  const pills = (pick?.r.standings || []).map((s, i) => { const t = teamById(s.id);
     return `<span class="ov-pill"><span class="pl">${i + 1}</span><span class="sq" style="background:${esc(t.color)}"></span>${esc(t.name)} <b>${s.score}</b></span>`; }).join("");
   const bg = ovBg === "black" ? "#000000" : "#00b140";
   document.body.style.background = bg;
   return `<div class="ov-stage" style="background:${bg}">
     <div class="ov-ctl ${ovHidden ? "hide" : ""}" id="ovCtl">
       <button data-ovcp="auto" aria-pressed="${ovCp === "auto"}">Latest spot</button>
-      ${cps.map((c, i) => `<button data-ovcp="${i}" aria-pressed="${String(ovCp) === String(i)}">${esc(c)}</button>`).join("")}
+      ${order.map(i => `<button data-ovcp="${i}" aria-pressed="${String(ovCp) === String(i)}">${esc(cps[i])}</button>`).join("")}
       <button id="ovBg">${ovBg === "black" ? "Black background" : "Green background"}</button>
       <a class="btn" href="#scores">Close</a>
       <span class="tip">These buttons hide after 3 seconds and come back when you move the mouse.</span>
     </div>
     <div class="ov-third">
       <div class="ov-clockbox"><div class="ov-race">${esc(race?.name || label)}</div><div class="ov-clock" id="ovClock">0:00</div></div>
-      <div class="ov-scores"><div class="ov-cp">${shown ? esc(shown.name) + " · " : ""}Team scores</div>
+      <div class="ov-scores"><div class="ov-cp">${pick ? esc(pick.name) + " · " : ""}Team scores</div>
         ${pills ? `<div class="ov-pills">${pills}</div>` : `<div class="ov-wait">Scores appear once a team has 5 runners through</div>`}</div>
     </div></div>`;
 }
@@ -396,11 +412,11 @@ function render(force){
 
 // ---------- GPS spot check ----------
 let gpsPos = null, gpsErr = "", gpsWatch = null;
-const pinned = () => (race?.pins || []).some(Boolean);
+const pinned = () => shown().some(i => (race?.pins || [])[i]);
 function spotDist(i){ const p = (race?.pins || [])[i]; return p && gpsPos ? S.metres(gpsPos, p) : null; }
 function nearestSpot(){
   let best = null;
-  (race?.pins || []).forEach((p, i) => { if (p && gpsPos){ const d = S.metres(gpsPos, p); if (!best || d < best.d) best = { i, d }; } });
+  (race?.pins || []).forEach((p, i) => { if (p && gpsPos && shown().includes(i)){ const d = S.metres(gpsPos, p); if (!best || d < best.d) best = { i, d }; } });
   return best;
 }
 function gpsWanted(on){
@@ -414,7 +430,7 @@ function gpsWanted(on){
   } else if (!on && gpsWatch != null){ navigator.geolocation.clearWatch(gpsWatch); gpsWatch = null; }
 }
 function miniMap(myPin){
-  const pts = (race.pins || []).map((p, i) => p && { ...p, i }).filter(Boolean);
+  const pts = (race.pins || []).map((p, i) => p && shown().includes(i) && { ...p, i }).filter(Boolean);
   const all = gpsPos ? [...pts, gpsPos] : pts;
   if (!all.length) return "";
   const k = Math.cos((all[0].lat * Math.PI) / 180);
@@ -728,8 +744,9 @@ function setPin(row, pin){
 function readSetup(){
   const teams = [...document.querySelectorAll(".teamrow")].map(r => ({ id: r.dataset.id, color: r.querySelector("input[type=color]").value, name: r.querySelector("input[type=text]").value.trim() })).filter(x => x.name);
   const rows = [...document.querySelectorAll(".spotrow")].filter(r => r.querySelector(".spotname").value.trim());
-  return { name: $("#fName").value.trim(), teams, checkpoints: rows.map(r => r.querySelector(".spotname").value.trim()),
-           pins: rows.map(r => r.dataset.pin ? JSON.parse(r.dataset.pin) : null),
+  return { name: $("#fName").value.trim(), teams,
+           spots: rows.map(r => ({ idx: r.dataset.idx === "" ? null : Number(r.dataset.idx), name: r.querySelector(".spotname").value.trim(),
+                                   pin: r.dataset.pin ? JSON.parse(r.dataset.pin) : null, coach: r.querySelector(".spotcoach").value.trim() })),
            course_id: Number($("#fCourse").value) || null, stream_url: $("#fStream").value.trim() };
 }
 
@@ -739,6 +756,11 @@ document.addEventListener("pointerdown", e => {
 });
 document.addEventListener("toggle", e => { const k = e.target.dataset?.key; if (k){ e.target.open ? openDetails.add(k) : openDetails.delete(k); lastHtml = ""; } }, true);
 document.addEventListener("change", e => {
+  if (e.target.id === "coachName"){
+    const v = e.target.value.trim();
+    if (v !== coachName){ coachName = v; ls.set("xc-coach", coachName); setTimeout(() => render(true), 0); }   // after any redraw under way
+    return;
+  }
   if (e.target.id === "fCourse"){
     const c = (cfg.courses || []).find(x => x.id === Number(e.target.value));
     $("#courseMap").innerHTML = c?.map_url ? `<a href="${esc(c.map_url)}" target="_blank" rel="noopener">Open the course map</a> to find the mile markers.` : "";
@@ -756,6 +778,7 @@ document.addEventListener("click", async e => {
   if (t.dataset.cp != null){
     const n = $("#coachName"); if (n){ coachName = n.value.trim(); ls.set("xc-coach", coachName); }
     myCp = Number(t.dataset.cp); ls.set(cpKey, myCp);
+    if (!coachName && coachOf(myCp)){ coachName = coachOf(myCp); ls.set("xc-coach", coachName); }
     wake(); render(); return;
   }
   if (t.dataset.switch != null){ myCp = Number(t.dataset.switch); ls.set(cpKey, myCp); render(); return; }
@@ -781,7 +804,8 @@ document.addEventListener("click", async e => {
   if (t.id === "pinMine"){
     try { const c = await hereNow(); const pins = [...(race.pins || [])]; while (pins.length < race.checkpoints.length) pins.push(null);
       pins[myCp] = { lat: +c.latitude.toFixed(6), lon: +c.longitude.toFixed(6) };
-      await post("/race", { csrf: CSRF, fresh: false, name: race.name, teams: race.teams, checkpoints: race.checkpoints, pins, course_id: race.course?.id || null, stream_url: race.stream_url });
+      const spots = shown().map(i => ({ idx: i, name: race.checkpoints[i], pin: pins[i] || null, coach: coachOf(i) }));
+      await post("/race", { csrf: CSRF, fresh: false, name: race.name, teams: race.teams, spots, course_id: race.course?.id || null, stream_url: race.stream_url });
       toast(`Pinned ${race.checkpoints[myCp]} (GPS within ${Math.round(c.accuracy)} m).`, true); poll();
     } catch(err){ toast(err.message); }
     return;
@@ -800,17 +824,23 @@ document.addEventListener("click", async e => {
     $("#teamList").appendChild(row); row.querySelector("input[type=text]").focus(); return;
   }
   if (t.hasAttribute("data-rmteam")){ t.closest(".teamrow").remove(); return; }
-  if (t.id === "addSpot"){ $("#spotList").insertAdjacentHTML("beforeend", spotRow("", null)); $("#spotList .spotrow:last-child .spotname").focus(); return; }
+  if (t.id === "addSpot"){ $("#spotList").insertAdjacentHTML("beforeend", spotRow("", null, "", null)); $("#spotList .spotrow:last-child .spotname").focus(); return; }
+  if (t.hasAttribute("data-up") || t.hasAttribute("data-down")){
+    const row = t.closest(".spotrow"), up = t.hasAttribute("data-up");
+    const other = up ? row.previousElementSibling : row.nextElementSibling;
+    if (other){ up ? other.before(row) : other.after(row); t.focus(); }
+    return;
+  }
   if (t.hasAttribute("data-rmspot")){ t.closest(".spotrow").remove(); return; }
   if (t.id === "saveSetup" || t.id === "newRace"){
     if (t.id === "newRace" && armed !== "newrace"){ armed = "newrace"; t.classList.add("armed"); t.textContent = "Tap again: start the next race"; setTimeout(() => { if (armed === "newrace"){ armed = null; t.classList.remove("armed"); t.textContent = "New race, same teams"; } }, 4000); return; }
     armed = null;
     const data = readSetup();
-    if (!data.teams.length || !data.checkpoints.length){ toast("Add at least one team and one coach spot."); return; }
+    if (!data.teams.length || !data.spots.length){ toast("Add at least one team and one coach spot."); return; }
     const fresh = t.id === "newRace";
     try {
       await post("/race", { ...data, fresh, csrf: CSRF });
-      if (fresh || !race){ myCp = myCp != null && myCp < data.checkpoints.length ? myCp : null; }
+      if (fresh || !race){ myCp = null; ls.set(cpKey, null); }
       location.hash = fresh || !race ? "#start" : "#tap";
       await poll();
       toast(fresh ? "Next race ready. Press START at the gun." : "Saved.", true);

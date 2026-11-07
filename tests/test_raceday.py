@@ -71,7 +71,8 @@ def test_clean_race_and_pins():
                        "checkpoints": ["1 Mile", "", "Finish"], "pins": [{"lat": 38.6, "lon": -121.3}, {"lat": 0, "lon": 0}, "x"],
                        "stream_url": "youtu.be/abc123"})
     assert r["name"] == "Meet" and [t["id"] for t in r["teams"]] == ["a", "b", "c"]
-    assert r["checkpoints"] == ["1 Mile", "Finish"] and r["pins"] == [{"lat": 38.6, "lon": -121.3}, None]
+    assert [x["name"] for x in r["spots"]] == ["1 Mile", "Finish"]
+    assert [x["pin"] for x in r["spots"]] == [{"lat": 38.6, "lon": -121.3}, None]
     assert r["stream_url"] == "https://youtu.be/abc123"
     with pytest.raises(ValueError):
         RD.clean_race({"teams": TEAMS, "checkpoints": []})
@@ -217,3 +218,35 @@ def test_who_can_manage(app):
     assert coach.get("/race-day").status_code == 403
     assert coach.get(f"/rd/{tap}/state").json()["can_manage"] is False
     assert '<a href="/race-day"' not in coach.get("/").text
+
+
+def test_spot_order_and_coaches_keep_taps_with_their_spot(session):
+    from xcapp.models import RaceBoard, RaceBoardLog
+    b = RaceBoard(label="Meet", tap_code="t1", watch_code="w1")
+    session.add(b)
+    session.flush()
+    spots = [{"name": "1 Mile", "coach": "Coach Smith"}, {"name": "2 Mile"}, {"name": "Finish", "coach": "Coach Lee"}]
+    RD.save_race(session, b, {"teams": TEAMS, "spots": spots}, fresh=False)
+    st = RD.state(session, b)["race"]
+    assert st["checkpoints"] == ["1 Mile", "2 Mile", "Finish"] and st["order"] == [0, 1, 2]
+    assert st["coaches"] == ["Coach Smith", "", "Coach Lee"]
+    RD.save_log(session, b, {"race_id": b.race_id, "cp": 1, "device": "p2", "taps": CASES["none"]})   # taps at 2 Mile
+
+    # Mid-race: move Finish first, rename 2 Mile, add a spot, remove 1 Mile; numbers stay, so taps stay with 2 Mile
+    RD.save_race(session, b, {"teams": TEAMS, "spots": [{"idx": 2, "name": "Finish", "coach": "Coach Lee"},
+                                                          {"idx": 1, "name": "Two Mile", "coach": "Coach Kim"},
+                                                          {"idx": None, "name": "Hill"}]}, fresh=False)
+    st = RD.state(session, b)
+    race = st["race"]
+    assert race["order"] == [2, 1, 3] and race["checkpoints"][1] == "Two Mile" and race["checkpoints"][3] == "Hill"
+    assert race["coaches"][1] == "Coach Kim" and race["checkpoints"][0] == "1 Mile"     # removed: kept, just not shown
+    assert [(lg["cp"], len(lg["taps"])) for lg in st["logs"]] == [(1, 3)]
+    RD.save_log(session, b, {"race_id": b.race_id, "cp": 3, "device": "p3", "taps": []})  # the new spot's number works
+
+    # The next race starts numbering again, in the shown order; the earlier race keeps its order
+    first = b.race_id
+    RD.save_race(session, b, {"teams": TEAMS, "spots": [{"idx": 2, "name": "Finish"}, {"idx": 1, "name": "Two Mile"}]}, fresh=True)
+    race = RD.state(session, b)["race"]
+    assert race["checkpoints"] == ["Finish", "Two Mile"] and race["order"] == [0, 1]
+    assert RD.state(session, b, first)["race"]["order"] == [2, 1, 3]
+    assert session.query(RaceBoardLog).filter_by(race_id=first).count() == 2
