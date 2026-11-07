@@ -82,3 +82,22 @@ def test_data_check_page(monkeypatch):
     assert {x.id for x in db.query(Activity).all()} == {keep, late}
     assert db.get(Activity, late).local_date == dt.date(2026, 10, 21)
     db.close()
+
+
+def test_clear_garmin_copies_are_removed_automatically(session, athlete):
+    file = run(session, athlete, "f1", PRACTICE, laps=3)
+    summary = run(session, athlete, "s1", PRACTICE, source="garmin_summary", rpe=6)        # the same run, sent twice
+    other_file = run(session, athlete, "f2", PRACTICE + dt.timedelta(days=1), day=TUE + dt.timedelta(days=1))
+    upload = run(session, athlete, "u1", PRACTICE + dt.timedelta(days=1, minutes=1), source="upload", day=TUE + dt.timedelta(days=1))
+    shifted = run(session, athlete, "c1", PRACTICE + dt.timedelta(days=2, hours=7), source="garmin_summary", day=TUE + dt.timedelta(days=2))
+    shifted_file = run(session, athlete, "f3", PRACTICE + dt.timedelta(days=2), day=TUE + dt.timedelta(days=2))
+    short = run(session, athlete, "s9", PRACTICE + dt.timedelta(days=3), miles=2, source="garmin_summary", day=TUE + dt.timedelta(days=3))
+    long = run(session, athlete, "f9", PRACTICE + dt.timedelta(days=3), miles=5, day=TUE + dt.timedelta(days=3))
+    removed = DC.auto_remove(session, TUE, TUE + dt.timedelta(days=3))
+    assert len(removed) == 1 and "Lucia Sorensen" in removed[0] and "garmin_summary, kept garmin_file" in removed[0]
+    assert session.get(Activity, summary.id) is None and file.rpe == 6           # the athlete's effort moved over
+    # Left for a coach: a manual upload, a time-zone slip, and copies whose distances don't match
+    for a in (other_file, upload, shifted, shifted_file, short, long):
+        assert session.get(Activity, a.id) is not None
+    left = DC.find_issues(session, TUE, TUE + dt.timedelta(days=3), today=TUE + dt.timedelta(days=3))["duplicates"]
+    assert len(left) == 3 and not any(DC.certain(p) for p in left)

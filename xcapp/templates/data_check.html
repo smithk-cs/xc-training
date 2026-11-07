@@ -19,7 +19,7 @@
 
 <div class="card" id="duplicates">
   <h2>Duplicates</h2>
-  <p class="small muted">Two runs of one athlete that overlap in time, or match in distance and time but start whole hours apart. The fuller copy is kept (a Garmin file over a summary over a CSV import); the athlete’s effort and notes move to it.</p>
+  <p class="small muted">Two runs of one athlete that overlap in time, or match in distance and time but start whole hours apart. The fuller copy is kept (a Garmin file over a summary over a CSV import); the athlete’s effort and notes move to it. Copies that are certainly the same run (both from Garmin, same time, same distance) are removed automatically after each Garmin sync and every night, and listed in the Sync log; the ones here need your check.</p>
   {% if issues.duplicates %}
   <form method="post" action="/data-check/remove">
     <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="days" value="{{ days }}">

@@ -106,6 +106,12 @@ def nightly() -> dict:
         else:
             out["class_years"] = CY.refresh(db, A.team_today())
         out["duplicate_pain_reports_removed"] = A.dedupe_pain_reports(db)
+        from . import data_check as DC
+        today = A.team_today()
+        removed = DC.auto_remove(db, today - dt.timedelta(days=60), today)
+        out["duplicate_runs_removed"] = len(removed)
+        if removed:
+            log(db, "garmin", f"Nightly: removed {len(removed)} duplicate run(s) automatically: " + "; ".join(removed))
         from . import weather as WX
         out["weather"] = WX.nightly(db)
         if settings().ai_configured:

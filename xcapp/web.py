@@ -3276,12 +3276,25 @@ def create_app() -> FastAPI:
         flash(request, "Garmin is connected. New runs will appear after your watch syncs.")
         return back(f"/a/{a.link_token}")
 
+    garmin_lock = threading.Lock()
+
     def _process(payload: dict):
+        # One notification at a time: Garmin sends a run's summary and its file almost together, and two at once could
+        # each miss the other's copy and save the run twice.
+        with garmin_lock:
+            _process_one(payload)
+
+    def _process_one(payload: dict):
         db = SessionLocal()
         try:
             with G.make_client() as http:
                 counts = G.handle_notification(db, payload, http)
             log(db, "garmin", "Notification processed: " + ", ".join(f"{k} {v}" for k, v in counts.items() if v))
+            if counts.get("created") or counts.get("upgraded"):
+                today = A.team_today()
+                removed = DC.auto_remove(db, today - dt.timedelta(days=3), today)
+                if removed:
+                    log(db, "garmin", f"Removed {len(removed)} duplicate run(s) automatically: " + "; ".join(removed))
             db.commit()
         except Exception as exc:
             db.rollback()

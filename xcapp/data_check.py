@@ -4,6 +4,8 @@
   CSV import with different IDs and start times a few minutes apart), or that match in distance and duration but
   start a whole number of hours apart (a copy whose time zone was read wrongly). The better copy is kept: the
   richer source (SOURCE_RANK), then the one with laps, then the athlete's effort note, then the older one.
+- Clear duplicates are removed automatically (auto_remove: after each Garmin sync and nightly): both copies from
+  Garmin, overlapping in time, with matching distance and duration. Anything less certain waits for a coach.
 - Wrong day: a run whose stored day isn't the day it started in the team's time zone.
 - Odd runs: dated in the future, faster than 4:00 a mile, over 50 km or 5 hours, or started between midnight and
   4 a.m. (often a time-zone slip). These are only shown; the coach decides.
@@ -26,6 +28,7 @@ SAME_SHARE = 0.02            # distance and duration within 2%
 MAX_SHIFT_H = 14
 FASTEST_S_PER_MILE = 240     # 4:00 a mile
 LONGEST_M, LONGEST_S = 50_000, 5 * 3600
+GARMIN_SOURCES = ("garmin_summary", "garmin_details", "garmin_file")
 FEEDBACK = ("rpe", "feel", "athlete_note", "feedback_at", "run_type")
 
 
@@ -141,3 +144,23 @@ def remove_duplicate(db: Session, drop: Activity, keep: Activity) -> None:
     rematch_day(db, day)
     if keep.local_date != day:
         rematch_day(db, keep.local_date)
+
+
+def certain(pair: dict) -> bool:
+    """A duplicate safe to remove without asking: both copies came from Garmin, they overlap in time, and the distance
+    and duration match (within 2%, or 50 m and 30 s)."""
+    k, d = pair["keep"], pair["drop"]
+    return (k.source in GARMIN_SOURCES and d.source in GARMIN_SOURCES
+            and pair["why"] in ("overlapping times", "the same start time")
+            and _close(k.distance_m or 0, d.distance_m or 0, 50) and _close(k.duration_s or 0, d.duration_s or 0, 30))
+
+
+def auto_remove(db: Session, start: dt.date, end: dt.date) -> list[str]:
+    """Remove the certain duplicates among runs dated start..end; returns a line for each, for the sync log."""
+    out = []
+    for p in find_issues(db, start, end)["duplicates"]:
+        if certain(p):
+            k, d = p["keep"], p["drop"]
+            out.append(f"{k.athlete.name} {d.local_date:%b %-d} ({d.source}, kept {k.source})")
+            remove_duplicate(db, d, k)
+    return out
