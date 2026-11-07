@@ -31,7 +31,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .clock{font-family:var(--display);font-weight:700;font-size:clamp(56px,19vw,104px);line-height:.95;font-variant-numeric:tabular-nums}
 .clock small{font-size:.45em;opacity:.7}
 .clocksub{font-size:13px;opacity:.75;padding-bottom:6px}
-.views{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid rgba(127,127,127,.3)}
+.views{display:grid;grid-template-columns:repeat(5,1fr);border-top:1px solid rgba(127,127,127,.3)}
 .views a{color:inherit;text-decoration:none;text-align:center;padding:10px 4px;font-family:var(--display);font-weight:700;letter-spacing:.08em;text-transform:uppercase;font-size:15px;opacity:.65;border-bottom:3px solid transparent}
 .views a[aria-current="page"]{opacity:1;border-bottom-color:var(--go)}
 a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid var(--go);outline-offset:2px}
@@ -171,3 +171,14 @@ body.recfull .campads{display:grid;position:absolute;left:calc(env(safe-area-ins
   .campads .pad{min-height:56px}
 }
 .savehint{flex-basis:100%;font-size:13px;color:var(--muted)}
+/* Live switching: the director's camera grid, and the on-air highlight */
+.livegrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px}
+.tile{background:var(--surface);border:3px solid var(--line);border-radius:10px;overflow:hidden;display:grid}
+.tile video{width:100%;aspect-ratio:16/9;object-fit:cover;background:#000;display:block}
+.tile .tname{font-size:14px;font-weight:600;padding:6px 8px 0}
+.tile button{margin:6px 8px 8px;min-height:40px}
+.tile.onair{border-color:#d00}
+.tile.onair button{background:#d00;color:#fff;opacity:1}
+.live-panel.onair{border:2px solid #d00}
+.live-panel.onair h3{color:#d00}
+@media (max-width: 380px){ .views a{font-size:13px;letter-spacing:.04em} }

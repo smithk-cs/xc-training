@@ -897,6 +897,12 @@ class RaceBoard(Base):
     course_id: Mapped[int | None] = mapped_column(ForeignKey("courses.id", ondelete="SET NULL"), nullable=True)
     start_at: Mapped[int | None] = mapped_column(BigInteger, nullable=True)   # epoch ms, server clock
     stream_url: Mapped[str] = mapped_column(String(300), default="")       # the YouTube livestream, for families
+    # Live switching (see live.py): the board's video room, which phone is on air, and the stream to YouTube
+    live_room: Mapped[str] = mapped_column(String(64), default="")
+    on_air: Mapped[str] = mapped_column(String(40), default="")            # device id of the phone on the stream
+    live_rec: Mapped[str] = mapped_column(String(64), default="")          # the running stream job, if any
+    live_since: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    yt_key: Mapped[str] = mapped_column(Text, default="")                  # YouTube stream key, encrypted
     updated_ms: Mapped[int] = mapped_column(BigInteger, default=0)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
 

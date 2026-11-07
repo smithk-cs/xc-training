@@ -47,6 +47,11 @@ class Settings:
     email_from: str           # sender, such as "Jesuit XC <reminders@yourdomain.org>" (a domain verified with Resend)
     ai_monthly_budget: float  # US dollars; AI requests stop for the month once this would be exceeded
     ai_effort: str            # how much Claude thinks before answering: low | medium | high
+    # Race Day live switching: Cloudflare RealtimeKit (see live.py). Off unless all three are set.
+    realtime_account_id: str
+    realtime_app_id: str
+    realtime_api_token: str
+    realtime_api_base: str
     cron_secret: str  # shared with the hosting platform's timer that calls POST /cron/nightly
     setup_code: str  # lets the first admin be created on the sign-in page when no staff accounts exist
     team_name: str
@@ -108,6 +113,10 @@ class Settings:
             email_from=_env("EMAIL_FROM", ""),
             ai_monthly_budget=float(_env("AI_MONTHLY_BUDGET_USD", "25")),
             ai_effort=_env("AI_EFFORT", "medium"),
+            realtime_account_id=_env("REALTIME_ACCOUNT_ID", ""),
+            realtime_app_id=_env("REALTIME_APP_ID", ""),
+            realtime_api_token=_env("REALTIME_API_TOKEN", ""),
+            realtime_api_base=_env("REALTIME_API_BASE", "https://api.cloudflare.com/client/v4"),
             cron_secret=_env("CRON_SECRET", ""),
             setup_code=_env("SETUP_CODE", ""),
             team_name=_env("TEAM_NAME", "XC Training"),

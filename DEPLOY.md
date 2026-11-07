@@ -72,6 +72,7 @@ Add each one with exactly this name (paste the value with no spaces or quotes ar
 | `SETUP_CODE` | From step 3 | To create the first admin |
 | `GARMIN_CLIENT_ID`, `GARMIN_CLIENT_SECRET` | Garmin Developer Portal | Later, for Garmin sync |
 | `ANTHROPIC_API_KEY` | Claude Console | Later, for the AI briefing |
+| `REALTIME_ACCOUNT_ID`, `REALTIME_APP_ID`, `REALTIME_API_TOKEN` | Cloudflare RealtimeKit (see Later) | Later, for Race Day live switching |
 
 GitHub never shows a secret again after you save it, not even to you, and never prints it in logs.
 
@@ -136,6 +137,18 @@ Garmin the link. Edit `wrangler.jsonc` on GitHub (open the file, click the penci
   5. Add your own email on the **Staff** page, then on **Reminder emails** (linked from Athletes) use **Email me a test**,
      choose what to remind about, and tick **Send daily reminders**.
   The privacy policy lists Resend once email is set up. Athletes need an email address on their athlete page to opt in.
+* **Race Day live switching** (coaches' phones as live cameras; a coach picks which one goes to YouTube, no laptop):
+  1. Cloudflare dashboard → **Realtime** → **RealtimeKit** → **Create App**. Copy the **App ID**.
+  2. **My Profile** → **API Tokens** → **Create Token** → **Create Custom Token**. Permissions: **Account** →
+     **Realtime** → **Edit** (shown as Realtime Admin on some screens). Limit it to your account. Copy the token.
+  3. Add three GitHub secrets: `REALTIME_ACCOUNT_ID` (the same Account ID as in step 1.4), `REALTIME_APP_ID`, and
+     `REALTIME_API_TOKEN`. Run the workflow again. The **Live** tab on the coach tap screen then turns on.
+  4. In YouTube Studio → **Go live** → **Stream**, copy the **Stream key** and paste it on the Live tab (stored
+     encrypted). Start the YouTube stream there first, then press **Start stream** on the Live tab.
+  Cost (Cloudflare's listed prices): each phone in the video room is free for the first 10,000 minutes a month, then
+  $0.002 a minute; sending to YouTube is free for the first 100 minutes a month, then $0.01 a minute. A stream left
+  running stops itself after 4 hours. The app makes its own RealtimeKit roles (`xc_camera`, `xc_director`,
+  `recorder_preset_v2`) the first time someone goes live.
 * **Your own address** (for example `xc.yourschool.org`): Cloudflare → the `xc-training` Worker → **Settings** →
   **Domains & Routes**, then update `BASE_URL`.
 * **Logs:** Cloudflare → Workers & Pages → `xc-training` → **Logs**. The app's own **Sync log** page shows syncs and

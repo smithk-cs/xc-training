@@ -10,7 +10,9 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from . import live as LV
 from . import raceday as RD
+from .config import settings
 from .ingest import log
 from .models import Course, RaceBoard, RaceBoardRun, StaffUser
 from .security import csrf_ok
@@ -19,7 +21,9 @@ from .security import csrf_ok
 # as strict as the rest of the app.
 RACE_CSP = ("default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; "
             "media-src 'self' blob: mediastream:; frame-src https://www.youtube-nocookie.com https://www.youtube.com; "
-            "connect-src 'self'; frame-ancestors 'none'; form-action 'self'; base-uri 'none'")
+            "connect-src 'self' https://*.realtime.cloudflare.com wss://*.realtime.cloudflare.com https://*.cloudflarestorage.com; "
+            "worker-src 'self' blob:; frame-ancestors 'none'; form-action 'self'; base-uri 'none'")
+# Live switching: phones and the program page connect to Cloudflare RealtimeKit (see live.py)
 
 
 def register(app, h: SimpleNamespace) -> None:
@@ -66,6 +70,7 @@ def register(app, h: SimpleNamespace) -> None:
         b = db.get(RaceBoard, bid)
         if b is None:
             raise HTTPException(404, "Not found.")
+        LV.stop_stream(b)   # the stream films a page under the old watch link
         b.tap_code, b.watch_code = RD.new_code(), RD.new_code()
         flash(request, "Made new links. The old ones stop working.")
         return back("/race-day")
@@ -75,6 +80,7 @@ def register(app, h: SimpleNamespace) -> None:
         await form_checked(request)
         b = db.get(RaceBoard, bid)
         if b is not None:
+            LV.stop_stream(b)
             db.delete(b)
             log(db, "admin", f"{user.username} deleted the Race Day board {b.label}.")
             flash(request, f"Deleted {b.label}.")
@@ -104,11 +110,21 @@ def register(app, h: SimpleNamespace) -> None:
     @app.get("/rd/{code}/state")
     def raceday_state(request: Request, code: str, race: str = "", db: Session = Depends(get_db, scope="function")):
         b = board_or_404(db, code)
-        return json_out({**RD.state(db, b, race or None), "can_manage": manager(request, db) is not None})
+        return json_out({**RD.state(db, b, race or None), "can_manage": manager(request, db) is not None, "live": LV.status(b)})
 
     @app.get("/rw/{code}/state")
     def raceday_watch_state(code: str, race: str = "", db: Session = Depends(get_db, scope="function")):
-        return json_out({**RD.state(db, board_or_404(db, code, watch=True), race or None), "can_manage": False})
+        b = board_or_404(db, code, watch=True)
+        return json_out({**RD.state(db, b, race or None), "can_manage": False, "live": LV.status(b)})
+
+    @app.get("/rw/{code}/program", response_class=HTMLResponse)
+    def raceday_program(request: Request, code: str, db: Session = Depends(get_db, scope="function")):
+        """What goes out on the YouTube stream: the phone on air, the race clock and team scores. Cloudflare's recorder
+        opens this page with its own join token."""
+        b = board_or_404(db, code, watch=True)
+        resp = render(request, "raceday_program.html", None, board=b, cfg={"api": f"/rw/{b.watch_code}", "label": b.label})
+        resp.headers["Content-Security-Policy"] = RACE_CSP
+        return resp
 
     async def body(request: Request) -> dict:
         raw = await request.body()
@@ -132,11 +148,13 @@ def register(app, h: SimpleNamespace) -> None:
             return json_out({"error": str(exc)}, 400)
         return json_out({"ok": True, "now": RD.now_ms()})
 
-    def managed(request: Request, db: Session, data: dict) -> None:
-        if manager(request, db) is None:
+    def managed(request: Request, db: Session, data: dict) -> StaffUser:
+        m = manager(request, db)
+        if m is None:
             raise HTTPException(403, "Sign in to the app as a coach to set up races and run the clock.")
         if not csrf_ok(request.session, data.get("csrf")):
             raise HTTPException(400, "Your session expired. Reload the page and try again.")
+        return m
 
     @app.post("/rd/{code}/race")
     async def raceday_race(request: Request, code: str, db: Session = Depends(get_db, scope="function")):
@@ -170,3 +188,64 @@ def register(app, h: SimpleNamespace) -> None:
             return json_out({"error": "Unknown clock action."}, 400)
         b.updated_ms = now
         return json_out({"ok": True, "start_at": b.start_at})
+
+    # ---------- live switching (live.py) ----------
+
+    def live_call(fn):
+        try:
+            return fn()
+        except LV.LiveError as exc:
+            return json_out({"error": str(exc)}, 400)
+
+    @app.post("/rd/{code}/live/token")
+    async def raceday_live_token(request: Request, code: str, db: Session = Depends(get_db, scope="function")):
+        """A token to join the board's video room: as a camera (anyone with the tap link) or as the director (a coach)."""
+        b = board_or_404(db, code)
+        data = await body(request)
+        role, device = data.get("role"), str(data.get("device") or "")
+        if role not in ("camera", "director") or not RD.ID_RE.match(device):
+            return json_out({"error": "Bad request."}, 400)
+        if role == "director":
+            managed(request, db, data)
+        name = str(data.get("name") or "").strip()[:60]
+        return live_call(lambda: json_out({"token": LV.join_token(b, device, role, name)}))
+
+    @app.post("/rd/{code}/live/air")
+    async def raceday_live_air(request: Request, code: str, db: Session = Depends(get_db, scope="function")):
+        """Put a phone on the stream (its device id), or nobody ("")."""
+        b = board_or_404(db, code)
+        data = await body(request)
+        managed(request, db, data)
+        device = str(data.get("device") or "")
+        if device and not RD.ID_RE.match(device):
+            return json_out({"error": "Bad request."}, 400)
+        b.on_air = device
+        b.updated_ms = RD.now_ms()
+        return json_out({"ok": True, "live": LV.status(b)})
+
+    @app.post("/rd/{code}/live/key")
+    async def raceday_live_key(request: Request, code: str, db: Session = Depends(get_db, scope="function")):
+        b = board_or_404(db, code)
+        data = await body(request)
+        managed(request, db, data)
+        return live_call(lambda: (LV.set_key(b, str(data.get("key") or "")), json_out({"ok": True, "live": LV.status(b)}))[1])
+
+    @app.post("/rd/{code}/live/stream")
+    async def raceday_live_stream(request: Request, code: str, db: Session = Depends(get_db, scope="function")):
+        """Start or stop sending the program to YouTube."""
+        b = board_or_404(db, code)
+        data = await body(request)
+        user = managed(request, db, data)
+        action = data.get("action")
+        if action == "start":
+            url = f"{settings().base_url.rstrip('/')}/rw/{b.watch_code}/program"
+            out = live_call(lambda: (LV.start_stream(b, url, RD.now_ms()), None)[1])
+            if out is not None:
+                return out
+            log(db, "admin", f"{user.username} started the YouTube stream for {b.label}.")
+        elif action == "stop":
+            LV.stop_stream(b)
+            log(db, "admin", f"{user.username} stopped the YouTube stream for {b.label}.")
+        else:
+            return json_out({"error": "Unknown action."}, 400)
+        return json_out({"ok": True, "live": LV.status(b)})

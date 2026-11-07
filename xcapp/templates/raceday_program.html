@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1280, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex">
+<title>{{ board.label }} · Live</title>
+<link rel="stylesheet" href="/static/raceday.css?v={{ asset_v }}">
+<style>
+  html, body { margin: 0; width: 100%; height: 100%; background: #000; overflow: hidden; }
+  #pv { position: fixed; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #000; }
+  .slate { position: fixed; inset: 0; display: grid; place-content: center; text-align: center; gap: 1vh; color: #fff;
+           font-family: var(--display); background: radial-gradient(circle at 50% 40%, #2a2f33, #0c0e10 70%); }
+  .slate .s1 { font-size: 3.2vw; letter-spacing: .08em; text-transform: uppercase; opacity: .8; }
+  .slate .s2 { font-size: 6vw; font-weight: 700; }
+  .slate .s3 { font-size: 2vw; color: #f3d58a; letter-spacing: .06em; text-transform: uppercase; }
+  .ov-third { bottom: 4vh; }
+  .ov-cam { position: fixed; top: 3vh; left: 3vw; background: rgba(20,24,27,.82); color: #fff; font-family: var(--display);
+            font-weight: 700; font-size: 1.9vw; letter-spacing: .08em; text-transform: uppercase; padding: .5vh 1.2vw;
+            border-left: .5vw solid #a6192e; }
+</style>
+</head>
+<body>
+<video id="pv" autoplay playsinline muted hidden></video>
+<audio id="pa" autoplay></audio>
+<div class="slate" id="slate"><div class="s1" id="slLabel">{{ board.label }}</div><div class="s2" id="slName">Live coverage</div><div class="s3" id="slSub">Starting soon</div></div>
+<div class="ov-cam" id="camLabel" hidden></div>
+<div class="ov-stage" style="background:transparent">
+  <div class="ov-third">
+    <div class="ov-clockbox"><div class="ov-race" id="ovRace">{{ board.label }}</div><div class="ov-clock" id="ovClock">0:00</div></div>
+    <div class="ov-scores"><div class="ov-cp" id="ovCp">Team scores</div><div id="ovBody"><div class="ov-wait">Scores appear once a team has 5 runners through</div></div></div>
+  </div>
+</div>
+<script type="application/json" id="rp-cfg">{{ cfg|tojson }}</script>
+<script src="/static/raceday-score.js?v={{ asset_v }}"></script>
+<script src="/static/vendor/realtimekit-2.0.4.js"></script>
+<script src="/static/vendor/realtimekit-recording-0.0.4.js"></script>
+<script src="/static/raceday-program.js?v={{ asset_v }}"></script>
+</body>
+</html>

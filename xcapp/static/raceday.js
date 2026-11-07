@@ -37,6 +37,7 @@ let coachName = ls.get("xc-coach", "");
 const cpKey = "xc-cp-" + cfg.api;
 let myCp = ls.get(cpKey, null);
 let race = null, remoteLogs = [], canManage = !!cfg.canManage, label = cfg.label;
+let live = { configured: false, on_air: "", streaming: false, since: null, has_key: false };
 let loaded = false, online = true, lastOk = 0;
 let local = { raceId: null, logs: {} };
 const dirty = new Set();                 // "raceId|cp" waiting to be sent
@@ -97,6 +98,7 @@ function apply(data){
   race = next.race_id ? next : null;
   if (race && race.current && !WATCH) ls.set("xc-race-" + cfg.api, race);
   remoteLogs = data.logs || [];
+  if (data.live) live = data.live;
   if (changed && race){
     loadLocal(race.race_id);
     if (race.current) for (const cp of Object.keys(local.logs)) dirty.add(race.race_id + "|" + cp);
@@ -162,7 +164,7 @@ function tick(){
 }
 
 // ---------- views ----------
-const VIEWS = WATCH ? ["watch"] : ["tap", "scores", "start", "setup", "overlay"];
+const VIEWS = WATCH ? ["watch"] : ["tap", "scores", "start", "setup", "live", "overlay"];
 const view = () => { const h = location.hash.slice(1); return VIEWS.includes(h) ? h : (PAST ? "scores" : VIEWS[0]); };
 function teamById(id){ return id === OTHER ? { id: OTHER, name: "Other", color: "#9aa39e" } : (race?.teams || []).find(t => t.id === id) || { id, name: "?", color: "#888888" }; }
 function swatch(id){ return `<span class="sw" style="background:${esc(teamById(id).color)}"></span>`; }
@@ -199,10 +201,12 @@ function renderTap(){
       <span class="tm">${race.start_at ? fmt(x.at - race.start_at) : "before start"}</span><button class="x" data-del="${esc(x.id)}" aria-label="Remove this tap">Remove</button></div>`).join("");
   return `${!race.start_at ? `<div class="banner"><span><b>Clock not started.</b> Tap anyway; times fill in once the starter presses Start.</span></div>` : ""}
     <div class="cpbar"><span class="cpname">${esc(cps[myCp])}</span><button id="changeCp">Change spot</button></div>
+    ${liveMeeting ? livePanel() : ""}
     <div id="gps"></div>
     <div class="pads">${pads}</div>
     <div class="panel"><div class="row" style="justify-content:space-between"><h3>Last taps at ${esc(cps[myCp])} · ${mine.length} total</h3>${mine.length ? `<button id="undo">Undo last</button>` : ""}</div>
       ${recent ? `<div class="recent">${recent}</div>` : `<p class="muted">Tap a jersey color each time a runner passes you. The time is taken at the moment you tap.</p>`}</div>
+    ${liveMeeting ? "" : livePanel()}
     ${camStream ? "" : `<div class="panel"><h3>Video</h3><p class="muted small">Record the race with the clock on the picture, then save it for YouTube. Keep this screen open while recording.</p><div><button id="camOn">Turn on camera</button></div></div>`}`;
 }
 
@@ -377,13 +381,16 @@ function render(force){
   document.querySelectorAll(".views a").forEach(a => a.dataset.v === v ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current"));
   $("#raceName").textContent = race?.name || label;
   $("#cam").hidden = !(camStream && v === "tap");
+  $("#livebox").hidden = v !== "live";
+  directorWanted(v === "live" && canManage && live.configured);
   if (WATCH) showStream();
   if (v === "setup" && !force && $("#setupForm")) return;   // never wipe a form being filled in
   const html = v === "overlay" ? renderOverlay()
-    : ({ tap: renderTap, scores: renderScores, start: renderStart, setup: renderSetup, watch: renderWatch }[v])();
+    : ({ tap: renderTap, scores: renderScores, start: renderStart, setup: renderSetup, live: renderLive, watch: renderWatch }[v])();
   if (html !== lastHtml || force){ $("#main").innerHTML = html; lastHtml = html; }
   if (v === "tap") updateGps();
   renderCamPads();
+  if (v === "live") paintGrid();
   gpsWanted(v === "tap" && race?.current && pinned());
 }
 
@@ -456,7 +463,7 @@ let camStream = null, camFacing = "environment", recorder = null, recording = fa
 const canvas = () => document.getElementById("camCanvas");
 async function camStart(){
   if (!navigator.mediaDevices?.getUserMedia){ toast("This browser can't use the camera."); return; }
-  camStop();
+  camStop(true);
   const video = { facingMode: { ideal: camFacing }, width: { ideal: 1280 }, height: { ideal: 720 } };
   try { camStream = await navigator.mediaDevices.getUserMedia({ video, audio: true }); }
   catch(e){
@@ -464,10 +471,12 @@ async function camStart(){
     catch(e2){ camStream = null; toast("Camera blocked. Allow it in the browser's settings."); render(true); return; }
   }
   const v = $("#camVideo"); v.srcObject = camStream; try { await v.play(); } catch(e){}
+  if (liveMeeting) await sendTracks();
   wake(); render(true);
 }
-function camStop(){
+function camStop(keepLive){
   if (recording) recStop();
+  if (!keepLive) liveLeave();
   if (camStream){ camStream.getTracks().forEach(t => t.stop()); camStream = null; }
   const v = $("#camVideo"); if (v) v.srcObject = null;
 }
@@ -557,7 +566,7 @@ let camPadsHtml = "";
 function renderCamPads(){
   if (!recording) return;
   const cps = race?.checkpoints || [];
-  $("#camSpot").textContent = myCp != null && cps[myCp] ? cps[myCp] : "No spot";
+  $("#camSpot").textContent = (myCp != null && cps[myCp] ? cps[myCp] : "No spot") + (liveMeeting && live.on_air === deviceId ? " · ON AIR" : "");
   let html;
   if (!race?.current || myCp == null || myCp >= cps.length) html = `<div class="nospot">Pick your spot on the Tap screen to tap runners while recording.</div>`;
   else {
@@ -567,6 +576,128 @@ function renderCamPads(){
       + `<button class="pad other" data-team="${OTHER}"><span class="pn">Other</span><span class="pc">${counts[OTHER] || 0}</span></button>`;
   }
   if (html !== camPadsHtml){ $("#camPads").innerHTML = html; camPadsHtml = html; }
+}
+
+// ---------- live switching (RealtimeKit; see xcapp/live.py) ----------
+let sdkLoading = null, liveMeeting = null, liveJoining = false, director = null, directorJoining = false;
+function loadSdk(){
+  if (window.RealtimeKitClient) return Promise.resolve();
+  return sdkLoading ||= new Promise((ok, bad) => {
+    const el = document.createElement("script"); el.src = "/static/vendor/realtimekit-2.0.4.js";
+    el.onload = () => ok(); el.onerror = () => { sdkLoading = null; bad(new Error("Couldn't load the live video tools. Check signal and try again.")); };
+    document.head.appendChild(el);
+  });
+}
+async function liveToken(role, name){
+  const d = await post("/live/token", { role, device: deviceId, name, csrf: CSRF });
+  return d.token;
+}
+async function sendTracks(){
+  const vt = camStream?.getVideoTracks()[0], at = camStream?.getAudioTracks()[0];
+  if (vt) await liveMeeting.self.enableVideo(vt);
+  if (at) await liveMeeting.self.enableAudio(at);
+}
+async function goLive(){
+  if (liveMeeting || liveJoining) return;
+  if (myCp == null){ toast("Pick your spot first."); return; }
+  liveJoining = true; render(true);
+  try {
+    await loadSdk();
+    if (!camStream) await camStart();
+    if (!camStream) throw new Error("The camera is off.");
+    const spot = race?.checkpoints?.[myCp] || "Camera";
+    const token = await liveToken("camera", `${spot} · ${coachName || "Coach"}`);
+    const m = await RealtimeKitClient.init({ authToken: token, defaults: { audio: false, video: false } });
+    await m.join();
+    liveMeeting = m; await sendTracks();
+    m.self.on?.("roomLeft", () => { if (liveMeeting === m){ liveMeeting = null; render(true); } });
+    toast("You're live. The director can put you on air.", true); wake();
+  } catch(e){ toast(e.message || "Couldn't go live."); liveMeeting = null; }
+  liveJoining = false; render(true);
+}
+function liveLeave(){
+  const m = liveMeeting; liveMeeting = null;
+  if (m) m.leave().catch(() => {});
+}
+function livePanel(){
+  if (!live.configured || !race?.current) return "";
+  if (liveMeeting){
+    const onAir = live.on_air === deviceId;
+    return `<div class="panel live-panel${onAir ? " onair" : ""}"><div class="row" style="justify-content:space-between"><h3>${onAir ? "ON AIR · your camera is on the stream" : "Live · standing by"}</h3><button id="stopLive">Stop live video</button></div>
+      <p class="muted small">${onAir ? "Keep the camera steady on the runners." : "Your camera is sending to the director, who picks which phone goes on the stream."} Recording on this phone still works.</p></div>`;
+  }
+  return `<div class="panel"><h3>Live stream</h3><p class="muted small">Send this phone's camera to the director, who picks which phone goes out on the team's YouTube stream. Uses about 1 GB of data an hour.</p>
+    <div><button id="goLive" class="primary"${liveJoining ? " disabled" : ""}>${liveJoining ? "Connecting…" : "Go live"}</button></div></div>`;
+}
+
+// The director (a signed-in coach): sees every live camera and picks one for the stream
+function renderLive(){
+  if (!live.configured) return `<div class="panel"><h2>Live switching isn't set up</h2><p class="muted">An admin adds the Cloudflare RealtimeKit settings (see DEPLOY.md). Until then, use the livestream scoreboard with your own streaming setup.</p></div>`;
+  if (!canManage) return signIn("switch the live cameras");
+  const mins = live.since ? Math.max(0, Math.round((sNow() - live.since) / 60000)) : 0;
+  const stream = live.streaming
+    ? `<div class="panel live-panel onair"><div class="row" style="justify-content:space-between"><h3>On YouTube · ${mins} min</h3>
+        <button class="danger ${armed === "stream" ? "armed" : ""}" id="streamStop">${armed === "stream" ? "Tap again to stop the stream" : "Stop stream"}</button></div>
+        <p class="muted small">Costs about 1 cent a minute after the free 100 minutes each month. Stop it when the racing is done.</p></div>`
+    : `<div class="panel"><h3>YouTube stream</h3><p class="muted small">Sends the camera on air, with the race clock and team scores, to your YouTube stream. In YouTube Studio, start a stream first (Go live → Stream) so it's waiting.</p>
+        <div><button class="primary" id="streamStart"${live.has_key ? "" : " disabled"}>Start stream</button></div>
+        ${live.has_key ? "" : `<p class="small muted">Add your YouTube stream key below first.</p>`}</div>`;
+  const key = `<details class="panel"${live.has_key ? "" : " open"}><summary><b>YouTube stream key</b> ${live.has_key ? `<span class="muted small">· saved</span>` : ""}</summary>
+      <p class="muted small">YouTube Studio → Go live → Stream → Stream key. It's stored encrypted and never shown again.</p>
+      <div class="row"><input id="ytKey" type="password" autocomplete="off" placeholder="xxxx-xxxx-xxxx-xxxx-xxxx" style="flex:1"><button id="saveKey">Save</button></div></details>`;
+  return stream + key + `<p class="muted small">Cameras: on each camera phone, open the coach tap link, pick the spot, and tap <b>Go live</b>.</p>`;
+}
+async function directorWanted(on){
+  if (on && !director && !directorJoining){
+    directorJoining = true; paintGrid();
+    try {
+      await loadSdk();
+      const token = await liveToken("director", (coachName || "Director") + " · director");
+      const m = await RealtimeKitClient.init({ authToken: token, defaults: { audio: false, video: false } });
+      for (const ev of ["participantJoined", "participantLeft", "videoUpdate"]) m.participants.joined.on(ev, () => paintGrid());
+      await m.join();
+      director = m;
+    } catch(e){ toast(e.message || "Couldn't connect to the cameras."); }
+    directorJoining = false; paintGrid();
+  } else if (!on && director){ const m = director; director = null; m.leave().catch(() => {}); }
+}
+const tiles = new Map();   // device -> { el, track }
+function paintGrid(){
+  const box = $("#livebox"); if (!box) return;
+  if (!(view() === "live" && canManage && live.configured)){ box.innerHTML = ""; tiles.clear(); return; }
+  if (!box.querySelector(".livegrid")) box.innerHTML = `<div class="row" style="justify-content:space-between;margin:12px 0 8px"><h2>Cameras</h2><button data-air="">Take off air</button></div><div class="livegrid"></div><p class="small muted" id="gridNote"></p>`;
+  const grid = box.querySelector(".livegrid");
+  const cams = director ? director.participants.joined.toArray().filter(p => String(p.customParticipantId || "").startsWith("camera-")) : [];
+  const seen = new Set();
+  for (const p of cams){
+    const dev = p.customParticipantId.slice(7); seen.add(dev);
+    let t = tiles.get(dev);
+    if (!t){
+      const el = document.createElement("div"); el.className = "tile";
+      el.innerHTML = `<video muted playsinline autoplay></video><div class="tname"></div><button class="primary" data-air="${esc(dev)}">Put on air</button>`;
+      grid.appendChild(el); t = { el, track: null }; tiles.set(dev, t);
+    }
+    const vt = p.videoEnabled ? p.videoTrack : null;
+    if (vt !== t.track){ t.track = vt; const v = t.el.querySelector("video"); v.srcObject = vt ? new MediaStream([vt]) : null; if (vt) v.play().catch(() => {}); }
+    t.el.querySelector(".tname").textContent = p.name + (vt ? "" : " (camera off)");
+    const onAir = live.on_air === dev;
+    t.el.classList.toggle("onair", onAir);
+    const b = t.el.querySelector("button"); b.textContent = onAir ? "ON AIR" : "Put on air"; b.disabled = onAir;
+  }
+  for (const [dev, t] of tiles) if (!seen.has(dev)){ t.el.remove(); tiles.delete(dev); }
+  $("#gridNote").textContent = directorJoining ? "Connecting to the cameras…" : !director ? "" : cams.length ? (live.on_air && !seen.has(live.on_air) ? "The camera on air has dropped out; the stream shows the title card until you pick another." : "") : "No cameras live yet.";
+}
+async function setAir(dev){
+  try { const d = await post("/live/air", { device: dev, csrf: CSRF }); live = d.live; paintGrid(); render(); }
+  catch(e){ toast(e.message); }
+}
+async function saveKey(){
+  try { const d = await post("/live/key", { key: $("#ytKey").value, csrf: CSRF }); live = d.live; toast("Saved the stream key.", true); render(true); }
+  catch(e){ toast(e.message); }
+}
+async function streamAction(action){
+  try { const d = await post("/live/stream", { action, csrf: CSRF }); live = d.live; toast(action === "start" ? "Starting the stream. YouTube shows it in about 30 seconds." : "Stream stopped.", true); render(true); }
+  catch(e){ toast(e.message); render(true); }
 }
 
 // ---------- actions ----------
@@ -633,6 +764,12 @@ document.addEventListener("click", async e => {
   if (t.dataset.del){ delTap(t.dataset.del); return; }
   if (t.dataset.pick){ const [cp, id] = t.dataset.pick.split("|"); scorePick[cp] = id; render(); return; }
   if (t.id === "camOn"){ camStart(); return; }
+  if (t.id === "goLive"){ goLive(); return; }
+  if (t.id === "stopLive"){ liveLeave(); render(true); return; }
+  if (t.dataset.air != null){ setAir(t.dataset.air); return; }
+  if (t.id === "saveKey"){ saveKey(); return; }
+  if (t.id === "streamStart"){ streamAction("start"); return; }
+  if (t.id === "streamStop"){ if (armed !== "stream") return arm("stream"); armed = null; streamAction("stop"); return; }
   if (t.id === "camOff"){ camStop(); render(true); return; }
   if (t.id === "camFlip"){ camFacing = camFacing === "environment" ? "user" : "environment"; camStart(); return; }
   if (t.id === "recStop"){ recStop(); return; }
