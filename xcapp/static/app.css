@@ -661,3 +661,22 @@ a.route-link { white-space: nowrap; }
 .rd-board { display: grid; gap: 10px; }
 .rd-links { display: grid; gap: 10px; }
 .rd-url { width: min(100%, 30em); font-size: 13px; padding: 4px 6px; }
+
+/* Dashboard: four tabs, each with athletes in collapsible bands */
+.dash-tabs { display: grid; grid-template-columns: repeat(4, auto); justify-content: start; gap: 4px; border-bottom: 1px solid var(--color-border-line); margin: 12px 0 14px; }
+@media (max-width: 560px) { .dash-tabs { grid-template-columns: 1fr 1fr; } }
+.dash-tabs button { font: inherit; font-weight: 600; background: none; border: 0; border-bottom: 3px solid transparent; border-radius: 0; color: inherit; opacity: .7; padding: 10px 14px; margin-bottom: -1px; white-space: nowrap; cursor: pointer; min-height: 44px; }
+.dash-tabs button[aria-selected="true"] { opacity: 1; border-bottom-color: var(--brand-red); }
+.dash-band { margin-bottom: 12px; }
+.dash-band > summary { display: flex; align-items: center; gap: 10px; cursor: pointer; list-style: none; }
+.dash-band > summary::-webkit-details-marker { display: none; }
+.dash-band > summary::before { content: "▸"; font-size: 14px; transition: transform .15s; }
+.dash-band[open] > summary::before { transform: rotate(90deg); }
+.dash-band > summary h2 { margin: 0; font-size: 1.1rem; }
+.dash-list { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 0; }
+.dash-list li { display: grid; grid-template-columns: 1fr auto; gap: 0 12px; padding: 8px 0; border-top: 1px solid var(--color-border-line); }
+.dash-list li:first-child { border-top: 0; }
+.dash-pct { font-variant-numeric: tabular-nums; font-size: 1.05rem; }
+.dash-detail { grid-column: 1 / -1; }
+.dash-weeks { white-space: nowrap; }
+@media (prefers-reduced-motion: reduce) { .dash-band > summary::before { transition: none; } }

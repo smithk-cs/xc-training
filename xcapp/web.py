@@ -171,7 +171,6 @@ def create_app() -> FastAPI:
     templates.env.filters["local"] = A.local_time   # stored UTC times are shown in the team's time zone
     limiter = _LoginLimiter()
     garmin_origin = "{0.scheme}://{0.netloc}".format(urlparse(s.garmin_authorize_url))
-    dashboard_body = (HERE / "static" / "dashboard_body.html").read_text(encoding="utf-8")
 
     @app.middleware("http")
     async def headers(request: Request, call_next):
@@ -356,12 +355,20 @@ def create_app() -> FastAPI:
     # ---------- dashboard ----------
 
     @app.get("/dashboard", response_class=HTMLResponse)
-    def dashboard(request: Request, user=Depends(any_staff, scope="function"), db: Session = Depends(get_db, scope="function")):
-        snap = DS.snapshot(db)
-        first = (snap["watchlist"] or snap["roster"] or [{}])[0].get("athlete_id")
-        latest = max(snap["segments"], key=lambda r: r["date"], default=None)
-        params = {"athlete": first, "event": "5K", "workout": latest["workout_id"] if latest else None}
-        return render(request, "dashboard.html", user, body=dashboard_body, params=json.dumps(params))
+    def dashboard(request: Request, team: str = "", start: str = "", user=Depends(any_staff, scope="function"),
+                  db: Session = Depends(get_db, scope="function")):
+        """Mileage, points, days running and the total score this week: athletes in bands (see dashboard.py)."""
+        from . import dashboard as DB
+        team = pick_team(team)
+        today = A.team_today()
+        try:
+            monday = A.week_monday(dt.date.fromisoformat(start)) if start else A.week_monday(today)
+        except ValueError:
+            monday = A.week_monday(today)
+        monday = min(monday, A.week_monday(today))
+        rows = PT.team_week(db, monday, team)
+        return render(request, "dashboard.html", user, team=team, monday=monday, today=today,
+                      current=monday == A.week_monday(today), board=DB.board(rows), tabs=DB.TABS, bands=DB.BANDS)
 
     @app.get("/api/datasets/{name}.csv")
     def dataset_csv(name: str, user=Depends(any_staff, scope="function"), db: Session = Depends(get_db, scope="function")):

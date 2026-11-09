@@ -95,6 +95,14 @@ def score_pace(week: dict, today: dt.date, target_days: int) -> None:
                          f"× 80% + days run {run} of {due_d} due ({100 * dys:.0f}%) × 20%")
 
 
+def days_pace(week: dict, today: dt.date) -> None:
+    """Days run against the run days the week asks for so far (plan_days: workout and easy days through today, the
+    whole week once it's over): 'days_due' and 'days_pct'."""
+    so_far = [d for d in week["days"] if d["date"] <= today and d.get("kind", "easy") in ("workout", "easy")]
+    week["days_due"] = len(so_far)
+    week["days_pct"] = _pct(week["run_days"], len(so_far))
+
+
 def keep_pace(week: dict, today: dt.date) -> None:
     """Colours, each with the reason behind it ('why_miles', 'why_points'), from what each day asks for (plan_days):
     - each day on its own: a workout day against its workout, an easy day against its share of the easy miles and
@@ -317,6 +325,7 @@ def team_week(db: Session, monday: dt.date, gender: str | None = None, athletes:
         plan_days(week, target_days, rest)
         keep_pace(week, today)
         score_pace(week, today, target_days)
+        days_pace(week, today)
         if last["points"] > 0 and week["points"] > JUMP * last["points"]:
             week["flags"].append(f"Points up {100 * (week['points'] / last['points'] - 1):.0f}% on last week")
         no_score = ("" if week["target"] else "No VDOT yet (needs a race)" if not v

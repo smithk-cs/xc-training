@@ -1,13 +1,71 @@
 {% extends "base.html" %}
-{% block title %}Dashboard · XC Training{% endblock %}
-{% block mainclass %}wide{% endblock %}
-{% block head %}
-<script>window.XC_APP = true; window.DASH_PARAMS = {{ params | safe }};</script>
-<script src="/static/d3.v7.9.0.min.js"></script>
-<script src="/static/dash-shim.js?v={{ asset_v }}"></script>
-{% endblock %}
+{% block title %}Dashboard · {{ team_name }}{% endblock %}
 {% block content %}
-<div id="dash-root">
-{{ body | safe }}
+<div class="form-row title-row" style="margin-bottom:8px">
+  <h1 style="margin:0">{{ team }} dashboard</h1>
+  {% with base='/dashboard', extra='&start=' ~ monday.isoformat() %}{% include "_team_switch.html" %}{% endwith %}
 </div>
+<p class="small muted">
+  Week of {{ monday.strftime('%b %-d') }}–{{ (monday + timedelta(days=6)).strftime('%b %-d') }}{% if current %}, so far (through {{ today.strftime('%a %b %-d') }}){% endif %}.
+  Each athlete against what the week asks for so far, the same numbers as the <a href="/week?team={{ team }}&start={{ monday.isoformat() }}">Week page</a>.
+  <span class="dash-weeks"><a href="/dashboard?team={{ team }}&start={{ (monday - timedelta(days=7)).isoformat() }}">← Previous week</a>{% if not current %} · <a href="/dashboard?team={{ team }}&start={{ (monday + timedelta(days=7)).isoformat() }}">Next week →</a> · <a href="/dashboard?team={{ team }}">This week</a>{% endif %}</span>
+</p>
+
+<div class="dash-tabs" role="tablist" aria-label="Measures">
+  {% for key, label in tabs %}<button type="button" role="tab" id="tab-{{ key }}" data-tab="{{ key }}" aria-controls="panel-{{ key }}" aria-selected="{{ 'true' if loop.first else 'false' }}">{{ label }}</button>{% endfor %}
+</div>
+
+{% for key, label in tabs %}{% set b = board[key] %}
+<section class="dash-panel" role="tabpanel" id="panel-{{ key }}" aria-labelledby="tab-{{ key }}"{% if not loop.first %} hidden{% endif %}>
+  {% for band, name, _ in bands %}{% set people = b.bands[band] %}
+  <details class="card dash-band band-{{ band }}" open>
+    <summary><h2>{{ name }}</h2> <span class="pill {{ {'top': 'good', 'mid': 'warn', 'low': 'bad'}[band] }}">{{ people|length }}</span></summary>
+    {% if people %}
+    <ul class="dash-list">
+      {% for e in people %}<li>
+        <div class="dash-who"><a href="/athletes/{{ e.a.id }}">{{ e.a.name }}</a>{% if e.group %} <span class="small muted">{{ e.group }}</span>{% endif %}</div>
+        <b class="dash-pct">{{ e.pct }}%</b>
+        <div class="small muted dash-detail">{{ e.detail }}</div>
+      </li>{% endfor %}
+    </ul>
+    {% else %}<p class="small muted">No one this week.</p>{% endif %}
+  </details>
+  {% endfor %}
+  {% if b.none %}
+  <details class="card dash-band band-none">
+    <summary><h2>Not measured yet</h2> <span class="pill">{{ b.none|length }}</span></summary>
+    <ul class="dash-list">
+      {% for e in b.none %}<li><div class="dash-who"><a href="/athletes/{{ e.a.id }}">{{ e.a.name }}</a>{% if e.group %} <span class="small muted">{{ e.group }}</span>{% endif %}</div>
+        <div class="small muted dash-detail">{{ e.detail }}</div></li>{% endfor %}
+    </ul>
+  </details>
+  {% endif %}
+</section>
+{% endfor %}
+{% if not board.miles.count %}<p class="muted">No athletes on this team yet.</p>{% endif %}
+
+<script>
+(() => {
+  const tabs = [...document.querySelectorAll(".dash-tabs [role=tab]")];
+  function show(key, save) {
+    if (!tabs.some(t => t.dataset.tab === key)) key = tabs[0].dataset.tab;
+    for (const t of tabs) {
+      const on = t.dataset.tab === key;
+      t.setAttribute("aria-selected", on ? "true" : "false");
+      t.tabIndex = on ? 0 : -1;
+      document.getElementById("panel-" + t.dataset.tab).hidden = !on;
+    }
+    if (save) { try { localStorage.setItem("xc-dash-tab", key); } catch (e) {} }
+  }
+  tabs.forEach((t, i) => {
+    t.addEventListener("click", () => show(t.dataset.tab, true));
+    t.addEventListener("keydown", e => {
+      const step = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
+      if (step) { const n = tabs[(i + step + tabs.length) % tabs.length]; show(n.dataset.tab, true); n.focus(); }
+    });
+  });
+  let saved = null; try { saved = localStorage.getItem("xc-dash-tab"); } catch (e) {}
+  show(location.hash.slice(1) || saved || "miles", false);
+})();
+</script>
 {% endblock %}

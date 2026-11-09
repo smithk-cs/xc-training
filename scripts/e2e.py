@@ -106,26 +106,24 @@ try:
     check("Coach question answered without sending names", not calls[-1]["names_found"] and "has the most flags" in c.get("/ai").text)
 
     cookie = "; ".join(f"{k}={v}" for k, v in c.cookies.items())
-    out = subprocess.run(["node", "harness.mjs", "dashboard", APP + "/dashboard", cookie], cwd=HERE, capture_output=True, text=True, timeout=120)
-    dash = json.loads(out.stdout or "{}") if out.returncode == 0 else {"errors": [out.stderr[-500:]]}
-    json.dump(dash, open(os.path.join(tmp, "dash.json"), "w"), indent=1)
-    check("Dashboard renders in a browser with no script errors", dash.get("ready") and not dash.get("errors"), dash.get("errors"))
-    check("Dashboard shows no NaN/undefined values", dash.get("bad_values") == [], dash.get("bad_values"))
     sys.path.insert(0, ROOT)
     os.environ.update({k: v for k, v in env.items() if k in ("DATABASE_URL", "TOKEN_KEY", "SECRET_KEY", "AS_OF_DATE")})
-    from xcapp import config, db as D, datasets as DS  # noqa: E402
+    from xcapp import config, db as D, dashboard as DBD, points as PT  # noqa: E402
+    from xcapp import analysis as A_  # noqa: E402
     config.reload_settings()
     D.init_engine(env["DATABASE_URL"])
     s = D.SessionLocal()
-    snap = DS.snapshot(s, dt.date(2026, 10, 25))
-    k = snap["kpis"]
-    want = {"injured_now": str(k["injured_now"]), "over_now": str(k["over_now"]), "over_prev": str(k["over_prev"]),
-            "median_gain": f"{k['median_gain']:.1f}", "returners": str(k["returners"]), "goals_met": str(k["goals_met"]), "goal_total": str(k["goal_total"])}
-    check("Dashboard headline numbers equal the server's own calculation", dash.get("kpis") == want, (dash.get("kpis"), want))
-    check("Dashboard watch list equals the server's", [r_[0] for r_ in dash.get("watch", [])] == [w["athlete"] for w in snap["watchlist"]],
-          ([r_[0] for r_ in dash.get("watch", [])], [w["athlete"] for w in snap["watchlist"]]))
-    check("Season columns follow the data", dash.get("season_headers", [])[2:5] == ["2025 XC", "2026 track", "2026 XC"], dash.get("season_headers"))
-    check("Every tab draws", dash.get("bench_points", 0) > 0 and dash.get("rep_svg_circles", 0) > 0 and dash.get("load_bars", 0) > 0 and dash.get("team_svg") == 1 and dash.get("injury_rows") == len(snap["injuries"]))
+    dash_page = c.get("/dashboard").text
+    check("Dashboard has the Mileage, Points, Days running and Total score tabs, each with three collapsible lists",
+          all(f">{t}</button>" in dash_page for t in ("Mileage", "Points", "Days running", "Total score"))
+          and all(dash_page.count(f"<h2>{b_}</h2>") == 4 for b_ in ("90% or more", "80–89%", "Below 80%")))
+    want_board = DBD.board(PT.team_week(s, A_.week_monday(A_.team_today()), "Boys"))
+    panels = {m.group(1): m.group(2) for m in re.finditer(r'id="panel-(\w+)".*?>(.*?)</section>', dash_page, re.S)}
+    shown_ok = all(
+        [re.sub(r"<[^>]+>", "", x).strip() for x in re.findall(r'<div class="dash-who"><a [^>]*>([^<]+)</a>', re.split(r"<h2>", panels[tab])[i + 1])]
+        == [e["a"].name for e in want_board[tab]["bands"][band]]
+        for tab in ("miles", "points", "days", "score") for i, band in enumerate(("top", "mid", "low")))
+    check("Dashboard lists the same athletes in each band as the server's own calculation", shown_ok)
     out = subprocess.run(["node", "harness.mjs", "charts", APP + "/charts", cookie], cwd=HERE, capture_output=True, text=True, timeout=120)
     charts = json.loads(out.stdout or "{}") if out.returncode == 0 else {"errors": [out.stderr[-500:]]}
     json.dump(charts, open(os.path.join(tmp, "charts.json"), "w"), indent=1)
@@ -166,17 +164,10 @@ try:
     check("Athlete reports a day missed through injury", r.status_code == 303 and "Sent to your coaches" in a.get(f"{link}/missed/2026-10-24").text)
     check("The missed-run injury reaches the watch list and the injuries page",
           "Missed run (injury): Ankle, left, 5/10" in c.get("/").text and "rolled it on a trail" in c.get("/injuries").text)
-    out = subprocess.run(["node", "harness.mjs", "dashboard", APP + "/dashboard", cookie], cwd=HERE, capture_output=True, text=True, timeout=120)
-    dash2 = json.loads(out.stdout or "{}") if out.returncode == 0 else {"errors": [out.stderr[-500:]]}
-    check("Dashboard watch list shows the missed-run injury (same rule as the server)",
-          not dash2.get("errors") and any(r_[0] == "Test Garmin" and "Missed run (injury): Ankle, left, 5/10" in r_[-1] for r_ in dash2.get("watch", [])),
-          [r_ for r_ in dash2.get("watch", []) if r_[0] == "Test Garmin"])
-
     r = a.post(link + "/disconnect", data={"csrf": csrf})
     check("Athlete disconnect deregisters at Garmin", httpx.get(FAKE + "/_log").json()["deletes"] == 1 and "Connect Garmin" in a.get(link).text)
     r = run("nightly")
     check("Nightly job writes a new briefing", r.returncode == 0 and "'briefing': 'ok'" in r.stdout, (r.stdout + r.stderr)[-300:])
-    print("DASH", json.dumps({k_: dash.get(k_) for k_ in ("sub", "take", "kpis", "first_insight_scope", "season_headers", "workout_buttons", "rep_legend", "bands", "after_row_click_athlete", "sorted_days", "search_rows", "ev_label")}))
     print("CHARTS", json.dumps({k_: v for k_, v in charts.items() if k_ != "errors"}))
 finally:
     web.terminate()
