@@ -7,12 +7,7 @@
   "main": "cloudflare/worker.js",
   "compatibility_date": "2026-10-01",
   "observability": { "enabled": true },
-  // The team's address. Cloudflare makes the DNS records and certificates for these (the domain must be on this
-  // Cloudflare account). The workers.dev address stays on, and page views there are sent here (cloudflare/app.js).
-  "routes": [
-    { "pattern": "jesuitxc.org", "custom_domain": true },
-    { "pattern": "www.jesuitxc.org", "custom_domain": true }
-  ],
+  // jesuitxc.org goes here as custom domains once it is Active in Cloudflare (see DEPLOY.md, "Your own address").
   "workers_dev": true,
   "containers": [
     {
