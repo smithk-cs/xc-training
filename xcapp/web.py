@@ -2912,7 +2912,7 @@ def create_app() -> FastAPI:
         if a is None:
             raise HTTPException(404, "Not found.")
         if f.get("action") == "apply" and str(f.get("vdot", "")).isdigit() and A.VDOT_MIN <= int(f["vdot"]) <= A.VDOT_MAX:
-            A.set_vdot(db, a, int(f["vdot"]), user.username, "Suggested from workouts")
+            A.set_vdot(db, a, int(f["vdot"]), user.username, "Workout suggestion")
             flash(request, f"{a.name}: VDOT set to {f['vdot']}. Training paces update everywhere.")
         else:
             VS.dismiss(db, a.id, str(f.get("key", "")))

@@ -142,6 +142,6 @@ def test_vdot_page_apply(monkeypatch):
     c.post("/vdot/suggest", data={"csrf": csrf, "athlete_id": aid, "vdot": "51", "action": "apply", "team": "Boys"})
     db = SessionLocal()
     assert db.get(Athlete, aid).vdot_override == 51
-    assert db.query(VdotChange).filter_by(athlete_id=aid, source="Suggested from workouts").count() == 1
+    assert db.query(VdotChange).filter_by(athlete_id=aid, source="Workout suggestion").count() == 1
     db.close()
     assert "Suggested VDOT changes" not in c.get("/vdot").text        # a fresh VDOT: four weeks before the next raise
