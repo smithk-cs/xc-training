@@ -20,11 +20,11 @@ svg text { font-family: var(--font-anthropic-sans); }
 {% endblock %}
 {% block content %}
 <div class="form-row title-row" style="justify-content:space-between; margin-bottom:6px"><h1 style="margin:0">Results charts</h1>
-  <label>Times <select id="t-mode"><option value="run">As run</option><option value="adj">Adjusted for course and weather</option></select></label></div>
-<p class="muted">Built from every benchmark result in the system: races, time trials and converted track times. Higher on a chart is always faster. <span id="t-note">Adjusted times put every race on a flat track at 55°F or cooler at sea level, so different courses and days compare fairly; track meets and time trials stay as run.</span></p>
+  <label>Times <select id="t-mode"><option value="split" selected>Adjusted mile split</option><option value="adj">Adjusted for course and weather</option><option value="run">As run</option></select></label></div>
+<p class="muted">Built from every benchmark result in the system: races, time trials and converted track times. Higher on a chart is always faster. <span id="t-note">Adjusted mile split: each time adjusted for course and weather, then divided by the race distance in miles, so a 1 mile, a 2 mile and a 5K read on one scale (time per mile). Adjusted times put every race on a flat track at 55°F or cooler at sea level, so different courses and days compare fairly; track meets and time trials stay as run.</span></p>
 <div class="card" id="career">
   <div class="form-row"><h2 style="flex:1">Career</h2><label>Athlete<select id="c-athlete"></select></label></div>
-  <p class="small muted">Each benchmark event over time. The larger dot is the personal record. Hover a dot for the date, course and season.</p>
+  <p class="small muted">Every race and time trial as an adjusted mile split: the time adjusted for course and weather, divided by the distance in miles, so events of different lengths read on one scale. The larger dot is the fastest split. Hover a dot for the date, event, course and season.</p>
   <div class="xcc-multi" id="c-chart"></div>
 </div>
 <div class="card" id="compare">
@@ -52,7 +52,11 @@ svg text { font-family: var(--font-anthropic-sans); }
   'use strict';
   const EVENTS = ['1 Mile', '1.5 Mile', '2 Mile', '5K'];
   const COLORS = ['var(--dash-c1)', 'var(--dash-c2)', 'var(--dash-c3)', 'var(--dash-c4)', 'var(--dash-c5)', 'var(--dash-c6)'];
-  const fmt = (s) => { const t = Math.round(s * 10) / 10; const m = Math.floor(t / 60); return m + ':' + (t - m * 60).toFixed(1).padStart(4, '0'); };
+  let unit = '/mi';   // shown after times in the mile-split view
+  const fmt = (s) => { const t = Math.round(s * 10) / 10; const m = Math.floor(t / 60); return m + ':' + (t - m * 60).toFixed(1).padStart(4, '0') + unit; };
+  const fmtSplit = (s) => { const t = Math.round(s * 10) / 10; const m = Math.floor(t / 60); return m + ':' + (t - m * 60).toFixed(1).padStart(4, '0') + '/mi'; };
+  const MILES = { '1 Mile': 1, '1.5 Mile': 1.5, '2 Mile': 2, '5K': 5000 / 1609.344 };
+  const EVENT_COLORS = { '1 Mile': 'var(--dash-c1)', '1.5 Mile': 'var(--dash-c2)', '2 Mile': 'var(--dash-c3)', '5K': 'var(--dash-c4)' };
   const fmtTick = (s) => { const t = Math.round(s); const m = Math.floor(t / 60); return m + ':' + String(t - m * 60).padStart(2, '0'); };
   const parseDay = (s) => new Date(s + 'T00:00:00Z');
   const fmtDay = d3.utcFormat('%b %-d, %Y');
@@ -73,7 +77,9 @@ svg text { font-family: var(--font-anthropic-sans); }
   // 'As run' or 'Adjusted for course and weather': every chart reads r.t, so switching rebuilds the list and redraws
   const asRun = data.results.map((r) => ({ ...r, t: Number(r.time_sec), d: parseDay(r.date) }));
   const adjusted = data.results.map((r) => ({ ...r, t: Number(r.time_adj_sec ?? r.time_sec), d: parseDay(r.date) }));
-  let results = asRun;
+  // Adjusted mile split: the adjusted time ÷ the race's distance in miles
+  const split = data.results.filter((r) => MILES[r.event]).map((r) => ({ ...r, t: Number(r.time_adj_sec ?? r.time_sec) / MILES[r.event], d: parseDay(r.date) }));
+  let results = split;
   const roster = data.roster.slice().sort((a, b) => a.athlete.localeCompare(b.athlete));
   const seasons = [...new Set(results.map((r) => r.season))].sort((a, b) => seasonKey(a) - seasonKey(b));
   const xcSeasons = seasons.filter((x) => /XC$/.test(x));
@@ -99,35 +105,41 @@ svg text { font-family: var(--font-anthropic-sans); }
   function drawCareer() {
     const box = $('c-chart');
     const id = $('c-athlete').value;
-    const mine = results.filter((r) => r.athlete_id === id);
+    const mine = split.filter((r) => r.athlete_id === id);   // always the adjusted mile split
     if (!mine.length) { empty(box, 'No results yet for this athlete.'); return; }
     const extent = d3.extent(mine, (r) => r.d);
     const x0 = new Date(+extent[0] - 20 * 864e5), x1 = new Date(+extent[1] + 20 * 864e5);
     box.replaceChildren();
-    for (const ev of EVENTS) {
-      const rs = mine.filter((r) => r.event === ev).sort((a, b) => a.d - b.d);
+    {   // every race on one chart as an adjusted mile split, colored by event
+      const rs = mine.slice().sort((a, b) => a.d - b.d);
       const panel = el('div', 'xcc-panel');
+      panel.style.gridColumn = '1 / -1';
       const h = el('h3');
-      const name = el('span'); name.textContent = ev;
-      const pr = el('span', 'muted'); pr.textContent = rs.length ? 'PR ' + fmt(d3.min(rs, (r) => r.t)) : '';
-      h.append(name, pr);
+      const name = el('span'); name.textContent = 'All events, adjusted per mile';
+      const keys = el('span', 'muted');
+      keys.replaceChildren(...EVENTS.filter((ev) => rs.some((r) => r.event === ev)).map((ev) => {
+        const k = el('span'); k.style.marginLeft = '10px'; const dot = el('span'); dot.textContent = '● '; dot.style.color = EVENT_COLORS[ev]; k.append(dot, ev); return k;
+      }));
+      h.append(name, keys);
       panel.append(h);
       box.append(panel);
-      const W = Math.max(240, panel.clientWidth || 280), H = 150, m = { t: 18, r: 10, b: 22, l: 10 };
+      const W = Math.max(300, panel.clientWidth || 600), H = 190, m = { t: 20, r: 12, b: 22, l: 12 };
       const svg = d3.select(panel).append('svg').attr('width', '100%').attr('viewBox', `0 0 ${W} ${H}`);
-      if (!rs.length) { svg.append('text').attr('class', 't').attr('x', W / 2).attr('y', H / 2).attr('text-anchor', 'middle').text('No results'); continue; }
-      const lo = d3.min(rs, (r) => r.t), hi = d3.max(rs, (r) => r.t), pad = Math.max(2, (hi - lo) * 0.2);
+      const lo = d3.min(rs, (r) => r.t), hi = d3.max(rs, (r) => r.t), pad = Math.max(2, (hi - lo) * 0.15);
       const y = d3.scaleLinear([hi + pad, lo - pad], [H - m.b, m.t]);
-      const x = d3.scaleUtc([x0, x1], [m.l, W - m.r]);
-      const ticks = x.ticks(4);
-      svg.append('g').selectAll('text').data(ticks).join('text').attr('class', 't').attr('x', x).attr('y', H - 6).attr('text-anchor', 'middle').text(d3.utcFormat("%b '%y"));
-      svg.append('path').datum(rs).attr('d', d3.line().x((r) => x(r.d)).y((r) => y(r.t))).attr('fill', 'none').attr('stroke', COLORS[0]).attr('stroke-width', 2).attr('stroke-linejoin', 'round');
+      const yt = y.ticks(4);
+      const ml = Math.ceil(Math.max(...yt.map((v) => textW(svg, fmtTick(v))))) + 10;
+      const x = d3.scaleUtc([x0, x1], [ml, W - m.r]);
+      svg.append('g').selectAll('line').data(yt).join('line').attr('x1', ml).attr('x2', W - m.r).attr('y1', y).attr('y2', y).attr('stroke', 'var(--cds-chart-grid)');
+      svg.append('g').selectAll('text').data(yt).join('text').attr('class', 't').attr('x', ml - 6).attr('y', y).attr('dy', '0.32em').attr('text-anchor', 'end').text(fmtTick);
+      svg.append('g').selectAll('text').data(x.ticks(5)).join('text').attr('class', 't').attr('x', x).attr('y', H - 6).attr('text-anchor', 'middle').text(d3.utcFormat("%b '%y"));
+      svg.append('path').datum(rs).attr('d', d3.line().x((r) => x(r.d)).y((r) => y(r.t))).attr('fill', 'none').attr('stroke', 'var(--cds-chart-axis)').attr('stroke-width', 1.2).attr('stroke-dasharray', '3 3');
       svg.append('g').selectAll('circle').data(rs).join('circle').attr('cx', (r) => x(r.d)).attr('cy', (r) => y(r.t))
-        .attr('r', (r) => (r.t === lo ? 6 : 3.5)).attr('fill', COLORS[0])
-        .on('pointermove', (event, r) => showTip(panel, event, [fmtDay(r.d), r.event + ' ' + fmt(r.t), r.season + (r.course ? ', ' + r.course : '')]))
+        .attr('r', (r) => (r.t === lo ? 6.5 : 4.5)).attr('fill', (r) => EVENT_COLORS[r.event])
+        .on('pointermove', (event, r) => showTip(panel, event, [fmtDay(r.d), r.event + ': ' + fmtSplit(r.t) + (r.adjusted ? ' (adjusted)' : ''), r.season + (r.course ? ', ' + r.course : '')]))
         .on('pointerleave', () => hideTip(panel));
-      const prRow = rs.find((r) => r.t === lo);
-      svg.append('text').attr('class', 'v').attr('x', Math.min(W - m.r - 30, Math.max(m.l + 30, x(prRow.d)))).attr('y', y(lo) - 9).attr('text-anchor', 'middle').text(fmt(lo));
+      const best = rs.find((r) => r.t === lo);
+      svg.append('text').attr('class', 'v').attr('x', Math.min(W - m.r - 40, Math.max(ml + 40, x(best.d)))).attr('y', y(lo) - 10).attr('text-anchor', 'middle').text('Fastest ' + fmtSplit(lo));
     }
   }
 
@@ -254,7 +266,13 @@ svg text { font-family: var(--font-anthropic-sans); }
   }
 
   const redraw = () => { drawCareer(); drawPicks(); drawCompare(); drawImprove(); drawTop7(); };
-  $('t-mode').addEventListener('change', () => { results = $('t-mode').value === 'adj' ? adjusted : asRun; redraw(); });
+  $('t-mode').addEventListener('change', () => {
+    const mode = $('t-mode').value;
+    results = mode === 'split' ? split : mode === 'adj' ? adjusted : asRun;
+    unit = mode === 'split' ? '/mi' : '';
+    $('t-note').hidden = mode === 'run';
+    redraw();
+  });
   $('c-athlete').addEventListener('change', drawCareer);
   $('m-event').addEventListener('change', () => { picked.clear(); drawPicks(); drawCompare(); });
   $('m-season').addEventListener('change', () => { picked.clear(); drawPicks(); drawCompare(); });

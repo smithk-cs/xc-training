@@ -71,6 +71,8 @@ if (mode === 'athlete') {
   out.ready = await waitFor(() => w.__chartsReady);
   out.career_panels = doc.querySelectorAll('#c-chart .xcc-panel').length;
   out.career_svgs = doc.querySelectorAll('#c-chart svg').length;
+  out.career_dots = doc.querySelectorAll('#c-chart circle').length;
+  out.career_title = (doc.querySelector('#c-chart h3 span') || {}).textContent || '';
   out.compare_lines = doc.querySelectorAll('#m-chart path').length;
   out.compare_picks = doc.querySelectorAll('#m-picks input').length;
   out.improve_bars = doc.querySelectorAll('#i-chart rect').length;

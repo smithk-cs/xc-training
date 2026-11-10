@@ -128,7 +128,8 @@ try:
     charts = json.loads(out.stdout or "{}") if out.returncode == 0 else {"errors": [out.stderr[-500:]]}
     json.dump(charts, open(os.path.join(tmp, "charts.json"), "w"), indent=1)
     check("Results charts render with no script errors", charts.get("ready") and not charts.get("errors") and charts.get("bad_values") == [], charts)
-    check("Charts: 4 career panels, comparison, improvement bars and top-7 points", charts.get("career_panels") == 4 and charts.get("compare_lines", 0) >= 3
+    check("Charts: career as an adjusted mile split, comparison, improvement bars and top-7 points", charts.get("career_panels") == 1
+          and charts.get("career_dots", 0) > 0 and "adjusted per mile" in charts.get("career_title", "") and charts.get("compare_lines", 0) >= 3
           and charts.get("improve_bars", 0) > 0 and charts.get("top7_points") == 4 and charts.get("compare_after_more") == 6 and charts.get("compare_disabled_at_6"), charts)
 
     # ---- athlete pages: charts with dropdowns, My runs, effort and pain per run
