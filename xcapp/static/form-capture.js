@@ -10,14 +10,16 @@ let file = null, landmarker = null;
 
 function say(text, bad) { status.textContent = text; status.classList.toggle("bad", !!bad); }
 
-$("#file").addEventListener("change", (e) => {
+function picked(e) {
   file = e.target.files[0] || null;
   if (!file) return;
   video.src = URL.createObjectURL(file);
   video.hidden = false;
   $("#go").disabled = false;
   say("Ready. Check the runner is side-on with the whole body in frame, then tap Analyze.");
-});
+}
+$("#pick").addEventListener("change", picked);    // camera roll or files
+$("#film").addEventListener("change", picked);    // opens the camera
 
 async function loadModel() {
   if (landmarker) return landmarker;

@@ -14,7 +14,11 @@
   <p class="small muted">The video stays on this {{ 'device' }}: the pose model runs here and only the measurements are saved to {{ a.first_name }}'s record.</p>
 </div>
 <div class="card">
-  <label class="button" style="display:inline-block">Film or choose a video<input id="file" type="file" accept="video/*" capture="environment" hidden></label>
+  <div class="form-row">
+    <label class="button">Choose a video<input id="pick" type="file" accept="video/*" hidden></label>
+    <label class="button secondary">Film now<input id="film" type="file" accept="video/*" capture="environment" hidden></label>
+  </div>
+  <p class="small muted">Choose a video from the camera roll or files (slow-motion clips work), or film one now.</p>
   <video id="clip" playsinline muted controls hidden style="width:100%;max-height:60vh;margin-top:12px;border-radius:10px;background:#000"></video>
   <div class="form-row" style="margin-top:12px">
     <label>Pace during the clip (optional)<input id="pace" placeholder="6:20" inputmode="numeric" style="width:6em"></label>
@@ -25,7 +29,7 @@
   <p class="small muted">The pace gives step and stride length. If the clip is a slow-motion video saved at normal speed, choose how slow it plays so the timing is right.</p>
   <button id="go" type="button" disabled>Analyze</button>
   <progress id="progress" max="1" value="0" style="width:100%;margin-top:10px"></progress>
-  <p id="status" class="small" role="status" aria-live="polite">Film or choose a side-view clip to begin.</p>
+  <p id="status" class="small" role="status" aria-live="polite">Choose or film a side-view clip to begin.</p>
 </div>
 <script type="application/json" id="form-cfg">{{ {'save': '/athletes/' ~ a.id ~ '/form', 'csrf': csrf}|tojson }}</script>
 <script type="module" src="/static/form-capture.js?v={{ asset_v }}"></script>
