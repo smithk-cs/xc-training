@@ -37,6 +37,8 @@ from . import weather as WX
 from . import team_calendar as TC
 from . import classyear as CY
 from . import data_check as DC
+from . import limits as LM
+from . import vdot_suggest as VS
 from . import medals as MD
 from . import vdot_report as VR
 from . import sections as SEC
@@ -1375,6 +1377,7 @@ def create_app() -> FastAPI:
                       zones=list(A.WORKOUT_ZONES), fill_pace=A.FILL_MIN_PER_MILE,
                       easy_groups=db.scalars(select(TrainingGroup).order_by(TrainingGroup.position)).all(),
                       previews={w.id: A.group_part_paces(db, w.part_list) for w in rows[:30] if w.part_list},
+                      limits=LM.check(db, [w for w in rows[:30] if w.date >= today - dt.timedelta(days=7)]),
                       day_weather={d: WX.practice_forecast(db, d, "All") for d in {w.date for w in rows if w.date >= today}},
                       part_label=A.part_label)
 
@@ -1474,6 +1477,9 @@ def create_app() -> FastAPI:
             n = rematch_day(db, d) + (rematch_day(db, old_day) if old_day and old_day != d else 0)
             forecast_day(db, d)
             flash(request, f"{'Updated' if old_day else 'Saved'} {title}." + (f" Re-matched {n} runs already synced." if n else ""))
+            over = LM.check(db, [pw]).get(pw.id)
+            if over:
+                flash(request, LM.summary(over) + ". See the workout below for who, and how much would fit.", "warn")
         except ValueError as exc:
             flash(request, str(exc) if "part" in str(exc).lower() or "Add at least" in str(exc) else "Check the date and each part's numbers.", "error")
         return back("/workouts")
@@ -2872,6 +2878,7 @@ def create_app() -> FastAPI:
         return render(request, "vdot.html", user, board=A.vdot_board(db, A.team_today(), (team,)), team=team,
                       edit=bool(edit) and user.role != "trainer",
                       changes=changes, open_changes=request.query_params.get("changes") == "1",
+                      hints=VS.suggestions(db, A.team_today(), team),
                       zones=A.PACE_ZONES, vdot_limits=(A.VDOT_MIN, A.VDOT_MAX), season=A.season_for(A.team_today()))
 
     @app.post("/vdot")
@@ -2895,6 +2902,22 @@ def create_app() -> FastAPI:
             flash(request, "Saved.")
         team = pick_team(f.get("team"))
         return back(f"/vdot?team={team}&edit=1" if bad else f"/vdot?team={team}")
+
+    @app.post("/vdot/suggest")
+    async def vdot_suggest(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
+        """Apply or dismiss a VDOT suggestion from workouts (vdot_suggest.py)."""
+        f = await form_checked(request)
+        a = db.get(Athlete, int(f["athlete_id"])) if str(f.get("athlete_id", "")).isdigit() else None
+        team = pick_team(f.get("team"))
+        if a is None:
+            raise HTTPException(404, "Not found.")
+        if f.get("action") == "apply" and str(f.get("vdot", "")).isdigit() and A.VDOT_MIN <= int(f["vdot"]) <= A.VDOT_MAX:
+            A.set_vdot(db, a, int(f["vdot"]), user.username, "Suggested from workouts")
+            flash(request, f"{a.name}: VDOT set to {f['vdot']}. Training paces update everywhere.")
+        else:
+            VS.dismiss(db, a.id, str(f.get("key", "")))
+            flash(request, f"Kept {a.name}'s VDOT. The suggestion comes back only after a newer workout.")
+        return back(f"/vdot?team={team}")
 
     @app.post("/vdot/import")
     async def vdot_import(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):

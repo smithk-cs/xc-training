@@ -10,6 +10,33 @@
   {% if user.role != 'trainer' %}{% if edit %}<span class="form-row"><a href="/vdot?team={{ team }}">Cancel</a><button type="submit" form="vdot-form">Save and finish</button></span>{% else %}<a class="button secondary" href="/vdot?team={{ team }}&edit=1">Edit VDOT</a>{% endif %}{% endif %}
 </div>
 <p class="muted" style="max-width:80ch">VDOT comes from each athlete’s fastest race or time trial in the look-back window (1500 m to 10K), read on the team’s VDOT table, unless a coach has set it. Paces per mile, as a share of VDOT: {% for n, pct in zones %}{{ n|lower }} {{ (pct * 100)|round(1)|string|replace('.0', '') }}%{{ ', ' if not loop.last else '' }}{% endfor %}. Boys and girls each have their own group cutoffs and weekly mileage goals, set on the <a href="/groups">Groups</a> page.</p>
+{% if hints and user.role != 'trainer' %}
+<details class="card vdot-hints" open>
+  <summary><h2>Suggested VDOT changes <span class="pill">{{ hints|length }}</span></h2></summary>
+  <p class="small muted">From Threshold and Interval workouts since each athlete's last VDOT change or race. Daniels: raise VDOT when workouts show the athlete is ready, after about 4 weeks at a VDOT; a race result can update it sooner. Nothing changes until you apply it.</p>
+  {% for h in hints %}
+  <div class="vdot-hint {{ h.kind }}">
+    <div class="form-row" style="justify-content:space-between;align-items:flex-start">
+      <div><b><a href="/athletes/{{ h.a.id }}">{{ h.a.name }}</a></b> · VDOT {{ h.vdot }} → <b>{{ h.to }}</b>
+        <span class="pill {{ 'good' if h.kind == 'up' else 'warn' }}">{{ 'Ready to raise' if h.kind == 'up' else 'Worth a check' }}</span>
+        <div class="small">{{ h.why|capitalize }}{% if h.held is not none %} · {{ h.held }} days at this VDOT{% endif %}.</div></div>
+      <form method="post" action="/vdot/suggest" class="form-row">
+        <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="athlete_id" value="{{ h.a.id }}">
+        <input type="hidden" name="vdot" value="{{ h.to }}"><input type="hidden" name="key" value="{{ h.key }}"><input type="hidden" name="team" value="{{ team }}">
+        <button type="submit" name="action" value="apply">Set VDOT {{ h.to }}</button>
+        <button type="submit" name="action" value="dismiss" class="secondary">Not now</button>
+      </form>
+    </div>
+    <table class="list compact small"><thead><tr><th>Day</th><th>Workout</th><th class="num">Rep pace</th><th class="num">Target</th><th class="num">vs target</th><th class="num">Heart rate</th></tr></thead><tbody>
+    {% for s in h.sessions %}<tr><td class="nowrap">{{ s.date.strftime('%a %b %-d') }}</td><td>{{ s.title }} <span class="muted">({{ s.zone }}, {{ s.reps }} reps)</span></td>
+      <td class="num">{{ fmt_secs(s.pace) }}/mi</td><td class="num">{{ fmt_secs(s.target) }}/mi</td>
+      <td class="num">{% set d = (s.ratio - 1) * 100 %}{{ '%.1f' % (-d) }}% {{ 'faster' if d < 0 else 'slower' }}</td>
+      <td class="num">{{ '%.0f%% of max' % s.hr_pct if s.hr_pct is not none else '–' }}</td></tr>{% endfor %}
+    </tbody></table>
+  </div>
+  {% endfor %}
+</details>
+{% endif %}
 {% if edit %}<form method="post" action="/vdot" id="vdot-form"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="team" value="{{ team }}">{% endif %}
 {% for b in board %}
 <div class="vdot-board">

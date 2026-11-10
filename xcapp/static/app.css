@@ -680,3 +680,14 @@ a.route-link { white-space: nowrap; }
 .dash-detail { grid-column: 1 / -1; }
 .dash-weeks { white-space: nowrap; }
 @media (prefers-reduced-motion: reduce) { .dash-band > summary::before { transition: none; } }
+
+/* Daniels' session limits on the Workouts page, and warning messages */
+.flash.warn { border-color: var(--color-warn); }
+.limit-warn { margin: 6px 0; padding: 6px 10px; border-left: 3px solid var(--color-warn); background: var(--color-soft); border-radius: 6px; }
+.limit-warn > summary { cursor: pointer; font-weight: 600; font-size: 0.9em; }
+.limit-list { margin: 2px 0 6px; padding-left: 18px; }
+.limit-list li { margin: 2px 0; }
+.vdot-hints > summary { cursor: pointer; list-style: none; }
+.vdot-hints > summary h2 { display: inline; }
+.vdot-hint { border-top: 1px solid var(--color-border-line); padding: 10px 0; }
+.vdot-hint table { margin-top: 6px; }
