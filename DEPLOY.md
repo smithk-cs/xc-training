@@ -94,7 +94,7 @@ characters. The form disappears once an account exists. Then follow `TEAM_SETUP.
 ## Privacy policy
 
 The app has a public privacy policy at `https://<your-address>/privacy` (for this team,
-https://xc-training.jesuit-xc.workers.dev/privacy). Garmin asks for this link when you set up your app, and athletes see it
+https://jesuitxc.org/privacy). Garmin asks for this link when you set up your app, and athletes see it
 on their page. Its details come from `vars` in `wrangler.jsonc`:
 
 | Setting | What to put |
@@ -149,8 +149,17 @@ Garmin the link. Edit `wrangler.jsonc` on GitHub (open the file, click the penci
   $0.002 a minute; sending to YouTube is free for the first 100 minutes a month, then $0.01 a minute. A stream left
   running stops itself after 4 hours. The app makes its own RealtimeKit roles (`xc_camera`, `xc_director`,
   `recorder_preset_v2`) the first time someone goes live.
-* **Your own address** (for example `xc.yourschool.org`): Cloudflare → the `xc-training` Worker → **Settings** →
-  **Domains & Routes**, then update `BASE_URL`.
+* **Your own address** (this team: `jesuitxc.org`, bought at GoDaddy):
+  1. Cloudflare → **Add a domain** → the domain → the **Free** plan. Cloudflare shows two nameservers.
+  2. At the registrar (GoDaddy → **My Products** → the domain → **DNS** → **Nameservers** → **Change** → **I'll use my
+     own nameservers**), enter Cloudflare's two nameservers. Wait until Cloudflare shows the domain **Active** (minutes
+     to a day).
+  3. In `wrangler.jsonc`, list the domain under `routes` with `"custom_domain": true` (with `www.` too) and set
+     `BASE_URL` to it. The deploy makes the DNS records and certificates. The old workers.dev address stays on and
+     sends page views to the new one (cloudflare/app.js), so old athlete links keep working.
+  4. After the deploy, in the Garmin Developer Portal set the redirect URL to `https://<domain>/garmin/callback`
+     and the webhook addresses to the ones on the Sync log page; update any privacy-policy link you gave Garmin.
+     Everyone signs in again once on the new address.
 * **Logs:** Cloudflare → Workers & Pages → `xc-training` → **Logs**. The app's own **Sync log** page shows syncs and
   nightly runs.
 * **Backups:** the data is in Supabase. Check which backups your Supabase plan includes, and download one before big

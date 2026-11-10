@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
-import { APP_SETTINGS, appEnv, forApp } from "./app.js";
+import { APP_SETTINGS, appEnv, forApp, redirectFor } from "./app.js";
 
 test("every setting in .env.example that the app reads in production is passed through", () => {
   const example = readFileSync(new URL("../.env.example", import.meta.url), "utf8");
@@ -36,4 +36,19 @@ test("forApp sets the visitor's real address and cannot be fooled", async () => 
 
   const noIp = forApp(new Request("https://xc.example/", { headers: { "X-Forwarded-For": "1.2.3.4" } }));
   assert.equal(noIp.headers.get("X-Forwarded-For"), null);
+});
+
+test("old and www addresses send page views to the app's own address", () => {
+  const base = "https://jesuitxc.org";
+  const req = (url, method = "GET") => new Request(url, { method });
+  assert.equal(redirectFor(req("https://xc-training.jesuit-xc.workers.dev/a/tok-1?x=2"), base), "https://jesuitxc.org/a/tok-1?x=2");
+  assert.equal(redirectFor(req("https://www.jesuitxc.org/race-day"), base), "https://jesuitxc.org/race-day");
+  assert.equal(redirectFor(req("https://jesuitxc.org/week"), base), null);
+  // Garmin keeps working at the old address until it's updated; posts and the health check aren't redirected
+  assert.equal(redirectFor(req("https://xc-training.jesuit-xc.workers.dev/garmin/callback?code=1"), base), null);
+  assert.equal(redirectFor(req("https://xc-training.jesuit-xc.workers.dev/garmin/webhook/s", "POST"), base), null);
+  assert.equal(redirectFor(req("https://xc-training.jesuit-xc.workers.dev/login", "POST"), base), null);
+  assert.equal(redirectFor(req("https://xc-training.jesuit-xc.workers.dev/healthz"), base), null);
+  assert.equal(redirectFor(req("https://other.example/x"), base), null);
+  assert.equal(redirectFor(req("https://xc-training.jesuit-xc.workers.dev/"), ""), null);
 });

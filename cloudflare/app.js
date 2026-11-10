@@ -22,3 +22,20 @@ export function forApp(request) {
   headers.set("X-Forwarded-Proto", "https");
   return new Request(request, { headers });
 }
+
+// The app's own address (BASE_URL) is the only one people should use. Pages opened at another address of this
+// Worker (the old workers.dev one, or www.) are sent there, so old athlete links and bookmarks keep working.
+// Garmin's sign-in return and notifications (/garmin/...) and anything that isn't a page view (POST) are served
+// where they arrive, so they work until Garmin is told the new address.
+export function redirectFor(request, baseUrl) {
+  if (!baseUrl) return null;
+  const url = new URL(request.url);
+  const base = new URL(baseUrl);
+  if (url.host === base.host) return null;
+  const isWww = url.host === "www." + base.host;
+  const isOld = url.hostname.endsWith(".workers.dev");
+  if (!isWww && !isOld) return null;
+  if (request.method !== "GET" && request.method !== "HEAD") return null;
+  if (isOld && (url.pathname.startsWith("/garmin/") || url.pathname === "/healthz")) return null;
+  return base.origin + url.pathname + url.search;
+}

@@ -1,6 +1,6 @@
 // Cloudflare Worker in front of the app's container (see wrangler.jsonc).
 import { Container, getContainer } from "@cloudflare/containers";
-import { appEnv, forApp } from "./app.js";
+import { appEnv, forApp, redirectFor } from "./app.js";
 
 export class XcApp extends Container {
   defaultPort = 8000;
@@ -17,6 +17,8 @@ const app = (env) => getContainer(env.XC_APP, "main");
 
 export default {
   async fetch(request, env) {
+    const to = redirectFor(request, env.BASE_URL);
+    if (to) return Response.redirect(to, 301);
     return app(env).fetch(forApp(request));
   },
 
