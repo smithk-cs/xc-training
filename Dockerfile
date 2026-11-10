@@ -4,6 +4,8 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY xcapp ./xcapp
+COPY scripts/fetch_pose_assets.py /tmp/fetch_pose_assets.py
+RUN python /tmp/fetch_pose_assets.py /app/xcapp/static/vendor/pose && rm /tmp/fetch_pose_assets.py
 RUN useradd --create-home app && mkdir -p /data && chown app /data
 USER app
 ENV DATABASE_URL=sqlite:////data/xc.db

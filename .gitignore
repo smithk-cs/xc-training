@@ -42,3 +42,6 @@ supabase/signing_keys.json
 .wrangler/
 .dev.vars
 .dev.vars.*
+
+# Pose model for running-form analysis: fetched at build time (scripts/fetch_pose_assets.py), not committed
+xcapp/static/vendor/pose/

@@ -691,3 +691,22 @@ a.route-link { white-space: nowrap; }
 .vdot-hints > summary h2 { display: inline; }
 .vdot-hint { border-top: 1px solid var(--color-border-line); padding: 10px 0; }
 .vdot-hint table { margin-top: 6px; }
+
+/* Running-form analysis */
+.form-top { display: grid; grid-template-columns: minmax(120px, 200px) 1fr; gap: 18px; align-items: center; }
+.form-figure { width: 100%; height: auto; color: var(--color-fg); }
+.form-score { font-family: var(--font-display, inherit); font-size: 3rem; font-weight: 700; color: var(--brand-red); line-height: 1; }
+.form-check > summary { display: flex; justify-content: space-between; gap: 10px; cursor: pointer; list-style: none; font-weight: 600; }
+.form-check > summary::-webkit-details-marker { display: none; }
+.form-check .fc-val { font-variant-numeric: tabular-nums; text-align: right; }
+.form-check.good .fc-val { color: var(--color-good); }
+.form-check.low .fc-val, .form-check.high .fc-val { color: var(--color-bad); }
+.form-check p { margin: 6px 0; }
+.form-curves { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+.form-curve { margin: 0; }
+.form-curve figcaption { font-weight: 600; font-size: .9rem; display: flex; justify-content: space-between; }
+.form-curve svg { width: 100%; height: auto; }
+.form-curve .grid { stroke: var(--color-border-line); stroke-width: 1; }
+.form-curve text { font-size: 9px; fill: var(--color-fg-muted); }
+#status.bad { color: var(--color-bad); }
+@media (max-width: 560px) { .form-top { grid-template-columns: 1fr; } .form-figure { max-width: 180px; } }

@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Form analysis · {{ a.name }}{% endblock %}
+{% block content %}
+<p class="small"><a href="/athletes/{{ a.id }}">← {{ a.name }}</a></p>
+<h1>Running form analysis</h1>
+<div class="card form-howto">
+  <h2>How to film</h2>
+  <ol class="small">
+    <li><b>From the side</b>, level with the runner's hips, about 10–15 m (30–50 ft) away. A track straight works well.</li>
+    <li><b>Hold the phone still</b> (a tripod or a fence helps) in landscape, or follow the runner smoothly.</li>
+    <li><b>The whole body in frame</b>, head to feet, for at least 4 steps. Good light, nobody else crossing.</li>
+    <li>At the <b>pace you want to check</b> (easy run, tempo or race pace). Slow motion (120 or 240 fps) makes contact and flight times more accurate.</li>
+  </ol>
+  <p class="small muted">The video stays on this {{ 'device' }}: the pose model runs here and only the measurements are saved to {{ a.first_name }}'s record.</p>
+</div>
+<div class="card">
+  <label class="button" style="display:inline-block">Film or choose a video<input id="file" type="file" accept="video/*" capture="environment" hidden></label>
+  <video id="clip" playsinline muted controls hidden style="width:100%;max-height:60vh;margin-top:12px;border-radius:10px;background:#000"></video>
+  <div class="form-row" style="margin-top:12px">
+    <label>Pace during the clip (optional)<input id="pace" placeholder="6:20" inputmode="numeric" style="width:6em"></label>
+    <label>Slow motion?<select id="slowmo"><option value="1">No</option><option value="2">½ speed</option><option value="4">¼ speed</option><option value="8">⅛ speed</option></select></label>
+    <label>Start at (seconds)<input id="start" type="number" min="0" step="0.5" value="0" style="width:5em"></label>
+    <label style="flex:1">Note (optional)<input id="note" maxlength="300" placeholder="Such as: tempo pace, after 2 mi"></label>
+  </div>
+  <p class="small muted">The pace gives step and stride length. If the clip is a slow-motion video saved at normal speed, choose how slow it plays so the timing is right.</p>
+  <button id="go" type="button" disabled>Analyze</button>
+  <progress id="progress" max="1" value="0" style="width:100%;margin-top:10px"></progress>
+  <p id="status" class="small" role="status" aria-live="polite">Film or choose a side-view clip to begin.</p>
+</div>
+<script type="application/json" id="form-cfg">{{ {'save': '/athletes/' ~ a.id ~ '/form', 'csrf': csrf}|tojson }}</script>
+<script type="module" src="/static/form-capture.js?v={{ asset_v }}"></script>
+{% endblock %}

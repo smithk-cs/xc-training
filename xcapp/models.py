@@ -936,3 +936,17 @@ class RaceBoardLog(Base):
     coach: Mapped[str] = mapped_column(String(60), default="")
     taps: Mapped[str] = mapped_column(Text, default="[]")
     updated_ms: Mapped[int] = mapped_column(BigInteger, default=0)
+
+
+class FormAnalysis(Base):
+    """A running-form analysis (form.py): measurements from a side-view clip. The video stays on the phone that filmed
+    it; only these numbers, the joint curves and a stick figure are kept."""
+    __tablename__ = "form_analyses"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    athlete_id: Mapped[int] = mapped_column(ForeignKey("athletes.id", ondelete="CASCADE"), index=True)
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
+    by: Mapped[str] = mapped_column(String(60), default="")
+    pace_s: Mapped[float | None] = mapped_column(Float, nullable=True)     # seconds a mile during the clip, if entered
+    score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    note: Mapped[str] = mapped_column(String(300), default="")
+    data: Mapped[str] = mapped_column(Text, default="{}")                 # form.clean(): metrics, curves, figure, fps...

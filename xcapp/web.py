@@ -15,6 +15,11 @@ from urllib.parse import quote, urlparse
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
+import mimetypes
+
+# The running-form pose model (static/vendor/pose) needs these served with the right types on any server
+mimetypes.add_type("text/javascript", ".mjs")
+mimetypes.add_type("application/wasm", ".wasm")
 from fastapi.templating import Jinja2Templates
 import httpx
 from sqlalchemy import func, select
@@ -516,7 +521,9 @@ def create_app() -> FastAPI:
         missed = db.scalars(select(MissedDay).where(MissedDay.athlete_id == a.id).order_by(MissedDay.date.desc()).limit(20)).all()
         group_names = [g.name for g in db.scalars(select(TrainingGroup).order_by(TrainingGroup.position)).all()]
         races = db.scalars(select(RaceResult).where(RaceResult.athlete_id == a.id).order_by(RaceResult.date.desc()).limit(30)).all()
+        from .form_web import for_athlete as form_reports
         return render(request, "athlete_detail.html", user, a=a, experience_labels=A.EXPERIENCE_LABELS, acts=acts, results=results, run_pain=run_pain, races=races,
+                      forms=form_reports(db, a.id),
                       adjusted=CS.adjusted_times(db, races), marks=A.race_marks(db.scalars(select(RaceResult).where(RaceResult.athlete_id == a.id)).all()),
                       ability=ability, group_names=group_names, missed=missed, vo2=A.latest_vo2(db, a.id),
                       goal_v=A.goal_vdot(db, a.id, A.team_today()),
@@ -1905,7 +1912,8 @@ def create_app() -> FastAPI:
         history = A.race_history(races)
         videos = {(t.date, t.meet, t.race): t.video_url for t in db.scalars(select(RaceTeamResult).where(
             RaceTeamResult.video_url != "", RaceTeamResult.date.in_({r.date for r in races} or {today}))).all()}
-        return render(request, "athlete.html", None, history=history, videos=videos, adjusted=CS.adjusted_times(db, races), paces=paces, a=a, acts=acts, tiles=tiles, seasons=seasons, need=need, ability=ability,
+        from .form_web import for_athlete as form_reports
+        return render(request, "athlete.html", None, history=history, videos=videos, forms=form_reports(db, a.id), adjusted=CS.adjusted_times(db, races), paces=paces, a=a, acts=acts, tiles=tiles, seasons=seasons, need=need, ability=ability,
                       show_group=show_group, open_delete=open_delete, races=races, vo2=A.latest_vo2(db, a.id),
                       rhr=A.resting_hr(db, a.id, today), rhr_range=(A.RESTING_HR_MIN, A.RESTING_HR_MAX),
                       rhr_cal=A.resting_hr_calendar(db, a.id, today), photo_v=photo_versions(db).get(a.id), meets=my_meets(db, a, today),
@@ -2313,13 +2321,16 @@ def create_app() -> FastAPI:
         return None
 
     from types import SimpleNamespace
-    from . import calendar_web, newsletter_web, raceday_web, squads_web
+    from . import calendar_web, form_web, newsletter_web, raceday_web, squads_web
     calendar_web.register(app, SimpleNamespace(render=render, flash=flash, back=back, form_checked=form_checked, any_staff=any_staff,
                                                coach_or_admin=coach_or_admin, get_db=get_db, settings=s))
     squads_web.register(app, SimpleNamespace(render=render, flash=flash, back=back, form_checked=form_checked, any_staff=any_staff,
                                              coach_or_admin=coach_or_admin, get_db=get_db))
     raceday_web.register(app, SimpleNamespace(render=render, flash=flash, back=back, form_checked=form_checked, any_staff=any_staff,
                                               coach_or_admin=coach_or_admin, get_db=get_db))
+    form_web.register(app, SimpleNamespace(render=render, flash=flash, back=back, form_checked=form_checked, any_staff=any_staff,
+                                           coach_or_admin=coach_or_admin, get_db=get_db, get_athlete=get_athlete,
+                                           athlete_by_token=athlete_by_token, logo_bytes=logo_bytes, team_name=s.team_name))
     newsletter_web.register(app, SimpleNamespace(render=render, flash=flash, back=back, form_checked=form_checked, any_staff=any_staff,
                                                  coach_or_admin=coach_or_admin, get_db=get_db, logo_bytes=logo_bytes, settings=s,
                                                  templates=templates))
