@@ -85,6 +85,21 @@ FEEDBACK = {
 
 METRIC_KEYS = {k for k, *_ in CHECKS} | {k for k, *_ in TIMING}
 CURVE_KEYS = ("knee", "hip", "ankle", "elbow")
+SHORT = {"overstride_deg": "Foot landing", "shin_deg": "Shin at landing", "front_knee_deg": "Front knee at landing",
+         "back_knee_deg": "Back knee at landing", "trunk_deg": "Forward lean", "head_deg": "Head position", "elbow_deg": "Arms",
+         "cadence": "Step rate", "oscillation_pct": "Bounce"}
+
+
+def view(data: dict, pace_s: float | None) -> dict:
+    """Everything the results screen (static/form-view.js) shows, as plain data."""
+    rep = report(data["metrics"], pace_s)
+    for c in rep["checks"]:
+        c["short"] = SHORT.get(c["key"], c["title"])
+    return {"score": rep["score"], "checks": rep["checks"], "timing": rep["timing"], "stride": rep["stride"],
+            "curves": data.get("curves") or {}, "curve_titles": CURVE_TITLES, "clip": data.get("clip"), "figure": data.get("figure"),
+            "bones": BONES, "fps": data.get("fps"), "contacts": data.get("contacts")}
+
+
 CURVE_TITLES = {"knee": "Knee bend", "hip": "Hip (thigh against the trunk)", "ankle": "Ankle", "elbow": "Elbow"}
 
 
@@ -110,6 +125,7 @@ def report(metrics: dict, pace_s: float | None = None) -> dict:
             scores.append(s)
         fb = FEEDBACK.get((key, state)) if state else None
         checks.append({"key": key, "title": title, "unit": unit, "value": v, "lo": lo, "hi": hi, "what": what, "state": state,
+                       "score": round(s) if s is not None else None, "priority": None,
                        "summary": fb[0] if fb else "Not measured in this clip.", "why": fb[1] if fb else "", "cue": fb[2] if fb else "",
                        "drill": fb[3] if fb else ""})
     timing = [{"key": k, "title": t, "unit": u, "value": metrics.get(k), "what": w} for k, t, u, w in TIMING]
@@ -120,6 +136,8 @@ def report(metrics: dict, pace_s: float | None = None) -> dict:
         stride = {"step_m": round(step, 2), "stride_m": round(2 * step, 2), "pace": A.fmt_secs(pace_s)}
     order = {"high": 0, "low": 0, "good": 2, "": 3}
     focus = sorted([c for c in checks if c["state"] in ("low", "high")], key=lambda c: (order[c["state"]], rate(c["key"], c["value"])[1]))
+    for i, c in enumerate(focus, 1):   # what to work on first: the furthest out of range
+        c["priority"] = i
     return {"checks": checks, "timing": timing, "stride": stride, "score": round(sum(scores) / len(scores), 1) if scores else None,
             "focus": focus[:3]}
 
@@ -139,9 +157,17 @@ def clean(data: dict) -> dict:
     figure = [[num(p[0], -1, 2), num(p[1], -1, 2)] for p in fig[:33] if isinstance(p, list) and len(p) >= 2]
     if len(figure) != 33 or any(v is None for p in figure for v in p):
         figure = []
+    clip = data.get("clip") or {}
+    frames = []
+    for fr in (clip.get("f") or [])[:90]:
+        pts = [[num(p[0], -2, 3), num(p[1], -2, 3)] for p in fr[:33] if isinstance(p, list) and len(p) >= 2] if isinstance(fr, list) else []
+        if len(pts) == 33 and all(v is not None for p in pts for v in p):
+            frames.append(pts)
+    times = [num(t, 0, 30) for t in (clip.get("t") or [])[:len(frames)]]
+    clip = {"t": times, "f": frames} if frames and len(times) == len(frames) and None not in times else None
     if metrics.get("cadence") is None:
         raise ValueError("The analysis didn't find a step rate. Film again with the whole body in frame.")
-    return {"metrics": metrics, "curves": curves, "figure": figure,
+    return {"metrics": metrics, "curves": curves, "figure": figure, "clip": clip,
             "fps": num(data.get("fps"), 1, 1000), "seconds": num(data.get("seconds"), 0, 600),
             "contacts": int(num(data.get("contacts"), 0, 1000) or 0), "camera": str(data.get("camera") or "")[:12],
             "near": str(data.get("near") or "")[:6]}

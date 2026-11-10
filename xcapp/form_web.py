@@ -81,7 +81,7 @@ def register(app, h: SimpleNamespace) -> None:
         db.add(fa)
         db.flush()
         log(db, "app", f"{user.username} saved a running-form analysis for {a.name}.")
-        return JSONResponse({"url": f"/athletes/{a.id}/form/{fa.id}"})
+        return JSONResponse({"url": f"/athletes/{a.id}/form/{fa.id}", "view": F.view(clean, pace)})
 
     @app.get("/athletes/{athlete_id}/form/{fid}", response_class=HTMLResponse)
     def form_report(request: Request, athlete_id: int, fid: int, user=Depends(any_staff, scope="function"),
@@ -89,7 +89,7 @@ def register(app, h: SimpleNamespace) -> None:
         a = get_athlete(db, athlete_id)
         fa = one(db, a.id, fid)
         data = json.loads(fa.data)
-        return render(request, "form_report.html", user, a=a, fa=fa, data=data, rep=F.report(data["metrics"], fa.pace_s),
+        return render(request, "form_report.html", user, a=a, fa=fa, data=data, rep=F.report(data["metrics"], fa.pace_s), view=F.view(data, fa.pace_s),
                       bones=F.BONES, curve_titles=F.CURVE_TITLES, curve_keys=F.CURVE_KEYS,
                       others=db.scalars(select(FormAnalysis).where(FormAnalysis.athlete_id == a.id, FormAnalysis.id != fa.id)
                                         .order_by(FormAnalysis.created_at.desc())).all())

@@ -121,9 +121,25 @@ export function analyze(frames, w, h) {
     flight_ms: okTiming ? round(Math.max(0, stepS - contactS) * 1000, 0) : null,
     duty_pct: okTiming ? round(contactS / (2 * stepS) * 100, 1) : null,
   };
-  return { metrics, curves: curves(px, contacts, dir), figure: figure(px[contacts.find(c => c.side === near)?.on ?? contacts[0].on].p),
+  return { metrics, clip: strideClip(px, contacts, near, dir, legLen), curves: curves(px, contacts, dir), figure: figure(px[contacts.find(c => c.side === near)?.on ?? contacts[0].on].p),
            fps: round(fps, 1), seconds: round(dur, 2), frames: px.length, contacts: contacts.length, near, direction: dir,
            camera: still ? "still" : "following", visibility: round(vis, 2) };
+}
+
+/** One stride (a foot strike to the next of the same foot), for the animated stick figure on the saved report: the
+    runner kept centered on the hips (like a treadmill), facing right, at most 60 frames. */
+export function strideClip(px, contacts, near, dir, legLen) {
+  const mine = contacts.filter(c => c.side === near);
+  const [a, b] = mine.length >= 2 ? [mine[0].on, mine[1].on] : [0, Math.min(px.length - 1, contacts[contacts.length - 1].on)];
+  const idx = [];
+  const n = Math.min(60, b - a + 1);
+  for (let k = 0; k < n; k++) idx.push(Math.round(a + (b - a) * k / Math.max(1, n - 1)));
+  const s = 2.6 * legLen;
+  const top = Math.min(...idx.map(i => Math.min(...px[i].p.map(q => q[1])))) - 0.1 * legLen;
+  return {
+    t: idx.map(i => round(px[i].t - px[a].t, 3)),
+    f: idx.map(i => { const hx = mid(px[i].p, L.lHip, L.rHip)[0]; return px[i].p.map(q => [round(0.5 + dir * (q[0] - hx) / s, 3), round((q[1] - top) / s, 3)]); }),
+  };
 }
 
 function round(x, d) { return Number.isFinite(x) ? Math.round(x * 10 ** d) / 10 ** d : null; }

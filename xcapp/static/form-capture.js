@@ -2,6 +2,7 @@
    (on this phone or computer; the video is never uploaded), measure the stride (form-core.js), and save only the
    measurements to the athlete's record. The server writes the feedback and the PDF. */
 import { analyze } from "/static/form-core.js";
+import { mount } from "/static/form-view.js";
 
 const cfg = JSON.parse(document.getElementById("form-cfg").textContent);
 const $ = (s) => document.querySelector(s);
@@ -72,7 +73,7 @@ $("#go").addEventListener("click", async () => {
       await seek(t);
       const r = lm.detectForVideo(video, Math.round(t * 1000) + 1);
       const p = r.landmarks && r.landmarks[0];
-      if (p) frames.push({ t: (t - start) / slow, p: p.map((q) => [q.x, q.y, q.visibility ?? 1]) });
+      if (p) frames.push({ t: (t - start) / slow, vt: t, p: p.map((q) => [q.x, q.y, q.visibility ?? 1]) });
       if (i % 5 === 0) { bar.value = i / total; say(`Finding the runner in each frame… ${Math.round(100 * i / total)}%`); }
     }
     bar.value = 1;
@@ -85,7 +86,15 @@ $("#go").addEventListener("click", async () => {
     const r = await fetch(cfg.save, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), credentials: "same-origin" });
     const d = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(d.error || d.detail || "Couldn't save the analysis.");
-    location.href = d.url;
+    // The results screen, playing this video with the skeleton drawn over the runner
+    document.getElementById("setup").hidden = true;
+    document.querySelector(".form-howto").hidden = true;
+    const box = document.getElementById("result");
+    box.hidden = false;
+    document.getElementById("open").href = d.url;
+    document.getElementById("pdf").href = d.url + "/pdf";
+    mount(document.getElementById("view"), d.view, { video, frames, width: video.videoWidth, height: video.videoHeight });
+    window.scrollTo(0, box.offsetTop - 10);
   } catch (e) {
     say(e.message || "Something went wrong analyzing the clip.", true);
     $("#go").disabled = false;

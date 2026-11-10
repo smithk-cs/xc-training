@@ -710,3 +710,55 @@ a.route-link { white-space: nowrap; }
 .form-curve text { font-size: 9px; fill: var(--color-fg-muted); }
 #status.bad { color: var(--color-bad); }
 @media (max-width: 560px) { .form-top { grid-template-columns: 1fr; } .form-figure { max-width: 180px; } }
+
+/* Running-form results screen (form-view.js): a dark, app-like panel */
+.fv { background: #121212; color: #eee; border-radius: 18px; padding: 10px; font-family: Inter, system-ui, sans-serif; }
+.fv-stage { position: relative; background: #000; border-radius: 12px; overflow: hidden; aspect-ratio: 16 / 9; }
+.fv-stage video { width: 100%; height: 100%; object-fit: contain; display: block; }
+.fv-stage canvas { position: absolute; inset: 0; pointer-events: none; }
+.fv-stage.fv-anim { background: radial-gradient(circle at 50% 35%, #2a2a2a, #0d0d0d 75%); aspect-ratio: 4 / 3; max-height: 60vh; }
+.fv-controls { display: flex; align-items: center; gap: 10px; padding: 12px 4px; }
+.fv-play { background: #ff5a1f; color: #fff; border: 0; border-radius: 10px; width: 46px; height: 42px; font-size: 16px; cursor: pointer; }
+.fv-speed { background: #262626; color: #fff; border: 0; border-radius: 12px; padding: 0 12px; height: 42px; font-weight: 700; cursor: pointer; }
+.fv-controls input[type=range] { flex: 1; accent-color: #ff5a1f; }
+.fv-tabs { display: flex; gap: 4px; border-bottom: 1px solid #2a2a2a; margin: 4px 0 12px; overflow-x: auto; }
+.fv-tabs button { background: none; border: 0; border-bottom: 3px solid transparent; color: #bbb; font: inherit; font-size: 1.02rem; padding: 10px 14px; cursor: pointer; }
+.fv-tabs button[aria-selected="true"] { color: #ff6a2b; border-bottom-color: #ff6a2b; }
+.fv-total { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 14px; background: #1e1e1e; border-radius: 18px; padding: 14px 18px; margin-bottom: 12px; }
+.fv-total-label { font-size: 1.25rem; color: #ddd; }
+.fv-total-num { font-size: 2.6rem; font-weight: 600; }
+.fv-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.fv-card { text-align: left; background: #1e1e1e; color: #eee; border: 0; border-radius: 18px; padding: 14px 14px 0; display: flex; flex-direction: column; gap: 6px; cursor: pointer; font: inherit; min-height: 230px; }
+.fv-card[aria-expanded="true"] { grid-column: 1 / -1; }
+.fv-card-top { display: flex; align-items: center; gap: 12px; }
+.fv-sub { color: #aaa; font-size: .9rem; }
+.fv-big { font-size: 1.6rem; font-weight: 600; }
+.fv-name { color: #ddd; font-size: 1.05rem; margin-top: 6px; }
+.fv-verdict { font-size: 1.15rem; font-weight: 600; line-height: 1.25; }
+.fv-val { color: #bbb; font-size: .85rem; font-variant-numeric: tabular-nums; }
+.fv-val span { color: #888; }
+.fv-pri { display: flex; align-items: center; gap: 8px; color: #ff6a2b; font-size: .85rem; margin-top: auto; }
+.fv-pri b { background: #3a1d12; border-radius: 50%; width: 36px; height: 36px; display: grid; place-items: center; font-size: 1.05rem; flex: none; }
+.fv-more p { margin: 4px 0; font-size: .9rem; color: #ddd; }
+.fv-tap { background: #2a2a2a; margin: 8px -14px 0; padding: 8px; text-align: center; border-radius: 0 0 18px 18px; font-size: .85rem; color: #ddd; }
+.fv-card.good .fv-verdict { color: #9be07e; }
+.fv-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.fv-metric { background: #1e1e1e; border-radius: 18px; padding: 14px; }
+.fv-metric p, .fv-note { color: #aaa; font-size: .85rem; margin: 6px 0 0; }
+.fv-chart { background: #1e1e1e; border-radius: 18px; padding: 12px; margin: 12px 0 0; }
+.fv-chart figcaption { display: flex; justify-content: space-between; font-weight: 600; margin-bottom: 6px; }
+.fv-chart figcaption span { font-weight: 400; font-size: .8rem; color: #bbb; display: flex; gap: 6px; align-items: center; }
+.fv-chart i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
+.fv-chart svg { width: 100%; height: auto; }
+.fv-chart text { fill: #999; font-size: 9px; }
+@media (max-width: 380px) { .fv-big { font-size: 1.3rem; } .fv-verdict { font-size: 1rem; } }
+/* the results screen's own buttons, not the app's red ones */
+.fv button { min-height: 0; box-shadow: none; text-transform: none; letter-spacing: normal; }
+.fv button.fv-card, .fv button.fv-card:hover, .fv button.fv-card:focus, .fv button.fv-card:active { background: #1e1e1e !important; color: #eee !important; text-align: left; align-items: stretch; justify-content: flex-start; }
+.fv button.fv-card:focus-visible { outline: 2px solid #ff6a2b; outline-offset: 2px; }
+.fv .fv-card-top, .fv .fv-name, .fv .fv-verdict, .fv .fv-val { text-align: left; }
+.fv .fv-card-top { justify-content: flex-start; }
+.fv button.fv-play, .fv button.fv-play:hover { background: #ff5a1f !important; color: #fff !important; }
+.fv button.fv-speed, .fv button.fv-speed:hover { background: #262626 !important; color: #fff !important; }
+.fv .fv-tabs button, .fv .fv-tabs button:hover { background: none !important; border-radius: 0; }
+.fv .fv-tap { align-self: stretch; }

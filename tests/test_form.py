@@ -56,12 +56,24 @@ def test_ratings_feedback_and_score():
     assert every <= set(F.FEEDBACK)                                       # feedback written for every case
 
 
+def test_priorities_and_view():
+    m = {"overstride_deg": 16, "shin_deg": 4, "front_knee_deg": 160, "back_knee_deg": 80, "trunk_deg": 7, "head_deg": -10,
+         "elbow_deg": 140, "cadence": 158, "oscillation_pct": 8}
+    v = F.view({"metrics": m, "curves": {}, "clip": None, "figure": []}, None)
+    pri = {c["key"]: c["priority"] for c in v["checks"]}
+    assert pri["elbow_deg"] == 1 and pri["overstride_deg"] == 2 and pri["cadence"] == 3 and pri["trunk_deg"] is None
+    assert {c["key"]: c["score"] for c in v["checks"]}["overstride_deg"] == 50 and v["bones"] == F.BONES
+
+
 def test_clean_rejects_junk():
     d = F.clean({"metrics": {"cadence": 178, "trunk_deg": "x", "elbow_deg": float("nan"), "evil": 3},
                  "curves": {"knee": {"left": [1, 2, "x"] + [3] * 60}}, "figure": [[0.1, 0.2]] * 33, "fps": 60, "contacts": 9})
     assert d["metrics"]["cadence"] == 178 and d["metrics"]["trunk_deg"] is None and d["metrics"]["elbow_deg"] is None
     assert "evil" not in d["metrics"] and len(d["curves"]["knee"]["left"]) == 50 and len(d["figure"]) == 33
     assert F.clean({"metrics": {"cadence": 170}, "figure": [[0, 0]] * 5})["figure"] == []
+    clip = F.clean({"metrics": {"cadence": 170}, "clip": {"t": [0, 0.1], "f": [[[0.5, 0.5]] * 33, [[0.5, 0.6]] * 33]}})["clip"]
+    assert clip == {"t": [0.0, 0.1], "f": [[[0.5, 0.5]] * 33, [[0.5, 0.6]] * 33]}
+    assert F.clean({"metrics": {"cadence": 170}, "clip": {"t": [0], "f": [[[0.5, "x"]] * 33]}})["clip"] is None
     with pytest.raises(ValueError):
         F.clean({"metrics": {}})
     assert FW.parse_pace("6:20") == 380 and FW.parse_pace("") is None
@@ -107,10 +119,13 @@ def test_save_view_pdf_and_who_sees_it():
     assert coach.post(f"/athletes/{aid}/form", json={**body, "pace": "fast"}).json()["error"].startswith("Pace looks like")
     r = coach.post(f"/athletes/{aid}/form", json=body)
     url = r.json()["url"]
+    view = r.json()["view"]                                              # the results screen, shown right away
+    assert view["score"] is not None and len(view["checks"]) == len(F.CHECKS) and view["clip"]["f"]
+    assert all(c["short"] for c in view["checks"]) and {c["priority"] for c in view["checks"] if c["state"] in ("low", "high")} >= {1}
     fid = int(url.rsplit("/", 1)[1])
     report = coach.get(url).text
     assert "Running form: Sam Reyes" in report and "Form score" in report and "tempo pace" in report
-    assert "Foot landing ahead of the hips" in report and "Joint angles through the stride" in report and "<polyline" in report
+    assert "Foot landing ahead of the hips" in report and "form-view.js" in report and '"clip"' in report
     assert "Running form" in coach.get(f"/athletes/{aid}").text and url in coach.get(f"/athletes/{aid}").text
     pdf = coach.get(f"{url}/pdf")
     assert pdf.status_code == 200 and pdf.headers["content-type"] == "application/pdf" and pdf.content.startswith(b"%PDF")

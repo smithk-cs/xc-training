@@ -13,7 +13,12 @@
   </ol>
   <p class="small muted">The video stays on this {{ 'device' }}: the pose model runs here and only the measurements are saved to {{ a.first_name }}'s record.</p>
 </div>
-<div class="card">
+<div id="result" hidden>
+  <div class="form-row" style="margin-bottom:10px"><a class="button" id="pdf" href="#">Download PDF</a><a class="button secondary" id="open" href="#">Open saved report</a>
+    <a class="button secondary" href="/athletes/{{ a.id }}/form/new">Analyze another clip</a></div>
+  <div id="view"></div>
+</div>
+<div class="card" id="setup">
   <div class="form-row">
     <label class="button">Choose a video<input id="pick" type="file" accept="video/*" hidden></label>
     <label class="button secondary">Film now<input id="film" type="file" accept="video/*" capture="environment" hidden></label>

@@ -1,15 +1,6 @@
 {% extends "base.html" %}
 {% block title %}Running form · {{ a.name }}{% endblock %}
 {% block content %}
-{% macro curve(title, series) %}{% set vals = (series.left or []) + (series.right or []) %}
-<figure class="form-curve"><figcaption>{{ title }} <span class="small"><span style="color:#1b4fa0">■ left</span> <span style="color:#a6192e">■ right</span></span></figcaption>
-{% if vals %}{% set lo = ((vals|min) - 5) // 10 * 10 %}{% set hi = ((vals|max) + 15) // 10 * 10 %}{% set span = (hi - lo) or 1 %}
-<svg viewBox="0 0 300 120" role="img" aria-label="{{ title }} through the stride, left and right">
-  {% for i in range(3) %}{% set v = lo + span * i / 2 %}<line x1="30" x2="300" y1="{{ 110 - 100 * i / 2 }}" y2="{{ 110 - 100 * i / 2 }}" class="grid"/><text x="26" y="{{ 113 - 100 * i / 2 }}" text-anchor="end">{{ '%.0f' % v }}°</text>{% endfor %}
-  {% for side, color in (('left', '#1b4fa0'), ('right', '#a6192e')) %}{% set s = series[side] or [] %}{% if s|length > 1 %}
-  <polyline fill="none" stroke="{{ color }}" stroke-width="2" points="{% for v in s %}{{ 30 + 270 * loop.index0 / (s|length - 1) }},{{ 110 - 100 * (v - lo) / span }} {% endfor %}"/>{% endif %}{% endfor %}
-</svg>{% else %}<p class="small muted">Not enough strides seen.</p>{% endif %}</figure>
-{% endmacro %}
 <p class="small"><a href="/athletes/{{ a.id }}">← {{ a.name }}</a></p>
 <div class="form-row" style="justify-content:space-between">
   <h1 style="margin:0">Running form: {{ a.name }}</h1>
@@ -17,44 +8,12 @@
 </div>
 <p class="small muted">Filmed {{ (fa.created_at|local).strftime('%b %-d, %Y, %-I:%M %p') }}{% if fa.by %} by {{ fa.by }}{% endif %} · {{ data.contacts }} foot strikes · {{ '%.0f' % data.fps if data.fps else '?' }} frames a second{% if fa.note %} · {{ fa.note }}{% endif %}</p>
 
-<div class="card form-top">
-  {% if data.figure %}<svg class="form-figure" viewBox="-0.1 -0.1 1.2 1.2" role="img" aria-label="Stick figure of the runner as a foot lands">
-    {% for b in bones %}{% set p, q = data.figure[b[0]], data.figure[b[1]] %}<line x1="{{ p[0] }}" y1="{{ p[1] }}" x2="{{ q[0] }}" y2="{{ q[1] }}" stroke="{{ '#a6192e' if b[0] in (11,13,15,23,25,27,29,31) and b[1] in (11,13,15,23,25,27,29,31) else 'currentColor' }}" stroke-width="0.02" stroke-linecap="round"/>{% endfor %}
-    <circle cx="{{ data.figure[0][0] }}" cy="{{ data.figure[0][1] }}" r="0.05" fill="currentColor"/>
-  </svg>{% endif %}
-  <div>
-    <div class="small muted">Form score</div>
-    <div class="form-score">{{ '%.0f%%' % rep.score if rep.score is not none else '–' }}</div>
-    {% if rep.focus %}<p><b>Work on:</b> {% for c in rep.focus %}{{ c.summary|lower|replace('.', '') }}{{ '; ' if not loop.last else '.' }}{% endfor %}</p>
-    {% else %}<p>Every check is in the usual range. Keep it up.</p>{% endif %}
-    <p class="small muted">The figure shows the runner as a foot lands (red: left side). The score is the share of checks in the usual range for distance runners; the ranges are guides, and speed, build and injury history matter too.</p>
-  </div>
-</div>
-
-{% for c in rep.checks %}
-<details class="card form-check {{ c.state or 'none' }}"{% if c.state in ('low', 'high') %} open{% endif %}>
-  <summary><span class="fc-title">{{ c.title }}</span>
-    <span class="fc-val">{% if c.value is not none %}{{ '%g' % c.value }}{{ c.unit if c.unit in ('°', '') else ' ' ~ c.unit }}{% else %}–{% endif %}
-      <span class="small muted">good {{ '%g' % c.lo }} to {{ '%g' % c.hi }}</span></span></summary>
-  <p><b>{{ c.summary }}</b> <span class="small muted">{{ c.what }}</span></p>
-  {% if c.why %}<p class="small"><b>Why it matters:</b> {{ c.why }}</p>{% endif %}
-  {% if c.state in ('low', 'high') %}<p class="small"><b>Cue:</b> {{ c.cue }}</p><p class="small"><b>Drill:</b> {{ c.drill }}</p>{% endif %}
-</details>
-{% endfor %}
-
-<div class="card">
-  <h2>Stride timing</h2>
-  <table class="list compact"><tbody>
-  {% for t in rep.timing %}<tr><td>{{ t.title }}</td><td class="num"><b>{{ ('%g ' % t.value) ~ t.unit if t.value is not none else 'film at 60+ fps' }}</b></td><td class="small muted">{{ t.what }}</td></tr>{% endfor %}
-  {% if rep.stride %}<tr><td>Step / stride length</td><td class="num"><b>{{ rep.stride.step_m }} / {{ rep.stride.stride_m }} m</b></td><td class="small muted">At {{ rep.stride.pace }} a mile.</td></tr>{% endif %}
-  </tbody></table>
-</div>
-
-<div class="card">
-  <h2>Joint angles through the stride</h2>
-  <p class="small muted">From one foot strike to the next of the same foot. Left and right lines far apart can point to an imbalance worth a look.</p>
-  <div class="form-curves">{% for k in curve_keys %}{{ curve(curve_titles[k], data.curves[k]) }}{% endfor %}</div>
-</div>
+<div id="view"></div>
+<noscript>
+  <p><b>Form score: {{ '%.0f%%' % rep.score if rep.score is not none else '–' }}</b></p>
+  <ul>{% for c in rep.checks %}<li>{{ c.title }}: {{ c.value if c.value is not none else '–' }} (good {{ c.lo }} to {{ c.hi }}). {{ c.summary }}</li>{% endfor %}</ul>
+</noscript>
+<p class="small muted" style="margin-top:10px">The stick figure replays one stride (red: left side). Scores compare each measure with the usual range for distance runners; the ranges are guides, and speed, build and injury history matter too.</p>
 
 {% if others %}<div class="card"><h2>Earlier analyses</h2><ul class="plain-list">{% for o in others %}<li><a href="/athletes/{{ a.id }}/form/{{ o.id }}">{{ (o.created_at|local).strftime('%b %-d, %Y') }}</a>{% if o.score is not none %} · {{ '%.0f%%' % o.score }}{% endif %}</li>{% endfor %}</ul></div>{% endif %}
 
@@ -62,4 +21,9 @@
 <form method="post" action="/athletes/{{ a.id }}/form/{{ fa.id }}/delete" onsubmit="return confirm('Delete this form analysis?')">
   <input type="hidden" name="csrf" value="{{ csrf }}"><button type="submit" class="danger">Delete this analysis</button></form>
 {% endif %}
+<script type="application/json" id="form-view">{{ view|tojson }}</script>
+<script type="module">
+  import { mount } from "/static/form-view.js?v={{ asset_v }}";
+  mount(document.getElementById("view"), JSON.parse(document.getElementById("form-view").textContent), null);
+</script>
 {% endblock %}
