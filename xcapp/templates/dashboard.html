@@ -23,7 +23,7 @@
 {% for key, label in tabs %}{% set b = board[key] %}
 <section class="dash-panel" role="tabpanel" id="panel-{{ key }}" aria-labelledby="tab-{{ key }}"{% if not loop.first %} hidden{% endif %}>
   {% for band, name, _ in bands %}{% set people = b.bands[band] %}
-  <details class="card dash-band band-{{ band }}" open>
+  <details class="card dash-band band-{{ band }}">
     <summary><h2>{{ name }}</h2> <span class="pill {{ {'top': 'good', 'mid': 'warn', 'low': 'bad'}[band] }}">{{ people|length }}</span></summary>
     {% if people %}
     <ul class="dash-list">
