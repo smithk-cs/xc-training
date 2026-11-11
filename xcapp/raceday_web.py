@@ -15,7 +15,7 @@ from . import raceday as RD
 from .config import settings
 from .ingest import log
 from .models import Course, RaceBoard, RaceBoardRun, StaffUser
-from .security import csrf_ok
+from .security import csrf_ok, session_mark
 
 # The race pages show a YouTube livestream (watch view) and use the phone's camera (tap view); everything else stays
 # as strict as the rest of the app.
@@ -24,6 +24,8 @@ RACE_CSP = ("default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 's
             "connect-src 'self' https://*.realtime.cloudflare.com wss://*.realtime.cloudflare.com https://*.cloudflarestorage.com; "
             "worker-src 'self' blob:; frame-ancestors 'none'; form-action 'self'; base-uri 'none'")
 # Live switching: phones and the program page connect to Cloudflare RealtimeKit (see live.py)
+# Race Day films (camera and microphone) and checks the coach's spot (location), on this site only
+RACE_PERMISSIONS = "camera=(self), microphone=(self), geolocation=(self), fullscreen=(self \"https://www.youtube-nocookie.com\" \"https://www.youtube.com\"), payment=(), usb=()"
 
 
 def register(app, h: SimpleNamespace) -> None:
@@ -34,6 +36,8 @@ def register(app, h: SimpleNamespace) -> None:
         """The signed-in coach or admin who may set up races and run the clock (the Race Day section turned on)."""
         uid = request.session.get("uid")
         u = db.get(StaffUser, uid) if uid else None
+        if u is not None and request.session.get("pv") != session_mark(u.password_hash):
+            return None   # signed in before a password change
         return u if u is not None and u.role in ("admin", "coach") and u.sees("raceday") else None
 
     def board_or_404(db: Session, code: str, watch: bool = False) -> RaceBoard:
@@ -100,6 +104,7 @@ def register(app, h: SimpleNamespace) -> None:
                "watchLink": f"/rw/{board.watch_code}" if m else ""}
         resp = render(request, "raceday_app.html", None, board=board, mode=mode, cfg=cfg)
         resp.headers["Content-Security-Policy"] = RACE_CSP
+        resp.headers["Permissions-Policy"] = RACE_PERMISSIONS
         return resp
 
     @app.get("/rd/{code}", response_class=HTMLResponse)
@@ -127,6 +132,7 @@ def register(app, h: SimpleNamespace) -> None:
         b = board_or_404(db, code, watch=True)
         resp = render(request, "raceday_program.html", None, board=b, cfg={"api": f"/rw/{b.watch_code}", "label": b.label})
         resp.headers["Content-Security-Policy"] = RACE_CSP
+        resp.headers["Permissions-Policy"] = RACE_PERMISSIONS
         return resp
 
     async def body(request: Request) -> dict:

@@ -59,7 +59,7 @@ from .models import (Activity, AiRun, AppSetting, Athlete, CaptainPost, RaceWeat
                      OAuthState, PainReport, PlannedWorkout, RaceResult, RestingHeartRate, Result, StaffUser, AthletePhoto,
                      MeetEntry, MeetDivision, MeetResponse, DivisionAthlete, SyncLog, TrainingGroup, VdotChange, Announcement, utcnow,
                      Course, MeetConditions, RaceTeamResult)
-from .security import csrf_ok, csrf_token, hash_password, new_link_token, verify_password
+from .security import csrf_ok, csrf_token, hash_password, new_link_token, verify_password, session_mark, csv_safe
 
 HERE = Path(__file__).parent
 BACKFILL_IN_BACKGROUND = True  # tests switch this off and run G.process_backfills themselves
@@ -185,6 +185,10 @@ def create_app() -> FastAPI:
         resp.headers.setdefault("X-Content-Type-Options", "nosniff")
         resp.headers.setdefault("X-Frame-Options", "DENY")
         resp.headers.setdefault("Referrer-Policy", "no-referrer")
+        # No page uses the camera, microphone or location unless it says so (Race Day does)
+        resp.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=(), bluetooth=()")
+        if s.secure_cookies:   # https only from now on, for this address (browsers remember it for a year)
+            resp.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
         resp.headers.setdefault("Content-Security-Policy",
                                 "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; "
                                 f"img-src 'self' data:; frame-ancestors 'none'; form-action 'self' {garmin_origin}; base-uri 'none'")
@@ -214,7 +218,11 @@ def create_app() -> FastAPI:
 
     def current_user(request: Request, db: Session = Depends(get_db, scope="function")) -> StaffUser | None:
         uid = request.session.get("uid")
-        return db.get(StaffUser, uid) if uid else None
+        u = db.get(StaffUser, uid) if uid else None
+        if u is not None and not hmac.compare_digest(str(request.session.get("pv", "")), session_mark(u.password_hash)):
+            request.session.clear()   # signed in before a password change: sign in again
+            return None
+        return u
 
     def staff(*roles: str):
         def dep(request: Request, user: StaffUser | None = Depends(current_user, scope="function")) -> StaffUser:
@@ -306,7 +314,7 @@ def create_app() -> FastAPI:
         log(db, "admin", f"First admin account {user.username} created on the sign-in page.")
         limiter.clear(key)
         request.session.clear()
-        request.session["uid"] = user.id
+        request.session["uid"], request.session["pv"] = user.id, session_mark(user.password_hash)
         flash(request, f"Welcome, {user.username}. Add your other staff under Staff.")
         return back("/")
 
@@ -324,7 +332,7 @@ def create_app() -> FastAPI:
             return back("/login")
         limiter.clear(key)
         request.session.clear()
-        request.session["uid"] = user.id
+        request.session["uid"], request.session["pv"] = user.id, session_mark(user.password_hash)
         return back("/")
 
     @app.post("/logout")
@@ -425,7 +433,7 @@ def create_app() -> FastAPI:
         for a in db.scalars(select(Athlete).where(Athlete.active.is_(True)).options(selectinload(Athlete.garmin))
                             .order_by(Athlete.last_name, Athlete.first_name)).all():
             status = a.garmin.status if a.garmin else "not connected"
-            w.writerow([a.name, a.grade, a.email, status, f"{s.base_url.rstrip('/')}/a/{a.link_token}"])
+            w.writerow([csv_safe(x) for x in (a.name, a.grade, a.email, status, f"{s.base_url.rstrip('/')}/a/{a.link_token}")])
         return Response(buf.getvalue(), media_type="text/csv; charset=utf-8",
                         headers={"Content-Disposition": 'attachment; filename="athlete-links.csv"'})
 
@@ -1747,9 +1755,15 @@ def create_app() -> FastAPI:
         target = db.get(StaffUser, uid)
         if target is None or (user.role != "admin" and target.id != user.id):
             raise HTTPException(403, "You can only change your own password.")
+        if target.id == user.id and not verify_password(str(f.get("current", "")), user.password_hash):
+            flash(request, "Your current password did not match, so the password was not changed.", "error")
+            return back("/staff" if user.role == "admin" else "/")
         try:
             target.password_hash = hash_password(str(f.get("password", "")))
-            flash(request, "Password changed.")
+            if target.id == user.id:   # stay signed in here; every other device is signed out
+                request.session["pv"] = session_mark(target.password_hash)
+            log(db, "admin", f"{user.username} changed the password for {target.username}.")
+            flash(request, "Password changed. Any other device signed in to that account is now signed out.")
         except ValueError as exc:
             flash(request, str(exc), "error")
         return back("/staff" if user.role == "admin" else "/")

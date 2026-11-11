@@ -15,7 +15,7 @@
       <label>Email<input type="email" name="email" maxlength="254" value="{{ u.email }}" aria-label="Email for {{ u.username }}"></label>
       <label class="check"><input type="checkbox" name="on_entries" value="1"{% if u.on_entries %} checked{% endif %}> List on meet entry sheets</label>
       <button class="secondary" type="submit">Save</button></form></details></td>
-  <td><form method="post" action="/staff/{{ u.id }}/password" class="form-row"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="password" name="password" minlength="10" autocomplete="new-password" required><button class="secondary" type="submit">Change</button></form></td>
+  <td><form method="post" action="/staff/{{ u.id }}/password" class="form-row"><input type="hidden" name="csrf" value="{{ csrf }}">{% if u.id == user.id %}<input type="password" name="current" autocomplete="current-password" placeholder="Current password" required aria-label="Current password">{% endif %}<input type="password" name="password" minlength="10" autocomplete="new-password" placeholder="New password" required aria-label="New password"><button class="secondary" type="submit">Change</button></form></td>
   <td>{% if u.id != user.id %}<form method="post" action="/staff/{{ u.id }}/delete" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="link" type="submit">Remove</button></form>{% endif %}</td></tr>
   {% endfor %}
   </tbody></table>

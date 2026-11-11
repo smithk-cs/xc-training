@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from . import analysis as A
+from .security import csv_safe
 from .models import AiRun
 
 COLUMNS = {
@@ -66,7 +67,7 @@ def to_csv(name: str, rows: list[dict]) -> str:
     w = csv.DictWriter(buf, fieldnames=COLUMNS[name], extrasaction="ignore", lineterminator="\n")
     w.writeheader()
     for r in rows:
-        w.writerow({k: ("" if r.get(k) is None else r.get(k)) for k in COLUMNS[name]})
+        w.writerow({k: ("" if r.get(k) is None else csv_safe(r.get(k))) for k in COLUMNS[name]})
     return buf.getvalue()
 
 

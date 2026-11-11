@@ -75,3 +75,21 @@ def csrf_token(session: dict) -> str:
 def csrf_ok(session: dict, submitted: str | None) -> bool:
     expected = session.get("csrf")
     return bool(expected and submitted and hmac.compare_digest(expected, submitted))
+
+
+def session_mark(password_hash: str) -> str:
+    """A short fingerprint of a staff member's current password, kept in their session at sign-in. Every page checks
+    it still matches, so changing a password signs out every other device at once."""
+    return hashlib.sha256(("session:" + password_hash).encode()).hexdigest()[:20]
+
+
+def csv_safe(value):
+    """A spreadsheet cell that can't run as a formula: text starting with = + - @ (or a tab or return) gets a leading
+    apostrophe, which Excel and Sheets show as plain text. Numbers, including negative ones, are left alone."""
+    if isinstance(value, str) and value[:1] in ("=", "+", "-", "@", "\t", "\r"):
+        try:
+            float(value)
+            return value
+        except ValueError:
+            return "'" + value
+    return value
