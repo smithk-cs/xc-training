@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from . import analysis as A
 from .config import settings
 from .ingest import log
+from .db import page_cache
 from .models import (CalendarEvent, Course, MeetConditions, MeetEntry, MeetForecast, PlannedWorkout, PracticeForecast, RaceResult,
                      RaceWeather, utcnow)
 
@@ -107,8 +108,15 @@ def course_for(db: Session, m: MeetEntry) -> Course | None:
     if m.course is not None:
         return m.course
     where = f"{m.location} {m.name}".lower()
-    return next((c for c in db.scalars(select(Course).order_by(func.length(Course.name).desc())).all()
-                 if c.name.strip().lower() in where), None)
+    return next((c for c in _courses(db) if c.name.strip().lower() in where), None)
+
+
+def _courses(db: Session) -> list[Course]:
+    """Every saved course, longest name first, read once per page."""
+    cache = page_cache(db)
+    if "courses" not in cache:
+        cache["courses"] = db.scalars(select(Course).order_by(func.length(Course.name).desc())).all()
+    return cache["courses"]
 
 
 def refresh_forecast(db: Session, http: httpx.Client, m: MeetEntry, today: dt.date) -> bool:
@@ -143,7 +151,10 @@ def _words(s: str) -> list[str]:
 def entry_for(db: Session, meet: str, day: dt.date) -> MeetEntry | None:
     """The Entries-page meet that results belong to: same date, and the same name give or take a year or a word;
     else the only meet that day."""
-    same_day = db.scalars(select(MeetEntry).where(MeetEntry.date == day)).all()
+    cache = page_cache(db).setdefault("meets_on", {})
+    if day not in cache:
+        cache[day] = db.scalars(select(MeetEntry).where(MeetEntry.date == day)).all()
+    same_day = cache[day]
     want = set(_words(meet))
     for m in same_day:
         have = set(_words(m.name))
@@ -154,7 +165,7 @@ def entry_for(db: Session, meet: str, day: dt.date) -> MeetEntry | None:
 
 def course_named(db: Session, *names: str) -> Course | None:
     """A saved course whose name matches one of these, or is part of one ('Woodward Park' in 'Clovis at Woodward Park')."""
-    courses = db.scalars(select(Course).order_by(func.length(Course.name).desc())).all()
+    courses = _courses(db)
     for name in (n for n in names if n):
         low = name.strip().lower()
         hit = next((c for c in courses if c.name.strip().lower() == low), None) or \

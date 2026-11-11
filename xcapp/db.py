@@ -6,7 +6,20 @@ import os
 from contextlib import contextmanager
 
 from sqlalchemy import create_engine, event
-from sqlalchemy.orm import DeclarativeBase, sessionmaker
+from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
+
+
+def page_cache(db) -> dict:
+    """Things read once per page load and reused (the team's abilities, the course list, settings...). Cleared
+    whenever the session saves anything or holds changes not yet saved, so nothing read here can be stale."""
+    if db.new or db.dirty or db.deleted:
+        db.info.pop("cache", None)
+    return db.info.setdefault("cache", {})
+
+
+@event.listens_for(Session, "after_flush")
+def _clear_page_cache(session, _ctx) -> None:
+    session.info.pop("cache", None)
 
 
 class Base(DeclarativeBase):

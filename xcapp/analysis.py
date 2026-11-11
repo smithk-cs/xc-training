@@ -17,6 +17,7 @@ from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session, selectinload
 
 from .config import settings
+from .db import page_cache
 from .models import (Activity, AppSetting, Athlete, Goal, Injury, MissedDay, PainReport, PlannedWorkout, RaceResult, RestingHeartRate, Result,
                      VdotChange,
                      TrainingGroup)
@@ -381,8 +382,11 @@ def vdot(distance_m: float, time_s: float) -> float:
 
 
 def get_setting(db: Session, key: str, default: str) -> str:
-    row = db.get(AppSetting, key)
-    return row.value if row is not None else default
+    cache = page_cache(db).setdefault("settings", {})   # each setting read once per page, not every time it's needed
+    if key not in cache:
+        row = db.get(AppSetting, key)
+        cache[key] = row.value if row is not None else None
+    return cache[key] if cache[key] is not None else default
 
 
 def set_setting(db: Session, key: str, value: str) -> None:
@@ -473,6 +477,13 @@ def latest_races(db: Session, since: dt.date, as_of: dt.date) -> dict[int, tuple
 
 
 def abilities(db: Session, as_of: dt.date) -> dict[int, dict]:
+    cache = page_cache(db).setdefault("abilities", {})   # the whole team, worked out once per page
+    if as_of not in cache:
+        cache[as_of] = _abilities(db, as_of)
+    return cache[as_of]
+
+
+def _abilities(db: Session, as_of: dt.date) -> dict[int, dict]:
     """athlete id -> {group, vdot, source, override, ...}. VDOT comes from the athlete's fastest race in the look-back
     window, read on the team's scale, unless a coach has set it; the group follows from VDOT unless a coach pinned one."""
     lookback = int(get_setting(db, "group_lookback_days", "365"))
@@ -1157,7 +1168,13 @@ def target_pace(db: Session, athlete_id: int, pw: PlannedWorkout) -> float | Non
         return pace_at(v, WORKOUT_ZONES[main["zone"]]) if v and main["zone"] in WORKOUT_ZONES else None
     if pw.pace_event not in EVENTS:
         return None
-    rs = db.scalars(select(Result).where(Result.athlete_id == athlete_id, Result.event == pw.pace_event, Result.date <= pw.date)).all()
+    cache = page_cache(db)
+    if "results_by_athlete" not in cache:   # every athlete's results, read once for the page (not once per run)
+        by: dict[int, list] = defaultdict(list)
+        for r in db.scalars(select(Result)).all():
+            by[r.athlete_id].append(r)
+        cache["results_by_athlete"] = by
+    rs = [r for r in cache["results_by_athlete"].get(athlete_id, []) if r.event == pw.pace_event and r.date <= pw.date]
     if not rs:
         return None
     season = season_for(pw.date)

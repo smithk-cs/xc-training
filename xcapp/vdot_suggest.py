@@ -19,7 +19,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from . import analysis as A
-from .models import Activity, Athlete, PainReport, PlannedWorkout, VdotChange
+from .models import Activity, AppSetting, Athlete, PainReport, PlannedWorkout, VdotChange
 
 MILE = A.METERS_PER_MILE
 ZONES = ("Threshold", "Interval")
@@ -30,19 +30,8 @@ HR_DOWN, HR_UP = 2.0, 3.0                    # points of max heart rate across t
 PAIN_DAYS = 14
 
 
-def _since(db: Session, a: Athlete, races: dict, today: dt.date) -> dt.date | None:
-    """When the athlete's VDOT last changed: a coach's change or the race it comes from, whichever is later."""
-    days = [db.scalar(select(func.max(VdotChange.date)).where(VdotChange.athlete_id == a.id))]
-    r = races.get(a.id)
-    if r:
-        days.append(r[2])
-    days = [d for d in days if d]
-    return max(days) if days else None
-
-
-def session(db: Session, a: Athlete, act: Activity, v: float) -> dict | None:
+def session(act: Activity, pw: PlannedWorkout | None, v: float, hr_max: float | None) -> dict | None:
     """One Threshold or Interval session: rep pace against the target at VDOT v, and heart rate as a share of max."""
-    pw = db.get(PlannedWorkout, act.planned_workout_id)
     main = A.main_part(pw.part_list) if pw else None
     if not main or main["zone"] not in ZONES:
         return None
@@ -52,8 +41,6 @@ def session(db: Session, a: Athlete, act: Activity, v: float) -> dict | None:
     dist = sum(lp.distance_m for lp in reps)
     pace = sum(lp.timer_s for lp in reps) / dist * MILE
     target = A.pace_at(v, A.WORKOUT_ZONES[main["zone"]])
-    from .workout_view import max_hr
-    hr_max = max_hr(db, a, act.local_date)[0]
     hrs = [(lp.avg_hr, lp.distance_m) for lp in reps if lp.avg_hr]
     hr_pct = (100 * sum(h * d for h, d in hrs) / sum(d for _, d in hrs) / hr_max) if hrs and hr_max else None
     return {"date": act.local_date, "title": pw.title, "zone": main["zone"], "pace": pace, "target": target,
@@ -84,30 +71,46 @@ def _judge(sessions: list[dict], held_days: int | None, pain: bool) -> tuple[str
 
 
 def suggestions(db: Session, today: dt.date, gender: str | None = None) -> list[dict]:
-    """Athletes whose recent workouts suggest a VDOT change: [{"a", "vdot", "to", "kind", "why", "sessions", "key"}]."""
+    """Athletes whose recent workouts suggest a VDOT change: [{"a", "vdot", "to", "kind", "why", "sessions", "key"}].
+    Everything is read in a few queries for the whole team (the page would otherwise wait on one query per run)."""
     ab = A.abilities(db, today)
     races = A.latest_races(db, today - dt.timedelta(days=365), today)
     q = select(Athlete).where(A.on_team())
     if gender:
         q = q.where(Athlete.gender == gender)
+    athletes = [a for a in db.scalars(q.order_by(Athlete.last_name, Athlete.first_name)).all() if ab.get(a.id, {}).get("vdot")]
+    if not athletes:
+        return []
+    ids = [a.id for a in athletes]
+    changed = dict(db.execute(select(VdotChange.athlete_id, func.max(VdotChange.date))
+                              .where(VdotChange.athlete_id.in_(ids)).group_by(VdotChange.athlete_id)).all())
+    acts_by: dict[int, list[Activity]] = {}
+    for x in db.scalars(select(Activity).options(selectinload(Activity.laps))
+                        .where(Activity.athlete_id.in_(ids), Activity.planned_workout_id.is_not(None),
+                               Activity.local_date >= today - dt.timedelta(days=LOOK_BACK), Activity.local_date <= today)
+                        .order_by(Activity.local_date, Activity.id)).all():
+        acts_by.setdefault(x.athlete_id, []).append(x)
+    pw_ids = {x.planned_workout_id for xs in acts_by.values() for x in xs}
+    pws = {w.id: w for w in db.scalars(select(PlannedWorkout).where(PlannedWorkout.id.in_(pw_ids))).all()} if pw_ids else {}
+    pain = set(db.scalars(select(PainReport.athlete_id).where(PainReport.athlete_id.in_(ids),
+                                                             PainReport.date > today - dt.timedelta(days=PAIN_DAYS))).all())
+    seen_max = dict(db.execute(select(Activity.athlete_id, func.max(Activity.max_hr)).where(
+        Activity.athlete_id.in_(ids), Activity.local_date > today - dt.timedelta(days=365), Activity.local_date <= today,
+        Activity.max_hr <= 230).group_by(Activity.athlete_id)).all())
+    dismissed = dict(db.execute(select(AppSetting.key, AppSetting.value).where(AppSetting.key.like("vdot_hint_%"))).all())
     out = []
-    for a in db.scalars(q.order_by(Athlete.last_name, Athlete.first_name)).all():
-        v = ab.get(a.id, {}).get("vdot")
-        if not v:
-            continue
-        since = _since(db, a, races, today)
-        start = max(since + dt.timedelta(days=1) if since else today - dt.timedelta(days=LOOK_BACK), today - dt.timedelta(days=LOOK_BACK))
-        acts = db.scalars(select(Activity).options(selectinload(Activity.laps))
-                          .where(Activity.athlete_id == a.id, Activity.planned_workout_id.is_not(None),
-                                 Activity.local_date >= start, Activity.local_date <= today)
-                          .order_by(Activity.local_date, Activity.id)).all()
-        sessions = [s for s in (session(db, a, x, v) for x in acts) if s]
+    for a in athletes:
+        v = ab[a.id]["vdot"]
+        days = [d for d in (changed.get(a.id), (races.get(a.id) or (None, None, None))[2]) if d]
+        since = max(days) if days else None
+        start = since + dt.timedelta(days=1) if since else today - dt.timedelta(days=LOOK_BACK)
+        hr_max = float(a.hr_max) if a.hr_max else (float(seen_max[a.id]) if seen_max.get(a.id) else None)
+        sessions = [s for s in (session(x, pws.get(x.planned_workout_id), v, hr_max)
+                                for x in acts_by.get(a.id, []) if x.local_date >= start) if s]
         if not sessions:
             continue
-        pain = db.scalar(select(func.count(PainReport.id)).where(
-            PainReport.athlete_id == a.id, PainReport.date > today - dt.timedelta(days=PAIN_DAYS))) > 0
         held = (today - since).days if since else None
-        verdict = _judge(sessions, held, pain)
+        verdict = _judge(sessions, held, a.id in pain)
         if not verdict:
             continue
         kind, why = verdict
@@ -115,7 +118,7 @@ def suggestions(db: Session, today: dt.date, gender: str | None = None) -> list[
         if not A.VDOT_MIN <= to <= A.VDOT_MAX:
             continue
         key = f"{kind}:{sessions[-1]['date'].isoformat()}"
-        if A.get_setting(db, f"vdot_hint_{a.id}", "") == key:
+        if dismissed.get(f"vdot_hint_{a.id}") == key:
             continue   # dismissed; comes back after a newer session
         out.append({"a": a, "vdot": v, "to": to, "kind": kind, "why": why, "sessions": sessions[-3:], "key": key,
                     "held": held})
