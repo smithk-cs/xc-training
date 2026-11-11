@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Season awards · {{ team_name }}{% endblock %}
+{% block content %}
+{% macro ord(n) %}{{ n }}{% if n % 100 in (11, 12, 13) %}th{% elif n % 10 == 1 %}st{% elif n % 10 == 2 %}nd{% elif n % 10 == 3 %}rd{% else %}th{% endif %}{% endmacro %}
+<div class="form-row title-row" style="margin-bottom:8px">
+  <h1 style="margin:0">{{ team }} season awards</h1>
+  {% with base='/races/awards', extra='&season=' ~ season.school_year %}{% include "_team_switch.html" %}{% endwith %}
+</div>
+<form method="get" action="/races/awards" class="form-row" style="align-items:end; margin-bottom:8px">
+  <input type="hidden" name="team" value="{{ team }}">
+  <label>Season<select name="season" onchange="this.form.submit()">{% for x in seasons %}<option value="{{ x.school_year }}"{{ ' selected' if x.school_year == season.school_year }}>{{ x.label }}</option>{% endfor %}</select></label>
+  <noscript><button type="submit" class="secondary">Show</button></noscript>
+  <a href="/races" class="small">← Races</a>
+</form>
+<details class="muted how-points" style="max-width:90ch; margin-bottom:10px"><summary>How the awards are worked out</summary>
+  <p style="margin:6px 0 0">From the race results for {{ season.label }} ({{ season.start.strftime('%b %-d') }} to {{ season.end.strftime('%b %-d, %Y') }}). Classes go by each athlete’s grade that season: Freshmen are 9th grade, Sophomores 10th, Varsity 11th and 12th.</p>
+  <p style="margin:6px 0 0"><b>Who counts:</b> athletes who ran at least {{ min_pct }}% of the meets their class raced in this season (a meet where any athlete of that class ran), so freshmen aren’t held to meets only varsity entered.</p>
+  <p style="margin:6px 0 0"><b>MVP:</b> lowest average finishing place, since in cross country a runner scores the points of their place. Only races whose results list a place count. Ties go to more races, then the faster average adjusted time.</p>
+  <p style="margin:6px 0 0"><b>Most improved:</b> the season’s first race against the better of the last two, each turned into the 5K time it’s worth (by VDOT, from the time adjusted for the course and weather), so a 2-mile race and a 5K, or a hilly course and a flat one, compare fairly. Ranked by how much faster, as a share of the first time.</p>
+</details>
+
+{% for key, label, _ in classes %}{% set c = board[key] %}
+<section class="card" style="margin-bottom:14px">
+  <h2 style="margin-top:0">{{ label }}</h2>
+  {% if not c.meets %}<p class="muted">No {{ team|lower }} {{ label|lower }} race results this season yet.</p>{% else %}
+  <p class="small muted" style="margin-top:0">{{ c.meets }} meet{{ 's' if c.meets != 1 }} this season: {{ c.eligible }} athlete{{ 's' if c.eligible != 1 }} ran at least {{ c.need }} ({{ min_pct }}%).</p>
+  <div class="grid">
+    <div>
+      <h3>MVP: top 5 scorers</h3>
+      {% if c.mvp %}<table class="list compact">
+        <thead><tr><th>#</th><th>Athlete</th><th class="num">Avg place</th><th class="num">Best</th><th class="num">Races</th></tr></thead>
+        <tbody>{% for m in c.mvp %}<tr><td>{{ loop.index }}</td><td><a href="/athletes/{{ m.a.id }}">{{ m.a.name }}</a> <span class="small muted">{{ m.grade }}th</span></td>
+          <td class="num"><b>{{ '%.1f' % m.avg_place }}</b></td><td class="num">{{ ord(m.best) }}</td><td class="num">{{ m.placed }}{% if m.placed != m.ran %} <span class="small muted">of {{ m.ran }}</span>{% endif %}</td></tr>{% endfor %}</tbody>
+      </table>{% else %}<p class="muted small">No results with places for athletes who qualify.</p>{% endif %}
+    </div>
+    <div>
+      <h3>Most improved: top 5</h3>
+      {% if c.improved %}<table class="list compact">
+        <thead><tr><th>#</th><th>Athlete</th><th class="num">5K worth</th><th class="num">Faster</th></tr></thead>
+        <tbody>{% for m in c.improved %}<tr><td>{{ loop.index }}</td><td><a href="/athletes/{{ m.a.id }}">{{ m.a.name }}</a> <span class="small muted">{{ m.grade }}th</span>
+            <div class="small muted">{{ m['from'].r.meet }} {{ fmt_time(m['from'].r.time_s) }} ({{ m['from'].r.distance_label or ('%g m' % m['from'].r.distance_m) }}) → {{ m['to'].r.meet }} {{ fmt_time(m['to'].r.time_s) }} ({{ m['to'].r.distance_label or ('%g m' % m['to'].r.distance_m) }})</div></td>
+          <td class="num nowrap">{{ fmt_time(m.from_5k) }} → <b>{{ fmt_time(m.to_5k) }}</b></td><td class="num nowrap"><b>{{ '%.1f' % m.pct }}%</b><br><span class="small muted">{{ fmt_time(m.from_5k - m.to_5k) }}</span></td></tr>{% endfor %}</tbody>
+      </table>{% else %}<p class="muted small">No athlete who qualifies has raced faster than their first race yet.</p>{% endif %}
+    </div>
+  </div>
+  {% if c.short %}<details class="small muted" style="margin-top:8px"><summary>{{ c.short|length }} not counted (under {{ c.need }} meets)</summary>
+    <p style="margin:6px 0 0">{% for e in c.short %}{{ e.a.name }} ({{ e.ran }}){{ ', ' if not loop.last }}{% endfor %}</p></details>{% endif %}
+  {% endif %}
+</section>
+{% endfor %}
+{% endblock %}

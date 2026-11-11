@@ -808,6 +808,18 @@ def create_app() -> FastAPI:
 
     # ---------- races (full meet results at their real distances) ----------
 
+    @app.get("/races/awards", response_class=HTMLResponse)
+    def race_awards(request: Request, team: str = "", season: int = 0, user=Depends(any_staff, scope="function"),
+                    db: Session = Depends(get_db, scope="function")):
+        """Season awards: each class's top 5 scorers (MVP) and most improved (see awards.py)."""
+        from . import awards as AW
+        team = pick_team(team)
+        today = A.team_today()
+        seasons = AW.xc_seasons(db, today)
+        pick = next((x for x in seasons if x["school_year"] == season), seasons[0])
+        return render(request, "awards.html", user, team=team, seasons=seasons, season=pick,
+                      board=AW.awards(db, pick, team, today), classes=AW.CLASSES, min_pct=round(AW.MIN_SHARE * 100))
+
     @app.get("/races", response_class=HTMLResponse)
     def races_page(request: Request, user=Depends(any_staff, scope="function"), db: Session = Depends(get_db, scope="function")):
         rows = db.scalars(select(RaceResult).options(selectinload(RaceResult.athlete))
