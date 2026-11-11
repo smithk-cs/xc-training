@@ -63,12 +63,20 @@ def test_awards_by_class(session):
     assert [m["a"].first_name for m in v["mvp"]] == ["Steady", "Climber", "Other"]          # avg 3, 6, 6 (Climber faster)
     assert v["mvp"][0]["avg_place"] == 3 and v["mvp"][1]["avg_place"] == 6
     assert [m["a"].first_name for m in v["improved"]] == ["Climber"]                          # the others didn't get faster
-    c = v["improved"][0]
-    assert c["from"]["r"].meet == "Meet 1" and c["to"]["r"].meet == "Meet 5" and 7 < c["pct"] < 9
+    c = v["improved"][0]                                                    # 19:00 → 17:32 over 5K: 28 s a mile faster
+    assert c["from"]["r"].meet == "Meet 1" and c["to"]["r"].meet == "Meet 5" and round(c["gain"]) == 28 and c["same_distance"]
     f = b["freshmen"]
     assert f["meets"] == 3 and f["need"] == 3 and f["eligible"] == 2                          # held to their own meets
     assert [m["a"].first_name for m in f["mvp"]] == ["Frosh", "Frosh2"]
-    assert [m["a"].first_name for m in f["improved"]] == ["Frosh"] and f["improved"][0]["pct"] > 0   # 2 mi vs 5K compared
+    fi = f["improved"]                                                      # 2 miles at 6:30 → 5K at 6:10 a mile
+    assert [m["a"].first_name for m in fi] == ["Frosh"] and round(fi[0]["gain"]) == 20 and not fi[0]["same_distance"]
+    # The coach picks the meets: Meet 2 to Meet 4 for varsity; the freshmen didn't race Meet 4
+    meets = AW.season_meets(session, SE.period(2026, "xc"), "Boys", TODAY)
+    assert [m[1] for m in meets] == ["Meet 1", "Meet 2", "Meet 3", "Meet 4", "Meet 5"]
+    picked = AW.awards(session, SE.period(2026, "xc"), "Boys", TODAY, (meets[1], meets[3]))
+    assert picked["varsity"]["span"] == (meets[1], meets[3]) and round(picked["varsity"]["improved"][0]["gain"]) == 14
+    assert picked["freshmen"]["span"] == (meets[1], None) and picked["freshmen"]["improved"] == []
+    assert AW.parse_meet(AW.meet_key(meets[2])) == meets[2] and AW.parse_meet("junk") is None
     assert b["sophomores"]["meets"] == 0
     girls = AW.awards(session, SE.period(2026, "xc"), "Girls", TODAY)
     assert girls["varsity"]["eligible"] == 1 and girls["varsity"]["mvp"][0]["a"].first_name == "Girl"
@@ -90,4 +98,8 @@ def test_awards_page(session):
         assert f"<h2" in page and f">{name}</h2>" in page
     assert "Steady Test" in page and "1 not counted" in page and "Winner Test (3)" in page
     assert "Girl Test" not in page and "Girl Test" in c.get("/races/awards?team=Girls&season=2026").text
-    assert c.get("/races/awards?season=1999").status_code == 200                              # unknown season: the latest
+    assert c.get("/races/awards?season=1999").status_code == 200
+    picked = c.get("/races/awards?season=2026&start_meet=2026-09-12|Meet 2&end_meet=2026-10-10|Meet 4").text
+    assert 'value="2026-09-12|Meet 2" selected' in picked and "Sep 12 Meet 2 → Oct 10 Meet 4" in picked
+    assert "14 s/mi" in picked and "Freshmen didn’t race at both chosen meets" in picked
+    assert "different distance" in page and "28 s/mi" in page                              # unknown season: the latest

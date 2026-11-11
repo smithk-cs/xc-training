@@ -6,9 +6,10 @@
   athlete of that class, same team, ran). Freshmen don't run sectionals, so they aren't held to meets they couldn't enter.
 - MVP: lowest average finishing place (in cross country a runner scores the points of their place, so lower is better),
   over the races with a place in the results. Ties go to more races, then the faster average adjusted time.
-- Most improved: the first race of the season against the better of the last two races, each turned into the 5K time
-  it's worth (by VDOT, from the time adjusted for the course and weather), so a 2-mile race and a 5K, or a hilly course
-  and a flat one, compare fairly. Ranked by how much faster, as a share of the first 5K time.
+- Most improved: average mile pace, from the time adjusted for the course and weather, at one meet against another (the
+  coach picks them; by default each class's first and last meet of the season). Athletes who ran both meets are ranked
+  by how many seconds a mile faster they got. Pace depends on the distance too, so the two meets are best at the same
+  distance (each athlete's distances are shown).
 """
 from __future__ import annotations
 
@@ -51,8 +52,33 @@ def xc_seasons(db: Session, today: dt.date) -> list[dict]:
     return out
 
 
-def awards(db: Session, season: dict, team: str, today: dt.date) -> dict:
-    """{class key: {"label", "meets", "need", "eligible", "mvp": [...], "improved": [...], "short": [...]}}."""
+MILE = A.METERS_PER_MILE
+Meet = tuple  # (date, meet name)
+
+
+def meet_key(m: Meet) -> str:
+    return f"{m[0].isoformat()}|{m[1]}"
+
+
+def parse_meet(text: str) -> Meet | None:
+    try:
+        d, name = str(text or "").split("|", 1)
+        return (dt.date.fromisoformat(d), name)
+    except ValueError:
+        return None
+
+
+def season_meets(db: Session, season: dict, team: str, today: dt.date) -> list[Meet]:
+    """The team's meets in the season, in order: (date, meet)."""
+    return [tuple(x) for x in db.execute(
+        select(RaceResult.date, RaceResult.meet).join(Athlete, Athlete.id == RaceResult.athlete_id)
+        .where(Athlete.gender == team, RaceResult.date >= season["start"], RaceResult.date <= min(season["end"], today))
+        .group_by(RaceResult.date, RaceResult.meet).order_by(RaceResult.date, RaceResult.meet)).all()]
+
+
+def awards(db: Session, season: dict, team: str, today: dt.date, span: tuple[Meet | None, Meet | None] = (None, None)) -> dict:
+    """{class key: {"label", "meets", "need", "eligible", "mvp": [...], "improved": [...], "span": (from, to),
+    "missed_span": n, "short": [...]}}. span: the two meets most improved compares (None: the class's first or last)."""
     start, end = season["start"], min(season["end"], today)
     rows = db.execute(select(RaceResult, Athlete).join(Athlete, Athlete.id == RaceResult.athlete_id)
                       .where(Athlete.gender == team, RaceResult.date >= start, RaceResult.date <= end)
@@ -62,8 +88,9 @@ def awards(db: Session, season: dict, team: str, today: dt.date) -> dict:
     for r, a in rows:
         g = grade_in(a, start, today)
         e = by_athlete.setdefault(a.id, {"a": a, "grade": g, "races": []})
-        e["races"].append({"r": r, "meet": (r.date, r.meet), "adj": adj.get(r.id) or r.time_s,
-                           "vdot": A.vdot(r.distance_m, adj.get(r.id) or r.time_s) if r.distance_m and r.time_s else None})
+        t = adj.get(r.id) or r.time_s
+        e["races"].append({"r": r, "meet": (r.date, r.meet), "adj": t,
+                           "pace": t / (r.distance_m / MILE) if r.distance_m and t else None})
     out = {}
     for key, label, grades in CLASSES:
         people = [e for e in by_athlete.values() if e["grade"] in grades]
@@ -84,21 +111,25 @@ def awards(db: Session, season: dict, team: str, today: dt.date) -> dict:
                         "placed": len(placed), "best": min(x["r"].place for x in placed),
                         "avg_adj": statistics.fmean(x["adj"] for x in placed), "races": e["races"]})
         mvp.sort(key=lambda m: (m["avg_place"], -m["placed"], m["avg_adj"]))
-        improved = []
-        for e in eligible:
-            rs = [x for x in e["races"] if x["vdot"]]
-            if len(rs) < 2:
-                continue
-            first, late = rs[0], max(rs[-2:] if len(rs) >= 3 else rs[-1:], key=lambda x: x["vdot"])
-            gain = late["vdot"] - first["vdot"]
-            if gain <= 0:
-                continue
-            # The same gain as a 5K time: the 5K each VDOT predicts
-            f5, l5 = A.equivalent_time(5000, first["vdot"]), A.equivalent_time(5000, late["vdot"])
-            improved.append({"a": e["a"], "grade": e["grade"], "ran": e["ran"], "gain": gain, "from": first, "to": late,
-                             "from_5k": f5, "to_5k": l5, "pct": 100 * (f5 - l5) / f5})
-        improved.sort(key=lambda m: -m["pct"])     # the biggest share faster: fair to slower and faster runners alike
+        # Most improved: adjusted mile pace at one meet against another
+        pick = lambda chosen, default: (chosen if chosen in meets else None) if chosen else default
+        m_from, m_to = pick(span[0], meets[0] if meets else None), pick(span[1], meets[-1] if meets else None)
+        improved, missed_span = [], 0
+        if m_from and m_to and m_from < m_to:
+            for e in eligible:
+                pace_at = lambda m: min((x for x in e["races"] if x["meet"] == m and x["pace"]), key=lambda x: x["pace"], default=None)
+                f, t = pace_at(m_from), pace_at(m_to)
+                if not f or not t:
+                    missed_span += 1
+                    continue
+                gain = f["pace"] - t["pace"]
+                if gain <= 0:
+                    continue
+                improved.append({"a": e["a"], "grade": e["grade"], "ran": e["ran"], "from": f, "to": t, "gain": gain,
+                                 "pct": 100 * gain / f["pace"], "same_distance": abs(f["r"].distance_m - t["r"].distance_m) < 50})
+        improved.sort(key=lambda m: -m["gain"])     # most seconds a mile faster
         out[key] = {"label": label, "meets": len(meets), "need": need, "eligible": len(eligible),
-                    "mvp": mvp[:TOP], "improved": improved[:TOP],
+                    "mvp": mvp[:TOP], "improved": improved[:TOP], "span": (m_from, m_to), "missed_span": missed_span,
+                    "all_meets": meets,
                     "short": sorted(short, key=lambda e: (-e["ran"], e["a"].last_name))}
     return out

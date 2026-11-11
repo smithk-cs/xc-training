@@ -809,7 +809,8 @@ def create_app() -> FastAPI:
     # ---------- races (full meet results at their real distances) ----------
 
     @app.get("/races/awards", response_class=HTMLResponse)
-    def race_awards(request: Request, team: str = "", season: int = 0, user=Depends(any_staff, scope="function"),
+    def race_awards(request: Request, team: str = "", season: int = 0, start_meet: str = "", end_meet: str = "",
+                    user=Depends(any_staff, scope="function"),
                     db: Session = Depends(get_db, scope="function")):
         """Season awards: each class's top 5 scorers (MVP) and most improved (see awards.py)."""
         from . import awards as AW
@@ -817,8 +818,12 @@ def create_app() -> FastAPI:
         today = A.team_today()
         seasons = AW.xc_seasons(db, today)
         pick = next((x for x in seasons if x["school_year"] == season), seasons[0])
-        return render(request, "awards.html", user, team=team, seasons=seasons, season=pick,
-                      board=AW.awards(db, pick, team, today), classes=AW.CLASSES, min_pct=round(AW.MIN_SHARE * 100))
+        meets = AW.season_meets(db, pick, team, today)
+        span = (AW.parse_meet(start_meet), AW.parse_meet(end_meet))
+        span = tuple(m if m in meets else None for m in span)
+        return render(request, "awards.html", user, team=team, seasons=seasons, season=pick, meets=meets, span=span,
+                      meet_key=AW.meet_key, board=AW.awards(db, pick, team, today, span), classes=AW.CLASSES,
+                      min_pct=round(AW.MIN_SHARE * 100))
 
     @app.get("/races", response_class=HTMLResponse)
     def races_page(request: Request, user=Depends(any_staff, scope="function"), db: Session = Depends(get_db, scope="function")):
