@@ -8,7 +8,7 @@
   },
   "devDependencies": {
     "@cloudflare/containers": "^0.3.7",
-    "supabase": "^2.122.0",
+    "supabase": "^3.0.0",
     "wrangler": "^4.152.0"
   },
   "type": "module"
