@@ -514,13 +514,13 @@ def create_app() -> FastAPI:
     def athlete_detail(request: Request, athlete_id: int, user=Depends(any_staff, scope="function"), db: Session = Depends(get_db, scope="function")):
         a = get_athlete(db, athlete_id)
         acts = db.scalars(select(Activity).where(Activity.athlete_id == a.id).options(selectinload(Activity.laps), selectinload(Activity.planned))
-                          .order_by(Activity.start_utc.desc()).limit(40)).all()
+                          .order_by(Activity.start_utc.desc())).all()   # every run: the page shows 5, the rest open on request
         results = db.scalars(select(Result).where(Result.athlete_id == a.id).order_by(Result.date.desc())).all()
         run_pain = {p.activity_id: p for p in a.pain_reports if p.activity_id}
         ability = A.abilities(db, A.team_today()).get(a.id, {})
         missed = db.scalars(select(MissedDay).where(MissedDay.athlete_id == a.id).order_by(MissedDay.date.desc()).limit(20)).all()
         group_names = [g.name for g in db.scalars(select(TrainingGroup).order_by(TrainingGroup.position)).all()]
-        races = db.scalars(select(RaceResult).where(RaceResult.athlete_id == a.id).order_by(RaceResult.date.desc()).limit(30)).all()
+        races = db.scalars(select(RaceResult).where(RaceResult.athlete_id == a.id).order_by(RaceResult.date.desc())).all()   # all; 5 shown
         from .form_web import for_athlete as form_reports
         return render(request, "athlete_detail.html", user, a=a, experience_labels=A.EXPERIENCE_LABELS, acts=acts, results=results, run_pain=run_pain, races=races,
                       forms=form_reports(db, a.id),

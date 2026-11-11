@@ -43,8 +43,9 @@
 <div class="grid">
 <div class="card">
   <h2>Recent runs</h2>
-  <div class="scroll"><table class="list"><thead><tr><th>Date</th><th>Type</th><th class="num">Miles</th><th class="num">Time</th><th class="num">Avg HR</th><th class="num">VO2 max</th><th>Workout</th><th class="num">Effort</th><th>Legs</th><th>Pain</th><th>Device</th></tr></thead><tbody>
+  <div class="scroll"><table class="list" id="runs-table"><thead><tr><th>Date</th><th>Type</th><th class="num">Miles</th><th class="num">Time</th><th class="num">Avg HR</th><th class="num">VO2 max</th><th>Workout</th><th class="num">Effort</th><th>Legs</th><th>Pain</th><th>Device</th></tr></thead><tbody>
   {% for act in acts %}
+  {% if loop.index0 == 5 %}</tbody><tbody id="more-runs" hidden>{% endif %}
   <tr><td><a href="/athletes/{{ a.id }}/runs/{{ act.id }}">{{ act.local_date.strftime('%a %b %-d') }}</a></td><td>{{ run_type_of(act) }}</td><td class="num">{{ '%.1f' % (act.distance_m / 1609.344) }}</td>
   <td class="num">{{ fmt_time(act.duration_s)[:-2] }}</td><td class="num">{{ act.avg_hr|round|int if act.avg_hr else '' }}</td>
   <td class="num">{{ '%.1f' % act.vo2_max if act.vo2_max else '' }}</td>
@@ -55,6 +56,8 @@
   {% if act.athlete_note %}<tr><td></td><td colspan="9" class="small muted">Athlete note: {{ act.athlete_note }}</td></tr>{% endif %}
   {% else %}<tr><td colspan="10" class="muted">No runs yet.</td></tr>{% endfor %}
   </tbody></table></div>
+  {% if acts|length > 5 %}<p><button type="button" class="secondary show-more" aria-controls="more-runs" aria-expanded="false"
+    data-more="Show all {{ acts|length }} runs" data-less="Show the 5 most recent">Show all {{ acts|length }} runs</button></p>{% endif %}
   <p class="small muted">Data recorded on Garmin devices is labelled with the device model, as Garmin requires.</p>
 </div>
 <div class="card" id="form">
@@ -67,9 +70,11 @@
 {% if races %}
 <div class="card">
   <h2>Races</h2>
-  <div class="scroll"><table class="list"><thead><tr><th>Date</th><th>Meet</th><th>Race</th><th>Distance</th><th class="num">Place</th><th class="num">Time</th></tr></thead><tbody>
-  {% for r in races %}<tr><td>{{ r.date.strftime('%b %-d, %Y') }}</td><td><a href="/races">{{ r.meet }}</a></td><td>{{ r.race }}</td><td>{{ r.distance_label }}</td><td class="num">{{ r.place or '' }}</td><td class="num nowrap">{% set adj = adjusted.get(r.id) %}{% include "_race_time.html" %}{% if marks.get(r.id) %}<br><span class="pill{% if marks[r.id] != 'SB' %} good{% endif %}">{{ marks[r.id] }}</span>{% endif %}</td></tr>{% endfor %}
+  <div class="scroll"><table class="list" id="races-table"><thead><tr><th>Date</th><th>Meet</th><th>Race</th><th>Distance</th><th class="num">Place</th><th class="num">Time</th></tr></thead><tbody>
+  {% for r in races %}{% if loop.index0 == 5 %}</tbody><tbody id="more-races" hidden>{% endif %}<tr><td>{{ r.date.strftime('%b %-d, %Y') }}</td><td><a href="/races">{{ r.meet }}</a></td><td>{{ r.race }}</td><td>{{ r.distance_label }}</td><td class="num">{{ r.place or '' }}</td><td class="num nowrap">{% set adj = adjusted.get(r.id) %}{% include "_race_time.html" %}{% if marks.get(r.id) %}<br><span class="pill{% if marks[r.id] != 'SB' %} good{% endif %}">{{ marks[r.id] }}</span>{% endif %}</td></tr>{% endfor %}
   </tbody></table></div>
+  {% if races|length > 5 %}<p><button type="button" class="secondary show-more" aria-controls="more-races" aria-expanded="false"
+    data-more="Show all {{ races|length }} races" data-less="Show the 5 most recent">Show all {{ races|length }} races</button></p>{% endif %}
 </div>
 {% endif %}
 <div class="card">
@@ -186,4 +191,15 @@
 </div>
 {% endif %}
 </div>
+<script>
+// "Show all" buttons under Recent runs and Races: open or close the rest of the table
+document.querySelectorAll('button.show-more').forEach((b) => b.addEventListener('click', () => {
+  const more = document.getElementById(b.getAttribute('aria-controls'));
+  const open = more.hidden;
+  more.hidden = !open;
+  b.setAttribute('aria-expanded', String(open));
+  b.textContent = open ? b.dataset.less : b.dataset.more;
+  if (!open) more.closest('table').scrollIntoView({ block: 'nearest' });
+}));
+</script>
 {% endblock %}
