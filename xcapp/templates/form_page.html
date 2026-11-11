@@ -22,7 +22,7 @@
 <div class="card" id="setup">
   <label class="form-athlete">Athlete
     <select id="athlete" required><option value="">Choose an athlete…</option>
-      {% for x in athletes %}<option value="{{ x.id }}"{% if x.id == picked %} selected{% endif %}>{{ x.last_name }}, {{ x.first_name }}{% if x.group %} · {{ x.group }}{% endif %}</option>{% endfor %}
+      {% for x in athletes %}<option value="{{ x.id }}"{% if x.id == picked %} selected{% endif %}>{{ x.last_name }}, {{ x.first_name }}{% if x.grade %} · {{ x.grade }}th grade{% endif %}</option>{% endfor %}
     </select></label>
   <div class="form-row">
     <label class="button">Choose a video<input id="pick" type="file" accept="video/*" hidden></label>

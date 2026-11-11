@@ -5,10 +5,15 @@
   <h1 style="margin:0">{{ team }} dashboard</h1>
   {% with base='/dashboard', extra='&start=' ~ monday.isoformat() %}{% include "_team_switch.html" %}{% endwith %}
 </div>
+<div class="form-row" style="align-items:center; margin-bottom:8px">
+  <a class="button secondary" href="/dashboard?team={{ team }}&start={{ (monday - timedelta(days=7)).isoformat() }}" aria-label="Week before">‹</a>
+  <b>{{ monday.strftime('%b %-d') }} to {{ (monday + timedelta(days=6)).strftime('%b %-d, %Y') }}</b>
+  {% if current %}<span class="button secondary" aria-disabled="true" style="opacity:.4; pointer-events:none" title="This is the current week">›</span>
+  {% else %}<a class="button secondary" href="/dashboard?team={{ team }}&start={{ (monday + timedelta(days=7)).isoformat() }}" aria-label="Week after">›</a>
+  <a href="/dashboard?team={{ team }}">This week</a>{% endif %}
+</div>
 <p class="small muted">
-  Week of {{ monday.strftime('%b %-d') }}–{{ (monday + timedelta(days=6)).strftime('%b %-d') }}{% if current %}, so far (through {{ today.strftime('%a %b %-d') }}){% endif %}.
-  Each athlete against what the week asks for so far, the same numbers as the <a href="/week?team={{ team }}&start={{ monday.isoformat() }}">Week page</a>.
-  <span class="dash-weeks"><a href="/dashboard?team={{ team }}&start={{ (monday - timedelta(days=7)).isoformat() }}">← Previous week</a>{% if not current %} · <a href="/dashboard?team={{ team }}&start={{ (monday + timedelta(days=7)).isoformat() }}">Next week →</a> · <a href="/dashboard?team={{ team }}">This week</a>{% endif %}</span>
+  {% if current %}So far this week (through {{ today.strftime('%a %b %-d') }}). {% endif %}Each athlete against what the week asks for so far, the same numbers as the <a href="/week?team={{ team }}&start={{ monday.isoformat() }}">Week page</a>.
 </p>
 
 <div class="dash-tabs" role="tablist" aria-label="Measures">

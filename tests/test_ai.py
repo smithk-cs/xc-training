@@ -7,7 +7,7 @@ import pytest
 
 from xcapp import ai as AI
 from xcapp import datasets as DS
-from xcapp.models import Athlete, Injury, PainReport, Result
+from xcapp.models import Athlete, Injury, PainReport, RaceResult, Result
 
 
 class FakeClient:
@@ -54,6 +54,25 @@ def test_payload_is_deidentified(session, team):
     assert "SECRET" not in text and "Girls" not in text and "hr_max" not in text
     assert sorted(code_map) == ["R01", "R02", "R03"] and code_map["R01"]["name"] == "Lucia Sorensen"
     assert payload["athletes"][2]["pain_reports"][0]["severity"] == 5
+
+
+def test_payload_has_race_results_and_grades(session, team):
+    team[1].grade = 9
+    for i, a in enumerate(team):
+        session.add(RaceResult(athlete_id=a.id, meet="Clovis Invitational", date=dt.date(2026, 10, 10), race="Frosh/Soph Girls" if i != 1 else "Frosh/Soph Boys",
+                               distance_m=5000, distance_label="5K", time_s=1150 + 10 * i, place=4 + i, points=4 + i))
+    session.add(RaceResult(athlete_id=team[1].id, meet="Old Meet", date=dt.date(2024, 9, 1), distance_m=5000, time_s=1200, place=1))
+    session.flush()
+    payload, code_map = AI.build_payload(DS.snapshot(session, dt.date(2026, 10, 25)))
+    text = json.dumps(payload)
+    assert "Girls" not in text and "Boys" not in text and "Old Meet" not in text          # no gender; only the last two seasons
+    # The boys' and girls' races are separate races (same name once gender is taken out)
+    assert [(r["meet"], r["division"]) for r in payload["races"]] == [("Clovis Invitational", "Frosh/Soph")] * 2
+    assert sorted(r["team_athletes_in_it"] for r in payload["races"]) == [1, 2]
+    adrian = next(a for a in payload["athletes"] if code_map[a["code"]]["name"] == "Adrian Iverson")
+    assert adrian["grade"] == 9 and adrian["race_results"] == [{"race_no": adrian["race_results"][0]["race_no"], "place": 5, "time_s": 1160.0, "adjusted_s": adrian["race_results"][0]["adjusted_s"], "team_points": 5}]
+    assert any(s["season"].endswith("Cross Country") and s["start"] <= "2026-10-10" <= s["end"] for s in payload["season_dates"])
+    assert "9 = freshman" in AI.SYSTEM_QUESTION and "haven't turned on AI analysis" in AI.SYSTEM_QUESTION
 
 
 def test_reply_checking():

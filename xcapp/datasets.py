@@ -85,8 +85,24 @@ def snapshot(db: Session, as_of: dt.date | None = None) -> dict[str, list[dict]]
     from .models import Athlete as _Ath
     data["ai_consented"] = {a.code for a in db.scalars(select(_Ath).where(A.on_team(), _Ath.ai_consent_at.is_not(None))).all()}
     data["missed_days"] = missed_days(db, as_of)
+    data["race_results"] = race_results(db, as_of)
     data["as_of"] = as_of
     return data
+
+
+def race_results(db: Session, as_of: dt.date, days: int = 430) -> list[dict]:
+    """Each race run in about the last two seasons: meet, race (division), distance, time, the time adjusted for the course
+    and weather, place and team points (when the results give them)."""
+    from .courses import adjusted_times
+    from .models import Athlete, RaceResult
+    rows = db.execute(select(RaceResult, Athlete).join(Athlete, Athlete.id == RaceResult.athlete_id)
+                      .where(A.on_team(), RaceResult.date > as_of - dt.timedelta(days=days), RaceResult.date <= as_of)
+                      .order_by(RaceResult.date, RaceResult.meet, RaceResult.race)).all()
+    adj = adjusted_times(db, [r for r, _ in rows])
+    return [{"athlete_id": a.code, "date": r.date.isoformat(), "meet": r.meet, "race": r.race, "course": r.course,
+             "distance": r.distance_label or f"{r.distance_m:g} m", "distance_m": r.distance_m, "time_s": r.time_s,
+             "adjusted_s": round(adj[r.id], 1) if adj.get(r.id) else None, "place": r.place, "points": r.points}
+            for r, a in rows]
 
 
 def missed_days(db: Session, as_of: dt.date, days: int = 14) -> list[dict]:

@@ -129,7 +129,7 @@ def test_save_view_pdf_and_who_sees_it():
     old = coach.get(f"/athletes/{aid}/form/new")                          # the old address opens the new page, athlete picked
     assert old.status_code == 303 and old.headers["location"] == f"/form?athlete={aid}"
     page = coach.get(f"/form?athlete={aid}")
-    assert f'<option value="{aid}" selected>Reyes, Sam' in page.text and "Choose a video" in page.text and "Film now" in page.text
+    assert f'<option value="{aid}" selected>Reyes, Sam · 11th grade</option>' in page.text and "Varsity" not in page.text.split('id="athlete"')[1].split("</select>")[0] and "Choose a video" in page.text and "Film now" in page.text
     assert '<a href="/form"' in coach.get("/").text                       # in the menu
     assert page.status_code == 200 and "'wasm-unsafe-eval'" in page.headers["content-security-policy"]
     assert "connect-src 'self'" in page.headers["content-security-policy"] and "form-capture.js" in page.text

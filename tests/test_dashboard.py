@@ -58,4 +58,7 @@ def test_dashboard_page(monkeypatch):
     assert "Team briefing" not in page                                  # the old tabs are gone
     last = c.get("/dashboard?start=" + (dt.date.today() - dt.timedelta(days=7)).isoformat()).text
     assert "This week</a>" in last
+    # Same week arrows as the Week page: back from this week, forward only from an earlier one
+    assert 'aria-label="Week before"' in page and 'aria-label="Week after"' not in page and "This week</a>" not in page
+    assert 'aria-label="Week before"' in last and 'aria-label="Week after"' in last
     assert c.get("/dashboard?start=nonsense").status_code == 200

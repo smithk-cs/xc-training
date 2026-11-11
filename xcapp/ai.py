@@ -56,10 +56,17 @@ SYSTEM_QUESTION = """You answer a high school cross country coach's question abo
 The data is one JSON object; athletes appear only as codes such as R07, and the definitions are:
 load_ratio = this week's miles / average of the previous four weeks (above 1.3 is flagged);
 recovery_bpm = heart-rate drop in the first 60 seconds of rest between reps (under 25 is flagged);
+grade: 9 = freshman, 10 = sophomore, 11 = junior, 12 = senior;
+races: each race the team ran in about the last two seasons (race_no, date, meet, division, course, distance);
+each athlete's race_results give race_no, place (overall finishing place in that race, when the results list it),
+time_s, adjusted_s (the time adjusted for the course and weather, to compare races) and team_points;
+season_dates: the dates each season covers.
+Only athletes who have agreed to AI analysis are in the data; if a question is about athletes who aren't there, say
+that the others haven't turned on AI analysis on their athlete page yet.
 times in seconds, paces in seconds per mile. In your answer write times and paces as minutes and seconds
 ("6:52/mi", "1:25"), never as a number of seconds over a minute.
 Use only the data. Refer to athletes by code. Do not diagnose; send medical questions to the athletic trainer or a
-physician. If the data cannot answer the question, say so. Answer in at most 200 words of plain prose."""
+physician. If the data cannot answer the question, say so. Answer in at most 250 words of plain prose."""
 
 
 class AiError(Exception):
@@ -127,6 +134,14 @@ def _days_ago(as_of: dt.date, iso: str) -> int:
     return (as_of - dt.date.fromisoformat(iso)).days
 
 
+def _season_dates(as_of: dt.date) -> list[dict]:
+    """This school year's and last school year's seasons, with their dates (to place races in a season)."""
+    from . import seasons as SE
+    y = SE.school_year_of(as_of)
+    return [{"season": p["label"], "start": p["start"].isoformat(), "end": p["end"].isoformat()}
+            for yr in (y - 1, y) for p in SE.year_periods(yr) if p["start"] <= as_of]
+
+
 def build_payload(snap: dict) -> tuple[dict, dict[str, dict]]:
     as_of: dt.date = snap["as_of"]
     # Only athletes who explicitly agreed to AI analysis are sent, and team-wide numbers are recomputed from them alone.
@@ -140,6 +155,7 @@ def build_payload(snap: dict) -> tuple[dict, dict[str, dict]]:
     progress_all, watch_all = keep(snap["progress"]), keep(snap["watchlist"])
     pain_all = keep(snap["pain_reports"])
     recent_all, missed_all = keep(snap.get("recent_runs", [])), keep(snap.get("missed_days", []))
+    races_all = keep(snap.get("race_results", []))
     peaks_all = A.injury_peaks(injuries_all, weekly_all)
     kpis_all = A.kpis(injuries_all, weekly_all, progress_all, watch_all, roster)
     bands_all = A.risk_bands(weekly_all, injuries_all)
@@ -181,6 +197,20 @@ def build_payload(snap: dict) -> tuple[dict, dict[str, dict]]:
             {"days_ago": _days_ago(as_of, r["date"]), "miles": r["miles"], "rpe": r["rpe"], "legs": r["feel"] or None, "workout": r["workout"]})
     pain = pain_all
 
+    # Races: each race once (meet, date, course, division, distance), then each athlete's results by race number
+    race_key = lambda x: (x["date"], x["meet"], x["race"], x["distance"])
+    race_list = sorted({race_key(x): x for x in races_all}.values(), key=race_key)
+    race_no = {race_key(x): i for i, x in enumerate(race_list, start=1)}
+    no_gender = lambda t: re.sub(r"\s{2,}", " ", re.sub(r"\b(boys|girls|men'?s|women'?s|male|female)\b", "", t or "", flags=re.I)).strip() or None
+    races = [{"race_no": race_no[race_key(x)], "date": x["date"], "meet": x["meet"], "division": no_gender(x["race"]),
+              "course": x["course"] or None, "distance": x["distance"],
+              "team_athletes_in_it": sum(1 for y in races_all if race_key(y) == race_key(x))} for x in race_list]
+    results_by: dict = {}
+    for x in races_all:
+        results_by.setdefault(x["athlete_id"], []).append(
+            {"race_no": race_no[race_key(x)], "place": x["place"], "time_s": round(x["time_s"], 1),
+             "adjusted_s": x["adjusted_s"], "team_points": x["points"]})
+
     athletes = []
     for r in roster:
         aid = r["athlete_id"]
@@ -210,12 +240,14 @@ def build_payload(snap: dict) -> tuple[dict, dict[str, dict]]:
                              for p in pain if p["athlete_id"] == aid],
             "recent_workouts": workouts,
             "benchmarks_sec": prog.get(aid, {}),
+            "race_results": results_by.get(aid, []),
             "flags": watch.get(aid, ""),
         })
 
     payload = {
         "as_of": as_of.isoformat(),
         "seasons": snap["seasons"],
+        "season_dates": _season_dates(as_of),
         "team": {
             "athletes": len(roster), "kpis": kpis_all,
             "injury_rate_by_load_ratio": bands_all,
@@ -224,6 +256,7 @@ def build_payload(snap: dict) -> tuple[dict, dict[str, dict]]:
             "latest_workout": None if latest_date is None else {
                 "date": latest_date, "team_median_recovery_bpm": round(statistics.median(latest_recs), 1) if latest_recs else None},
         },
+        "races": races,
         "athletes": athletes,
     }
     # Codes only: the payload must never carry a roster name.

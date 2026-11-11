@@ -678,7 +678,6 @@ a.route-link { white-space: nowrap; }
 .dash-list li:first-child { border-top: 0; }
 .dash-pct { font-variant-numeric: tabular-nums; font-size: 1.05rem; }
 .dash-detail { grid-column: 1 / -1; }
-.dash-weeks { white-space: nowrap; }
 @media (prefers-reduced-motion: reduce) { .dash-band > summary::before { transition: none; } }
 
 /* Daniels' session limits on the Workouts page, and warning messages */
