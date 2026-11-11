@@ -1,0 +1,28 @@
+# Dependabot: GitHub checks the app's libraries each week and opens a pull request when one has an update (security
+# fixes right away). Each pull request runs the tests; merging it deploys. Updates are grouped so there's about one
+# pull request per kind each week, not one per library.
+version: 2
+updates:
+  - package-ecosystem: pip            # requirements.txt (the app)
+    directory: /
+    schedule: { interval: weekly, day: monday }
+    groups:
+      python: { patterns: ["*"] }
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: npm            # package.json (the deploy tools: wrangler, Cloudflare containers)
+    directory: /
+    schedule: { interval: weekly, day: monday }
+    groups:
+      npm: { patterns: ["*"] }
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: docker         # the Dockerfile's base image
+    directory: /
+    schedule: { interval: weekly, day: monday }
+
+  - package-ecosystem: github-actions # the actions in .github/workflows
+    directory: /
+    schedule: { interval: weekly, day: monday }
+    groups:
+      actions: { patterns: ["*"] }
