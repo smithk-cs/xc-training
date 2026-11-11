@@ -9,23 +9,28 @@
 <form method="get" action="/races/awards" class="form-row" style="align-items:end; margin-bottom:8px">
   <input type="hidden" name="team" value="{{ team }}">
   <label>Season<select name="season" onchange="this.form.start_meet.value=''; this.form.end_meet.value=''; this.form.submit()">{% for x in seasons %}<option value="{{ x.school_year }}"{{ ' selected' if x.school_year == season.school_year }}>{{ x.label }}</option>{% endfor %}</select></label>
-  <label>Most improved from<select name="start_meet" onchange="this.form.submit()"><option value="">Each class’s first meet</option>{% for m in meets %}<option value="{{ meet_key(m) }}"{{ ' selected' if span[0] == m }}>{{ m[0].strftime('%b %-d') }} · {{ m[1] }}</option>{% endfor %}</select></label>
-  <label>to<select name="end_meet" onchange="this.form.submit()"><option value="">Each class’s last meet</option>{% for m in meets %}<option value="{{ meet_key(m) }}"{{ ' selected' if span[1] == m }}>{{ m[0].strftime('%b %-d') }} · {{ m[1] }}</option>{% endfor %}</select></label>
+  <label>From meet<select name="start_meet" onchange="this.form.submit()"><option value="">Each class’s first meet</option>{% for m in meets %}<option value="{{ meet_key(m) }}"{{ ' selected' if span[0] == m }}>{{ m[0].strftime('%b %-d') }} · {{ m[1] }}</option>{% endfor %}</select></label>
+  <label>to meet<select name="end_meet" onchange="this.form.submit()"><option value="">Each class’s last meet</option>{% for m in meets %}<option value="{{ meet_key(m) }}"{{ ' selected' if span[1] == m }}>{{ m[0].strftime('%b %-d') }} · {{ m[1] }}</option>{% endfor %}</select></label>
   <noscript><button type="submit" class="secondary">Show</button></noscript>
   <a href="/races" class="small">← Races</a>
 </form>
 <details class="muted how-points" style="max-width:90ch; margin-bottom:10px"><summary>How the awards are worked out</summary>
   <p style="margin:6px 0 0">From the race results for {{ season.label }} ({{ season.start.strftime('%b %-d') }} to {{ season.end.strftime('%b %-d, %Y') }}). Classes go by each athlete’s grade that season: Freshmen are 9th grade, Sophomores 10th, Varsity 11th and 12th.</p>
-  <p style="margin:6px 0 0"><b>Who counts:</b> athletes who ran at least {{ min_pct }}% of the meets their class raced in this season (a meet where any athlete of that class ran), so freshmen aren’t held to meets only varsity entered.</p>
-  <p style="margin:6px 0 0"><b>MVP:</b> lowest average finishing place, since in cross country a runner scores the points of their place. Only races whose results list a place count. Ties go to more races, then the faster average adjusted time.</p>
-  <p style="margin:6px 0 0"><b>Most improved:</b> average mile pace at one meet against another, from the times adjusted for the course and weather (as on the Races page). Pick the two meets above; by default each class’s first and last meet. Athletes who ran both are ranked by how many seconds a mile faster they got. Pace also depends on the distance (a 2-mile race is run faster a mile than a 5K), so pick two meets at the same distance; a different distance is marked.</p>
+  <p style="margin:6px 0 0"><b>The window:</b> the two meets picked above (by default each class’s first and last meet of the season). Those meets and every race in between count, for both awards and for who qualifies.</p>
+  <p style="margin:6px 0 0"><b>Who counts:</b> athletes who ran at least {{ min_pct }}% of the meets their class raced in the window (a meet where any athlete of that class ran), so freshmen aren’t held to meets only varsity entered.</p>
+  <p style="margin:6px 0 0"><b>MVP:</b> lowest average finishing place over every race in the window, since in cross country a runner scores the points of their place. Only races whose results list a place count. Ties go to more races, then the faster average adjusted time.</p>
+  <p style="margin:6px 0 0"><b>Most improved:</b> every race in the window as an adjusted mile pace (the time adjusted for the course and weather, as on the Races page). A 5K is its own pace; another distance counts as the 5K pace it’s worth (by VDOT), since a 2-mile race is run faster a mile than a 5K. A best-fit line through all of an athlete’s races, over the dates, shows the trend; the improvement is how much faster the line is at their last race than at their first, so one good or bad day at either end doesn’t decide it.</p>
 </details>
 
 {% for key, label, _ in classes %}{% set c = board[key] %}
 <section class="card" style="margin-bottom:14px">
   <h2 style="margin-top:0">{{ label }}</h2>
-  {% if not c.meets %}<p class="muted">No {{ team|lower }} {{ label|lower }} race results this season yet.</p>{% else %}
-  <p class="small muted" style="margin-top:0">{{ c.meets }} meet{{ 's' if c.meets != 1 }} this season: {{ c.eligible }} athlete{{ 's' if c.eligible != 1 }} ran at least {{ c.need }} ({{ min_pct }}%).</p>
+  {% set f, t = c.span %}
+  {% if not c.raced %}<p class="muted">No {{ team|lower }} {{ label|lower }} race results this season yet.</p>
+  {% elif not (f and t) %}<p class="muted">{{ label }} didn’t race at the {{ 'first' if not f else 'last' }} meet picked.</p>
+  {% elif not c.ok_span %}<p class="muted">Pick a first meet before the last meet.</p>
+  {% else %}
+  <p class="small muted" style="margin-top:0">{{ f[0].strftime('%b %-d') }} {{ f[1] }} to {{ t[0].strftime('%b %-d') }} {{ t[1] }}: {{ c.meets }} meet{{ 's' if c.meets != 1 }}; {{ c.eligible }} athlete{{ 's' if c.eligible != 1 }} ran at least {{ c.need }} ({{ min_pct }}%).</p>
   <div class="grid">
     <div>
       <h3>MVP: top 5 scorers</h3>
@@ -37,16 +42,12 @@
     </div>
     <div>
       <h3>Most improved: top 5</h3>
-      {% set f, t = c.span %}
-      {% if f and t and f < t %}<p class="small muted" style="margin-top:0">Adjusted mile pace, {{ f[0].strftime('%b %-d') }} {{ f[1] }} → {{ t[0].strftime('%b %-d') }} {{ t[1] }}{% if c.missed_span %} ({{ c.missed_span }} who qualify didn’t run both){% endif %}.</p>{% endif %}
-      {% if not (f and t) %}<p class="muted small">{{ label }} didn’t race at {{ 'both chosen meets' if span[0] or span[1] else 'two meets yet' }}.</p>
-      {% elif not f < t %}<p class="muted small">Pick a “from” meet before the “to” meet.</p>
-      {% elif c.improved %}<table class="list compact">
-        <thead><tr><th>#</th><th>Athlete</th><th class="num">Pace a mile</th><th class="num">Faster</th></tr></thead>
+      {% if c.improved %}<table class="list compact">
+        <thead><tr><th>#</th><th>Athlete</th><th class="num">Mile pace trend</th><th class="num">Faster</th></tr></thead>
         <tbody>{% for m in c.improved %}<tr><td>{{ loop.index }}</td><td><a href="/athletes/{{ m.a.id }}">{{ m.a.name }}</a> <span class="small muted">{{ m.grade }}th</span>
-            <div class="small muted">{{ fmt_time(m['from'].r.time_s) }} ({{ m['from'].r.distance_label or ('%g m' % m['from'].r.distance_m) }}) → {{ fmt_time(m['to'].r.time_s) }} ({{ m['to'].r.distance_label or ('%g m' % m['to'].r.distance_m) }}){% if not m.same_distance %} <span class="pill warn">different distance</span>{% endif %}</div></td>
-          <td class="num nowrap">{{ fmt_time(m['from'].pace|round)[:-2] }} → <b>{{ fmt_time(m['to'].pace|round)[:-2] }}</b></td><td class="num nowrap"><b>{{ m.gain|round|int }} s/mi</b><br><span class="small muted">{{ '%.1f' % m.pct }}%</span></td></tr>{% endfor %}</tbody>
-      </table>{% else %}<p class="muted small">No athlete who qualifies got faster between these meets.</p>{% endif %}
+            <div class="small muted">{{ m.n }} races: {% for x in m.races %}{{ fmt_time(x.pace5k|round)[:-2] }}{{ ' ' if not loop.last }}{% endfor %}{% if m.mixed %} <span title="Races of other distances count as the 5K pace they’re worth">(5K pace)</span>{% endif %}</div></td>
+          <td class="num nowrap">{{ fmt_time(m.p_from|round)[:-2] }} → <b>{{ fmt_time(m.p_to|round)[:-2] }}</b></td><td class="num nowrap"><b>{{ m.gain|round|int }} s/mi</b><br><span class="small muted">{{ '%.1f' % m.pct }}%</span></td></tr>{% endfor %}</tbody>
+      </table>{% else %}<p class="muted small">No athlete who qualifies got faster over the window.</p>{% endif %}
     </div>
   </div>
   {% if c.short %}<details class="small muted" style="margin-top:8px"><summary>{{ c.short|length }} not counted (under {{ c.need }} meets)</summary>
