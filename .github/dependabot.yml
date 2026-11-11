@@ -20,6 +20,11 @@ updates:
   - package-ecosystem: docker         # the Dockerfile's base image
     directory: /
     schedule: { interval: weekly, day: monday }
+    ignore:
+      # Stay on Python 3.12 (fixes within it still come): moving to a newer Python is a deliberate, tested step,
+      # since the tests run on 3.12 and every library must support the new version first
+      - dependency-name: python
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
 
   - package-ecosystem: github-actions # the actions in .github/workflows
     directory: /
