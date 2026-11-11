@@ -17,6 +17,14 @@
       <button type="submit">Save goal</button>
     </div>
   </form>
+  {% if user.role in ('admin', 'coach') %}
+  <form method="post" action="/goals/one-up" class="form-row" style="margin-top:12px"
+        onsubmit="return confirm('Set every athlete\'s goal VDOT to their VDOT + 1? This replaces their goal times for {{ season_now }} (1 mile, 1.5 mile, 2 mile and 5K).')">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <button type="submit" class="secondary">Set every goal VDOT to VDOT + 1</button>
+    <span class="small muted">For all athletes with a VDOT: replaces this season's goal times with the times for one VDOT faster.</span>
+  </form>
+  {% endif %}
 </div>
 <div class="card">
   <h2>Import results</h2>

@@ -1257,7 +1257,7 @@ def create_app() -> FastAPI:
     def results_page(request: Request, user=Depends(any_staff, scope="function"), db: Session = Depends(get_db, scope="function")):
         rows, used, more = results_filtered(db, request.query_params, RESULTS_LATEST)
         cur = A.current_xc_season(A.benchmark_rows(db)) or A.season_for(A.team_today())
-        return render(request, "results.html", user, rows=rows, used=used, more=more, season=cur,
+        return render(request, "results.html", user, rows=rows, used=used, more=more, season=cur, season_now=A.season_for(A.team_today()),
                       today=A.team_today().isoformat(), **results_filter_options(db))
 
     @app.get("/results/all", response_class=HTMLResponse)
@@ -1315,6 +1315,15 @@ def create_app() -> FastAPI:
         except (ValueError, HTTPException) as exc:
             flash(request, getattr(exc, "detail", None) or str(exc), "error")
         return back("/results")
+
+    @app.post("/goals/one-up")
+    async def goals_one_up(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
+        await form_checked(request)
+        today = A.team_today()
+        n = A.goals_one_up(db, today)
+        log(db, "app", f"{user.username} set {n} athletes' goal VDOT to their VDOT + 1 ({A.season_for(today)} goal times replaced).")
+        flash(request, f"Set {n} athletes' goal VDOT to their VDOT + 1. Their {A.season_for(today)} goal times now match it.")
+        return back("/results#set-goal")
 
     @app.post("/goals/import")
     async def goals_import(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):

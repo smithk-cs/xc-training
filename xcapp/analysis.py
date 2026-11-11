@@ -644,6 +644,43 @@ def goal_vdot(db: Session, athlete_id: int, on: dt.date) -> int | None:
     return max(team_vdot(vdot(EVENTS[g.event], g.goal_s), targets) for g in pool)
 
 
+def goal_time_for(distance_m: float, n: int, targets: dict) -> float:
+    """The slowest time (to the tenth) over a distance that reaches whole-number VDOT n on the team's scale."""
+    lo, hi = equivalent_time(distance_m, n + 4), equivalent_time(distance_m, n - 4)   # fast, slow
+    for _ in range(60):
+        mid = (lo + hi) / 2
+        if team_vdot(vdot(distance_m, mid), targets) >= n:
+            lo = mid
+        else:
+            hi = mid
+    tenths = math.floor(lo * 10)          # whole tenths, so the time stored is exactly the time checked
+    while team_vdot(vdot(distance_m, tenths / 10), targets) < n:
+        tenths -= 1
+    return tenths / 10
+
+
+def goals_one_up(db: Session, today: dt.date) -> int:
+    """Every athlete's goal VDOT set to their VDOT + 1: this season's goal times (1 mile, 1.5 mile, 2 mile, 5K) are
+    replaced with the times for VDOT + 1 on the team's table. Athletes without a VDOT are left alone. Returns how
+    many athletes were set."""
+    season, targets = season_for(today), vdot_targets(db)
+    ab = abilities(db, today)
+    n_set = 0
+    for a in db.scalars(select(Athlete).where(on_team())).all():
+        v = ab.get(a.id, {}).get("vdot")
+        if not v:
+            continue
+        n = int(round(v)) + 1
+        for g in db.scalars(select(Goal).where(Goal.athlete_id == a.id, Goal.season == season)).all():
+            db.delete(g)
+        db.flush()
+        for event, meters in EVENTS.items():
+            db.add(Goal(athlete_id=a.id, event=event, season=season, goal_s=goal_time_for(meters, n, targets)))
+        n_set += 1
+    db.flush()
+    return n_set
+
+
 def training_paces(v: float | None) -> list[dict]:
     """Per-mile paces for each kind of run at VDOT v; interval and repetition also per 400 m."""
     if v is None:
