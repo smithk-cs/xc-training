@@ -152,20 +152,6 @@
     <label class="check"><input type="checkbox" name="is_test" value="1"{% if a.is_test %} checked{% endif %}> Test athlete (a staff test account: left out of team numbers, the watch list, the VDOT page and the AI briefing)</label>
     <button type="submit" class="secondary">Save</button>
   </form>
-  {% if a.active %}
-  <details><summary class="small" style="cursor:pointer; font-weight:600; color:var(--brand-red)">Left the team</summary>
-    <form method="post" action="/athletes/{{ a.id }}/status" class="form-row" style="margin-top:8px">
-      <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="leave">
-      <span class="small">Takes {{ a.first_name }} off the roster but keeps their runs, results and races. Their personal link stops working and Garmin is disconnected. The privacy policy says to delete their data within {{ settings.retention_days }} days; the home page reminds you.</span>
-      <button type="submit" class="danger">Remove from roster</button>
-    </form>
-  </details>
-  {% else %}
-  <form method="post" action="/athletes/{{ a.id }}/status" class="form-row">
-    <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="return">
-    <button type="submit">Put back on the roster</button>
-  </form>
-  {% endif %}
   <form method="post" action="/athletes/{{ a.id }}/other-names" class="form-row" style="margin-top:10px">
     <input type="hidden" name="csrf" value="{{ csrf }}">
     <label style="flex:1">Other names in uploads (separate with ;)<input type="text" name="other_names" maxlength="500" value="{{ a.other_names }}" placeholder="William Pell; Billy Pell"></label>
@@ -182,6 +168,20 @@
     </form>
     <p class="small muted">{{ a.name }}’s name, grade and personal link are kept; the other entry’s link stops working. The same run or result recorded under both names is kept once. The other name is saved above, so future uploads match {{ a.first_name }}.</p>
   </details>
+  {% if a.active %}
+  <details><summary class="small" style="cursor:pointer; font-weight:600; color:var(--brand-red)">Left the team</summary>
+    <form method="post" action="/athletes/{{ a.id }}/status" class="form-row" style="margin-top:8px">
+      <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="leave">
+      <span class="small">Takes {{ a.first_name }} off the roster but keeps their runs, results and races. Their personal link stops working and Garmin is disconnected. The privacy policy says to delete their data within {{ settings.retention_days }} days; the home page reminds you.</span>
+      <button type="submit" class="danger">Remove from roster</button>
+    </form>
+  </details>
+  {% else %}
+  <form method="post" action="/athletes/{{ a.id }}/status" class="form-row">
+    <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="return">
+    <button type="submit">Put back on the roster</button>
+  </form>
+  {% endif %}
   {% if user.role == 'admin' %}
   <form method="post" action="/athletes/{{ a.id }}/delete" style="margin-top:1em">
     <input type="hidden" name="csrf" value="{{ csrf }}">
