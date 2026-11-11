@@ -1,8 +1,10 @@
 // Runs xcapp/static/form-core.js on a made-up runner whose stride we know, and prints what it measured as JSON
-// (tests/test_form.py checks the numbers). Usage: node tests/form_core_check.mjs [still|following] [fps] [left|right]
-import { analyze } from "../xcapp/static/form-core.js";
+// (tests/test_form.py checks the numbers). Usage: node tests/form_core_check.mjs [still|following] [fps] [left|right] [clean|messy]
+// "messy" adds what the pose model gets wrong on real clips: legs labelled the wrong way round for a frame or two,
+// frames where it lost the runner, and a half-hidden joint jumping away. The page runs tidy() before analyze().
+import { analyze, tidy } from "../xcapp/static/form-core.js";
 
-const [camera = "still", fpsArg = "60", facing = "right"] = process.argv.slice(2);
+const [camera = "still", fpsArg = "60", facing = "right", mess = "clean"] = process.argv.slice(2);
 const fps = Number(fpsArg), W = 1920, H = 1080;
 const CAD = 180, CONTACT = 0.24, LEAN = 7 * Math.PI / 180, LAND_AHEAD = 0.13;   // steps/min, s, rad, × leg length
 const leg = 400, thigh = 205, shin = 205, speed = 1200;   // pixels; pixels a second across the image (still camera)
@@ -60,5 +62,21 @@ for (let i = 0; i < Math.round(3.2 * fps); i++) {
   p[2] = [head[0] + dir * 30, head[1] - 4, 0.9]; p[5] = [head[0] + dir * 30, head[1] - 4, 0.9];
   frames.push({ t, p: p.map(q => [q[0] / W, q[1] / H, q[2]]) });
 }
-const r = analyze(frames, W, H);
+const truth = frames.map(f => f.p.map(q => [...q]));
+let seed = 7;
+const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+if (mess === "messy") {
+  frames.forEach((f, i) => {
+    if (i % 9 === 4 || i % 9 === 5) for (const [a, b] of [[23, 24], [25, 26], [27, 28], [29, 30], [31, 32]]) [f.p[a], f.p[b]] = [f.p[b], f.p[a]];  // legs swapped
+    if (i % 13 === 6) f.p[15] = [f.p[15][0] + 0.15, f.p[15][1] - 0.2, 0.2];      // far wrist jumps away, low confidence
+    if (i % 17 === 8) f.p[28] = [f.p[28][0] - 0.12, f.p[28][1] - 0.15, 0.8];     // a foot jumps away, model sure of it
+  });
+  frames.forEach((f, i) => { if (i % 11 === 3 || rand() < 0.03) f.p = null; });   // runner lost in some frames
+}
+const kept = tidy(frames, W, H);
+// How far the tidied joints are from the truth, in pixels (frames that were dropped are skipped)
+const err = [];
+kept.forEach(f => { const i = Math.round(f.t * fps); for (const j of [13, 15, 25, 26, 27, 28]) err.push(Math.hypot((f.p[j][0] - truth[i][j][0]) * W, (f.p[j][1] - truth[i][j][1]) * H)); });
+err.sort((a, b) => a - b);
+const r = { ...analyze(kept, W, H), kept: kept.length, total: frames.length, err95: Math.round(err[Math.floor(0.95 * (err.length - 1))]) };
 console.log(JSON.stringify({ ...r, curves: Object.fromEntries(Object.entries(r.curves).map(([k, v]) => [k, { left: v.left.length, right: v.right.length, kneeMax: k === "knee" ? Math.max(...v.left) : null }])) }));

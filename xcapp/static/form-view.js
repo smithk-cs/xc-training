@@ -139,21 +139,35 @@ export function mount(root, v, player) {
     stage.append(vid, canvas);
     const fr = player.frames, t0 = fr[0].vt, t1 = fr[fr.length - 1].vt;
     length = t1 - t0;
-    const nearest = (t) => { let lo = 0, hi = fr.length - 1; while (hi - lo > 1) { const m = (lo + hi) >> 1; if (fr[m].vt < t) lo = m; else hi = m; } return Math.abs(fr[lo].vt - t) < Math.abs(fr[hi].vt - t) ? fr[lo] : fr[hi]; };
+    // The pose at video time t: blended between the two analyzed frames either side, so it moves smoothly
+    const poseAt = (t) => {
+      let lo = 0, hi = fr.length - 1;
+      while (hi - lo > 1) { const m = (lo + hi) >> 1; if (fr[m].vt <= t) lo = m; else hi = m; }
+      const a = fr[lo], b = fr[hi], u = b.vt > a.vt ? Math.min(1, Math.max(0, (t - a.vt) / (b.vt - a.vt))) : 0;
+      return a.p.map((q, j) => [q[0] + (b.p[j][0] - q[0]) * u, q[1] + (b.p[j][1] - q[1]) * u]);
+    };
+    // Drawn for the exact frame on screen (requestVideoFrameCallback gives its time), not the clock, which on
+    // iPhones runs a little behind the picture
+    let shown = null;
     draw = () => {
       const r = vid.getBoundingClientRect(); canvas.width = r.width * dpr; canvas.height = r.height * dpr;
       canvas.style.width = r.width + "px"; canvas.style.height = r.height + "px";
       const k = Math.min(r.width / player.width, r.height / player.height), ox = (r.width - player.width * k) / 2, oy = (r.height - player.height * k) / 2;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, r.width, r.height);
-      if (vid.currentTime < t0 - 0.05 || vid.currentTime > t1 + 0.05) return;
-      const f = nearest(vid.currentTime);
-      drawSkeleton(ctx, f.p.map((q) => [ox + q[0] * player.width * k, oy + q[1] * player.height * k]), v.bones, Math.max(0.7, k * player.width / 900), { width: 2.5 });
+      const t = shown ?? vid.currentTime;
+      if (t < t0 - 0.05 || t > t1 + 0.05) return;
+      drawSkeleton(ctx, poseAt(t).map((q) => [ox + q[0] * player.width * k, oy + q[1] * player.height * k]), v.bones, Math.max(0.7, k * player.width / 900), { width: 2.5 });
     };
     position = () => (vid.currentTime - t0) / (length || 1);
     setPosition = (x) => { vid.currentTime = t0 + x * length; };
     play = () => { try { vid.playbackRate = speed; } catch (e) {} if (vid.currentTime >= t1 - 0.02) vid.currentTime = t0; vid.play().catch(() => {}); };
     pause = () => vid.pause();
     vid.addEventListener("timeupdate", () => { if (vid.currentTime > t1) vid.currentTime = t0; });
+    if ("requestVideoFrameCallback" in vid) {
+      const onFrame = (_now, meta) => { shown = meta.mediaTime; draw(); vid.requestVideoFrameCallback(onFrame); };
+      vid.requestVideoFrameCallback(onFrame);
+      vid.addEventListener("seeking", () => { shown = null; });
+    }
     vid.currentTime = t0;
   } else if (v.clip) {
     // A saved report: one stride of the runner as an animated stick figure

@@ -1,7 +1,7 @@
 /* Running-form capture: pick or film a side-view clip, find the runner's joints in each frame with MediaPipe Pose
    (on this phone or computer; the video is never uploaded), measure the stride (form-core.js), and save only the
    measurements to the athlete's record. The server writes the feedback and the PDF. */
-import { analyze } from "/static/form-core.js";
+import { analyze, tidy } from "/static/form-core.js";
 import { mount } from "/static/form-view.js";
 
 const cfg = JSON.parse(document.getElementById("form-cfg").textContent);
@@ -32,13 +32,16 @@ $("#film").addEventListener("change", picked);    // opens the camera
 
 async function loadModel() {
   if (landmarker) return landmarker;
-  say("Loading the pose model (about 24 MB the first time; it's saved on this device after that)…");
+  say("Loading the pose model (about 45 MB the first time; it's saved on this device after that)…");
   const { FilesetResolver, PoseLandmarker } = await import("/static/vendor/pose/vision_bundle.mjs");
   const vision = await FilesetResolver.forVisionTasks("/static/vendor/pose");
-  const opts = (delegate) => ({ baseOptions: { modelAssetPath: "/static/vendor/pose/pose_landmarker_full.task", delegate },
-                                runningMode: "VIDEO", numPoses: 1, minPoseDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
-  try { landmarker = await PoseLandmarker.createFromOptions(vision, opts("GPU")); }
-  catch (e) { landmarker = await PoseLandmarker.createFromOptions(vision, opts("CPU")); }
+  // The heavy model is more accurate on fast legs and half-hidden arms; it needs the phone's GPU to be quick. Lower
+  // confidence settings keep the runner tracked through blurred frames (tidy() cleans up anything doubtful).
+  const opts = (model, delegate) => ({ baseOptions: { modelAssetPath: `/static/vendor/pose/pose_landmarker_${model}.task`, delegate },
+                                       runningMode: "VIDEO", numPoses: 1, minPoseDetectionConfidence: 0.4,
+                                       minPosePresenceConfidence: 0.3, minTrackingConfidence: 0.3 });
+  try { landmarker = await PoseLandmarker.createFromOptions(vision, opts("heavy", "GPU")); }
+  catch (e) { landmarker = await PoseLandmarker.createFromOptions(vision, opts("full", "CPU")); }
   return landmarker;
 }
 
@@ -70,21 +73,24 @@ $("#go").addEventListener("click", async () => {
     await new Promise((ok) => (video.readyState >= 1 ? ok() : video.addEventListener("loadedmetadata", ok, { once: true })));
     const slow = Number($("#slowmo").value) || 1;          // a slow-motion clip saved at normal speed: 2, 4 or 8 × slower
     const fps = await frameRate();
-    // About 4 seconds of running (a dozen steps) is plenty; fewer for very high frame rates, so the phone isn't busy for long
-    const realSeconds = Math.min(4, 480 / (fps * slow));
+    // About 3½ seconds of running (ten steps) is plenty. Slow-motion clips are read at up to 120 frames a second of
+    // real time (plenty for ground contact time), and at most 300 frames in all, so the phone isn't busy for long.
+    const rate = Math.min(fps * slow, 120);
+    const realSeconds = Math.min(3.5, 300 / rate);
     const end = Math.min(video.duration, Number($("#start").value || 0) + realSeconds * slow);
     const start = Math.min(Number($("#start").value || 0), Math.max(0, end - 1));
-    const step = 1 / fps, frames = [];
+    const step = Math.max(1 / fps, slow / rate), raw = [];
     const total = Math.floor((end - start) / step);
     for (let i = 0; i <= total; i++) {
       const t = start + i * step;
       await seek(t);
       const r = lm.detectForVideo(video, Math.round(t * 1000) + 1);
       const p = r.landmarks && r.landmarks[0];
-      if (p) frames.push({ t: (t - start) / slow, vt: t, p: p.map((q) => [q.x, q.y, q.visibility ?? 1]) });
+      raw.push({ t: (t - start) / slow, vt: t, p: p ? p.map((q) => [q.x, q.y, q.visibility ?? 1]) : null });
       if (i % 5 === 0) { bar.value = i / total; say(`Finding the runner in each frame… ${Math.round(100 * i / total)}%`); }
     }
     bar.value = 1;
+    const frames = tidy(raw, video.videoWidth, video.videoHeight);   // gaps filled, swapped legs put right
     if (frames.length < 0.6 * total) throw new Error("The runner was found in too few frames. Film side-on, the whole body in frame, in good light.");
     const result = analyze(frames, video.videoWidth, video.videoHeight);
     if (result.metrics.cadence && result.metrics.cadence < 120 && slow === 1)

@@ -37,6 +37,22 @@ def test_stride_math_on_a_known_runner():
     assert slow["contact_ms"] is None and slow["cadence"] == 180          # 30 fps: no contact time, cadence still right
 
 
+@need_node
+def test_cleanup_recovers_a_messy_clip():
+    # What the pose model gets wrong on real clips: legs labelled the wrong way round, frames where it lost the runner,
+    # a joint jumping away. tidy() puts them right, so the numbers match the clean clip.
+    for args in (("still", "60", "right"), ("still", "30", "left"), ("following", "60", "right"), ("still", "120", "right")):
+        clean, messy = run_core(*args, "clean"), run_core(*args, "messy")
+        assert clean["err95"] == 0 and messy["err95"] <= 10, args           # joints within a few pixels of the truth
+        assert messy["kept"] >= messy["total"] - 2, args                    # gaps filled, not dropped
+        assert messy["metrics"]["cadence"] == clean["metrics"]["cadence"] == 180, args
+        assert messy["contacts"] == clean["contacts"], args
+        for k in ("overstride_deg", "trunk_deg", "elbow_deg", "front_knee_deg", "back_knee_deg"):
+            assert abs(messy["metrics"][k] - clean["metrics"][k]) <= 2, (args, k)
+        if clean["metrics"]["contact_ms"]:
+            assert abs(messy["metrics"]["contact_ms"] - clean["metrics"]["contact_ms"]) <= 10, args
+
+
 def test_ratings_feedback_and_score():
     good = {"overstride_deg": 3, "shin_deg": 4, "front_knee_deg": 160, "back_knee_deg": 80, "trunk_deg": 7, "head_deg": -10,
             "elbow_deg": 90, "cadence": 180, "oscillation_pct": 8, "contact_ms": 230, "flight_ms": 100, "duty_pct": 35}

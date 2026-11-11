@@ -2,7 +2,8 @@
    Pure functions, so the tests run them on made-up strides. The page (form-capture.js) runs the pose model on the
    video and passes the frames here; the server rates each measure and writes the feedback (xcapp/form.py).
 
-   Side view, the whole body in frame. Each frame: {t: seconds, p: [[x, y, visibility] × 33]}. */
+   Side view, the whole body in frame. Each frame: {t: seconds, p: [[x, y, visibility] × 33]}. The page runs tidy()
+   on the frames first (filling gaps and fixing legs the model swapped); analyze() measures them. */
 
 export const L = { nose: 0, lEye: 2, rEye: 5, lEar: 7, rEar: 8, lSh: 11, rSh: 12, lEl: 13, rEl: 14, lWr: 15, rWr: 16,
   lHip: 23, rHip: 24, lKnee: 25, rKnee: 26, lAnk: 27, rAnk: 28, lHeel: 29, rHeel: 30, lToe: 31, rToe: 32 };
@@ -31,6 +32,89 @@ export function toPixels(frames, w, h) {
 }
 
 const mid = (p, a, b) => [(p[a][0] + p[b][0]) / 2, (p[a][1] + p[b][1]) / 2];
+
+// Left/right pairs: the legs (with the hips) and the arms (with the shoulders), each swapped as a group
+const LEG_PAIRS = [[L.lHip, L.rHip], [L.lKnee, L.rKnee], [L.lAnk, L.rAnk], [L.lHeel, L.rHeel], [L.lToe, L.rToe]];
+const ARM_PAIRS = [[L.lSh, L.rSh], [L.lEl, L.rEl], [L.lWr, L.rWr]];
+
+/** Clean up what the pose model found, before measuring or drawing. Seen side-on, a runner's legs cross every step
+    and the model sometimes labels the left leg as the right for a frame or two; it loses the runner in a blurred
+    frame; and a half-hidden joint (the far arm, a foot behind the other leg) can jump away for a frame. So:
+    - a frame where the runner wasn't found (p null) is filled in from the frames either side, if the gap is short;
+    - legs (and arms) are kept on the same side from frame to frame: when swapping a pair matches where those joints
+      were heading clearly better than keeping it, they're swapped;
+    - a joint the model wasn't sure of, or that jumps far from its neighbours for a frame, is filled in from the
+      frames either side.
+    frames: [{t, vt?, p: [[x, y, visibility] × 33] | null}], x and y from 0 to 1. Returns the frames kept, same shape. */
+export function tidy(frames, w = 1, h = 1) {
+  const n = frames.length;
+  if (!n) return [];
+  const dt = n > 1 ? (frames[n - 1].t - frames[0].t) / (n - 1) : 1 / 30;
+  const fps = 1 / Math.max(1e-3, dt);
+  const P = (f, j) => [f.p[j][0] * w, f.p[j][1] * h];
+  const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+  const found = frames.filter(f => f.p).map(f => ({ ...f, p: f.p.map(q => [...q]) }));
+  // 1. Keep each leg (and arm) on its own side: compare with where the joints were heading (from the two frames
+  //    found before, allowing for frames in between where the runner wasn't found)
+  for (let i = 1; i < found.length; i++) {
+    const f = found[i], a = found[i - 1], b = found[i - 2];
+    for (const pairs of [LEG_PAIRS, ARM_PAIRS]) {
+      let keep = 0, swap = 0;
+      for (const [l, r] of pairs) {
+        const pred = (j) => { const pa = P(a, j); if (!b) return pa; const pb = P(b, j), u = (f.t - a.t) / Math.max(1e-6, a.t - b.t);
+                              return [pa[0] + (pa[0] - pb[0]) * u, pa[1] + (pa[1] - pb[1]) * u]; };
+        const cl = P(f, l), cr = P(f, r), pl = pred(l), pr = pred(r);
+        keep += dist(cl, pl) + dist(cr, pr);
+        swap += dist(cl, pr) + dist(cr, pl);
+      }
+      if (swap < 0.6 * keep) for (const [l, r] of pairs) [f.p[l], f.p[r]] = [f.p[r], f.p[l]];
+    }
+  }
+  // 2. Short gaps (up to about a tenth of a second) filled in; longer ones dropped
+  const maxGap = Math.max(2, Math.round(0.1 * fps));
+  const at = new Map(found.map(f => [f.t, f]));
+  const filled = frames.map(f => at.get(f.t) || { ...f, p: null });
+  for (let i = 0; i < n; i++) {
+    if (filled[i].p) continue;
+    let j = i; while (j < n && !filled[j].p) j++;
+    const a = filled[i - 1], b = filled[j];
+    if (a && b && j - i <= maxGap) {
+      for (let k = i; k < j; k++) {
+        const u = (k - (i - 1)) / (j - (i - 1));
+        filled[k].p = a.p.map((q, m) => [q[0] + (b.p[m][0] - q[0]) * u, q[1] + (b.p[m][1] - q[1]) * u, Math.min(q[2], b.p[m][2])]);
+      }
+    }
+    i = j;
+  }
+  const out = filled.filter(f => f.p);
+  const m = out.length;
+  if (m < 3) return out;
+  // 3. Unsure or jumpy joints filled in from the frames either side (the 5-frame median keeps real fast movement)
+  const legLen = median(out.map(f => (dist(P(f, L.lHip), P(f, L.lAnk)) + dist(P(f, L.rHip), P(f, L.rAnk))) / 2)) || 1;
+  const reach = 4;
+  for (let j = 0; j < 33; j++) {
+    const bad = out.map((f, i) => {
+      if (f.p[j][2] < 0.3) return true;
+      const near = out.slice(Math.max(0, i - 2), Math.min(m, i + 3));
+      const med = [median(near.map(g => g.p[j][0] * w)), median(near.map(g => g.p[j][1] * h))];
+      return dist(P(f, j), med) > 0.4 * legLen;
+    });
+    if (bad.every(Boolean)) continue;
+    const fixed = out.map(f => f.p[j]);
+    for (let i = 0; i < m; i++) {
+      if (!bad[i]) continue;
+      let a = i - 1; while (a >= 0 && bad[a]) a--;
+      let b = i + 1; while (b < m && bad[b]) b++;
+      if (a >= 0 && b < m && b - a <= 2 * reach) {
+        const u = (i - a) / (b - a), qa = out[a].p[j], qb = out[b].p[j];
+        fixed[i] = [qa[0] + (qb[0] - qa[0]) * u, qa[1] + (qb[1] - qa[1]) * u, Math.min(qa[2], qb[2])];
+      } else if (a >= 0 && i - a <= reach && b >= m) fixed[i] = [...out[a].p[j]];
+      else if (b < m && b - i <= reach && a < 0) fixed[i] = [...out[b].p[j]];
+    }
+    out.forEach((f, i) => { f.p[j] = fixed[i]; });
+  }
+  return out;
+}
 
 /** Contacts for one foot: the frames it's on the ground. A foot is down while it's near its lowest point and moving
     backward relative to the hips (the body passing over it). That holds whether the phone is held still or follows
