@@ -41,7 +41,7 @@
 </div>
 {% endif %}
 <div class="grid">
-<div class="card">
+<div class="card wide-card">
   <h2>Recent runs</h2>
   <div class="scroll"><table class="list" id="runs-table"><thead><tr><th>Date</th><th>Type</th><th class="num">Miles</th><th class="num">Time</th><th class="num">Avg HR</th><th class="num">VO2 max</th><th>Workout</th><th class="num">Effort</th><th>Legs</th><th>Pain</th><th>Device</th></tr></thead><tbody>
   {% for act in acts %}
@@ -68,7 +68,7 @@
   </tbody></table>{% else %}<p class="small muted">Film the athlete from the side for a few strides; the phone finds their joints and measures the stride. The video stays on the phone.</p>{% endif %}
 </div>
 {% if races %}
-<div class="card">
+<div class="card wide-card">
   <h2>Races</h2>
   <div class="scroll"><table class="list" id="races-table"><thead><tr><th>Date</th><th>Meet</th><th>Race</th><th>Distance</th><th class="num">Place</th><th class="num">Time</th></tr></thead><tbody>
   {% for r in races %}{% if loop.index0 == 5 %}</tbody><tbody id="more-races" hidden>{% endif %}<tr><td>{{ r.date.strftime('%b %-d, %Y') }}</td><td><a href="/races">{{ r.meet }}</a></td><td>{{ r.race }}</td><td>{{ r.distance_label }}</td><td class="num">{{ r.place or '' }}</td><td class="num nowrap">{% set adj = adjusted.get(r.id) %}{% include "_race_time.html" %}{% if marks.get(r.id) %}<br><span class="pill{% if marks[r.id] != 'SB' %} good{% endif %}">{{ marks[r.id] }}</span>{% endif %}</td></tr>{% endfor %}

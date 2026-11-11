@@ -763,3 +763,6 @@ a.route-link { white-space: nowrap; }
 .fv .fv-tabs button, .fv .fv-tabs button:hover { background: none !important; border-radius: 0; }
 .fv .fv-tap { align-self: stretch; }
 .form-athlete { display: grid; gap: 4px; max-width: 26rem; margin-bottom: 12px; font-weight: 600; }
+
+/* Cards holding wide tables span the whole row of a card grid, so their columns aren't squeezed into tall rows */
+.grid > .wide-card { grid-column: 1 / -1; }
