@@ -11,13 +11,21 @@ let file = null, landmarker = null;
 
 function say(text, bad) { status.textContent = text; status.classList.toggle("bad", !!bad); }
 
+// Analyze needs a clip and an athlete
+function ready() {
+  const who = $("#athlete").value;
+  $("#go").disabled = !(file && who);
+  if (file && !who) say("Choose the athlete, then tap Analyze.");
+  else if (file) say("Ready. Check the runner is side-on with the whole body in frame, then tap Analyze.");
+}
+$("#athlete").addEventListener("change", ready);
+
 function picked(e) {
   file = e.target.files[0] || null;
   if (!file) return;
   video.src = URL.createObjectURL(file);
   video.hidden = false;
-  $("#go").disabled = false;
-  say("Ready. Check the runner is side-on with the whole body in frame, then tap Analyze.");
+  ready();
 }
 $("#pick").addEventListener("change", picked);    // camera roll or files
 $("#film").addEventListener("change", picked);    // opens the camera
@@ -83,7 +91,9 @@ $("#go").addEventListener("click", async () => {
       throw new Error(`That's ${result.metrics.cadence} steps a minute, too slow for running: if this is a slow-motion clip, choose how slow and analyze again.`);
     say("Saving…");
     const body = { ...result, pace: $("#pace").value.trim(), note: $("#note").value.trim(), csrf: cfg.csrf };
-    const r = await fetch(cfg.save, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), credentials: "same-origin" });
+    const who = $("#athlete").value;
+    if (!who) throw new Error("Choose the athlete first.");
+    const r = await fetch(`/athletes/${encodeURIComponent(who)}/form`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), credentials: "same-origin" });
     const d = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(d.error || d.detail || "Couldn't save the analysis.");
     // The results screen, playing this video with the skeleton drawn over the runner
@@ -93,6 +103,7 @@ $("#go").addEventListener("click", async () => {
     box.hidden = false;
     document.getElementById("open").href = d.url;
     document.getElementById("pdf").href = d.url + "/pdf";
+    document.getElementById("again").href = "/form?athlete=" + encodeURIComponent(who);
     mount(document.getElementById("view"), d.view, { video, frames, width: video.videoWidth, height: video.videoHeight });
     window.scrollTo(0, box.offsetTop - 10);
   } catch (e) {

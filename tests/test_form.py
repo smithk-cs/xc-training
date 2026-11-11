@@ -110,7 +110,11 @@ def test_save_view_pdf_and_who_sees_it():
     db.close()
     app = create_app()
     coach = login(app, "coach1")
-    page = coach.get(f"/athletes/{aid}/form/new")
+    old = coach.get(f"/athletes/{aid}/form/new")                          # the old address opens the new page, athlete picked
+    assert old.status_code == 303 and old.headers["location"] == f"/form?athlete={aid}"
+    page = coach.get(f"/form?athlete={aid}")
+    assert f'<option value="{aid}" selected>Reyes, Sam' in page.text and "Choose a video" in page.text and "Film now" in page.text
+    assert '<a href="/form"' in coach.get("/").text                       # in the menu
     assert page.status_code == 200 and "'wasm-unsafe-eval'" in page.headers["content-security-policy"]
     assert "connect-src 'self'" in page.headers["content-security-policy"] and "form-capture.js" in page.text
     csrf = re.search(r'"csrf": "([^"]+)"', page.text).group(1)
@@ -127,6 +131,7 @@ def test_save_view_pdf_and_who_sees_it():
     assert "Running form: Sam Reyes" in report and "Form score" in report and "tempo pace" in report
     assert "Foot landing ahead of the hips" in report and "form-view.js" in report and '"clip"' in report
     assert "Running form" in coach.get(f"/athletes/{aid}").text and url in coach.get(f"/athletes/{aid}").text
+    assert url in coach.get("/form").text and "Sam Reyes" in coach.get("/form").text       # listed on the Running form page
     pdf = coach.get(f"{url}/pdf")
     assert pdf.status_code == 200 and pdf.headers["content-type"] == "application/pdf" and pdf.content.startswith(b"%PDF")
     assert "Running-form-Sam-Reyes" in pdf.headers["content-disposition"]
@@ -139,6 +144,8 @@ def test_save_view_pdf_and_who_sees_it():
     # A trainer can read reports but not film or delete
     trainer = login(app, "trainer1")
     assert trainer.get(url).status_code == 200 and trainer.get(f"/athletes/{aid}/form/new").status_code == 403
+    trainer_page = trainer.get("/form").text
+    assert "Recent analyses" in trainer_page and "Choose a video" not in trainer_page
     assert TestClient(app, follow_redirects=False).get(url).status_code in (302, 303)
     # Deleting
     csrf = re.search(r'name="csrf" value="([^"]+)"', report).group(1)

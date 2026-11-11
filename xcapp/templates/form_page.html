@@ -1,8 +1,9 @@
 {% extends "base.html" %}
-{% block title %}Form analysis · {{ a.name }}{% endblock %}
+{% block title %}Running form · {{ team_name }}{% endblock %}
 {% block content %}
-<p class="small"><a href="/athletes/{{ a.id }}">← {{ a.name }}</a></p>
-<h1>Running form analysis</h1>
+<h1>Running form</h1>
+<p class="muted">Film or choose a side-view clip of an athlete; the phone finds their joints and measures the stride. The analysis is saved to the athlete: their page and yours. The video stays on the phone.</p>
+{% if can_film %}
 <div class="card form-howto">
   <h2>How to film</h2>
   <ol class="small">
@@ -11,14 +12,18 @@
     <li><b>The whole body in frame</b>, head to feet, for at least 4 steps. Good light, nobody else crossing.</li>
     <li>At the <b>pace you want to check</b> (easy run, tempo or race pace). Slow motion (120 or 240 fps) makes contact and flight times more accurate.</li>
   </ol>
-  <p class="small muted">The video stays on this {{ 'device' }}: the pose model runs here and only the measurements are saved to {{ a.first_name }}'s record.</p>
+  <p class="small muted">The video stays on this device: the pose model runs here and only the measurements are saved to the athlete's record.</p>
 </div>
 <div id="result" hidden>
   <div class="form-row" style="margin-bottom:10px"><a class="button" id="pdf" href="#">Download PDF</a><a class="button secondary" id="open" href="#">Open saved report</a>
-    <a class="button secondary" href="/athletes/{{ a.id }}/form/new">Analyze another clip</a></div>
+    <a class="button secondary" id="again" href="/form">Analyze another clip</a></div>
   <div id="view"></div>
 </div>
 <div class="card" id="setup">
+  <label class="form-athlete">Athlete
+    <select id="athlete" required><option value="">Choose an athlete…</option>
+      {% for x in athletes %}<option value="{{ x.id }}"{% if x.id == picked %} selected{% endif %}>{{ x.last_name }}, {{ x.first_name }}{% if x.group %} · {{ x.group }}{% endif %}</option>{% endfor %}
+    </select></label>
   <div class="form-row">
     <label class="button">Choose a video<input id="pick" type="file" accept="video/*" hidden></label>
     <label class="button secondary">Film now<input id="film" type="file" accept="video/*" capture="environment" hidden></label>
@@ -36,6 +41,18 @@
   <progress id="progress" max="1" value="0" style="width:100%;margin-top:10px"></progress>
   <p id="status" class="small" role="status" aria-live="polite">Choose or film a side-view clip to begin.</p>
 </div>
-<script type="application/json" id="form-cfg">{{ {'save': '/athletes/' ~ a.id ~ '/form', 'csrf': csrf}|tojson }}</script>
+<script type="application/json" id="form-cfg">{{ {'csrf': csrf}|tojson }}</script>
 <script type="module" src="/static/form-capture.js?v={{ asset_v }}"></script>
+{% endif %}
+
+<div class="card">
+  <h2>Recent analyses</h2>
+  {% if recent %}<div class="scroll"><table class="list compact"><thead><tr><th>Filmed</th><th>Athlete</th><th class="num">Score</th><th>By</th><th></th></tr></thead><tbody>
+  {% for f, ath in recent %}<tr><td class="nowrap"><a href="/athletes/{{ ath.id }}/form/{{ f.id }}">{{ (f.created_at|local).strftime('%b %-d, %Y') }}</a></td>
+    <td><a href="/athletes/{{ ath.id }}#form">{{ ath.name }}</a>{% if f.note %} <span class="small muted">– {{ f.note }}</span>{% endif %}</td>
+    <td class="num">{{ '%.0f%%' % f.score if f.score is not none else '–' }}</td><td class="small">{{ f.by }}</td>
+    <td class="nowrap"><a href="/athletes/{{ ath.id }}/form/{{ f.id }}">Report</a> · <a href="/athletes/{{ ath.id }}/form/{{ f.id }}/pdf">PDF</a></td></tr>{% endfor %}
+  </tbody></table></div>
+  {% else %}<p class="small muted">No analyses yet.</p>{% endif %}
+</div>
 {% endblock %}

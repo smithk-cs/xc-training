@@ -762,3 +762,4 @@ a.route-link { white-space: nowrap; }
 .fv button.fv-speed, .fv button.fv-speed:hover { background: #262626 !important; color: #fff !important; }
 .fv .fv-tabs button, .fv .fv-tabs button:hover { background: none !important; border-radius: 0; }
 .fv .fv-tap { align-self: stretch; }
+.form-athlete { display: grid; gap: 4px; max-width: 26rem; margin-bottom: 12px; font-weight: 600; }

@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from . import analysis as A
 from . import form as F
 from .ingest import log
-from .models import FormAnalysis
+from .models import Athlete, FormAnalysis
 from .security import csrf_ok
 
 # The capture page runs the pose model in the browser: WebAssembly needs 'wasm-unsafe-eval', the model runs in a
@@ -50,12 +50,20 @@ def register(app, h: SimpleNamespace) -> None:
             raise HTTPException(404, "Not found.")
         return fa
 
-    @app.get("/athletes/{athlete_id}/form/new", response_class=HTMLResponse)
-    def form_new(request: Request, athlete_id: int, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
-        a = get_athlete(db, athlete_id)
-        resp = render(request, "form_new.html", user, a=a)
+    @app.get("/form", response_class=HTMLResponse)
+    def form_page(request: Request, athlete: int = 0, user=Depends(any_staff, scope="function"), db: Session = Depends(get_db, scope="function")):
+        """Running form: pick an athlete, film or choose a clip, analyze; and the team's recent analyses."""
+        athletes = db.scalars(select(Athlete).where(A.on_team()).order_by(Athlete.last_name, Athlete.first_name)).all()
+        recent = db.execute(select(FormAnalysis, Athlete).join(Athlete, Athlete.id == FormAnalysis.athlete_id)
+                            .order_by(FormAnalysis.created_at.desc()).limit(30)).all()
+        resp = render(request, "form_page.html", user, athletes=athletes, picked=athlete, recent=recent,
+                      can_film=user.role in ("admin", "coach"))
         resp.headers["Content-Security-Policy"] = CAPTURE_CSP
         return resp
+
+    @app.get("/athletes/{athlete_id}/form/new")
+    def form_new(athlete_id: int, user=Depends(coach_or_admin, scope="function")):
+        return back(f"/form?athlete={athlete_id}")   # the analyzer has its own page now
 
     @app.post("/athletes/{athlete_id}/form")
     async def form_save(request: Request, athlete_id: int, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):

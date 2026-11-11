@@ -27,6 +27,7 @@
     {% if user.sees("workouts") %}<a href="/workouts" {% if p == '/workouts' %}aria-current="page"{% endif %}>Workouts</a>{% endif %}
     {% if user.sees("week") %}<a href="/week" {% if p == '/week' %}aria-current="page"{% endif %}>Week</a>{% endif %}
     {% if user.sees("squads") %}<a href="/squads" {% if p.startswith('/squads') %}aria-current="page"{% endif %}>Squads</a>{% endif %}
+    {% if user.sees("form") %}<a href="/form" {% if p == '/form' %}aria-current="page"{% endif %}>Running form</a>{% endif %}
     {% if user.sees("raceday") %}<a href="/race-day" {% if p.startswith('/race-day') %}aria-current="page"{% endif %}>Race Day</a>{% endif %}
     {% if user.sees("calendar") %}<a href="/calendar" {% if p.startswith('/calendar') %}aria-current="page"{% endif %}>Calendar</a>{% endif %}
     {% if user.sees("vdot") %}<a href="/vdot" {% if p == '/vdot' %}aria-current="page"{% endif %}>VDOT</a>{% endif %}
