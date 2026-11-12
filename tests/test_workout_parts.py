@@ -214,6 +214,50 @@ def test_easy_runs_for_the_whole_team_by_group(app):
     db.close()
 
 
+def test_pre_race_day_runs(app):
+    c, csrf = login(app)
+    page = c.get("/workouts").text
+    assert "Pre-race day runs" in page and '<option selected>Bronze</option>' in page and 'name="upper_miles"' in page
+    day = (A.team_today() + dt.timedelta(days=3)).isoformat()
+    c.post("/workouts/pre-race-day", data={"csrf": csrf, "date": day, "split": "Bronze", "upper_miles": "4", "lower_miles": "2.5",
+                                           "strides": "6", "stride_kind": "hill"})
+    assert "Pre-race day runs for" in c.get("/workouts").text
+    db = SessionLocal()
+    rows = {w.groups: w for w in db.query(PlannedWorkout).all()}
+    from xcapp.models import TrainingGroup
+    order = [g.name for g in db.query(TrainingGroup).order_by(TrainingGroup.position).all()]
+    cut = order.index("Bronze")
+    assert set(rows) == set(order)                                            # every group, boys and girls together
+    for name in order:
+        w = rows[name]
+        easy, strides = w.part_list
+        assert easy["zone"] == "Easy" and easy["mi"] == (4 if order.index(name) <= cut else 2.5), name
+        assert strides["reps"] == 6 and strides["note"] == "Hill strides" and strides["rest"] == "jog down"
+        assert w.title == f"Pre-race run · {name} + 6 hill strides" and w.gender == ""
+    n = db.query(PlannedWorkout).count()
+    db.close()
+    c.post("/workouts/pre-race-day", data={"csrf": csrf, "date": day, "split": "Bronze", "upper_miles": "4", "lower_miles": "2.5",
+                                           "strides": "6", "stride_kind": "flat"})       # again: nothing doubled
+    db = SessionLocal()
+    assert db.query(PlannedWorkout).count() == n
+    db.close()
+    # Boys only, flat strides; a missing distance or no strides is refused
+    day2 = (A.team_today() + dt.timedelta(days=5)).isoformat()
+    c.post("/workouts/pre-race-day", data={"csrf": csrf, "date": day2, "split": "Gold", "upper_miles": "5", "lower_miles": "3",
+                                           "strides": "4", "stride_kind": "flat", "pre_Boys": "on"})
+    db = SessionLocal()
+    boys = db.query(PlannedWorkout).filter(PlannedWorkout.date == dt.date.fromisoformat(day2)).all()
+    assert boys and all(w.gender == "Boys" and w.part_list[1]["note"] == "Strides" for w in boys)
+    assert {w.groups: w.part_list[0]["mi"] for w in boys}["Silver"] == 3
+    db.close()
+    for bad in ({"upper_miles": ""}, {"strides": "0"}, {"split": "Nope"}):
+        data = {"csrf": csrf, "date": day2, "split": "Bronze", "upper_miles": "4", "lower_miles": "3", "strides": "4", **bad}
+        assert c.post("/workouts/pre-race-day", data=data).status_code in (302, 303)
+    db = SessionLocal()
+    assert db.query(PlannedWorkout).count() == n + len(boys)
+    db.close()
+
+
 def test_copy_opens_a_new_workout_and_parts_can_be_reordered(app):
     c, csrf = login(app)
     day = (A.team_today() + dt.timedelta(days=1)).isoformat()

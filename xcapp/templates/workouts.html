@@ -139,6 +139,28 @@
   </form>
   {% if easy_groups %}<p class="small muted" style="margin-top:6px">At 6 days: {% for g in easy_groups %}{{ g.name }} {{ '%g' % ((g.miles_goal('Boys') / 6 * 2)|round / 2) }} mi{% if g.miles_goal('Girls') != g.miles_goal('Boys') %} (girls {{ '%g' % ((g.miles_goal('Girls') / 6 * 2)|round / 2) }}){% endif %}{{ ' · ' if not loop.last }}{% endfor %}</p>{% endif %}
 </details>
+<details class="card fold-card" id="prerace"><summary><h2>Pre-race day runs</h2></summary>
+  <p class="small muted">The day before a race: one easy run per training group, one distance for the faster groups and another for the rest, then strides or hill strides to stay sharp. Every athlete sees their own easy pace from their VDOT.</p>
+  <form method="post" action="/workouts/pre-race-day">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    {% set names = easy_groups|map(attribute='name')|list %}
+    {% set split_default = 'Bronze' if 'Bronze' in names else (names[(names|length - 1) // 2] if names else '') %}
+    <div class="form-row">
+      <label>Day<input type="date" name="date" value="{{ (now() + timedelta(days=1)).isoformat() }}" required></label>
+      <label><span>Miles for <select name="split" aria-label="Dividing group" style="width:auto">{% for n in names %}<option{{ ' selected' if n == split_default }}>{{ n }}</option>{% endfor %}</select> and above</span><input type="number" name="upper_miles" min="0.5" max="15" step="0.5" value="4" required style="width:6em"></label>
+      <label>Miles for the groups below it<input type="number" name="lower_miles" min="0.5" max="15" step="0.5" value="3" required style="width:6em"></label>
+      {% for g in ('Boys', 'Girls') %}<label class="check"><input type="checkbox" name="pre_{{ g }}"> {{ g }}</label>{% endfor %}
+      <span class="small muted">Leave both unticked for boys and girls.</span>
+    </div>
+    <div class="form-row">
+      <label>Strides after the run<select name="strides">{% for n in (4, 5, 6, 8) %}<option value="{{ n }}"{{ ' selected' if n == 6 }}>{{ n }}</option>{% endfor %}</select></label>
+      <label>Kind<select name="stride_kind"><option value="flat">100 m strides</option><option value="hill">100 m hill strides</option></select></label>
+      <span class="small muted">Fast and relaxed, about mile race pace, with a walk back (or jog down the hill) between.</span>
+      <button type="submit">Create pre-race runs</button>
+    </div>
+  </form>
+  {% if names %}<p class="small muted" style="margin-top:6px">Groups, fastest first: {{ names|join(' · ') }}.</p>{% endif %}
+</details>
 {% endif %}
 <div class="card scroll" id="list">
   <div class="form-row" style="justify-content:space-between; align-items:center">

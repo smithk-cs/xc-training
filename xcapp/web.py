@@ -1561,26 +1561,36 @@ def create_app() -> FastAPI:
             flash(request, "Pick a date and the number of running days.", "error")
             return back("/workouts#easy")
         teams = [t for t in ("Boys", "Girls") if f.get(f"easy_{t}")] or ["Boys", "Girls"]
-        strides = None   # strides for everyone after the easy run: 100 m at repetition pace, on the flat or up a hill
-        n_str = int(f.get("strides", 0) or 0) if str(f.get("strides", "0")).isdigit() else 0
-        if 1 <= n_str <= 20:
-            if f.get("stride_kind") == "hill":
-                strides = {"sets": 1, "reps": n_str, "dist": 100, "zone": "Repetition", "rest": "jog down", "note": "Hill strides",
-                           "strides": True}
-            else:
-                strides = {"sets": 1, "reps": n_str, "dist": 100, "zone": "Repetition", "rest": "walk back", "note": "Strides",
-                           "strides": True}
+        return make_easy_runs(request, db, d, teams, lambda g, t: round(g.miles_goal(t) / div * 2) / 2, stride_part(f),
+                              "Easy run", "Easy runs", "no weekly miles goal")
+
+    def stride_part(f) -> dict | None:
+        """Strides for everyone after the run, from the form: 100 m at repetition pace, on the flat or up a hill."""
+        n = int(f.get("strides", 0) or 0) if str(f.get("strides", "0")).isdigit() else 0
+        if not 1 <= n <= 20:
+            return None
+        hill = f.get("stride_kind") == "hill"
+        return {"sets": 1, "reps": n, "dist": 100, "zone": "Repetition", "rest": "jog down" if hill else "walk back",
+                "note": "Hill strides" if hill else "Strides", "strides": True}
+
+    def make_easy_runs(request, db, d, teams, miles_for, strides, title_base: str, what: str, no_miles: str):
+        """One easy run per training group (and team, when boys' and girls' distances differ) on day d: miles_for(group,
+        team) miles at easy pace, then the strides if any. Skips a group with no distance or a workout already that day."""
+        import json
+        n_str = strides["reps"] if strides else 0
         that_day = db.scalars(select(PlannedWorkout).where(PlannedWorkout.date == d)).all()
         made, skipped, existing = [], [], {(w.title, w.gender) for w in that_day}
         for g in db.scalars(select(TrainingGroup).order_by(TrainingGroup.position)).all():
-            miles = {t: round(g.miles_goal(t) / div * 2) / 2 for t in teams}
+            miles = {t: miles_for(g, t) for t in teams}
             same = len(teams) == 2 and miles["Boys"] == miles["Girls"]
             for t, mi in ([("", miles["Boys"])] if same else list(miles.items())):
-                title = f"Easy run · {g.name}"
+                title = f"{title_base} · {g.name}"
+                if strides:
+                    title += f" + {n_str} {'hill strides' if strides['note'] == 'Hill strides' else 'strides'}"
                 if not mi:
-                    skipped.append(f"{g.name}{' ' + t if t else ''} (no weekly miles goal)")
+                    skipped.append(f"{g.name}{' ' + t if t else ''} ({no_miles})")
                     continue
-                if (title, t) in existing:
+                if any(x[0].startswith(f"{title_base} · {g.name}") and x[1] == t for x in existing):
                     skipped.append(f"{g.name}{' ' + t if t else ''} (already on {d:%b %-d})")
                     continue
                 busy = [w.title for w in that_day if w.applies_to(g.name, gender=t or "") and (not t or not w.gender or w.gender == t)]
@@ -1590,8 +1600,6 @@ def create_app() -> FastAPI:
                 m = round(mi * A.METERS_PER_MILE)
                 part = {"sets": 1, "reps": 1, "dist": m, "mi": mi, "zone": "Easy", "rest": "", "note": ""}
                 parts = [part] + ([strides] if strides else [])
-                if strides:
-                    title += f" + {n_str} {'hill strides' if strides['note'] == 'Hill strides' else 'strides'}"
                 db.add(PlannedWorkout(date=d, title=title, groups=g.name, gender=t, parts=json.dumps(parts), rep_distance_m=float(m),
                                       pace_event="5K", pace_factor=1.0, distance_unit="m"))
                 made.append(f"{g.name}{' ' + t if t else ''} {mi:g} mi")
@@ -1599,10 +1607,37 @@ def create_app() -> FastAPI:
         n = rematch_day(db, d)
         if made:
             forecast_day(db, d)
-        flash(request, (f"Easy runs for {d:%a %b %-d}: " + ", ".join(made) + "." if made else "No easy runs were added.")
+        flash(request, (f"{what} for {d:%a %b %-d}: " + ", ".join(made) + "." if made else f"No {what.lower()} were added.")
               + (f" Skipped: {', '.join(skipped)}." if skipped else "") + (f" Matched {n} runs already synced." if n else ""),
               "ok" if made else "error")
         return back("/workouts#list")
+
+    @app.post("/workouts/pre-race-day")
+    async def workouts_pre_race_day(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
+        """Pre-race day runs for the whole team: one distance for the faster groups (the chosen group and above), another
+        for the groups below it, easy pace, then strides or hill strides."""
+        f = await form_checked(request)
+        try:
+            d = parse_date(f.get("date", ""))
+            upper, lower = float(f.get("upper_miles", "")), float(f.get("lower_miles", ""))
+            if not (0.5 <= upper <= 15 and 0.5 <= lower <= 15):
+                raise ValueError
+        except (ValueError, TypeError):
+            flash(request, "Pick a date and both distances (0.5 to 15 miles).", "error")
+            return back("/workouts#prerace")
+        groups = db.scalars(select(TrainingGroup).order_by(TrainingGroup.position)).all()
+        split = next((g for g in groups if g.name == f.get("split")), None)
+        if split is None:
+            flash(request, "Pick the group that divides the two distances.", "error")
+            return back("/workouts#prerace")
+        strides = stride_part(f)
+        if not strides:
+            flash(request, "Pick how many strides (or hill strides) after the run.", "error")
+            return back("/workouts#prerace")
+        teams = [t for t in ("Boys", "Girls") if f.get(f"pre_{t}")] or ["Boys", "Girls"]
+        upper, lower = round(upper * 2) / 2, round(lower * 2) / 2
+        return make_easy_runs(request, db, d, teams, lambda g, t: upper if g.position <= split.position else lower, strides,
+                              "Pre-race run", "Pre-race day runs", "no distance")
 
     @app.post("/workouts/{wid}/delete")
     async def delete_workout(request: Request, wid: int, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
