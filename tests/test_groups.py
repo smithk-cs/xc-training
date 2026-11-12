@@ -117,7 +117,7 @@ def staff_login(app, user):
 def test_athlete_sets_type_and_workout(web):
     app, c, csrf, aid, act_id = web
     page = c.get(f"/a/tok-ava/runs/{act_id}").text
-    assert "Type of run" in page and "Hill repeats (Wed, Oct 21)" in page and "Old workout" not in page
+    assert "Type of run" in page and "Wed, Oct 21 · Hill repeats</option>" in page and "Old workout" not in page
     assert re.search(r'value="Workout" checked', page)                         # suggested from the matched workout
     me = c.get("/a/tok-ava").text
     assert '<summary class="group-btn" style="background:#7FDBCA; color:#1B1B1F">Aquamarine · VDOT 51</summary>' in me  # 19:30 girls' 5K

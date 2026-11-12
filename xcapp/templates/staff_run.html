@@ -38,9 +38,9 @@
     <input type="hidden" name="csrf" value="{{ csrf }}">
     <div class="form-row">
       <label>Type of run<select name="run_type">{% for t in RUN_TYPES %}<option {% if run_type_of(act) == t %}selected{% endif %}>{{ t }}</option>{% endfor %}</select></label>
-      <label>Team workout<select name="workout">
+      <label>Team workout<select name="workout" style="max-width:100%">
         <option value="none" {% if not act.planned_workout_id %}selected{% endif %}>Not a team workout</option>
-        {% for w in choices %}<option value="{{ w.id }}" {% if act.planned_workout_id == w.id %}selected{% endif %}>{{ w.title }} ({{ w.date.strftime('%a, %b %-d') }})</option>{% endfor %}
+        {% for w in choices %}<option value="{{ w.id }}" title="{{ w.title }}" {% if act.planned_workout_id == w.id %}selected{% endif %}>{{ w.date.strftime('%a, %b %-d') }} · {{ w.title[:20] }}{% if w.title|length > 20 %}…{% endif %}</option>{% endfor %}
       </select></label>
       <button type="submit">Save</button>
     </div>

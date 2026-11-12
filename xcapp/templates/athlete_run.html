@@ -36,7 +36,7 @@
     <label>Team workout
       <select name="workout">
         <option value="none" {% if not act.planned_workout_id %}selected{% endif %}>Not a team workout</option>
-        {% for w in choices %}<option value="{{ w.id }}" {% if act.planned_workout_id == w.id %}selected{% endif %}>{{ w.title }} ({{ w.date.strftime('%a, %b %-d') }})</option>{% endfor %}
+        {% for w in choices %}<option value="{{ w.id }}" title="{{ w.title }}" {% if act.planned_workout_id == w.id %}selected{% endif %}>{{ w.date.strftime('%a, %b %-d') }} · {{ w.title[:20] }}{% if w.title|length > 20 %}…{% endif %}</option>{% endfor %}
       </select>
     </label>
     <fieldset class="pick"><legend>Effort: how hard did the whole run feel?</legend>
