@@ -678,6 +678,10 @@ a.route-link { white-space: nowrap; }
 .dash-list li:first-child { border-top: 0; }
 .dash-pct { font-variant-numeric: tabular-nums; font-size: 1.05rem; }
 .dash-detail { grid-column: 1 / -1; }
+.dash-bar { grid-column: 1 / -1; display: block; width: 100%; max-width: 28rem; margin: 4px 0 2px; }
+.band-top .dash-bar > span { background: var(--color-ok); }
+.band-mid .dash-bar > span { background: var(--color-warn); }
+.band-low .dash-bar > span { background: var(--color-bad); }
 @media (prefers-reduced-motion: reduce) { .dash-band > summary::before { transition: none; } }
 
 /* Daniels' session limits on the Workouts page, and warning messages */

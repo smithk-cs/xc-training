@@ -56,6 +56,7 @@ def test_dashboard_page(monkeypatch):
         assert page.count(f"<h2>{band}</h2>") == 4                       # one collapsible list per band on each tab
     assert page.count("<details") >= 12 and "Sam Reyes" in page
     assert "<details" in page and " open>" not in page.split('class="dash-tabs"')[1]      # every list starts collapsed
+    assert 'class="miles-bar dash-bar"' in page and '% of the target so far"' in page          # a progress bar for each athlete
     assert "Team briefing" not in page                                  # the old tabs are gone
     last = c.get("/dashboard?start=" + (dt.date.today() - dt.timedelta(days=7)).isoformat()).text
     assert "This week</a>" in last

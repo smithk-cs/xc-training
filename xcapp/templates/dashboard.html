@@ -30,6 +30,7 @@
       {% for e in people %}<li>
         <div class="dash-who"><a href="/athletes/{{ e.a.id }}">{{ e.a.name }}</a>{% if e.group %} <span class="small muted">{{ e.group }}</span>{% endif %}</div>
         <b class="dash-pct">{{ e.pct }}%</b>
+        <div class="miles-bar dash-bar" role="img" aria-label="{{ e.pct }}% of the target so far"><span style="width:{{ [e.pct, 100]|min }}%"></span></div>
         <div class="small muted dash-detail">{{ e.detail }}</div>
       </li>{% endfor %}
     </ul>
