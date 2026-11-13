@@ -24,7 +24,12 @@ def test_rates_and_worked_example():
     assert P.ZONES == ["Easy", "Moderate", "Threshold", "Interval", "Repetition"]
     week = [40 * 0.2, 10 * 0.2 + 5 * 3 * 1.0 + 5 * 2 * 0.2 + 10 * 0.2, 40 * 0.2, 10 * 0.2 + 20 * 0.6 + 10 * 0.2, 35 * 0.2, 80 * 0.2]
     assert [round(x) for x in week] == [8, 21, 8, 16, 7, 16] and round(sum(week)) == 76
-    assert round(P.week_score(61, 76, 5, 6)) == 81                                  # 0.8 x 80 + 0.2 x 83
+    assert round(P.week_score(61, 76, 5, 6)) == 81                                  # no miles goal: (0.4 x 80 + 0.2 x 83) / 0.6
+    assert round(P.week_score(61, 76, 5, 6, 27, 30)) == 85                          # 0.4 x 80 + 0.4 x 90 + 0.2 x 83 (no plan: 40/40/20)
+    season = {"points": 0.5, "miles": 0.3, "days": 0.2}
+    assert round(P.week_score(61, 76, 5, 6, 27, 30, season)) == 84                  # in season: 0.5 x 80 + 0.3 x 90 + 0.2 x 83
+    assert P.week_score(61, 76, 5, 6, 40, 30) == P.week_score(61, 76, 5, 6, 30, 30)   # miles count up to the goal, no more
+    assert P.week_score(0, 0, 5, 6) is None                                          # nothing to measure but days: no score
 
 
 def test_zone_for_uses_midpoints_and_walking():
@@ -101,7 +106,8 @@ def test_perfect_week(session):
     assert tue["planned"] == pytest.approx(19) and tue["points"] == pytest.approx(19, abs=0.5)
     assert [d["points"] for i, d in enumerate(w["days"]) if i != 1] == [0] * 6       # easy days: miles, no points
     assert w["run_days"] == 6 and not w["flags"]
-    assert w["score"] == pytest.approx(100 * (0.8 * min(w["points"] / w["target"], 1) + 0.2))
+    assert w["score"] == pytest.approx(100 * (0.4 * min(w["points"] / w["target"], 1) + 0.4 * min(w["miles"] / 30, 1) + 0.2))
+    assert w["shares"]["kind"] == "none"                                            # no season plan: 40% points, 40% miles, 20% days
 
 
 def test_too_fast_easy_week(session):
@@ -126,7 +132,8 @@ def test_race_days_count_and_short_days_are_marked(session):
     session.query(PlannedWorkout).delete()
     session.flush()
     none = P.team_week(session, MON, athletes=[a])[0]
-    assert none["score"] is None and none["no_score"] == "No team workout posted yet this week"
+    assert none["no_score"] == "No team workout posted yet this week" and none["target"] is None
+    assert none["score"] == pytest.approx(100 * (0.4 * min(none["miles"] / 30, 1) + 0.2 * 2 / 6) / 0.6)   # miles and days still count
 
 
 def test_every_day_a_workout_reaches_the_target(session):
@@ -152,11 +159,11 @@ def test_missed_week_and_extra_cap(session):
     a = make_week(session, [(2, [(PACE["Easy"], 20)])], [TUESDAY], goal=30)
     w = P.team_week(session, MON, athletes=[a])[0]
     assert w["run_days"] == 0 and w["days"][1]["points"] == 0                        # 20 minutes is under the 30-minute day
-    assert w["score"] == pytest.approx(100 * 0.8 * w["points"] / w["target"])
+    assert w["score"] == pytest.approx(100 * (0.4 * w["points"] / w["target"] + 0.4 * min(w["miles"] / 30, 1)))
     session.rollback()
     b = make_week(session, [(d, [(PACE["Easy"], 150)]) for d in range(7)], goal=10)
     w = P.team_week(session, MON, athletes=[b])[0]
-    assert w["points"] == 0 and w["target"] is None and w["score"] is None           # no workouts posted: no points
+    assert w["points"] == 0 and w["target"] is None and w["score"] == 100            # no workouts posted: miles and days only
     assert w["miles"] > 60 and w["run_days"] == 7                                     # the running still shows
 
 
@@ -306,7 +313,7 @@ def test_score_on_track_colour():
     assert round(week["score_pct"]) == 50 and P.pace_status(week["score_pct"]) == "bad"
     assert week["why_score"].startswith("On track for 50%: points 20 of 40 due by Thu (50%)")
     P.score_pace(week, MON + dt.timedelta(days=9), 6)       # week over: the score itself (80% x 20/60 + 20% x 2/6)
-    assert week["score_pct"] == pytest.approx(100 * (0.8 * 20 / 60 + 0.2 * 2 / 6))
+    assert week["score_pct"] == pytest.approx(100 * (0.4 * 20 / 60 + 0.2 * 2 / 6) / 0.6)   # no miles goal: points and days share it
 
 
 def test_one_workout_a_day_counts_toward_the_target():
@@ -328,3 +335,62 @@ def test_two_workouts_on_one_day_count_once(session):
     assert w["target"] == pytest.approx(one[1])                                       # only the one workout counted
     why = w["why_target"]
     assert len(why["workouts"]) == 1 and why["workouts"][0]["not_counted"] == ["w"] and why["easy"]["miles"] == pytest.approx(30 - one[0])
+
+
+def test_score_mix_follows_the_season_plan(session):
+    from xcapp import medals as MD
+    from xcapp.models import SeasonWeek, WeekResult
+    e, i = PACE["Easy"], PACE["Interval"]
+    runs = [(0, [(e, 40)]), (1, [(e, 10), (i, 15), (e, 10)]), (2, [(e, 40)]), (4, [(e, 25)])]   # a short week: under 100% on each part
+    a = make_week(session, runs, [TUESDAY], goal=30)
+    parts = lambda w: (min(w["points"] / w["target"], 1), min(w["miles"] / 30, 1), min(w["run_days"] / 6, 1))
+    w = P.team_week(session, MON, athletes=[a])[0]
+    p, m, d = parts(w)
+    assert w["shares"]["kind"] == "none" and w["score"] == pytest.approx(100 * (0.4 * p + 0.4 * m + 0.2 * d))
+    session.add(SeasonWeek(monday=MON, phase=1, miles_pct=80))                     # a base week: miles count most
+    session.flush()
+    w = P.team_week(session, MON, athletes=[a])[0]
+    assert w["shares"]["kind"] == "base" and w["score"] == pytest.approx(100 * (0.3 * p + 0.5 * m + 0.2 * d))
+    session.query(SeasonWeek).one().phase = 3                                        # in season: workout points count most
+    session.flush()
+    w = P.team_week(session, MON, athletes=[a])[0]
+    assert w["shares"]["kind"] == "season" and w["score"] == pytest.approx(100 * (0.5 * p + 0.3 * m + 0.2 * d))
+    from xcapp import dashboard as DB
+    detail = DB._measure("score", w)[1]
+    assert "× 50%" in detail and "miles" in detail and "× 30%" in detail and "× 20%" in detail
+    # The coach's own mix; saved weeks are worked out again
+    A.set_setting(session, P.SHARES_KEY, json.dumps({"base": [20, 60, 20], "season": [60, 20, 20], "none": [40, 40, 20]}))
+    session.flush()
+    session.info.pop("cache", None)
+    w = P.team_week(session, MON, athletes=[a])[0]
+    assert w["score"] == pytest.approx(100 * (0.6 * p + 0.2 * m + 0.2 * d))
+    A.set_setting(session, P.SHARES_KEY, json.dumps({"base": [50, 60, 20]}))      # doesn't add up to 100: the default
+    session.flush()
+    session.info.pop("cache", None)
+    assert P.shares(session)["base"] == (30, 50, 20)
+    session.add(WeekResult(athlete_id=a.id, monday=MON, score=1, miles=1, computed_on=dt.date(2026, 11, 20)))
+    session.flush()
+    MD.recalculate(session)
+    assert session.query(WeekResult).one().computed_on == dt.date(2000, 1, 1)
+
+
+def test_score_mix_form(session):
+    import re
+    from fastapi.testclient import TestClient
+    from xcapp.models import StaffUser
+    from xcapp.security import hash_password
+    session.add(StaffUser(username="coach1", role="coach", password_hash=hash_password("correct-horse-1")))
+    session.commit()
+    from xcapp.web import create_app
+    c = TestClient(create_app(), follow_redirects=False)
+    csrf = re.search(r'name="csrf" value="([^"]+)"', c.get("/login").text).group(1)
+    c.post("/login", data={"csrf": csrf, "username": "coach1", "password": "correct-horse-1"})
+    page = c.get("/week").text
+    assert "<b>40% points, 40% miles, 20% days</b>" in page and "Score mix" in page and 'name="base_miles" value="50"' in page
+    csrf = re.search(r'name="csrf" value="([^"]+)"', page).group(1)
+    good = {"csrf": csrf, "base_points": "25", "base_miles": "55", "base_days": "20", "season_points": "50", "season_miles": "30",
+            "season_days": "20", "none_points": "40", "none_miles": "40", "none_days": "20"}
+    c.post("/week/score-mix", data={**good, "base_days": "30"})                        # 110 in all: refused
+    assert 'name="base_miles" value="50"' in c.get("/week").text
+    c.post("/week/score-mix", data=good)
+    assert 'name="base_miles" value="55"' in c.get("/week").text

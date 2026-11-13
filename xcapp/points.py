@@ -7,8 +7,11 @@
   pace) times the zone rate, plus the rest of the group's weekly miles goal run at easy pace.
 - On a workout day the points earned are capped at that day's planned points, so running an easy day fast earns nothing
   extra. Other days count every running minute as easy. The week is capped at 110% of the target.
-- Weekly score: 80% points (earned / target, at most 1) and 20% days (days with at least the minimum minutes / target
-  days, at most 1).
+- Weekly score: points (earned / target), miles (run / the group's weekly goal) and days (days with at least the
+  minimum minutes / target days), each counted up to 100%, mixed by the week's phase in the season plan: base weeks
+  (Phases I-II) 30% points, 50% miles, 20% days; in-season weeks (III-IV) 50% points, 30% miles, 20% days; a week
+  with no plan 40/40/20. The coach can change the mix on the Week page. A part with nothing to measure (no points
+  target, no miles goal) is left out and the others share its weight.
 """
 from __future__ import annotations
 
@@ -28,7 +31,10 @@ WALK_PACE = 15 * 60       # seconds per mile: anything slower is walking and ear
 SMOOTH_S = 30             # pace is smoothed over about this many seconds to tame GPS noise
 MAX_GAP_S = 10            # a longer gap between samples is a pause, not running
 WEEK_CAP = 1.10           # extra running counts up to 110% of the weekly target
-POINTS_SHARE = 0.8        # the rest of the score is days run
+SHARES_KEY = "score_shares"
+# points, miles, days (%), by the week's season-plan phase
+DEFAULT_SHARES = {"base": (30, 50, 20), "season": (50, 30, 20), "none": (40, 40, 20)}
+SHARE_LABELS = {"base": "Base weeks (Phases I–II)", "season": "In-season weeks (Phases III–IV)", "none": "Weeks with no plan"}
 DEFAULT_TARGET_DAYS, DEFAULT_MIN_MINUTES = 6, 30
 JUMP = 1.10               # flag weekly points more than 10% over the week before
 ON_PACE, NEAR_PACE = 90, 80   # % of the week's goal due so far: green from 90, amber from 80, red below
@@ -74,25 +80,71 @@ def plan_days(week: dict, target_days: int, rest_day: int) -> None:
             d["kind"], d["due_m"], d["due_p"] = "easy", share_m, share_p
 
 
-def score_pace(week: dict, today: dt.date, target_days: int) -> None:
-    """Whether the athlete is on track for the week's score: the same 80/20 score, with points and run days measured
+def shares(db: Session) -> dict[str, tuple[int, int, int]]:
+    """The score mix for each kind of week: {"base" | "season" | "none": (points %, miles %, days %)}."""
+    try:
+        saved = json.loads(A.get_setting(db, SHARES_KEY, "{}") or "{}")
+    except ValueError:
+        saved = {}
+    out = {}
+    for k, v in DEFAULT_SHARES.items():
+        got = saved.get(k)
+        out[k] = tuple(int(x) for x in got) if isinstance(got, list) and len(got) == 3 and sum(got) == 100 else v
+    return out
+
+
+def shares_for(db: Session, monday: dt.date) -> dict:
+    """The mix for one week, from its phase in the season plan: {"points", "miles", "days" (0-1), "kind", "label"}."""
+    from .models import SeasonWeek
+    sw = db.scalar(select(SeasonWeek).where(SeasonWeek.monday == monday))
+    kind = "none" if sw is None else "base" if sw.phase in (1, 2) else "season"
+    p, m, d = shares(db)[kind]
+    return {"points": p / 100, "miles": m / 100, "days": d / 100, "kind": kind, "label": SHARE_LABELS[kind]}
+
+
+DEFAULT_MIX = {"points": 0.4, "miles": 0.4, "days": 0.2, "kind": "none", "label": SHARE_LABELS["none"]}
+
+
+def mix(parts: dict[str, float | None], sh: dict) -> float | None:
+    """0-100 from the parts' fractions (each at most 1; None when there's nothing to measure), weighted by the mix and
+    sharing out the weight of any part left out. None without points or miles to measure."""
+    if parts.get("points") is None and parts.get("miles") is None:
+        return None
+    have = {k: min(v, 1.0) for k, v in parts.items() if v is not None and sh.get(k)}
+    total = sum(sh[k] for k in have)
+    return 100 * sum(sh[k] * v for k, v in have.items()) / total if total else None
+
+
+def score_pace(week: dict, today: dt.date, target_days: int, sh: dict | None = None) -> None:
+    """Whether the athlete is on track for the week's score: the same mix of points, miles and run days, each measured
     against what the days so far ask for (plan_days). Once the week is over it is the score itself."""
+    sh = sh or DEFAULT_MIX
     week["score_pct"], week["why_score"] = None, ""
     days = week["days"]
-    if not days or not week.get("target") or today < days[0]["date"]:
+    if not days or not (week.get("target") or week.get("goal_miles")) or today < days[0]["date"]:
         return
     i = min(7, (today - days[0]["date"]).days + 1)
     so_far = days[:i]
     due_p = sum(d.get("due_p", 0) for d in so_far)
     due_d = sum(1 for d in so_far if d.get("kind") in ("workout", "easy"))
-    done_p = sum(d["points"] for d in so_far)
+    due_m = (week.get("miles_per_day") or 0) * due_d
+    done_p, done_m = sum(d["points"] for d in so_far), sum(d.get("miles", 0) for d in so_far)
     run = week["run_days"]   # days run so far (later days have no runs yet)
-    pts = min(done_p / due_p, 1.0) if due_p else 1.0
-    dys = min(run / due_d, 1.0) if due_d else 1.0
-    week["score_pct"] = 100 * (POINTS_SHARE * pts + (1 - POINTS_SHARE) * dys)
+    parts = {"points": (min(done_p / due_p, 1.0) if due_p else 1.0) if week.get("target") else None,
+             "miles": (min(done_m / due_m, 1.0) if due_m else 1.0) if week.get("goal_miles") else None,
+             "days": min(run / due_d, 1.0) if due_d else 1.0}
+    week["score_pct"] = mix(parts, sh)
+    if week["score_pct"] is None:
+        return
     through = "the whole week" if i == 7 else f"by {days[i - 1]['date']:%a}"
-    week["why_score"] = (f"On track for {week['score_pct']:.0f}%: points {done_p:.0f} of {due_p:.0f} due {through} ({100 * pts:.0f}%) "
-                         f"× 80% + days run {run} of {due_d} due ({100 * dys:.0f}%) × 20%")
+    bits = []
+    if parts["points"] is not None:
+        bits.append(f"points {done_p:.0f} of {due_p:.0f} due {through} ({100 * parts['points']:.0f}%) × {100 * sh['points']:.0f}%")
+    if parts["miles"] is not None:
+        bits.append(f"miles {done_m:.1f} of {due_m:.1f} due ({100 * parts['miles']:.0f}%) × {100 * sh['miles']:.0f}%")
+    bits.append(f"days run {run} of {due_d} due ({100 * parts['days']:.0f}%) × {100 * sh['days']:.0f}%")
+    left_out = " (the rest share the weight of the part with nothing to measure)" if None in parts.values() else ""
+    week["why_score"] = f"On track for {week['score_pct']:.0f}%: " + " + ".join(bits) + left_out
 
 
 def days_pace(week: dict, today: dt.date) -> None:
@@ -252,13 +304,14 @@ def workout_plan(pw: PlannedWorkout, v: float, daily_miles: float | None = None)
     return workout_minutes_miles_points(pw, v, daily_miles)[1:]
 
 
-def week_score(points: float, target: float, run_days: int, target_days: int) -> float | None:
-    """0-100: 80% points earned against the target, 20% days run against the target days."""
-    if not target or target <= 0:
-        return None
-    pts = min(points / target, 1.0)
-    days = min(run_days / target_days, 1.0) if target_days else 1.0
-    return 100 * (POINTS_SHARE * pts + (1 - POINTS_SHARE) * days)
+def week_score(points: float, target: float, run_days: int, target_days: int, miles: float = 0.0,
+               goal_miles: float | None = None, sh: dict | None = None) -> float | None:
+    """0-100: points earned against the target, miles against the weekly goal and days run against the target days,
+    mixed by the week's phase (shares_for). None without a points target or a miles goal."""
+    parts = {"points": points / target if target and target > 0 else None,
+             "miles": miles / goal_miles if goal_miles and goal_miles > 0 else None,
+             "days": run_days / target_days if target_days else 1.0}
+    return mix(parts, sh or DEFAULT_MIX)
 
 
 # ---------- a team's week ----------
@@ -312,6 +365,7 @@ def team_week(db: Session, monday: dt.date, gender: str | None = None, athletes:
     acts_by = by(acts, lambda r: (r.athlete_id, r.local_date))
     pain_by = by(pains, lambda r: (r.athlete_id, r.date))
     missed_by = by(missed, lambda r: (r.athlete_id, r.date))
+    sh = shares_for(db, monday)
     out = []
     for a in athletes:
         me = ab.get(a.id, {})
@@ -321,10 +375,12 @@ def team_week(db: Session, monday: dt.date, gender: str | None = None, athletes:
         rows = [_athlete_week(a, v, g, days, mine, acts_by, pain_by, missed_by, min_minutes, offset, target_days, race_days)
                 for offset in (0, -7)]
         week, last = rows
-        week["score"] = week_score(week["points"], week["target"] or 0, week["run_days"], target_days)
+        week["score"] = week_score(week["points"], week["target"] or 0, week["run_days"], target_days, week["miles"],
+                                   week["goal_miles"], sh)
+        week["shares"] = sh
         plan_days(week, target_days, rest)
         keep_pace(week, today)
-        score_pace(week, today, target_days)
+        score_pace(week, today, target_days, sh)
         days_pace(week, today)
         if last["points"] > 0 and week["points"] > JUMP * last["points"]:
             week["flags"].append(f"Points up {100 * (week['points'] / last['points'] - 1):.0f}% on last week")

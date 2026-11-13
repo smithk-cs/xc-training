@@ -1,4 +1,4 @@
-"""Weekly medals on the athlete page, from each finished week's score (the Week page's 80% points, 20% days):
+"""Weekly medals on the athlete page, from each finished week's score (the Week page's mix of points, miles and days):
 
 - gold: a green week (90% or more);
 - silver: an amber week (80 to 89%);
@@ -23,7 +23,7 @@ from .models import Athlete, WeekResult
 KINDS = ("gold", "silver", "miles")
 ICONS = {"gold": "🥇", "silver": "🥈", "miles": "👟"}
 RECHECK_DAYS = 14
-RULES_CHANGED = dt.date(2026, 11, 3)   # weeks saved before this are worked out again (race days count as days run; running beyond a workout earns easy points; VDOT from the fastest race)
+RULES_CHANGED = dt.date(2026, 11, 13)  # weeks saved before this are worked out again (latest: miles count in the score, mixed by the season plan's phase)
 
 
 def medal_for(score: float | None, miles: float, goal_miles: float | None) -> str:
@@ -129,3 +129,13 @@ def close_note(db: Session, a: Athlete, monday: dt.date) -> None:
     r = db.scalar(select(WeekResult).where(WeekResult.athlete_id == a.id, WeekResult.monday == monday))
     if r is not None:
         r.note_closed = True
+
+
+def recalculate(db: Session, since: dt.date | None = None) -> None:
+    """Have saved weeks worked out again on their next view (after the score mix or a week's phase changes): all of
+    them, or those from the Monday `since` on."""
+    from sqlalchemy import update
+    q = update(WeekResult).values(computed_on=dt.date(2000, 1, 1))
+    if since is not None:
+        q = q.where(WeekResult.monday >= since)
+    db.execute(q)

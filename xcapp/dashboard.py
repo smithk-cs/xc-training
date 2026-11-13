@@ -18,13 +18,16 @@ def _measure(tab: str, r: dict) -> tuple[float | None, str, str]:
         return r.get("points_pct"), f"{r['points']:.0f} of {r.get('points_due') or 0:.0f} pts due so far · {r['target']:.0f} for the week", "Nothing due yet"
     if tab == "days":
         return r.get("days_pct"), f"{r['run_days']} of {r.get('days_due', 0)} run days so far · {r['target_days']} for the week", "Nothing due yet"
-    if not r.get("target"):
-        return None, "", r.get("no_score") or "No points target yet"
+    if not r.get("target") and not r.get("goal_miles"):
+        return None, "", r.get("no_score") or "No points target or miles goal yet"
+    sh = r.get("shares") or {"points": 0.4, "miles": 0.4, "days": 0.2}
     parts = []
-    if r.get("points_pct") is not None:
-        parts.append(f"points {min(r['points_pct'], 100):.0f}% × 80%")
+    if r.get("target") and r.get("points_pct") is not None:
+        parts.append(f"points {min(r['points_pct'], 100):.0f}% × {100 * sh['points']:.0f}%")
+    if r.get("goal_miles") and r.get("miles_pct") is not None:
+        parts.append(f"miles {min(r['miles_pct'], 100):.0f}% × {100 * sh['miles']:.0f}%")
     if r.get("days_pct") is not None:
-        parts.append(f"days run {min(r['days_pct'], 100):.0f}% × 20%")
+        parts.append(f"days run {min(r['days_pct'], 100):.0f}% × {100 * sh['days']:.0f}%")
     return r.get("score_pct"), " + ".join(parts).capitalize() + " (each counted up to 100%)" if parts else "", "Nothing due yet"
 
 

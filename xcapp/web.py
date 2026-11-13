@@ -2977,7 +2977,8 @@ def create_app() -> FastAPI:
                       recovery=recovery, moves=A.vdot_moves(db, today),
                       days=[monday + dt.timedelta(days=i) for i in range(7)], rates=PT.RATES,
                       target_days=target_days, min_minutes=min_minutes, rest_day=rest_day, weekdays=PT.WEEKDAYS,
-                      season=SE.period_for(monday))
+                      season=SE.period_for(monday), mix=PT.shares_for(db, monday), all_shares=PT.shares(db),
+                      share_labels=PT.SHARE_LABELS)
 
     @app.post("/week/settings")
     async def week_settings(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
@@ -2994,6 +2995,28 @@ def create_app() -> FastAPI:
         except ValueError:
             flash(request, "Target days run from 1 to 7, and the minimum run from 5 to 120 minutes.", "error")
         return back(f"/week?team={pick_team(f.get('team'))}&start={f.get('start', '')}")
+
+    @app.post("/week/score-mix")
+    async def week_score_mix(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
+        """The weekly score's mix of points, miles and days for base weeks, in-season weeks and weeks with no plan."""
+        import json
+        from . import medals as MD
+        f = await form_checked(request)
+        try:
+            vals = {}
+            for k in PT.DEFAULT_SHARES:
+                trio = [int(f.get(f"{k}_{part}", "")) for part in ("points", "miles", "days")]
+                if any(not 0 <= x <= 100 for x in trio) or sum(trio) != 100:
+                    raise ValueError
+                vals[k] = trio
+        except ValueError:
+            flash(request, "Each row’s points, miles and days are whole percentages that add up to 100.", "error")
+        else:
+            A.set_setting(db, PT.SHARES_KEY, json.dumps(vals))
+            MD.recalculate(db)
+            log(db, "app", f"{user.username} set the weekly score mix: {vals}.")
+            flash(request, "Score mix saved. Past weeks are worked out again with it.")
+        return back(f"/week?team={pick_team(f.get('team'))}&start={f.get('start', '')}#score-mix")
 
     @app.get("/vdot", response_class=HTMLResponse)
     def vdot_page(request: Request, edit: int = 0, team: str = "", user=Depends(any_staff, scope="function"),

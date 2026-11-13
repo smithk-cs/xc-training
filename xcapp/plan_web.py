@@ -127,6 +127,9 @@ def register(app, h: SimpleNamespace) -> None:
                 changed += 1
             flash(request, f"Saved the plan for {p['label']}.")
         db.flush()
+        if action != "peaks":   # a week's phase sets its score mix: weeks saved for medals are worked out again
+            from .medals import recalculate
+            recalculate(db, SP.weeks_of(p)[0] if SP.weeks_of(p) else None)
         log(db, "app", f"{user.username} updated the season plan ({action}).")
         return back(f"/workouts/plan?season={season_key(p)}&week={f.get('week', '')}")
 
