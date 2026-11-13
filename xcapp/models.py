@@ -582,6 +582,7 @@ class RaceTeamResult(Base):
     teams: Mapped[int | None] = mapped_column(Integer, nullable=True)     # out of how many teams
     points: Mapped[float | None] = mapped_column(Float, nullable=True)    # the team's score (lower is better in XC)
     video_url: Mapped[str] = mapped_column(String(300), default="")       # a YouTube video of the race
+    finishers: Mapped[int | None] = mapped_column(Integer, nullable=True) # runners who finished the race, all teams (for MVP)
 
 
 class MeetConditions(Base):

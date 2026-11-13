@@ -106,3 +106,71 @@ def test_awards_page(session):
     assert 'value="2026-09-12|Meet 2" selected' in picked and "Sep 12 Meet 2 to Oct 10 Meet 4: 3 meets" in picked
     assert "14 s/mi" in picked and "Freshmen didn’t race at the last meet picked" in picked
     assert "(5K pace)" in page and "27 s/mi" in page and "5 races:" in page                              # unknown season: the latest
+
+
+def test_mvp_by_share_of_field_and_level(session):
+    from xcapp.imports import import_races
+    from xcapp.models import RaceTeamResult
+    # Two freshmen over three meets: Up races varsity (bigger, stronger fields), Down stays in Frosh/Soph
+    up, down, third = runner(session, "Up", 9), runner(session, "Down", 9), runner(session, "Third", 9)
+    session.commit()
+    csv = "meet,date,race,distance,athlete,time,place,finishers\n"
+    for i, day in enumerate(MEETS[:3]):
+        csv += f"Meet {i + 1},{day},Varsity Boys,5000,Up Test,17:{30 + i}.0,61,200\n"             # beat 69.5%  × 1.00
+        csv += f"Meet {i + 1},{day},Frosh/Soph Boys,5000,Down Test,18:{10 + i}.0,17,80\n"         # beat 78.75% × 0.80 = 63.0
+        csv += f"Meet {i + 1},{day},Frosh/Soph Boys,5000,Third Test,18:{40 + i}.0,30,80\n"        # beat 62.5%  × 0.80 = 50.0
+    n, _ = import_races(session, csv)
+    session.flush()
+    assert n == 9 and session.query(RaceTeamResult).filter_by(meet="Meet 1", race="Varsity Boys").one().finishers == 200
+    f = AW.awards(session, SE.period(2026, "xc"), "Boys", TODAY)["freshmen"]
+    assert f["by_field"] and f["missing"] == []
+    assert [m["a"].first_name for m in f["mvp"]] == ["Up", "Down", "Third"]                     # 61st of 200 in varsity wins
+    assert [round(m["score"], 1) for m in f["mvp"]] == [69.5, 63.0, 50.0]
+    assert f["mvp"][0]["levels"] == ["Varsity"] and f["mvp"][1]["best_race"]["level"] == "Frosh/Soph"
+    assert [m["a"].first_name for m in sorted(f["mvp"], key=lambda m: m["avg_place"])] == ["Down", "Third", "Up"]   # by place alone, Up was last
+    # The coach's weights change it: Frosh/Soph at 0.9 puts Down (78.75 × 0.9 = 70.9) ahead
+    AW.save_weights(session, {"Varsity": 1.0, "JV": 0.9, "Frosh/Soph": 0.9, "Other": 1.0})
+    f = AW.awards(session, SE.period(2026, "xc"), "Boys", TODAY)["freshmen"]
+    assert [m["a"].first_name for m in f["mvp"]][:2] == ["Down", "Up"]
+    # A race with no finisher count isn't scored, and is listed
+    session.query(RaceTeamResult).filter_by(meet="Meet 3", race="Varsity Boys").one().finishers = None
+    session.flush()
+    f = AW.awards(session, SE.period(2026, "xc"), "Boys", TODAY)["freshmen"]
+    assert f["missing"] == [(MEETS[2], "Meet 3", "Varsity Boys")] and f["mvp"][1]["scored"] == 2
+    assert AW.level_of("Boys Varsity Large School") == "Varsity" and AW.level_of("JV Girls") == "JV"
+    assert AW.level_of("F/S Boys") == "Frosh/Soph" and AW.level_of("Open 5K") == "Other"
+    assert AW.field_share(5, 200) == 97.5 and AW.field_share(10, None) is None and AW.field_share(90, 80) is None
+
+
+def test_mvp_falls_back_to_place_without_finishers(session):
+    build(session)
+    v = AW.awards(session, SE.period(2026, "xc"), "Boys", TODAY)["varsity"]
+    assert not v["by_field"] and len(v["missing"]) == 5 and [m["a"].first_name for m in v["mvp"]][0] == "Steady"
+
+
+def test_mvp_page_and_weights(session):
+    from xcapp.imports import import_races
+    up, down = runner(session, "Up", 9), runner(session, "Down", 9)
+    session.add(StaffUser(username="coach1", role="coach", password_hash=hash_password("correct-horse-1")))
+    session.commit()
+    csv = "meet,date,race,distance,athlete,time,place,finishers\n"
+    for i, day in enumerate(MEETS[:2]):
+        csv += f"Meet {i + 1},{day},Varsity Boys,5000,Up Test,17:3{i}.0,61,200\n"
+        csv += f"Meet {i + 1},{day},Frosh/Soph Boys,5000,Down Test,18:1{i}.0,17,{'80' if i == 0 else ''}\n"
+    import_races(session, csv)
+    session.commit()
+    from xcapp.web import create_app
+    c = TestClient(create_app(), follow_redirects=False)
+    csrf = re.search(r'name="csrf" value="([^"]+)"', c.get("/login").text).group(1)
+    c.post("/login", data={"csrf": csrf, "username": "coach1", "password": "correct-horse-1"})
+    page = c.get("/races/awards?season=2026").text
+    assert "61st of 200 · Varsity" in page and "beat 70% × 1.00" in page and "17th of 80 · Frosh/Soph" in page
+    assert "1 race without a finisher count" in page and "Meet 2 (Frosh/Soph Boys)" in page
+    assert 'name="w_Frosh/Soph" value="0.80"' in page and "Level weights:" in page
+    csrf = re.search(r'name="csrf" value="([^"]+)"', page).group(1)
+    r = c.post("/races/awards/weights", data={"csrf": csrf, "next": "/races/awards?season=2026", "w_Varsity": "1", "w_JV": "0.85",
+                                              "w_Frosh/Soph": "0.75", "w_Other": "1"})
+    assert r.headers["location"] == "/races/awards?season=2026"
+    assert 'name="w_JV" value="0.85"' in c.get("/races/awards?season=2026").text
+    c.post("/races/awards/weights", data={"csrf": csrf, "w_Varsity": "9", "w_JV": "1", "w_Frosh/Soph": "1", "w_Other": "1"})
+    assert 'name="w_JV" value="0.85"' in c.get("/races/awards?season=2026").text                 # 9 is refused; nothing changed

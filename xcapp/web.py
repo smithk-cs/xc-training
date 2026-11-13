@@ -812,6 +812,24 @@ def create_app() -> FastAPI:
 
     # ---------- races (full meet results at their real distances) ----------
 
+    @app.post("/races/awards/weights")
+    async def race_award_weights(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
+        """The MVP's weight for each race level (Varsity, JV, Frosh/Soph, Other)."""
+        from . import awards as AW
+        f = await form_checked(request)
+        try:
+            vals = {k: float(f.get(f"w_{k}", "")) for k in AW.LEVELS}
+            if not all(0.1 <= v <= 2 for v in vals.values()):
+                raise ValueError
+        except ValueError:
+            flash(request, "Each weight is a number from 0.1 to 2.", "error")
+        else:
+            AW.save_weights(db, vals)
+            log(db, "app", f"{user.username} set the MVP level weights: " + ", ".join(f"{k} {v:g}" for k, v in vals.items()) + ".")
+            flash(request, "MVP level weights saved.")
+        nxt = str(f.get("next", "/races/awards"))
+        return back(nxt if nxt.startswith("/races/awards") else "/races/awards")
+
     @app.get("/races/awards", response_class=HTMLResponse)
     def race_awards(request: Request, team: str = "", season: int = 0, start_meet: str = "", end_meet: str = "",
                     user=Depends(any_staff, scope="function"),
@@ -827,6 +845,7 @@ def create_app() -> FastAPI:
         span = tuple(m if m in meets else None for m in span)
         return render(request, "awards.html", user, team=team, seasons=seasons, season=pick, meets=meets, span=span,
                       meet_key=AW.meet_key, board=AW.awards(db, pick, team, today, span), classes=AW.CLASSES,
+                      weights=AW.weights(db), season_name=A.season_for,
                       min_pct=round(AW.MIN_SHARE * 100))
 
     @app.get("/races", response_class=HTMLResponse)
@@ -1224,13 +1243,18 @@ def create_app() -> FastAPI:
                     raise ValueError
                 return v
             row.place, row.teams, row.points = num("place", int, 1, 500), num("teams", int, 1, 500), num("points", float, 0, 5000)
+            row.finishers = num("finishers", int, 1, 5000)
             if row.place and row.teams and row.place > row.teams:
+                raise ValueError
+            worst = db.scalar(select(func.max(RaceResult.place)).where(RaceResult.meet == meet, RaceResult.date == d, RaceResult.race == race))
+            if row.finishers and worst and worst > row.finishers:
                 raise ValueError
         except ValueError:
             db.rollback()
-            flash(request, "Team place and number of teams are whole numbers (place no more than the number of teams); points a number.", "error")
+            flash(request, "Team place, number of teams and finishers are whole numbers (place no more than the number of teams; "
+                           "finishers at least as many as our slowest runner’s place); points a number.", "error")
             return back(races_url(d))
-        if row.place is None and row.teams is None and row.points is None and not row.video_url:
+        if row.place is None and row.teams is None and row.points is None and row.finishers is None and not row.video_url:
             db.delete(row)
         flash(request, f"Saved the team result for {race or 'the race'} at {meet}.")
         return back(races_url(d))

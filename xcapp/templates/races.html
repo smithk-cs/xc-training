@@ -9,7 +9,7 @@
 {% if user.role != 'trainer' %}
 <details class="card fold-card">
   <summary><h2>Import race results</h2></summary>
-  <p class="small muted">A CSV file with a header row: <code>meet, date, race, distance, athlete, time</code>, and optionally <code>course, place, points, grade, gender</code>. One row per athlete per race. Distances like <code>5,000 Meters</code>, <code>4K</code> or <code>3 Miles</code>. Importing the same file twice doesn’t double anything.</p>
+  <p class="small muted">A CSV file with a header row: <code>meet, date, race, distance, athlete, time</code>, and optionally <code>course, place, points, finishers, grade, gender</code> (<code>finishers</code>: how many finished that race, all teams, for the season awards). One row per athlete per race. Distances like <code>5,000 Meters</code>, <code>4K</code> or <code>3 Miles</code>. Importing the same file twice doesn’t double anything.</p>
   <pre class="small" style="overflow-x:auto">meet,date,course,race,distance,place,athlete,time,grade,gender
 Flat SAC Invitational,2026-10-24,Gibson Ranch Regional Park,Boys Varsity Large School,"5,000 Meters",6,Ava Doyle,15:29.9,12,Boys</pre>
   <form method="post" action="/races/import" enctype="multipart/form-data">
@@ -96,7 +96,7 @@ Flat SAC Invitational,2026-10-24,Gibson Ranch Regional Park,Boys Varsity Large S
   {% endif %}
   {% for (race, label, meters), rows in races.items() %}{% set t = teams.get((date, meet, race)) %}{% set sug = suggested.get((date, meet, race)) %}
   <div class="form-row" style="justify-content:space-between; align-items:baseline">
-    <h3>{{ race or 'Race' }} · {{ label }}{% if t and (t.place or t.points is not none) %} <span class="small team-result">Team: {{ team_line(t) }}</span>{% endif %}{% if t and t.video_url %} <a class="small video-link" href="{{ t.video_url }}" target="_blank" rel="noopener">▶ Watch the race</a>{% endif %}
+    <h3>{{ race or 'Race' }} · {{ label }}{% if t and (t.place or t.points is not none) %} <span class="small team-result">Team: {{ team_line(t) }}</span>{% endif %}{% if t and t.finishers %} <span class="small muted">· {{ t.finishers }} finishers</span>{% endif %}{% if t and t.video_url %} <a class="small video-link" href="{{ t.video_url }}" target="_blank" rel="noopener">▶ Watch the race</a>{% endif %}
       {% set rw = own.get((meet, date, race)) %}{% if rw and rw.start_time %}<br><span class="small muted" style="font-weight:400">Started {{ fmt_clock(rw.start_time) }}{% if rw.temp_f is not none %}: {{ '%.0f' % rw.temp_f }}°F, dew point {{ '%.0f' % rw.dew_point_f }}°F{% if rw.wind_mph is not none %}, wind {{ '%.0f' % rw.wind_mph }} mph{% endif %}{% if rw.pressure_inhg is not none %}, {{ '%.2f' % rw.pressure_inhg }} inHg{% endif %} (used for this race’s adjusted times){% else %}: weather not filled in yet{% endif %}</span>{% endif %}</h3>
     {% if user.role != 'trainer' %}
     <details class="edit-box video-box"><summary class="small">{{ '✎ Change race video' if t and t.video_url else '▶ Add race video' }}</summary>
@@ -120,13 +120,14 @@ Flat SAC Invitational,2026-10-24,Gibson Ranch Regional Park,Boys Varsity Large S
       </form>
       <p class="small muted">Changes this race for all {{ rows|length }} results. Times at 1 mile, 1.5 miles, 2 miles or 5K count toward VDOT.</p>
     </details>
-    <details class="edit-box"><summary class="small">Team place and points</summary>
+    <details class="edit-box"><summary class="small">Team place, points and finishers</summary>
       <form method="post" action="/races/team" class="form-row">
         <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="date" value="{{ date.isoformat() }}">
         <input type="hidden" name="meet" value="{{ meet }}"><input type="hidden" name="race" value="{{ race }}">
         <label>Team place<input type="number" name="place" value="{{ t.place if t and t.place else '' }}" min="1" max="500" style="width:5em"></label>
         <label>of how many teams<input type="number" name="teams" value="{{ t.teams if t and t.teams else '' }}" min="1" max="500" style="width:5em"></label>
         <label>Team points<input type="number" name="points" value="{{ '%g' % t.points if t and t.points is not none else ('%g' % sug if sug else '') }}" min="0" max="5000" step="any" style="width:6em"></label>
+        <label title="Everyone who finished this race, all teams: the season awards’ MVP uses each runner’s share of the field beaten">Finishers (all teams)<input type="number" name="finishers" value="{{ t.finishers if t and t.finishers else '' }}" min="1" max="5000" style="width:6em"></label>
         <button type="submit">Save team result</button>
       </form>
       {% if sug and not (t and t.points is not none) %}<p class="small muted">Points filled in from the top five runners’ points in the results ({{ '%g' % sug }}). Change it if the meet scored differently.</p>{% endif %}

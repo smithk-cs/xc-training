@@ -27,12 +27,16 @@ def test_team_place_and_points():
     csrf = re.search(r'name="csrf" value="([^"]+)"', c.get("/login").text).group(1)
     c.post("/login", data={"csrf": csrf, "username": "coach1", "password": "correct-horse-1"})
     page = c.get("/races?season=all").text
-    assert "Team place and points" in page and "<th class=\"num\">Points</th>" in page
+    assert "Team place, points and finishers" in page and 'name="finishers"' in page and "<th class=\"num\">Points</th>" in page
     assert 'name="points" value="40"' in page and "top five runners’ points" in page        # 2 + 5 + 8 + 11 + 14 suggested
     csrf = re.search(r'name="csrf" value="([^"]+)"', page).group(1)
     base = {"csrf": csrf, "date": DAY.isoformat(), "meet": "Flat SAC", "race": "Boys Frosh/Soph"}
     c.post("/races/team", data={**base, "place": "5", "teams": "3", "points": ""})
-    assert "Team place and number of teams" in c.get("/races?season=all").text            # 5th of 3 is refused
+    assert "Team place, number of teams and finishers" in c.get("/races?season=all").text   # 5th of 3 is refused
+    c.post("/races/team", data={**base, "place": "3", "teams": "12", "points": "41", "finishers": "20"})
+    assert "Team place, number of teams and finishers" in c.get("/races?season=all").text   # our 23rd place, but only 20 finishers
+    c.post("/races/team", data={**base, "place": "3", "teams": "12", "points": "41", "finishers": "180"})
+    assert "· 180 finishers" in c.get("/races?season=all").text
     c.post("/races/team", data={**base, "place": "3", "teams": "12", "points": "41"})
     page = c.get("/races?season=all").text
     assert "Team: <b>3rd</b> of 12 teams · <b>41</b> points" in page

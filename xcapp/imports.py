@@ -14,7 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .analysis import EVENTS, km_label, normalize_event, parse_time, season_for
-from .models import Athlete, Goal, RaceResult, RaceWeather, Result
+from .models import Athlete, Goal, RaceResult, RaceTeamResult, RaceWeather, Result
 from .security import new_link_token
 
 GROUPS = ("Varsity", "JV", "Development")
@@ -230,12 +230,14 @@ def _from_race(race: str, choices: dict[str, str]) -> str | None:
 
 
 def import_races(db: Session, text: str, add_athletes: bool = False) -> tuple[int, int]:
-    """Columns: meet, date, race (or division), distance, athlete (or name), time; optional course, place, and, for
+    """Columns: meet, date, race (or division), distance, athlete (or name), time; optional course, place, finishers (the
+    number who finished the race, all teams), and, for
     athletes not on the roster when add_athletes is on, grade (or yr), gender and group (read from the race if missing).
     Returns (results imported, athletes added)."""
     errors, todo, new = [], [], {}
     idx = _name_index(db)
     starts: dict[tuple, str] = {}   # (meet, date, race) -> start time, from an optional start_time column
+    fields: dict[tuple, int] = {}   # (meet, date, race) -> finishers in the race (all teams), from an optional finishers column
     for line, r in _rows(text):
         try:
             meet = (r.get("meet") or "").strip()
@@ -251,6 +253,9 @@ def import_races(db: Session, text: str, add_athletes: bool = False) -> tuple[in
                     raise ValueError(f"start time '{start}' should look like 13:20 or 1:20 PM")
                 h = (int(m.group(1)) % 12 + (12 if m.group(3)[0].lower() == "p" else 0)) if m.group(3) else int(m.group(1))
                 starts[(meet[:160], d, race[:120])] = f"{h:02d}:{m.group(2)}"
+            fin = _int_or_none(r.get("finishers") or r.get("field") or "", 1, 5000, "finishers")
+            if fin is not None:
+                fields[(meet[:160], d, race[:120])] = fin
             label = (r.get("distance") or "").strip()
             meters = parse_distance(label)
             t = parse_time(r.get("time", ""))
@@ -301,6 +306,12 @@ def import_races(db: Session, text: str, add_athletes: bool = False) -> tuple[in
             db.add(RaceWeather(meet=meet, date=d, race=race, start_time=start))
         elif rw.start_time != start:
             rw.start_time, rw.temp_f = start, None
+    for (meet, d, race), fin in fields.items():   # the race's field size, for the season awards
+        tr = db.scalar(select(RaceTeamResult).where(RaceTeamResult.meet == meet, RaceTeamResult.date == d, RaceTeamResult.race == race))
+        if tr is None:
+            db.add(RaceTeamResult(meet=meet, date=d, race=race, finishers=fin))
+        else:
+            tr.finishers = fin
     for a, meet, d, course, race, meters, label, t, place, points in todo:
         if db.scalar(select(RaceResult.id).where(RaceResult.athlete_id == a.id, RaceResult.date == d, RaceResult.meet == meet,
                                                  RaceResult.race == race, RaceResult.time_s == t)):

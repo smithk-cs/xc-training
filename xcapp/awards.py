@@ -6,8 +6,11 @@
   each athlete was in that season.
 - Who counts: athletes who ran at least 80% of the meets their class raced in the window (a meet where at least one
   athlete of that class, same team, ran). Freshmen don't run sectionals, so they aren't held to meets they couldn't enter.
-- MVP: lowest average finishing place over every race in the window with a place in the results (in cross country a
-  runner scores the points of their place, so lower is better). Ties go to more races, then the faster adjusted time.
+- MVP: in each race, the share of the field the athlete beat (finishers behind them ÷ everyone who finished, all teams;
+  the finisher count is entered with the race), times the race level's weight (Varsity 1.00, JV 0.90, Frosh/Soph 0.80 by
+  default; the coach can change them), so a freshman racing up to varsity gets credit for the stronger field. The MVP
+  score is the average over every race in the window with a place and a finisher count; ties go to the faster average
+  adjusted time. Without any finisher counts in the window, it falls back to the lowest average place.
 - Most improved: every race in the window as an adjusted mile pace (the time adjusted for the course and weather, as a
   5K: a 5K's own pace; another distance's 5K equivalent by VDOT, so a 2-mile race and a 5K compare fairly), and a
   best-fit line through them over the dates. The improvement is how much faster the line is at the end of the window
@@ -16,6 +19,8 @@
 from __future__ import annotations
 
 import datetime as dt
+import json
+import re
 import statistics
 
 from sqlalchemy import select
@@ -25,11 +30,45 @@ from . import analysis as A
 from . import classyear as CY
 from . import seasons as SE
 from .courses import adjusted_times
-from .models import Athlete, RaceResult
+from .models import Athlete, RaceResult, RaceTeamResult
 
 CLASSES = (("freshmen", "Freshmen", (9,)), ("sophomores", "Sophomores", (10,)), ("varsity", "Varsity", (11, 12)))
 MIN_SHARE = 0.8
 TOP = 5
+LEVELS = ("Varsity", "JV", "Frosh/Soph", "Other")
+DEFAULT_WEIGHTS = {"Varsity": 1.0, "JV": 0.9, "Frosh/Soph": 0.8, "Other": 1.0}
+WEIGHTS_KEY = "mvp_level_weights"
+
+
+def level_of(race: str) -> str:
+    """The race's level from its division name: 'Boys Varsity Large School' → Varsity, 'Frosh/Soph' → Frosh/Soph."""
+    t = (race or "").lower()
+    if re.search(r"\bjv\b|junior varsity", t):
+        return "JV"
+    if re.search(r"frosh|fresh|soph|\bf/s\b|\bfs\b|novice|\b9th|\b10th", t):
+        return "Frosh/Soph"
+    if "varsity" in t:
+        return "Varsity"
+    return "Other"
+
+
+def weights(db: Session) -> dict[str, float]:
+    try:
+        saved = json.loads(A.get_setting(db, WEIGHTS_KEY, "{}") or "{}")
+    except ValueError:
+        saved = {}
+    return {k: float(saved.get(k, v)) for k, v in DEFAULT_WEIGHTS.items()}
+
+
+def save_weights(db: Session, values: dict[str, float]) -> None:
+    A.set_setting(db, WEIGHTS_KEY, json.dumps(values, separators=(",", ":")))
+
+
+def field_share(place: int | None, finishers: int | None) -> float | None:
+    """Share of the field beaten, 0-100: 5th of 200 beat 97.5%."""
+    if not place or not finishers or place > finishers:
+        return None
+    return 100 * (finishers - place) / finishers
 
 
 def grade_in(a: Athlete, season_start: dt.date, today: dt.date) -> int | None:
@@ -95,6 +134,9 @@ def awards(db: Session, season: dict, team: str, today: dt.date, span: tuple[Mee
                       .where(Athlete.gender == team, RaceResult.date >= start, RaceResult.date <= end)
                       .order_by(RaceResult.date, RaceResult.id)).all()
     adj = adjusted_times(db, [r for r, _ in rows])
+    fields = {(t.meet, t.date, t.race): t.finishers for t in db.scalars(select(RaceTeamResult).where(
+        RaceTeamResult.date >= start, RaceTeamResult.date <= end, RaceTeamResult.finishers.is_not(None))).all()}
+    wts = weights(db)
     by_athlete: dict[int, dict] = {}
     for r, a in rows:
         g = grade_in(a, start, today)
@@ -104,7 +146,10 @@ def awards(db: Session, season: dict, team: str, today: dt.date, span: tuple[Mee
         if r.distance_m and t:
             pace = t / (r.distance_m / MILE)
             pace5k = pace if abs(r.distance_m - 5000) < 50 else A.equivalent_time(5000, A.vdot(r.distance_m, t)) / (5000 / MILE)
-        e["races"].append({"r": r, "meet": (r.date, r.meet), "adj": t, "pace": pace, "pace5k": pace5k})
+        lvl, fin = level_of(r.race), fields.get((r.meet, r.date, r.race))
+        share = field_share(r.place, fin)
+        e["races"].append({"r": r, "meet": (r.date, r.meet), "adj": t, "pace": pace, "pace5k": pace5k, "level": lvl,
+                           "finishers": fin, "share": share, "score": share * wts[lvl] if share is not None else None})
     out = {}
     for key, label, grades in CLASSES:
         people = [e for e in by_athlete.values() if e["grade"] in grades]
@@ -113,6 +158,7 @@ def awards(db: Session, season: dict, team: str, today: dt.date, span: tuple[Mee
         m_from = pick(span[0], season_meets_c[0] if season_meets_c else None)
         m_to = pick(span[1], season_meets_c[-1] if season_meets_c else None)
         entry = {"label": label, "meets": 0, "need": 0, "eligible": 0, "mvp": [], "improved": [], "span": (m_from, m_to),
+                 "by_field": False, "missing": [],
                  "short": [], "raced": bool(season_meets_c), "ok_span": bool(m_from and m_to and m_from <= m_to)}
         out[key] = entry
         if not entry["ok_span"]:
@@ -126,15 +172,26 @@ def awards(db: Session, season: dict, team: str, today: dt.date, span: tuple[Mee
         for e in people:
             e["ran"] = len({x["meet"] for x in e["races"]})
             (eligible if e["ran"] >= need else short).append(e)
+        # MVP: share of the field beaten × the race level's weight, averaged; by average place without finisher counts
+        races_in = {(x["r"].meet, x["r"].date, x["r"].race): x for e in eligible for x in e["races"] if x["r"].place}
+        missing = sorted({(k[1], k[0], k[2]) for k, x in races_in.items() if x["finishers"] is None})
+        by_field = len(missing) < len(races_in)
         mvp = []
         for e in eligible:
             placed = [x for x in e["races"] if x["r"].place]
-            if not placed:
+            scored = [x for x in placed if x["score"] is not None]
+            if not placed or (by_field and not scored):
                 continue
+            best = max(scored, key=lambda x: x["score"]) if scored else min(placed, key=lambda x: x["r"].place)
             mvp.append({"a": e["a"], "grade": e["grade"], "ran": e["ran"], "avg_place": statistics.fmean(x["r"].place for x in placed),
-                        "placed": len(placed), "best": min(x["r"].place for x in placed),
-                        "avg_adj": statistics.fmean(x["adj"] for x in placed), "races": e["races"]})
-        mvp.sort(key=lambda m: (m["avg_place"], -m["placed"], m["avg_adj"]))
+                        "placed": len(placed), "best": min(x["r"].place for x in placed), "best_race": best,
+                        "score": statistics.fmean(x["score"] for x in scored) if scored else None, "scored": len(scored),
+                        "avg_adj": statistics.fmean(x["adj"] for x in placed), "races": e["races"],
+                        "levels": sorted({x["level"] for x in placed}, key=LEVELS.index)})
+        if by_field:
+            mvp.sort(key=lambda m: (-m["score"], m["avg_adj"]))
+        else:
+            mvp.sort(key=lambda m: (m["avg_place"], -m["placed"], m["avg_adj"]))
         # Most improved: the trend of adjusted mile pace through every race in the window
         d0, d1 = m_from[0], m_to[0]
         improved = []
@@ -154,5 +211,6 @@ def awards(db: Session, season: dict, team: str, today: dt.date, span: tuple[Mee
                              "mixed": len({round(x["r"].distance_m, -2) for x in rs}) > 1})
         improved.sort(key=lambda m: -m["gain"])     # most seconds a mile faster, along the trend
         entry.update(meets=len(meets), need=need, eligible=len(eligible), mvp=mvp[:TOP], improved=improved[:TOP],
+                     by_field=by_field, missing=missing,
                      short=sorted(short, key=lambda e: (-e["ran"], e["a"].last_name)))
     return out
