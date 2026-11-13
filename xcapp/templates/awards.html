@@ -18,18 +18,25 @@
   <p style="margin:6px 0 0">From the race results for {{ season.label }} ({{ season.start.strftime('%b %-d') }} to {{ season.end.strftime('%b %-d, %Y') }}). Classes go by each athlete’s grade that season: Freshmen are 9th grade, Sophomores 10th, Varsity 11th and 12th.</p>
   <p style="margin:6px 0 0"><b>The window:</b> the two meets picked above (by default each class’s first and last meet of the season). Those meets and every race in between count, for both awards and for who qualifies.</p>
   <p style="margin:6px 0 0"><b>Who counts:</b> athletes who ran at least {{ min_pct }}% of the meets their class raced in the window (a meet where any athlete of that class ran), so freshmen aren’t held to meets only varsity entered.</p>
-  {% if user.role in ('admin', 'coach') %}<form method="post" action="/races/awards/attendance" class="form-row" style="margin-top:6px">
-    <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="{{ request.url.path }}?{{ request.url.query }}">
-    <label>Meets an athlete must run<span><input type="number" name="min_pct" value="{{ min_pct }}" min="50" max="100" step="5" style="width:5em"> % of their class’s meets</span></label>
-    <button type="submit" class="secondary">Save attendance</button></form>{% endif %}
   <p style="margin:6px 0 0"><b>MVP:</b> in each race, the share of the field the athlete beat (runners behind them ÷ everyone who finished, all teams), times the race level’s weight, so a freshman racing up to varsity gets credit for the stronger field. The score is the average over every race in the window with a place and a finisher count (enter it with the race on the Races page). Ties go to the faster average adjusted time. Until any race in the window has a finisher count, the lowest average place wins.</p>
   <p style="margin:6px 0 0"><b>Level weights:</b> {% for k, v in weights.items() %}{{ k }} {{ '%.2f' % v }}{{ ', ' if not loop.last }}{% endfor %}. The level comes from the race name (Varsity, JV, Frosh/Soph; anything else counts as Other).</p>
-  {% if user.role in ('admin', 'coach') %}<form method="post" action="/races/awards/weights" class="form-row" style="margin-top:6px">
-    <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="{{ request.url.path }}?{{ request.url.query }}">
-    {% for k, v in weights.items() %}<label>{{ k }}<input type="number" name="w_{{ k }}" value="{{ '%.2f' % v }}" min="0.1" max="2" step="0.05" style="width:5em"></label>{% endfor %}
-    <button type="submit" class="secondary">Save weights</button></form>{% endif %}
   <p style="margin:6px 0 0"><b>Most improved:</b> every race in the window as an adjusted mile pace (the time adjusted for the course and weather, as on the Races page). A 5K is its own pace; another distance counts as the 5K pace it’s worth (by VDOT), since a 2-mile race is run faster a mile than a 5K. A best-fit line through all of an athlete’s races, over the dates, shows the trend, so one good or bad day at either end doesn’t decide it. Athletes are ranked by how much faster the line is at their last race than at their first, as a percentage of their first pace (the seconds a mile are shown too): fair to faster runners, for whom each second is harder to find.</p>
 </details>
+{% if user.role in ('admin', 'coach') %}
+<section class="card" id="award-settings" style="max-width:90ch">
+  <h2 style="margin-top:0">Award settings</h2>
+  <p class="small muted" style="margin:0 0 6px"><b>Who counts:</b> athletes who ran at least this share of the meets their class raced in the window (a meet where any athlete of that class ran). Saved for everyone.</p>
+  <form method="post" action="/races/awards/attendance" class="form-row" style="margin-top:6px">
+    <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="{{ request.url.path }}?{{ request.url.query }}">
+    <label>Meets an athlete must run<span><input type="number" name="min_pct" value="{{ min_pct }}" min="50" max="100" step="1" style="width:5em"> % of their class’s meets</span></label>
+    <button type="submit" class="secondary">Save attendance</button></form>
+  <p class="small muted" style="margin:10px 0 6px"><b>MVP level weights:</b> each race’s share of the field beaten is multiplied by its level’s weight.</p>
+  <form method="post" action="/races/awards/weights" class="form-row" style="margin-top:6px">
+    <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="{{ request.url.path }}?{{ request.url.query }}">
+    {% for k, v in weights.items() %}<label>{{ k }}<input type="number" name="w_{{ k }}" value="{{ '%.2f' % v }}" min="0.1" max="2" step="0.05" style="width:5em"></label>{% endfor %}
+    <button type="submit" class="secondary">Save weights</button></form>
+</section>
+{% endif %}
 
 {% for key, label, _ in classes %}{% set c = board[key] %}
 <section class="card" style="margin-bottom:14px">

@@ -209,7 +209,7 @@ def test_attendance_form(session):
     csrf = re.search(r'name="csrf" value="([^"]+)"', c.get("/login").text).group(1)
     c.post("/login", data={"csrf": csrf, "username": "coach1", "password": "correct-horse-1"})
     page = c.get("/races/awards").text
-    assert 'name="min_pct" value="80"' in page and "at least 80% of the meets" in page
+    assert 'name="min_pct" value="80"' in page and "at least 80% of the meets" in page and "Award settings" in page
     csrf = re.search(r'name="csrf" value="([^"]+)"', page).group(1)
     c.post("/races/awards/attendance", data={"csrf": csrf, "min_pct": "40"})              # under 50: refused
     assert 'name="min_pct" value="80"' in c.get("/races/awards").text
