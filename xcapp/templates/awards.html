@@ -18,13 +18,17 @@
   <p style="margin:6px 0 0">From the race results for {{ season.label }} ({{ season.start.strftime('%b %-d') }} to {{ season.end.strftime('%b %-d, %Y') }}). Classes go by each athlete’s grade that season: Freshmen are 9th grade, Sophomores 10th, Varsity 11th and 12th.</p>
   <p style="margin:6px 0 0"><b>The window:</b> the two meets picked above (by default each class’s first and last meet of the season). Those meets and every race in between count, for both awards and for who qualifies.</p>
   <p style="margin:6px 0 0"><b>Who counts:</b> athletes who ran at least {{ min_pct }}% of the meets their class raced in the window (a meet where any athlete of that class ran), so freshmen aren’t held to meets only varsity entered.</p>
+  {% if user.role in ('admin', 'coach') %}<form method="post" action="/races/awards/attendance" class="form-row" style="margin-top:6px">
+    <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="{{ request.url.path }}?{{ request.url.query }}">
+    <label>Meets an athlete must run<span><input type="number" name="min_pct" value="{{ min_pct }}" min="50" max="100" step="5" style="width:5em"> % of their class’s meets</span></label>
+    <button type="submit" class="secondary">Save attendance</button></form>{% endif %}
   <p style="margin:6px 0 0"><b>MVP:</b> in each race, the share of the field the athlete beat (runners behind them ÷ everyone who finished, all teams), times the race level’s weight, so a freshman racing up to varsity gets credit for the stronger field. The score is the average over every race in the window with a place and a finisher count (enter it with the race on the Races page). Ties go to the faster average adjusted time. Until any race in the window has a finisher count, the lowest average place wins.</p>
   <p style="margin:6px 0 0"><b>Level weights:</b> {% for k, v in weights.items() %}{{ k }} {{ '%.2f' % v }}{{ ', ' if not loop.last }}{% endfor %}. The level comes from the race name (Varsity, JV, Frosh/Soph; anything else counts as Other).</p>
   {% if user.role in ('admin', 'coach') %}<form method="post" action="/races/awards/weights" class="form-row" style="margin-top:6px">
     <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="{{ request.url.path }}?{{ request.url.query }}">
     {% for k, v in weights.items() %}<label>{{ k }}<input type="number" name="w_{{ k }}" value="{{ '%.2f' % v }}" min="0.1" max="2" step="0.05" style="width:5em"></label>{% endfor %}
     <button type="submit" class="secondary">Save weights</button></form>{% endif %}
-  <p style="margin:6px 0 0"><b>Most improved:</b> every race in the window as an adjusted mile pace (the time adjusted for the course and weather, as on the Races page). A 5K is its own pace; another distance counts as the 5K pace it’s worth (by VDOT), since a 2-mile race is run faster a mile than a 5K. A best-fit line through all of an athlete’s races, over the dates, shows the trend; the improvement is how much faster the line is at their last race than at their first, so one good or bad day at either end doesn’t decide it.</p>
+  <p style="margin:6px 0 0"><b>Most improved:</b> every race in the window as an adjusted mile pace (the time adjusted for the course and weather, as on the Races page). A 5K is its own pace; another distance counts as the 5K pace it’s worth (by VDOT), since a 2-mile race is run faster a mile than a 5K. A best-fit line through all of an athlete’s races, over the dates, shows the trend, so one good or bad day at either end doesn’t decide it. Athletes are ranked by how much faster the line is at their last race than at their first, as a percentage of their first pace (the seconds a mile are shown too): fair to faster runners, for whom each second is harder to find.</p>
 </details>
 
 {% for key, label, _ in classes %}{% set c = board[key] %}
@@ -64,7 +68,7 @@
         <thead><tr><th>#</th><th>Athlete</th><th class="num">Mile pace trend</th><th class="num">Faster</th></tr></thead>
         <tbody>{% for m in c.improved %}<tr><td>{{ loop.index }}</td><td><a href="/athletes/{{ m.a.id }}">{{ m.a.name }}</a> <span class="small muted">{{ m.grade }}th</span>
             <div class="small muted">{{ m.n }} races: {% for x in m.races %}{{ fmt_time(x.pace5k|round)[:-2] }}{{ ' ' if not loop.last }}{% endfor %}{% if m.mixed %} <span title="Races of other distances count as the 5K pace they’re worth">(5K pace)</span>{% endif %}</div></td>
-          <td class="num nowrap">{{ fmt_time(m.p_from|round)[:-2] }} → <b>{{ fmt_time(m.p_to|round)[:-2] }}</b></td><td class="num nowrap"><b>{{ m.gain|round|int }} s/mi</b><br><span class="small muted">{{ '%.1f' % m.pct }}%</span></td></tr>{% endfor %}</tbody>
+          <td class="num nowrap">{{ fmt_time(m.p_from|round)[:-2] }} → <b>{{ fmt_time(m.p_to|round)[:-2] }}</b></td><td class="num nowrap"><b>{{ '%.1f' % m.pct }}%</b><br><span class="small muted">{{ m.gain|round|int }} s/mi</span></td></tr>{% endfor %}</tbody>
       </table>{% else %}<p class="muted small">No athlete who qualifies got faster over the window.</p>{% endif %}
     </div>
   </div>

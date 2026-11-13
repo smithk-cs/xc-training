@@ -4,7 +4,7 @@
   meets and every race between them count, for both awards and for who qualifies.
 - Classes: Freshmen (9th grade), Sophomores (10th) and Varsity (11th and 12th), for the Boys or the Girls, by the grade
   each athlete was in that season.
-- Who counts: athletes who ran at least 80% of the meets their class raced in the window (a meet where at least one
+- Who counts: athletes who ran at least 80% (the coach can change it) of the meets their class raced in the window (a meet where at least one
   athlete of that class, same team, ran). Freshmen don't run sectionals, so they aren't held to meets they couldn't enter.
 - MVP: in each race, the share of the field the athlete beat (finishers behind them ÷ everyone who finished, all teams;
   the finisher count is entered with the race), times the race level's weight (Varsity 1.00, JV 0.90, Frosh/Soph 0.80 by
@@ -13,8 +13,9 @@
   adjusted time. Without any finisher counts in the window, it falls back to the lowest average place.
 - Most improved: every race in the window as an adjusted mile pace (the time adjusted for the course and weather, as a
   5K: a 5K's own pace; another distance's 5K equivalent by VDOT, so a 2-mile race and a 5K compare fairly), and a
-  best-fit line through them over the dates. The improvement is how much faster the line is at the end of the window
-  than at the start, in seconds a mile: the trend over all the races, not one good or bad day at either end.
+  best-fit line through them over the dates. The improvement is how much faster the line is at the athlete's last race
+  than at their first, as a share of the first pace (seconds a mile shown too): the trend over all the races, not one
+  good or bad day at either end, and fair to faster runners, for whom each second is harder to find.
 """
 from __future__ import annotations
 
@@ -33,7 +34,8 @@ from .courses import adjusted_times
 from .models import Athlete, RaceResult, RaceTeamResult
 
 CLASSES = (("freshmen", "Freshmen", (9,)), ("sophomores", "Sophomores", (10,)), ("varsity", "Varsity", (11, 12)))
-MIN_SHARE = 0.8
+MIN_SHARE = 0.8          # the default share of the class's meets an athlete must run; the coach can change it
+SHARE_KEY = "awards_min_share"
 TOP = 5
 LEVELS = ("Varsity", "JV", "Frosh/Soph", "Other")
 DEFAULT_WEIGHTS = {"Varsity": 1.0, "JV": 0.9, "Frosh/Soph": 0.8, "Other": 1.0}
@@ -62,6 +64,15 @@ def weights(db: Session) -> dict[str, float]:
 
 def save_weights(db: Session, values: dict[str, float]) -> None:
     A.set_setting(db, WEIGHTS_KEY, json.dumps(values, separators=(",", ":")))
+
+
+def min_share(db: Session) -> float:
+    """The share of the class's meets in the window an athlete must run to count (0.5-1.0; 80% by default)."""
+    try:
+        v = float(A.get_setting(db, SHARE_KEY, str(MIN_SHARE)))
+    except ValueError:
+        return MIN_SHARE
+    return v if 0.5 <= v <= 1.0 else MIN_SHARE
 
 
 def field_share(place: int | None, finishers: int | None) -> float | None:
@@ -137,6 +148,7 @@ def awards(db: Session, season: dict, team: str, today: dt.date, span: tuple[Mee
     fields = {(t.meet, t.date, t.race): t.finishers for t in db.scalars(select(RaceTeamResult).where(
         RaceTeamResult.date >= start, RaceTeamResult.date <= end, RaceTeamResult.finishers.is_not(None))).all()}
     wts = weights(db)
+    share_needed = min_share(db)
     by_athlete: dict[int, dict] = {}
     for r, a in rows:
         g = grade_in(a, start, today)
@@ -167,7 +179,7 @@ def awards(db: Session, season: dict, team: str, today: dt.date, span: tuple[Mee
         people = [{**e, "races": [x for x in e["races"] if m_from <= x["meet"] <= m_to]} for e in people]
         people = [e for e in people if e["races"]]
         meets = sorted({x["meet"] for e in people for x in e["races"]})
-        need = int(-(-len(meets) * MIN_SHARE // 1)) if meets else 0          # 80%, rounded up
+        need = int(-(-len(meets) * share_needed // 1)) if meets else 0      # the coach's share (80% at first), rounded up
         eligible, short = [], []
         for e in people:
             e["ran"] = len({x["meet"] for x in e["races"]})
@@ -209,7 +221,7 @@ def awards(db: Session, season: dict, team: str, today: dt.date, span: tuple[Mee
             improved.append({"a": e["a"], "grade": e["grade"], "ran": e["ran"], "n": len(rs), "gain": gain,
                              "pct": 100 * gain / p_from, "p_from": p_from, "p_to": p_to, "races": rs,
                              "mixed": len({round(x["r"].distance_m, -2) for x in rs}) > 1})
-        improved.sort(key=lambda m: -m["gain"])     # most seconds a mile faster, along the trend
+        improved.sort(key=lambda m: -m["pct"])      # the biggest share faster along the trend: fair to fast and slower runners
         entry.update(meets=len(meets), need=need, eligible=len(eligible), mvp=mvp[:TOP], improved=improved[:TOP],
                      by_field=by_field, missing=missing,
                      short=sorted(short, key=lambda e: (-e["ran"], e["a"].last_name)))

@@ -812,6 +812,24 @@ def create_app() -> FastAPI:
 
     # ---------- races (full meet results at their real distances) ----------
 
+    @app.post("/races/awards/attendance")
+    async def race_award_attendance(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
+        """The share of their class's meets an athlete must run to count for the awards."""
+        from . import awards as AW
+        f = await form_checked(request)
+        try:
+            pct = int(f.get("min_pct", ""))
+            if not 50 <= pct <= 100:
+                raise ValueError
+        except ValueError:
+            flash(request, "Attendance is a whole percentage from 50 to 100.", "error")
+        else:
+            A.set_setting(db, AW.SHARE_KEY, str(pct / 100))
+            log(db, "app", f"{user.username} set the awards attendance to {pct}% of meets.")
+            flash(request, f"Athletes now need {pct}% of their class’s meets to count.")
+        nxt = str(f.get("next", "/races/awards"))
+        return back(nxt if nxt.startswith("/races/awards") else "/races/awards")
+
     @app.post("/races/awards/weights")
     async def race_award_weights(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
         """The MVP's weight for each race level (Varsity, JV, Frosh/Soph, Other)."""
@@ -846,7 +864,7 @@ def create_app() -> FastAPI:
         return render(request, "awards.html", user, team=team, seasons=seasons, season=pick, meets=meets, span=span,
                       meet_key=AW.meet_key, board=AW.awards(db, pick, team, today, span), classes=AW.CLASSES,
                       weights=AW.weights(db), season_name=A.season_for,
-                      min_pct=round(AW.MIN_SHARE * 100))
+                      min_pct=round(AW.min_share(db) * 100))
 
     @app.get("/races", response_class=HTMLResponse)
     def races_page(request: Request, user=Depends(any_staff, scope="function"), db: Session = Depends(get_db, scope="function")):

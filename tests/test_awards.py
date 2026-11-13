@@ -174,3 +174,45 @@ def test_mvp_page_and_weights(session):
     assert 'name="w_JV" value="0.85"' in c.get("/races/awards?season=2026").text
     c.post("/races/awards/weights", data={"csrf": csrf, "w_Varsity": "9", "w_JV": "1", "w_Frosh/Soph": "1", "w_Other": "1"})
     assert 'name="w_JV" value="0.85"' in c.get("/races/awards?season=2026").text                 # 9 is refused; nothing changed
+
+
+def test_most_improved_by_percent_and_attendance_setting(session):
+    from xcapp import analysis as A
+    fast, slow = runner(session, "Fast", 11), runner(session, "Slow", 12)
+    for i in range(5):                                       # straight-line improvement over five 5Ks (3.107 mi)
+        race(session, fast, i, (330 - 15 * i / 4) * 5000 / A.METERS_PER_MILE, 5 + i)   # 5:30 → 5:15 a mile: 15 s, 4.5%
+        race(session, slow, i, (480 - 20 * i / 4) * 5000 / A.METERS_PER_MILE, 40 + i)  # 8:00 → 7:40 a mile: 20 s, 4.2%
+    session.flush()
+    v = AW.awards(session, SE.period(2026, "xc"), "Boys", TODAY)["varsity"]
+    assert [m["a"].first_name for m in v["improved"]] == ["Fast", "Slow"]                    # by percent, not seconds
+    f, sl = v["improved"]                                    # the trend follows the meet dates, so about 15 and 20 s
+    assert abs(f["gain"] - 15) < 1.5 and abs(sl["gain"] - 20) < 2 and f["gain"] < sl["gain"] and f["pct"] > sl["pct"]
+    # Attendance: Winner ran 3 of 5 meets; at 60% they count
+    build(session)
+    assert [e["a"].first_name for e in AW.awards(session, SE.period(2026, "xc"), "Boys", TODAY)["varsity"]["short"]] == ["Winner"]
+    A.set_setting(session, AW.SHARE_KEY, "0.6")
+    session.flush()
+    session.info.pop("cache", None)
+    v = AW.awards(session, SE.period(2026, "xc"), "Boys", TODAY)["varsity"]
+    assert v["need"] == 3 and v["short"] == [] and v["mvp"][0]["a"].first_name == "Winner"
+    A.set_setting(session, AW.SHARE_KEY, "0.2")                                             # out of range: the 80% default
+    session.flush()
+    session.info.pop("cache", None)
+    assert AW.min_share(session) == 0.8
+
+
+def test_attendance_form(session):
+    session.add(StaffUser(username="coach1", role="coach", password_hash=hash_password("correct-horse-1")))
+    session.commit()
+    from xcapp.web import create_app
+    c = TestClient(create_app(), follow_redirects=False)
+    csrf = re.search(r'name="csrf" value="([^"]+)"', c.get("/login").text).group(1)
+    c.post("/login", data={"csrf": csrf, "username": "coach1", "password": "correct-horse-1"})
+    page = c.get("/races/awards").text
+    assert 'name="min_pct" value="80"' in page and "at least 80% of the meets" in page
+    csrf = re.search(r'name="csrf" value="([^"]+)"', page).group(1)
+    c.post("/races/awards/attendance", data={"csrf": csrf, "min_pct": "40"})              # under 50: refused
+    assert 'name="min_pct" value="80"' in c.get("/races/awards").text
+    r = c.post("/races/awards/attendance", data={"csrf": csrf, "min_pct": "70", "next": "/races/awards?team=Girls"})
+    assert r.headers["location"] == "/races/awards?team=Girls"
+    assert 'name="min_pct" value="70"' in c.get("/races/awards").text and "at least 70% of the meets" in c.get("/races/awards").text
