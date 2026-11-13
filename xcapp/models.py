@@ -949,4 +949,16 @@ class FormAnalysis(Base):
     pace_s: Mapped[float | None] = mapped_column(Float, nullable=True)     # seconds a mile during the clip, if entered
     score: Mapped[float | None] = mapped_column(Float, nullable=True)
     note: Mapped[str] = mapped_column(String(300), default="")
+    condition: Mapped[str] = mapped_column(String(10), default="fresh", server_default="fresh")   # fresh | tired (end of a workout)
     data: Mapped[str] = mapped_column(Text, default="{}")                 # form.clean(): metrics, curves, figure, fps...
+
+
+class SeasonWeek(Base):
+    """The season plan (season_plan.py): one row per planned week (Monday), with its Daniels phase and how much of each
+    group's peak weekly miles it asks for."""
+    __tablename__ = "season_weeks"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    monday: Mapped[dt.date] = mapped_column(Date, unique=True, index=True)
+    phase: Mapped[int] = mapped_column(Integer, default=1)                # 1-4: Daniels' phases I to IV
+    miles_pct: Mapped[int] = mapped_column(Integer, default=100)          # share of each group's peak weekly miles
+    note: Mapped[str] = mapped_column(String(200), default="")

@@ -6,7 +6,7 @@
   <h1 style="margin:0">Running form: {{ a.name }}</h1>
   <a class="button" href="/athletes/{{ a.id }}/form/{{ fa.id }}/pdf">Download PDF</a>
 </div>
-<p class="small muted">Filmed {{ (fa.created_at|local).strftime('%b %-d, %Y, %-I:%M %p') }}{% if fa.by %} by {{ fa.by }}{% endif %} · {{ data.contacts }} foot strikes · {{ '%.0f' % data.fps if data.fps else '?' }} frames a second{% if fa.note %} · {{ fa.note }}{% endif %}</p>
+<p class="small muted">{% if fa.condition == 'tired' %}<span class="pill warn">Tired: end of a workout</span> {% endif %}Filmed {{ (fa.created_at|local).strftime('%b %-d, %Y, %-I:%M %p') }}{% if fa.by %} by {{ fa.by }}{% endif %} · {{ data.contacts }} foot strikes · {{ '%.0f' % data.fps if data.fps else '?' }} frames a second{% if fa.note %} · {{ fa.note }}{% endif %}</p>
 
 <div id="view"></div>
 <noscript>
@@ -15,6 +15,7 @@
 </noscript>
 <p class="small muted" style="margin-top:10px">The stick figure replays one stride (red: left side). Scores compare each measure with the usual range for distance runners; the ranges are guides, and speed, build and injury history matter too.</p>
 
+{% include "_fatigue.html" %}
 {% if others %}<div class="card"><h2>Earlier analyses</h2><ul class="plain-list">{% for o in others %}<li><a href="/athletes/{{ a.id }}/form/{{ o.id }}">{{ (o.created_at|local).strftime('%b %-d, %Y') }}</a>{% if o.score is not none %} · {{ '%.0f%%' % o.score }}{% endif %}</li>{% endfor %}</ul></div>{% endif %}
 
 {% if user.role in ('admin', 'coach') %}

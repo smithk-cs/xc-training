@@ -1,0 +1,19 @@
+{# Form focus (cues and drills) and progress over time. Needs `form_focus`, `form_hist`, `a`; `token` on the athlete's own page. #}
+{% if form_focus %}
+<div class="form-focus" style="margin:8px 0 12px">
+  <h3 style="margin:0 0 4px">{{ 'What to work on' if token is defined else 'Focus and drills' }}</h3>
+  <ol class="small" style="margin:0; padding-left:1.3em">{% for c in form_focus %}<li style="margin-bottom:4px"><b>{{ c.summary }}</b> {{ c.why }}<br><b>Cue:</b> {{ c.cue }} <b>Drill:</b> {{ c.drill }}</li>{% endfor %}</ol>
+</div>
+{% endif %}
+{% if form_hist and form_hist.rows|length > 1 %}
+<h3 style="margin:10px 0 4px">Progress</h3>
+<div class="scroll"><table class="list compact form-hist">
+  <thead><tr><th>Filmed</th><th class="num">Score</th>{% for k, label, unit in form_hist.checks %}<th class="num small">{{ label }}</th>{% endfor %}</tr></thead>
+  <tbody>{% for r in form_hist.rows|reverse %}<tr>
+    <td class="nowrap">{% if token is defined %}<a href="/a/{{ token }}/form/{{ r.fa.id }}/pdf">{% else %}<a href="/athletes/{{ a.id }}/form/{{ r.fa.id }}">{% endif %}{{ r.day.strftime('%b %-d, %Y') }}</a>{% if r.condition == 'tired' %} <span class="pill warn">Tired</span>{% endif %}</td>
+    <td class="num">{{ '%.0f%%' % r.score if r.score is not none else '–' }}</td>
+    {% for k, label, unit in form_hist.checks %}{% set c = r.cells[k] %}<td class="num small {{ 'pace-good' if c.state == 'good' else 'pace-bad' if c.state else '' }}">{{ '%g' % c.value if c.value is not none else '–' }}{{ '°' if unit == '°' and c.value is not none else '' }}</td>{% endfor %}</tr>{% endfor %}
+  {% if form_hist.moves %}<tr><td class="small muted">Since the first (fresh)</td><td></td>{% for k, label, unit in form_hist.checks %}{% set m = form_hist.moves.get(k) %}<td class="num small {{ 'pace-good' if m == 'better' else 'pace-bad' if m == 'worse' else 'muted' }}">{{ '↑ better' if m == 'better' else '↓ worse' if m == 'worse' else '–' }}</td>{% endfor %}</tr>{% endif %}
+  </tbody></table></div>
+<p class="small muted">Green is in the usual range for distance runners, red outside it. Compare clips filmed at a similar pace.</p>
+{% endif %}

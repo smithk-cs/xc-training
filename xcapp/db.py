@@ -107,6 +107,7 @@ ADDED_COLUMNS = {
     "meet_conditions": [("pressure_inhg", "FLOAT")],
     "meet_forecasts": [("pressure_inhg", "FLOAT")],
     "pain_reports": [("activity_id", "INTEGER"), ("saw_trainer", "BOOLEAN DEFAULT FALSE")],
+    "form_analyses": [("condition", "VARCHAR(10) DEFAULT 'fresh'")],
 }
 
 

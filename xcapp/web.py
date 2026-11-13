@@ -27,6 +27,8 @@ from sqlalchemy.orm import Session, selectinload
 from starlette.middleware.sessions import SessionMiddleware
 
 from . import ai as AI
+from . import form_plan as FP
+from . import season_plan as SPL
 from . import analysis as A
 from . import courses as CS
 from . import points as PT
@@ -530,8 +532,10 @@ def create_app() -> FastAPI:
         group_names = [g.name for g in db.scalars(select(TrainingGroup).order_by(TrainingGroup.position)).all()]
         races = db.scalars(select(RaceResult).where(RaceResult.athlete_id == a.id).order_by(RaceResult.date.desc())).all()   # all; 5 shown
         from .form_web import for_athlete as form_reports
+        form_last = FP.latest(db, [a.id]).get(a.id)
         return render(request, "athlete_detail.html", user, a=a, experience_labels=A.EXPERIENCE_LABELS, acts=acts, results=results, run_pain=run_pain, races=races,
-                      forms=form_reports(db, a.id),
+                      forms=form_reports(db, a.id), form_focus=FP.focus(form_last), form_hist=FP.history(db, a.id),
+                      refilm=FP.refilm_on(db, a.id), fatigue=FP.fatigue(db, a.id), today=A.team_today(),
                       adjusted=CS.adjusted_times(db, races), marks=A.race_marks(db.scalars(select(RaceResult).where(RaceResult.athlete_id == a.id)).all()),
                       ability=ability, group_names=group_names, missed=missed, vo2=A.latest_vo2(db, a.id),
                       goal_v=A.goal_vdot(db, a.id, A.team_today()),
@@ -1405,8 +1409,17 @@ def create_app() -> FastAPI:
         if edit is None and request.query_params.get("copy", "").isdigit():   # a copy opens as a new workout to adjust
             edit = db.get(PlannedWorkout, int(request.query_params["copy"]))
             copying = edit is not None
-        edit_parts = [p for p in edit.part_list if not p.get("fill")] if edit else []
-        edit_fill = next((p for p in edit.part_list if p.get("fill")), None) if edit else None
+        suggested = False
+        if edit is None and request.query_params.get("suggest"):   # a session from the season plan, opened to adjust and save
+            from .plan_web import suggested_workout
+            edit, parts = suggested_workout(db, str(request.query_params["suggest"]), str(request.query_params.get("group", "")),
+                                            str(request.query_params.get("team", "")), str(request.query_params.get("week", "")), today)
+            copying = suggested = edit is not None
+        if suggested:
+            edit_parts, edit_fill = parts, None
+        else:
+            edit_parts = [p for p in edit.part_list if not p.get("fill")] if edit else []
+            edit_fill = next((p for p in edit.part_list if p.get("fill")), None) if edit else None
         if edit and not edit_parts:  # an older single-rep workout opens as one part
             edit_parts = [{"sets": 1, "reps": 1, "dist": round(edit.rep_distance_m), "zone": A.OLD_TYPE_ZONE.get(A.pace_type(edit.pace_factor), "Interval"), "rest": ""}]
         vdots = sorted(v for v in (x.get("vdot") for x in A.abilities(db, today).values()) if v)
@@ -1414,7 +1427,8 @@ def create_app() -> FastAPI:
                       today=today.isoformat(), q=q, window=WORKOUT_WINDOW, rates=PT.RATES, zone_pcts=dict(A.PACE_ZONES), hr_zones=WV.HR_CHOICES,
                       ref_vdot=vdots[len(vdots) // 2] if vdots else 50,
                       ai_ready=settings().ai_configured, pending_checks=len(AI.pending_workout_checks(db)),
-                      ability_names=ability_names, edit=edit, copying=copying, edit_parts=edit_parts, edit_fill=edit_fill,
+                      ability_names=ability_names, edit=edit, copying=copying, suggested=suggested, edit_parts=edit_parts, edit_fill=edit_fill,
+                      plan_week=SPL.week_of(db, today), phases=SPL.PHASES, form_focus=FP.focus_groups(db) if not all_dates else [],
                       zones=list(A.WORKOUT_ZONES), fill_pace=A.FILL_MIN_PER_MILE,
                       easy_groups=db.scalars(select(TrainingGroup).order_by(TrainingGroup.position)).all(),
                       previews={w.id: A.group_part_paces(db, w.part_list) for w in rows[:30] if w.part_list},
@@ -1988,7 +2002,8 @@ def create_app() -> FastAPI:
         videos = {(t.date, t.meet, t.race): t.video_url for t in db.scalars(select(RaceTeamResult).where(
             RaceTeamResult.video_url != "", RaceTeamResult.date.in_({r.date for r in races} or {today}))).all()}
         from .form_web import for_athlete as form_reports
-        return render(request, "athlete.html", None, history=history, videos=videos, forms=form_reports(db, a.id), adjusted=CS.adjusted_times(db, races), paces=paces, a=a, acts=acts, tiles=tiles, seasons=seasons, need=need, ability=ability,
+        return render(request, "athlete.html", None, history=history, videos=videos, forms=form_reports(db, a.id),
+                      form_focus=FP.focus(FP.latest(db, [a.id]).get(a.id)), form_hist=FP.history(db, a.id), adjusted=CS.adjusted_times(db, races), paces=paces, a=a, acts=acts, tiles=tiles, seasons=seasons, need=need, ability=ability,
                       show_group=show_group, open_delete=open_delete, races=races, vo2=A.latest_vo2(db, a.id),
                       rhr=A.resting_hr(db, a.id, today), rhr_range=(A.RESTING_HR_MIN, A.RESTING_HR_MAX),
                       rhr_cal=A.resting_hr_calendar(db, a.id, today), photo_v=photo_versions(db).get(a.id), meets=my_meets(db, a, today),
@@ -2396,7 +2411,9 @@ def create_app() -> FastAPI:
         return None
 
     from types import SimpleNamespace
-    from . import calendar_web, form_web, newsletter_web, raceday_web, squads_web
+    from . import calendar_web, form_web, newsletter_web, plan_web, raceday_web, squads_web
+    plan_web.register(app, SimpleNamespace(render=render, flash=flash, back=back, form_checked=form_checked, any_staff=any_staff,
+                                           coach_or_admin=coach_or_admin, get_db=get_db))
     calendar_web.register(app, SimpleNamespace(render=render, flash=flash, back=back, form_checked=form_checked, any_staff=any_staff,
                                                coach_or_admin=coach_or_admin, get_db=get_db, settings=s))
     squads_web.register(app, SimpleNamespace(render=render, flash=flash, back=back, form_checked=form_checked, any_staff=any_staff,

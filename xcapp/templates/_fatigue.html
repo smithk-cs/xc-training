@@ -1,0 +1,16 @@
+{# The fatigue check: a fresh clip against a tired one (form_plan.fatigue). Needs `fatigue` and `a`. #}
+{% if fatigue %}
+<div class="card" id="fatigue">
+  <h2>Fatigue check</h2>
+  <p class="small muted">Fresh: <a href="/athletes/{{ a.id }}/form/{{ fatigue.fresh.id }}">{{ (fatigue.fresh.created_at|local).strftime('%b %-d') }}</a>{% if fatigue.fresh.pace_s %} at {{ fmt_secs(fatigue.fresh.pace_s) }}/mi{% endif %} · Tired: <a href="/athletes/{{ a.id }}/form/{{ fatigue.tired.id }}">{{ (fatigue.tired.created_at|local).strftime('%b %-d') }}</a>{% if fatigue.tired.pace_s %} at {{ fmt_secs(fatigue.tired.pace_s) }}/mi{% endif %}.
+    {% if fatigue.counts.fatigue %}<b>{{ fatigue.counts.fatigue }} measure{{ 's' if fatigue.counts.fatigue != 1 }} slip{{ '' if fatigue.counts.fatigue != 1 else 's' }} with fatigue</b>: strength work, threshold sessions, and the cue in the last reps.{% endif %}
+    {% if fatigue.counts.technique %}<b>{{ fatigue.counts.technique }} {{ 'are' if fatigue.counts.technique != 1 else 'is' }} technique</b>: drills and cues, at easy pace first.{% endif %}
+    {% if not fatigue.counts.fatigue and not fatigue.counts.technique %}Form holds when tired.{% endif %}</p>
+  <div class="scroll"><table class="list compact"><thead><tr><th>Measure</th><th class="num">Fresh</th><th class="num">Tired</th><th>What it is</th></tr></thead><tbody>
+  {% for r in fatigue.rows %}<tr><td>{{ r.title }}</td>
+    <td class="num nowrap {{ 'pace-good' if r.fresh_state == 'good' else 'pace-bad' }}">{{ '%g' % r.fresh }}{{ '°' if r.unit == '°' else '' }}</td>
+    <td class="num nowrap {{ 'pace-good' if r.tired_state == 'good' else 'pace-bad' }}">{{ '%g' % r.tired }}{{ '°' if r.unit == '°' else '' }}</td>
+    <td><span class="pill{{ ' warn' if r.verdict == 'fatigue' else ' bad' if r.verdict == 'technique' else '' }}">{{ r.label }}</span>{% if r.verdict in ('fatigue', 'technique', 'tired_only') %} <span class="small muted">{{ r.advice }}</span>{% endif %}</td></tr>{% endfor %}
+  </tbody></table></div>
+</div>
+{% endif %}

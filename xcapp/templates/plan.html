@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}Season plan · {{ team_name }}{% endblock %}
+{% block content %}
+{% set can_edit = user.role in ('admin', 'coach') %}
+<div class="form-row title-row" style="margin-bottom:6px"><h1 style="margin:0">Season plan</h1>
+  <form method="get" action="/workouts/plan" class="inline">
+    <select id="season-pick" name="season" aria-label="Season" onchange="this.form.submit()">{% for x in seasons %}<option value="{{ season_key(x) }}"{{ ' selected' if season_key(x) == season_key(season) }}>{{ x.label }}</option>{% endfor %}</select>
+    <noscript><button type="submit" class="secondary">Show</button></noscript></form>
+  <a href="/workouts" class="small">← Workouts</a></div>
+<p class="muted">After Daniels’ <i>Running Formula</i>: each week has a phase and a share of each group’s peak weekly miles, and the plan suggests that week’s two quality sessions for each group, sized within Daniels’ limits. {{ season.label }}: {{ season.start.strftime('%b %-d') }} to {{ season.end.strftime('%b %-d, %Y') }}.</p>
+<details class="muted how-points" style="max-width:90ch"><summary>The four phases</summary>
+  <ul class="small" style="margin:6px 0 0">{% for n, (name, title, what) in phases.items() %}<li><b>{{ name }}: {{ title }}.</b> {{ what }}</li>{% endfor %}
+    <li>Mileage: base seasons build about 5 points every third week and hold in between (raise the miles, then hold them at least three weeks); in season it holds near 100%, tapering to 85% and 70% in the last two weeks.</li></ul>
+</details>
+
+{% if sw %}{% set ph = phases[sw.phase] %}
+<section class="card" id="week">
+  <div class="form-row" style="justify-content:space-between; align-items:center">
+    <h2 style="margin:0">Week of {{ focus.strftime('%b %-d') }}{% if focus == this_monday %} (this week){% endif %}: {{ ph[0] }} · {{ ph[1] }}</h2>
+    <span class="pill">{{ sw.miles_pct }}% of peak miles</span></div>
+  <p class="small muted" style="margin:6px 0">{{ ph[2] }}{% if sw.note %} <b>Note:</b> {{ sw.note }}{% endif %}</p>
+  {% if can_edit %}<form method="post" action="/workouts/plan/apply" class="form-row" style="align-items:center; margin:6px 0 10px">
+    <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="week" value="{{ focus.isoformat() }}"><input type="hidden" name="season" value="{{ season_key(season) }}">
+    <button type="submit"{% if not mismatch %} class="secondary"{% endif %}>Apply this week’s miles to the groups</button>
+    <span class="small muted">{% if mismatch %}The weekly goals on the Groups page don’t match this week’s plan yet ({{ mismatch|join(', ') }}).{% else %}The Groups page goals match this week’s plan.{% endif %}</span>
+  </form>{% endif %}
+  {% if board %}{% if can_edit %}<p class="small muted" style="margin:0">Tap a session to open it in Plan a workout, ready to adjust and save.</p>{% endif %}
+  <div class="plan-board">
+    {% for r in board %}<div style="padding:8px 0; border-top:1px solid var(--color-border-line)">
+      <div><b>{{ r.group }}</b>{% if r.team %} <span class="small muted">{{ r.team }}</span>{% endif %} <span class="small muted">· {{ '%g' % r.miles }} mi this week</span></div>
+      <ul class="small" style="margin:4px 0 0; padding-left:1.2em">{% for s in r.sessions %}<li style="margin:2px 0">{% if can_edit %}<a href="/workouts?suggest={{ s.key }}&group={{ r.group|urlencode }}&team={{ r.team }}&week={{ focus.isoformat() }}#plan"><b>{{ s.title }}</b></a>{% else %}<b>{{ s.title }}</b>{% endif %} <span class="muted">{{ s.why }}</span></li>{% endfor %}</ul>
+    </div>{% endfor %}
+  </div>
+  <p class="small muted">Two quality days a week; every other day easy (the Workouts page’s easy runs and pre-race day runs). In a race week the race is one of the two. The Workouts page checks every posted session against Daniels’ limits.</p>
+  {% else %}<p class="small muted">Set each group’s peak weekly miles below to see sessions sized for it.</p>{% endif %}
+</section>
+{% elif rows %}
+<p class="card small">The week of {{ focus.strftime('%b %-d') }} has no plan yet{% if can_edit %}: fill in Daniels’ plan below, or set its phase{% endif %}.</p>
+{% endif %}
+
+<section class="card">
+  <div class="form-row" style="justify-content:space-between; align-items:center"><h2 style="margin:0">Weeks</h2>
+  {% if can_edit %}<form method="post" action="/workouts/plan" class="form-row" style="margin:0">
+    <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="season" value="{{ season_key(season) }}"><input type="hidden" name="week" value="{{ focus.isoformat() }}">
+    <button type="submit" name="action" value="fill" class="secondary">Fill in Daniels’ plan</button>
+    <button type="submit" name="action" value="replace" class="link" onclick="return confirm('Replace every week of {{ season.label }} with Daniels’ plan?')">Start over</button>
+  </form>{% endif %}</div>
+  <form method="post" action="/workouts/plan">
+    <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="season" value="{{ season_key(season) }}"><input type="hidden" name="week" value="{{ focus.isoformat() }}">
+    <div class="scroll"><table class="list compact">
+      <thead><tr><th>Week of</th><th>Phase</th><th class="num">Miles</th>{% if top %}<th class="num">{{ top[0] }}</th>{% endif %}<th>Note</th></tr></thead>
+      <tbody>{% for w in rows %}{% set k = w.monday.isoformat() %}<tr{% if w.monday == focus %} class="row-sel" style="background:var(--color-soft)"{% endif %}>
+        <td class="nowrap"><a href="/workouts/plan?season={{ season_key(season) }}&week={{ k }}#week">{{ w.monday.strftime('%b %-d') }}</a>{% if w.monday == this_monday %} <span class="small muted">now</span>{% endif %}</td>
+        <td>{% if can_edit %}<select name="phase_{{ k }}" style="width:auto" aria-label="Phase, week of {{ w.monday.strftime('%b %-d') }}"><option value="">Not planned</option>{% for n, (name, title, _) in phases.items() %}<option value="{{ n }}"{{ ' selected' if w.row and w.row.phase == n }}>{{ name[6:] }} · {{ title }}</option>{% endfor %}</select>
+          {% elif w.row %}{{ phases[w.row.phase][0] }} · {{ phases[w.row.phase][1] }}{% else %}<span class="muted">–</span>{% endif %}</td>
+        <td class="num nowrap">{% if can_edit %}<input type="number" name="pct_{{ k }}" min="30" max="130" step="5" value="{{ w.row.miles_pct if w.row else 100 }}" style="width:4.5em" aria-label="Share of peak miles"> %{% elif w.row %}{{ w.row.miles_pct }}%{% endif %}</td>
+        {% if top %}<td class="num small">{% if w.row and top[1].Boys %}{{ '%g' % planned_miles(top[1].Boys, w.row.miles_pct) }} mi{% endif %}</td>{% endif %}
+        <td>{% if can_edit %}<input type="text" name="note_{{ k }}" maxlength="200" value="{{ w.row.note if w.row else '' }}" placeholder="Such as: league meet" style="width:12em" aria-label="Note">{% elif w.row %}<span class="small">{{ w.row.note }}</span>{% endif %}</td></tr>{% endfor %}</tbody>
+    </table></div>
+    {% if can_edit %}<button type="submit" name="action" value="save">Save the plan</button>{% endif %}
+  </form>
+</section>
+
+<section class="card">
+  <h2>Peak weekly miles</h2>
+  <p class="small muted">Each group’s weekly miles at 100%: the plan’s share of it is that week’s goal. They start as each group’s goal on the Groups page.</p>
+  <form method="post" action="/workouts/plan">
+    <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="season" value="{{ season_key(season) }}"><input type="hidden" name="week" value="{{ focus.isoformat() }}">
+    <table class="list compact"><thead><tr><th>Group</th><th class="num">Boys</th><th class="num">Girls</th></tr></thead>
+      <tbody>{% for g in groups %}<tr><td>{{ g.name }}</td>{% for t in ('Boys', 'Girls') %}<td class="num">{% if can_edit %}<input type="number" name="peak_{{ g.name }}_{{ t }}" min="0" max="150" step="0.5" value="{{ '%g' % peaks[g.name][t] }}" style="width:5em" aria-label="{{ g.name }} {{ t|lower }} peak miles">{% else %}{{ '%g' % peaks[g.name][t] }}{% endif %}</td>{% endfor %}</tr>{% endfor %}</tbody></table>
+    {% if can_edit %}<button type="submit" name="action" value="peaks" class="secondary">Save peak miles</button>{% endif %}
+  </form>
+</section>
+{% endblock %}

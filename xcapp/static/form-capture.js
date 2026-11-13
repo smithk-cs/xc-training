@@ -96,7 +96,7 @@ $("#go").addEventListener("click", async () => {
     if (result.metrics.cadence && result.metrics.cadence < 120 && slow === 1)
       throw new Error(`That's ${result.metrics.cadence} steps a minute, too slow for running: if this is a slow-motion clip, choose how slow and analyze again.`);
     say("Saving…");
-    const body = { ...result, pace: $("#pace").value.trim(), note: $("#note").value.trim(), csrf: cfg.csrf };
+    const body = { ...result, pace: $("#pace").value.trim(), note: $("#note").value.trim(), condition: $("#condition").value, csrf: cfg.csrf };
     const who = $("#athlete").value;
     if (!who) throw new Error("Choose the athlete first.");
     const r = await fetch(`/athletes/${encodeURIComponent(who)}/form`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), credentials: "same-origin" });

@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from . import analysis as A
 from . import form as F
+from . import form_plan as FP
 from .ingest import log
 from .models import Athlete, FormAnalysis
 from .security import csrf_ok
@@ -57,7 +58,7 @@ def register(app, h: SimpleNamespace) -> None:
         recent = db.execute(select(FormAnalysis, Athlete).join(Athlete, Athlete.id == FormAnalysis.athlete_id)
                             .order_by(FormAnalysis.created_at.desc()).limit(30)).all()
         resp = render(request, "form_page.html", user, athletes=athletes, picked=athlete, recent=recent,
-                      can_film=user.role in ("admin", "coach"))
+                      can_film=user.role in ("admin", "coach"), due=FP.due(db, A.team_today()), conditions=FP.CONDITIONS)
         resp.headers["Content-Security-Policy"] = CAPTURE_CSP
         return resp
 
@@ -85,6 +86,7 @@ def register(app, h: SimpleNamespace) -> None:
         except ValueError as exc:
             return JSONResponse({"error": str(exc)}, status_code=400)
         fa = FormAnalysis(athlete_id=a.id, by=user.display_name[:60], pace_s=pace, note=str(data.get("note") or "").strip()[:300],
+                          condition="tired" if data.get("condition") == "tired" else "fresh",
                           score=F.report(clean["metrics"], pace)["score"], data=json.dumps(clean, separators=(",", ":")))
         db.add(fa)
         db.flush()
@@ -98,6 +100,7 @@ def register(app, h: SimpleNamespace) -> None:
         fa = one(db, a.id, fid)
         data = json.loads(fa.data)
         return render(request, "form_report.html", user, a=a, fa=fa, data=data, rep=F.report(data["metrics"], fa.pace_s), view=F.view(data, fa.pace_s),
+                      fatigue=FP.fatigue(db, a.id, fa), conditions=FP.CONDITIONS,
                       bones=F.BONES, curve_titles=F.CURVE_TITLES, curve_keys=F.CURVE_KEYS,
                       others=db.scalars(select(FormAnalysis).where(FormAnalysis.athlete_id == a.id, FormAnalysis.id != fa.id)
                                         .order_by(FormAnalysis.created_at.desc())).all())
