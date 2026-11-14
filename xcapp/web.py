@@ -458,6 +458,7 @@ def create_app() -> FastAPI:
         for a in alumni:
             by_class.setdefault(a.grad_year or 0, []).append(a)
         return render(request, "athletes.html", user, athletes=rows, ab=A.abilities(db, today), ranks=ranks, moves=A.vdot_moves(db, today),
+                      film=FP.film_status(db, today),
                       photos=photo_versions(db), former=former, delete_by=lambda a: delete_by(a), alumni=by_class,
                       n_alumni=len(alumni), confirm=[x for x in CY.to_confirm(db, today) if team == "All" or x["athlete"].gender == team],
                       this_year=CY.school_year_end(today), dupes=dupes, team=team)
@@ -536,6 +537,7 @@ def create_app() -> FastAPI:
         return render(request, "athlete_detail.html", user, a=a, experience_labels=A.EXPERIENCE_LABELS, acts=acts, results=results, run_pain=run_pain, races=races,
                       forms=form_reports(db, a.id), form_focus=FP.focus(form_last), form_hist=FP.history(db, a.id),
                       refilm=FP.refilm_on(db, a.id), fatigue=FP.fatigue(db, a.id), today=A.team_today(),
+                      film=FP.film_status(db, A.team_today()), phases=SPL.PHASES,
                       adjusted=CS.adjusted_times(db, races), marks=A.race_marks(db.scalars(select(RaceResult).where(RaceResult.athlete_id == a.id)).all()),
                       ability=ability, group_names=group_names, missed=missed, vo2=A.latest_vo2(db, a.id),
                       goal_v=A.goal_vdot(db, a.id, A.team_today()),

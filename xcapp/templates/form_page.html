@@ -22,7 +22,7 @@
 <div class="card" id="setup">
   <label class="form-athlete">Athlete
     <select id="athlete" required><option value="">Choose an athlete…</option>
-      {% for x in athletes %}<option value="{{ x.id }}"{% if x.id == picked %} selected{% endif %}>{{ x.last_name }}, {{ x.first_name }}{% if x.grade %} · {{ x.grade }}th grade{% endif %}</option>{% endfor %}
+      {% for x in athletes %}<option value="{{ x.id }}"{% if x.id == picked %} selected{% endif %}>{{ x.last_name }}, {{ x.first_name }}{% if x.grade %} · {{ x.grade }}th grade{% endif %}{% if film.status.get(x.id) == 'due' %} · film {{ film.kind }} due{% endif %}</option>{% endfor %}
     </select></label>
   <div class="form-row">
     <label class="button">Choose a video<input id="pick" type="file" accept="video/*" hidden></label>
@@ -47,11 +47,13 @@
 <script type="module" src="/static/form-capture.js?v={{ asset_v }}"></script>
 {% endif %}
 
-{% if due.stale or due.never %}
-<details class="card fold-card" id="due"><summary><h2>Due for a re-film</h2> <span class="pill">{{ due.stale|length + due.never|length }}</span></summary>
-  <p class="small muted">About every six weeks (one Daniels phase), filmed fresh at the same pace as before, to see whether the drills are working.</p>
-  {% if due.stale %}<p class="small"><b>Last filmed {{ due.days // 7 }}+ weeks ago:</b> {% for a, d in due.stale %}<a href="/form?athlete={{ a.id }}">{{ a.name }}</a> <span class="muted">({{ d.strftime('%b %-d') }})</span>{{ ', ' if not loop.last }}{% endfor %}</p>{% endif %}
-  {% if due.never %}<p class="small"><b>Never filmed:</b> {% for a in due.never %}<a href="/form?athlete={{ a.id }}">{{ a.name }}</a>{{ ', ' if not loop.last }}{% endfor %}</p>{% endif %}
+{% set st = film.status %}
+{% if film.due or film.wait or film.soon %}
+<details class="card fold-card" id="due"{% if film.due %} open{% endif %}><summary><h2>{% if film.block %}Film for {{ phases[film.block.phase][0] }}{% else %}Due for a re-film{% endif %}</h2> <span class="pill{{ ' warn' if film.due }}">{{ film.due|length }} due</span></summary>
+  <p class="small muted">{{ film.label }}.{% if film.block %} {{ phases[film.block.phase][0] }} runs {{ film.block.start.strftime('%b %-d') }} to {{ film.block.end.strftime('%b %-d') }}; {{ film.done|length }} of {{ film.team }} done.{% endif %}</p>
+  {% if film.due %}<p class="small"><b>Due{% if film.kind == 'tired' %} (film tired){% endif %}:</b> {% for a in film.due %}<a href="/form?athlete={{ a.id }}">{{ a.name }}</a>{{ ', ' if not loop.last }}{% endfor %}</p>{% endif %}
+  {% if film.soon %}<p class="small"><b>From {{ film['from'].strftime('%a %b %-d') }}</b> (after the first week of running): {{ film.soon|length }} athletes.</p>{% endif %}
+  {% if film.wait %}<p class="small muted"><b>Wait until cleared</b> (injured, so their stride isn’t their usual one): {% for a in film.wait %}{{ a.name }}{{ ', ' if not loop.last }}{% endfor %}</p>{% endif %}
 </details>
 {% endif %}
 <div class="card">

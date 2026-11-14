@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from . import analysis as A
 from . import form as F
 from . import form_plan as FP
+from . import season_plan as SPL
 from .ingest import log
 from .models import Athlete, FormAnalysis
 from .security import csrf_ok
@@ -58,7 +59,8 @@ def register(app, h: SimpleNamespace) -> None:
         recent = db.execute(select(FormAnalysis, Athlete).join(Athlete, Athlete.id == FormAnalysis.athlete_id)
                             .order_by(FormAnalysis.created_at.desc()).limit(30)).all()
         resp = render(request, "form_page.html", user, athletes=athletes, picked=athlete, recent=recent,
-                      can_film=user.role in ("admin", "coach"), due=FP.due(db, A.team_today()), conditions=FP.CONDITIONS)
+                      can_film=user.role in ("admin", "coach"), film=FP.film_status(db, A.team_today()), conditions=FP.CONDITIONS,
+                      phases=SPL.PHASES)
         resp.headers["Content-Security-Policy"] = CAPTURE_CSP
         return resp
 

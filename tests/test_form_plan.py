@@ -80,7 +80,8 @@ def test_pages(session):
     form = c.get("/form").text
     assert '<select id="condition">' in form and "Tired (end of a workout)" in form and "Fatigue check:" in form
     assert "Due for a re-film" in form and "Ana Lee" in form.split('id="due"')[1].split("</details>")[0]
-    assert "Never filmed:" in form and ">Leo Park<" in form and 'class="pill warn">Tired' in form
+    due = form.split('id="due"')[1].split("</details>")[0]
+    assert ">Leo Park<" in due and ">Sam Reyes<" not in due and 'class="pill warn">Tired' in form   # never filmed is due too
     workouts = c.get("/workouts").text
     assert "Form focus groups" in workouts and "Reaches out in front (overstriding)." in workouts and "A-skips" in workouts
     detail = c.get(f"/athletes/{sid}").text
@@ -106,3 +107,55 @@ def test_pages(session):
     db = SessionLocal()
     assert db.get(FormAnalysis, int(url.rsplit("/", 1)[1])).condition == "fresh"
     db.close()
+
+
+def test_film_due_by_phase(session):
+    from xcapp.models import Injury, SeasonWeek
+    today = A.team_today()
+    monday = A.week_monday(today)
+    sam, ana, leo, first, latest, tired, old = team(session)     # Sam filmed fresh 10 days ago and tired 8 days ago
+    session.add(Injury(athlete_id=ana.id, onset_date=today - dt.timedelta(days=3), injury="Shin splints", body_area="Shin"))
+    for k in (-2, -1, 0, 1):                                     # Phase I since two weeks ago
+        session.add(SeasonWeek(monday=monday + dt.timedelta(days=7 * k), phase=1, miles_pct=80))
+    session.flush()
+    f = FP.film_status(session, today)
+    assert f["block"]["phase"] == 1 and f["block"]["start"] == monday - dt.timedelta(days=14) and f["kind"] == "fresh"
+    assert f["status"] == {sam.id: "done", ana.id: "wait", leo.id: "due"}           # Sam's clip is inside the block
+    # In Phase I's first week, nobody is due yet (a week of running first)
+    for w in session.query(SeasonWeek).filter(SeasonWeek.monday < monday).all():
+        session.delete(w)
+    session.flush()
+    f = FP.film_status(session, today)
+    assert f["status"][leo.id] == "soon" and f["from"] == monday + dt.timedelta(days=7)
+    # Phase III: a tired clip is what counts
+    for w in session.query(SeasonWeek).all():
+        w.phase = 3
+    session.add(SeasonWeek(monday=monday - dt.timedelta(days=7), phase=3, miles_pct=100))
+    session.flush()
+    f = FP.film_status(session, today)
+    assert f["kind"] == "tired" and f["status"][sam.id] == "done" and f["status"][leo.id] == "due"   # Sam's tired clip, 8 days ago
+    # Phase IV: optional, nobody is marked
+    for w in session.query(SeasonWeek).all():
+        w.phase = 4
+    session.flush()
+    f = FP.film_status(session, today)
+    assert f["kind"] is None and f["status"] == {} and f["due"] == []
+
+
+def test_film_markers_on_pages(session):
+    from xcapp.models import SeasonWeek
+    today = A.team_today()
+    sam, ana, leo, first, latest, tired, old = team(session)
+    session.add(SeasonWeek(monday=A.week_monday(today) - dt.timedelta(days=7), phase=2, miles_pct=90))
+    session.add(SeasonWeek(monday=A.week_monday(today), phase=2, miles_pct=90))
+    session.add(StaffUser(username="coach1", role="coach", password_hash=hash_password("correct-horse-1")))
+    session.commit()
+    sid, lid = sam.id, leo.id
+    from xcapp.web import create_app
+    c = login(create_app())
+    roster = c.get("/athletes").text
+    assert f'<a class="pill warn" href="/form?athlete={lid}"' in roster and "Film fresh</a>" in roster
+    assert "Film fresh due" in c.get(f"/athletes/{lid}").text and "Phase II re-film" in c.get(f"/athletes/{lid}").text
+    form = c.get("/form").text
+    assert "Film for Phase II" in form and "Leo Park" in form.split('id="due"')[1].split("</details>")[0]
+    assert f'value="{lid}">Park, Leo · 9th grade · film fresh due' in form

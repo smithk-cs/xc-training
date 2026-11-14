@@ -62,6 +62,9 @@
 </div>
 <div class="card" id="form">
   <div class="form-row" style="justify-content:space-between"><h2 style="margin:0">Running form</h2>{% if user.role in ('admin', 'coach') %}<a class="button secondary" href="/form?athlete={{ a.id }}">New form analysis</a>{% endif %}</div>
+  {% set fs = film.status.get(a.id) %}
+  {% if fs in ('due', 'wait', 'soon', 'done') and film.kind %}<p class="small" style="margin:4px 0">{% if fs == 'due' %}<a class="pill warn" href="/form?athlete={{ a.id }}">Film {{ film.kind }} due</a>{% elif fs == 'wait' %}<span class="pill">Film after the injury clears</span>{% elif fs == 'soon' %}<span class="pill">Film from {{ film['from'].strftime('%b %-d') }}</span>{% else %}<span class="pill good">Filmed ✓</span>{% endif %}
+    <span class="muted">{{ film.label }}{% if film.block %} ({{ phases[film.block.phase][0] }}, {{ film.block.start.strftime('%b %-d') }} to {{ film.block.end.strftime('%b %-d') }}){% endif %}.</span></p>{% endif %}
   {% if forms %}<p class="small muted" style="margin:4px 0">{% if refilm and refilm <= today %}<b>Due for a re-film</b> (six weeks since the last fresh clip){% elif refilm %}Next re-film due {{ refilm.strftime('%b %-d') }} (six weeks after the last fresh clip){% else %}Not filmed fresh yet{% endif %}.</p>
   {% include "_form_progress.html" %}
   <h3 style="margin:10px 0 4px">Reports</h3>

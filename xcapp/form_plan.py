@@ -161,3 +161,61 @@ def fatigue(db: Session, athlete_id: int, fa: FormAnalysis | None = None) -> dic
     out.sort(key=lambda r: order[r["verdict"]])
     counts = {v: sum(1 for r in out if r["verdict"] == v) for v in order}
     return {"fresh": fresh, "tired": tired, "rows": out, "counts": counts}
+
+
+# ---------- who needs filming in the current phase ----------
+
+NEEDS = {1: "fresh", 2: "fresh", 3: "tired", 4: None}   # Phase IV filming is optional
+
+
+def current_block(db: Session, today: dt.date) -> dict | None:
+    """The run of consecutive planned weeks with this week's phase: {"phase", "start", "end"}, or None (no plan)."""
+    from .models import SeasonWeek
+    rows = {w.monday: w.phase for w in db.scalars(select(SeasonWeek)).all()}
+    m = A.week_monday(today)
+    phase = rows.get(m)
+    if phase is None:
+        return None
+    start, end = m, m
+    while rows.get(start - dt.timedelta(days=7)) == phase:
+        start -= dt.timedelta(days=7)
+    while rows.get(end + dt.timedelta(days=7)) == phase:
+        end += dt.timedelta(days=7)
+    return {"phase": phase, "start": start, "end": end + dt.timedelta(days=6)}
+
+
+def injured(db: Session, today: dt.date) -> set[int]:
+    """Athletes with an injury that hasn't cleared (no return date yet, or one still ahead)."""
+    from .models import Injury
+    return set(db.scalars(select(Injury.athlete_id).where(Injury.onset_date <= today,
+                                                          (Injury.return_date.is_(None)) | (Injury.return_date > today))).all())
+
+
+def film_status(db: Session, today: dt.date) -> dict:
+    """Who needs a running-form clip now. With a season plan for this week: Phase I and II need a clip filmed fresh
+    during the phase (Phase I from its second week, once everyone has a few runs in), Phase III a clip filmed tired
+    (the fatigue check), Phase IV nothing (optional). Without a plan: a fresh clip every six weeks.
+    {"block", "kind", "from", "label", "status": {athlete_id: "due" | "wait" | "done" | "soon"}, "due", "wait", "done", "team"}"""
+    team = db.scalars(select(Athlete).where(A.on_team()).order_by(Athlete.last_name, Athlete.first_name)).all()
+    hurt = injured(db, today)
+    block = current_block(db, today)
+    status: dict[int, str] = {}
+    if block is None:
+        d = due(db, today)
+        need = {a.id for a, _ in d["stale"]} | {a.id for a in d["never"]}
+        for a in team:
+            status[a.id] = ("wait" if a.id in hurt else "due") if a.id in need else "done"
+        kind, start, label = "fresh", None, "Due for a re-film (six weeks since the last fresh clip, or never filmed)"
+    else:
+        kind = NEEDS[block["phase"]]
+        start = block["start"] + dt.timedelta(days=7 if block["phase"] == 1 else 0)
+        names = {1: "Phase I baseline", 2: "Phase II re-film", 3: "Phase III fatigue check", 4: "Phase IV (optional)"}
+        label = names[block["phase"]] + (": a clip filmed fresh" if kind == "fresh" else ": a clip filmed tired, at the end of an interval session" if kind == "tired" else "")
+        if kind:
+            have = {f.athlete_id for f in _all(db, [a.id for a in team])
+                    if (f.condition or "fresh") == kind and block["start"] <= day_of(f) <= block["end"]}
+            for a in team:
+                status[a.id] = ("done" if a.id in have else "soon" if today < start else "wait" if a.id in hurt else "due")
+    by = lambda s: [a for a in team if status.get(a.id) == s]
+    return {"block": block, "kind": kind, "from": start, "label": label, "status": status, "due": by("due"),
+            "wait": by("wait"), "done": by("done"), "soon": by("soon"), "team": len(team)}
