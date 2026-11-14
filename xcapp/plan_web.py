@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from . import analysis as A
 from . import points as PT
 from . import season_plan as SP
+from . import season_path as SPATH
 from . import seasons as SE
 from .ingest import log
 from .models import SeasonWeek, TrainingGroup
@@ -81,7 +82,7 @@ def register(app, h: SimpleNamespace) -> None:
         return render(request, "plan.html", user, season=p, seasons=season_choices(today), season_key=season_key, rows=rows,
                       focus=focus, sw=sw, board=SP.board(db, sw, run_days), phases=SP.PHASES, peaks=pk, groups=groups,
                       mismatch=mismatch, today=today, this_monday=A.week_monday(today), planned_miles=SP.planned_miles,
-                      top=next(iter(pk.items()), None))
+                      top=next(iter(pk.items()), None), path=SPATH.path(db, p, today), year=SPATH.year(db, p["school_year"]))
 
     @app.post("/workouts/plan")
     async def plan_save(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):

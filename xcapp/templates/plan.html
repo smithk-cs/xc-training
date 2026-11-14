@@ -13,6 +13,15 @@
     <li>Mileage: base seasons build about 5 points every third week and hold in between (raise the miles, then hold them at least three weeks); in season it holds near 100%, tapering to 85% and 70% in the last two weeks.</li></ul>
 </details>
 
+
+<section class="card plan-year" aria-label="School year at a glance">
+  <h2 style="margin:0 0 6px">School year at a glance</h2>
+  {% for y in year %}<div class="form-row" style="align-items:center; gap:8px; margin:2px 0; flex-wrap:nowrap">
+    <a href="/workouts/plan?season={{ season_key(y.season) }}" class="small nowrap" style="width:10.5em{% if season_key(y.season) == season_key(season) %}; font-weight:700{% endif %}">{{ y.season.label }}</a>
+    <div class="phase-strip" role="img" aria-label="{{ y.season.label }}: {% for m, ph in y.weeks %}{{ m.strftime('%b %-d') }} {{ phases[ph][0] if ph else 'not planned' }}{{ ', ' if not loop.last }}{% endfor %}">{% for m, ph in y.weeks %}<span class="ph ph{{ ph or 0 }}{% if m <= today <= m + timedelta(days=6) %} now{% endif %}" title="{{ m.strftime('%b %-d') }}: {{ phases[ph][0] ~ ' · ' ~ phases[ph][1] if ph else 'not planned' }}"></span>{% endfor %}</div>
+  </div>{% endfor %}
+  <p class="small muted" style="margin:6px 0 0"><span class="ph ph1 key"></span> I Foundation <span class="ph ph2 key"></span> II Early quality <span class="ph ph3 key"></span> III Transition <span class="ph ph4 key"></span> IV Final <span class="ph ph0 key"></span> not planned. A typical year: Phase I–II in Summer Base, II–IV through Cross Country, I–II again in Winter Base, then II–IV in Track.</p>
+</section>
 {% if sw %}{% set ph = phases[sw.phase] %}
 <section class="card" id="week">
   <div class="form-row" style="justify-content:space-between; align-items:center">
@@ -38,6 +47,35 @@
 <p class="card small">The week of {{ focus.strftime('%b %-d') }} has no plan yet{% if can_edit %}: fill in Daniels’ plan below, or set its phase{% endif %}.</p>
 {% endif %}
 
+
+{% if path.weeks and path.weeks|selectattr('phase')|list %}
+<section class="card" id="path">
+  <h2 style="margin-top:0">Season path: plan against what happened</h2>
+  <p class="small muted" style="margin-top:0">Each week’s phase and mileage target, then how the team did: average share of the miles goal and of the points target, and the weekly score (finished weeks, the Week page’s numbers); the share of running time at threshold pace or faster against the phase’s guide; and the quality paces posted, against what the phase calls for. Green is on course, amber worth a look, red off course.</p>
+  <div class="scroll"><table class="list compact path-table">
+    <thead><tr><th>Week</th><th>Phase</th><th class="num">Miles target</th><th class="num">Miles done</th><th class="num">Points</th><th class="num">Score</th><th class="num" title="Share of running time at threshold pace or faster (strides count)">Fast running</th><th>Quality posted</th></tr></thead>
+    <tbody>{% for w in path.weeks %}{% set ph = w.phase %}<tr{% if w.now %} style="background:var(--color-soft)"{% endif %}>
+      <td class="nowrap"><a href="/week?start={{ w.monday.isoformat() }}">{{ w.monday.strftime('%b %-d') }}</a>{% if w.now %} <span class="small muted">now</span>{% endif %}</td>
+      <td class="nowrap">{% if ph %}<span class="ph ph{{ ph }} key"></span> {{ phases[ph][0][6:] }}{% else %}<span class="muted">–</span>{% endif %}</td>
+      <td class="num">{{ '%d%%' % w.row.miles_pct if w.row else '' }}</td>
+      {% macro pc(v, over=false) %}{% if v is none %}<span class="muted">–</span>{% else %}<span class="{{ 'pace-warn' if over and v > 115 else 'pace-good' if v >= 90 else 'pace-warn' if v >= 80 else 'pace-bad' }}"{% if over and v > 115 %} title="More than 15% over the goal: check the load"{% endif %}>{{ '%.0f%%' % v }}</span>{% endif %}{% endmacro %}
+      <td class="num">{{ pc(w.miles_pct, true) }}</td><td class="num">{{ pc(w.points_pct) }}</td><td class="num">{{ pc(w.score) }}</td>
+      <td class="num nowrap">{% if w.quality_pct is not none %}<span class="{{ 'pace-good' if w.intensity == 'ok' else 'pace-warn' if w.intensity == 'low' else 'pace-bad' if w.intensity == 'high' else '' }}">{{ '%.0f%%' % w.quality_pct }}</span>{% else %}<span class="muted">–</span>{% endif %}{% if w.guide %}<br><span class="small muted">guide {{ w.guide[0] }}–{{ w.guide[1] }}%</span>{% endif %}</td>
+      <td class="small">{% for z, n in w.posted|dictsort %}{{ z[0] }}{{ '×%d' % n if n > 1 }}{{ ' ' if not loop.last }}{% else %}<span class="muted">none</span>{% endfor %}
+        {% if w.off %}<br><span class="pace-bad">{{ w.off|map('first')|join(', ') }} isn’t a {{ phases[ph][0] }} pace</span>{% elif w.main_ok == false and not w.future %}<br><span class="pace-warn">no {{ path.main[ph]|lower }} session {{ 'posted' if w.done else 'posted yet' }}</span>{% endif %}</td></tr>{% endfor %}</tbody>
+  </table></div>
+  <p class="small muted">Fast-running guide by phase (share of the team’s running time at T pace or faster): {% for n, g in path.intensity.items() %}{{ phases[n][0] }} {{ g[0] }}–{{ g[1] }}%{{ ', ' if not loop.last }}{% endfor %}. Guides for high school distance runners after Daniels (most running stays easy), not rules. Quality posted: T threshold, I interval, R repetition (strides don’t count); the phase’s key pace: Phase II R, III I, IV T.</p>
+</section>
+
+<section class="card" id="form-path">
+  <h2 style="margin-top:0">Form and technique by phase</h2>
+  {% for b in path.blocks %}<div style="padding:8px 0; border-top:1px solid var(--color-border-line)">
+    <div><span class="ph ph{{ b.phase }} key"></span> <b>{{ phases[b.phase][0] }} · {{ phases[b.phase][1] }}</b> <span class="small muted">{{ b.start.strftime('%b %-d') }} to {{ b.end.strftime('%b %-d') }} ({{ b.weeks }} week{{ 's' if b.weeks != 1 }})</span></div>
+    <div class="small"><b>Film:</b> {{ b.todo }}.{% if b.started %}{% set need = b.phase in (1, 2) %} <span class="{{ ('pace-good' if b.filmed >= 0.9 * b.team else 'pace-warn' if b.filmed >= 0.5 * b.team else 'pace-bad') if need else 'muted' }}">{{ b.filmed }} of {{ b.team }} filmed fresh</span>{% if b.phase == 3 %}, <span class="{{ 'pace-good' if b.tired >= 0.5 * b.team else 'pace-warn' if b.tired else 'pace-bad' }}">{{ b.tired }} filmed tired</span>{% endif %}.{% endif %} <a href="/form">Running form</a></div>
+    <div class="small"><b>Technique:</b> {{ b.how }}</div></div>{% endfor %}
+  <p class="small muted">Each athlete’s own focus and drills are on their page; the Workouts page groups the team by focus for drill stations.</p>
+</section>
+{% endif %}
 <section class="card">
   <div class="form-row" style="justify-content:space-between; align-items:center"><h2 style="margin:0">Weeks</h2>
   {% if can_edit %}<form method="post" action="/workouts/plan" class="form-row" style="margin:0">

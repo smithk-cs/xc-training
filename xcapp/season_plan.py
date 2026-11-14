@@ -37,7 +37,10 @@ PEAKS_KEY = "plan_peaks"
 
 
 def weeks_of(season: dict) -> list[dt.date]:
+    """The Mondays of the season: a week belongs to the season its Monday falls in (as for the weekly medals)."""
     m, out = A.week_monday(season["start"]), []
+    if m < season["start"]:
+        m += dt.timedelta(days=7)
     while m <= season["end"]:
         out.append(m)
         m += dt.timedelta(days=7)

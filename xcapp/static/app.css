@@ -769,3 +769,10 @@ a.route-link { white-space: nowrap; }
 
 /* Cards holding wide tables span the whole row of a card grid, so their columns aren't squeezed into tall rows */
 .grid > .wide-card { grid-column: 1 / -1; }
+
+/* Season plan: phase colors (the school year strip, the season path) */
+.phase-strip { display: flex; gap: 2px; flex: 1; min-width: 0; }
+.ph { display: inline-block; height: 14px; flex: 1; min-width: 4px; border-radius: 3px; background: var(--color-soft); }
+.ph.key { width: 12px; flex: none; vertical-align: -2px; }
+.ph1 { background: #7FB77E; } .ph2 { background: #4F7CA8; } .ph3 { background: #D98E04; } .ph4 { background: #A6192E; }
+.ph.now { outline: 2px solid var(--color-text, #222); outline-offset: 1px; }

@@ -17,7 +17,8 @@ def test_default_plans():
     assert len(xc) == 18 and [p for p, _ in xc] == [2] * 4 + [3] * 7 + [4] * 7                 # II, then III, then IV
     assert [pct for _, pct in xc][-3:] == [100, 85, 70]                                         # a two-week taper
     base = SP.default_plan({"kind": "summer", "start": dt.date(2026, 6, 7), "end": dt.date(2026, 8, 2)})
-    assert [p for p, _ in base] == [1] * 6 + [2] * 3 and [pct for _, pct in base] == [70, 70, 70, 75, 75, 75, 80, 80, 80]
+    assert [p for p, _ in base] == [1] * 5 + [2] * 3 and [pct for _, pct in base] == [70, 70, 70, 75, 75, 75, 80, 80]   # Jun 8 to Jul 27
+    assert SP.weeks_of({"start": dt.date(2026, 12, 6), "end": dt.date(2027, 2, 7)})[0] == dt.date(2026, 12, 7)   # a Sunday start: from the Monday after
 
 
 def test_sessions_fit_daniels_limits():
