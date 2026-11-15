@@ -95,11 +95,15 @@ def test_notes_and_sections():
 
 def test_built_in_courses():
     ps = FL.presets()
-    assert set(ps) == {"willow", "frogtown"} and ps["willow"]["distance"] == "5K" and ps["frogtown"]["distance"] == "3 mi"
+    assert set(ps) == {"willow", "frogtown", "wildfire"} and ps["willow"]["distance"] == "5K" and ps["frogtown"]["distance"] == "3 mi"
     data, notes, sections = FL.preset_record("willow")
     assert data["overlay"]["href"] == "/static/flyover/willow-satellite.jpg" and data["base"] and data["CP"]
     assert "Big climb out of G" in notes and sections.startswith("0 Back hills: Start, A, B")
     assert FL.preset_record("frogtown")[0]["official"]["href"] == "/static/flyover/frogtown-official.jpg"
+    wild = FL.preset_record("wildfire")[0]                     # no heights yet: a flat profile the page shows as such
+    assert ps["wildfire"]["distance"] == "5K" and wild["heights"] == "none" and wild["followW"] == 380
+    assert wild["overlay"]["href"] == "/static/flyover/wildfire-satellite.jpg" and wild["E"][-1][0] == wild["total"]
+    assert "Into the woods loop" in FL.preset_record("wildfire")[1]
 
 
 def test_flyover_pages_for_coaches_and_athletes():

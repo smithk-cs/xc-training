@@ -96,7 +96,7 @@
   function targetView() {
     if (!follow) return fullView();
     var a = at(mile - 0.04), b = at(mile + 0.04);
-    return { x: (a[0] + b[0]) / 2, y: (a[1] + b[1]) / 2, w: C.vb[2] * 0.52 };
+    return { x: (a[0] + b[0]) / 2, y: (a[1] + b[1]) / 2, w: C.followW || C.vb[2] * 0.52 };
   }
   function applyView() {
     var w = view.w;
@@ -128,7 +128,7 @@
     var pct = mile / C.total * 100;
     els.donerect.setAttribute('width', (pct * 10).toFixed(1));
     $('fly-cursor').style.left = pct + '%';
-    var kn = $('fly-knob'); kn.style.left = pct + '%'; kn.style.top = (els.H(e) / 2) + '%'; kn.style.background = col(SEGC, si);
+    var kn = $('fly-knob'); kn.style.left = pct + '%'; kn.style.top = (noHeights ? 50 : els.H(e) / 2) + '%'; kn.style.background = col(SEGC, si);
     var sc = $('fly-scrub'); sc.setAttribute('aria-valuenow', mile.toFixed(2));
     sc.setAttribute('aria-valuetext', mile.toFixed(2) + ' miles' + (noHeights ? '' : ', ' + Math.round(e) + ' feet'));
   }
@@ -185,6 +185,7 @@
     if (used) { mile = clamp(mile, 0, C.total); if (ev.key !== ' ' && playing) setPlaying(false); render(); ev.preventDefault(); }
   });
 
+  if (noHeights) $('fly-hint').textContent = 'Drag along the strip to move the runner forward or back. Arrow keys work too. No elevation data yet for this course.';
   buildMap(); buildProfile(); render();
   if (C.overlay || C.official) {
     var ob = $('fly-ov'); ob.hidden = false; ob.textContent = (C.overlay || C.official).label;
