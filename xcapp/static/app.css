@@ -776,3 +776,88 @@ a.route-link { white-space: nowrap; }
 .ph.key { width: 12px; flex: none; vertical-align: -2px; }
 .ph1 { background: #7FB77E; } .ph2 { background: #4F7CA8; } .ph3 { background: #D98E04; } .ph4 { background: #A6192E; }
 .ph.now { outline: 2px solid var(--color-text, #222); outline-offset: 1px; }
+
+/* ---------- course flyover (flyover.html, flyover.js) ---------- */
+.flyover {
+  --fly-c1: var(--brand-red); --fly-c2: var(--brand-gold); --fly-c3: var(--color-fg);
+  --fly-land: #F0EBE0; --fly-park: #F5EBC8; --fly-water: #D9D5CD; --fly-road: #DCD5C8; --fly-strip: #E9E3D6; --fly-contour: #E8C6C3;
+  --fly-ghost1: #E3A9AB; --fly-ghost2: #F6DA85; --fly-ghost3: #B8B3AA; --fly-case: #1C1A1A; --fly-halo: var(--color-bg);
+  --fly-fill1: #E7A4A6; --fly-fill2: #F7DC8A; --fly-fill3: #B4AFA8; --fly-area: #E8E1D3; --fly-line: var(--color-border-line);
+  max-width: 1240px; margin: 0 auto;
+}
+@media (prefers-color-scheme: dark) {
+  .flyover {
+    --fly-c1: #E0333B; --fly-c2: #F2B705;
+    --fly-land: #1E1A18; --fly-park: #2A2416; --fly-water: #333A40; --fly-road: #3A3430; --fly-strip: #2C2724; --fly-contour: #4A2A2A;
+    --fly-ghost1: #6E2A2D; --fly-ghost2: #6B5414; --fly-ghost3: #55504A; --fly-case: #0C0A09;
+    --fly-fill1: #7A2A2E; --fly-fill2: #7A6014; --fly-fill3: #5A5550; --fly-area: #2C2724;
+  }
+}
+.fly-back { margin: 0 0 6px; }
+.fly-head h1 { font-family: var(--font-display); font-size: clamp(30px, 5vw, 46px); line-height: .95; margin: 0 0 16px; }
+.fly-head h1 small { display: block; font-family: inherit; font-weight: 400; font-size: 16px; color: var(--color-fg-muted); margin-top: 6px; }
+.fly-stage { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 20px; align-items: start; }
+.fly-map { position: relative; background: var(--fly-land); border: 1px solid var(--color-border-line); border-radius: 14px; overflow: hidden; aspect-ratio: 1 / 1; max-height: 70vh; width: 100%; touch-action: none; }
+.fly-map svg { width: 100%; height: 100%; display: block; }
+#fly-offmap { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #FFFFFF; }
+#fly-offmap[hidden] { display: none; }
+.fly-map .fly-land, .fly-map .land { fill: var(--fly-land); }
+.fly-map .park { fill: var(--fly-park); } .fly-map .water { fill: var(--fly-water); } .fly-map .lot { fill: var(--fly-road); }
+.fly-map .road { fill: none; stroke: var(--fly-road); stroke-linecap: round; stroke-linejoin: round; }
+.fly-map .strip { fill: none; stroke: var(--fly-strip); stroke-width: 16; stroke-linecap: round; }
+.fly-map .track { fill: var(--fly-park); stroke: var(--fly-road); stroke-width: 6; }
+.fly-map .contour { fill: none; stroke: var(--fly-contour); stroke-width: 1.2; }
+.fly-ghost, .fly-case, .fly-route { fill: none; vector-effect: non-scaling-stroke; stroke-linecap: round; stroke-linejoin: round; }
+.fly-ghost { stroke-width: 3; } .fly-case { stroke: var(--fly-case); stroke-width: 9; } .fly-route { stroke-width: 5; }
+.fly-mk { fill: var(--color-bg); stroke: var(--color-fg); } .fly-mk.on { fill: var(--color-fg); }
+.fly-start { fill: var(--fly-c1); stroke: var(--fly-halo); } .fly-finish { fill: var(--color-fg); stroke: var(--fly-halo); }
+#fly-ring { stroke: var(--color-fg); } .fly-dot { fill: var(--color-bg); stroke: var(--color-fg); }
+.fly-map text { font-family: var(--font-display); paint-order: stroke; stroke: var(--fly-halo); stroke-width: 3px; stroke-linejoin: round; }
+.fly-map .t-lab { fill: var(--color-fg-muted); font-weight: 600; }
+.fly-map .t-cp, .fly-map .t-mk { fill: var(--color-fg); font-weight: 800; }
+.fly-map .t-flag { fill: var(--fly-c1); font-weight: 800; }
+.fly-panel { display: flex; flex-direction: column; gap: 16px; }
+.fly-figs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.fly-fig b { display: block; font-family: var(--font-display); font-size: 40px; line-height: 1; font-variant-numeric: tabular-nums; }
+.fly-fig span { font-size: 14px; color: var(--color-fg-muted); }
+.fly-section { border-left: 6px solid var(--seg, var(--fly-c1)); padding: 4px 0 4px 14px; }
+.fly-section h2 { font-family: var(--font-display); font-size: 28px; line-height: 1; margin: 0 0 4px; }
+.fly-section p { margin: 0; color: var(--color-fg-muted); font-size: 15px; }
+.fly-note { font-family: var(--font-display); font-size: 23px; line-height: 1.15; min-height: 56px; }
+.fly-note small { display: block; font-family: var(--font-body, inherit); font-size: 14px; color: var(--color-fg-muted); }
+.fly-legend { display: flex; flex-direction: column; gap: 6px; font-size: 15px; }
+.fly-legend div { display: flex; align-items: center; gap: 10px; opacity: .45; }
+.fly-legend div.on { opacity: 1; font-weight: 600; }
+.fly-legend i { width: 34px; height: 9px; border-radius: 5px; box-shadow: 0 0 0 1.5px var(--fly-case); flex: none; }
+.fly-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.fly-controls button { background: var(--color-soft); color: var(--color-fg); border-color: var(--color-border-line); }
+.fly-controls button:hover { background: var(--color-border-line); color: var(--color-fg); border-color: var(--color-border-line); }
+.fly-controls button[aria-pressed="true"] { background: var(--color-fg); color: var(--color-bg); border-color: var(--color-fg); }
+.fly-controls button.fly-play { background: var(--brand-red); color: #FFFFFF; border-color: var(--brand-red); min-width: 92px; }
+.fly-controls button[hidden] { display: none; }
+.fly-speeds { display: inline-flex; gap: 4px; }
+.fly-profile { margin-top: 20px; }
+.fly-hint { font-size: 15px; color: var(--color-fg-muted); margin: 0 0 8px; }
+.fly-scrub { position: relative; height: 170px; background: var(--color-soft); border: 1px solid var(--color-border-line); border-radius: 14px; padding: 14px 18px 34px 58px; touch-action: none; cursor: ew-resize; user-select: none; -webkit-user-select: none; }
+.fly-plot { position: relative; width: 100%; height: 100%; }
+.fly-plot svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.fly-grid { position: absolute; left: -52px; right: 0; height: 0; border-top: 1px dashed var(--fly-line); }
+.fly-grid span { position: absolute; left: 0; top: -10px; font-size: 13px; color: var(--color-fg-muted); font-variant-numeric: tabular-nums; }
+.fly-ticks { position: absolute; left: 0; right: 0; bottom: -28px; height: 20px; font-size: 13px; color: var(--color-fg-muted); }
+.fly-ticks span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
+.fly-ticks span.first { transform: none; } .fly-ticks span.last { transform: translateX(-100%); }
+.fly-cursor { position: absolute; top: -8px; bottom: -8px; width: 3px; margin-left: -1.5px; background: var(--color-fg); pointer-events: none; }
+.fly-knob { position: absolute; width: 34px; height: 34px; margin: -17px 0 0 -17px; border-radius: 50%; background: var(--fly-c1); border: 4px solid var(--color-fg); box-shadow: 0 0 0 3px var(--color-bg); pointer-events: none; }
+.fly-about { margin-top: 22px; font-size: 14px; color: var(--color-fg-muted); max-width: 72ch; }
+@media (max-width: 860px) {
+  .fly-stage { grid-template-columns: 1fr; }
+  .fly-map { max-height: none; }
+  .fly-fig b { font-size: 32px; }
+  .fly-scrub { height: 150px; padding-left: 50px; }
+}
+@media (max-width: 600px) { .fly-ticks span.half { display: none; } }
+.course-flyovers textarea { width: 100%; font-family: inherit; }
+.flyover-item { border: 1px solid var(--color-border-line); border-radius: 10px; padding: 8px 12px; margin-bottom: 8px; }
+.flyover-item summary { cursor: pointer; }
+.flyover-item .dist { display: inline-block; width: 5.5rem; font-weight: 600; }
+.flyover-item label { display: block; margin-bottom: 8px; }

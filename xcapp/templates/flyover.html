@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}{{ view.title }} flyover · {{ team_name }}{% endblock %}
+{% block content %}
+<div class="flyover">
+  <p class="small fly-back"><a href="{{ back_url }}">‹ {{ back_label }}</a></p>
+  <header class="fly-head">
+    <h1>{{ view.title }}{% if view.place %}<small>{{ view.place }}</small>{% endif %}</h1>
+  </header>
+
+  <div class="fly-stage">
+    <div class="fly-map" id="fly-mapbox"><svg id="fly-map" aria-label="Course map" role="img"></svg><img id="fly-offmap" alt="Official course map" hidden></div>
+    <div class="fly-panel">
+      <div class="fly-figs">
+        <div class="fly-fig"><b id="fly-mi">0.00</b><span>miles</span></div>
+        <div class="fly-fig"><b id="fly-ft">0</b><span>feet</span></div>
+        <div class="fly-fig"><b id="fly-gr">0%</b><span>grade</span></div>
+      </div>
+      <div class="fly-section" id="fly-sec"><h2 id="fly-sec-name"></h2><p id="fly-sec-cp"></p></div>
+      <div class="fly-note" id="fly-note"><small>What’s here</small><span></span></div>
+      <div class="fly-legend" id="fly-legend"></div>
+      <div class="fly-controls">
+        <button class="fly-play" id="fly-play" type="button">Play</button>
+        <span class="fly-speeds" role="group" aria-label="Playback speed">
+          <button type="button" data-speed="0.4" aria-pressed="false">Slow</button>
+          <button type="button" data-speed="1" aria-pressed="true">Normal</button>
+          <button type="button" data-speed="2.5" aria-pressed="false">Fast</button>
+        </span>
+        <button type="button" id="fly-follow" aria-pressed="true">Follow runner</button>
+        <button type="button" id="fly-ov" aria-pressed="false" hidden>Satellite photo</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="fly-profile">
+    <p class="fly-hint">Drag along the elevation strip to move the runner forward or back. Arrow keys work too.</p>
+    <div class="fly-scrub" id="fly-scrub" tabindex="0" role="slider" aria-label="Distance along the course" aria-valuemin="0" aria-valuemax="{{ view.total }}" aria-valuenow="0">
+      <div class="fly-plot" id="fly-plot">
+        <div id="fly-grids"></div>
+        <svg id="fly-prof" viewBox="0 0 1000 200" preserveAspectRatio="none" aria-hidden="true"></svg>
+        <div class="fly-cursor" id="fly-cursor"></div>
+        <div class="fly-knob" id="fly-knob"></div>
+        <div class="fly-ticks" id="fly-ticks"></div>
+      </div>
+    </div>
+  </div>
+
+  <p class="fly-about">{{ view.about }}</p>
+</div>
+<script type="application/json" id="fly-data">{{ view|tojson }}</script>
+<script src="/static/flyover.js?v={{ asset_v }}"></script>
+{% endblock %}

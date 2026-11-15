@@ -31,6 +31,7 @@ from . import form_plan as FP
 from . import season_plan as SPL
 from . import analysis as A
 from . import courses as CS
+from . import flyover as FLY
 from . import points as PT
 from . import datasets as DS
 from . import garmin as G
@@ -171,7 +172,7 @@ def create_app() -> FastAPI:
     # A fingerprint of the style sheet and scripts: links carry it (?v=...), so browsers load new ones after each deploy.
     import hashlib
     asset_v = hashlib.sha256(b"".join(f.read_bytes() for f in sorted((HERE / "static").glob("*.[cj]s*")))).hexdigest()[:10]
-    templates.env.globals.update(asset_v=asset_v, athlete_words=WV.athlete_words, mmss=A.mmss_text, map_url=A.map_url, course_place=A.course_place, race_videos=CS.race_videos, race_routes=CS.race_routes, fmt_clock=A.fmt_clock, fmt_secs=A.fmt_secs, describe_weather=WX.describe, fmt_time=A.fmt_time, timedelta=dt.timedelta, now=A.team_today, EVENTS=list(A.EVENTS), GROUPS=GROUPS, team_name=s.team_name,
+    templates.env.globals.update(asset_v=asset_v, athlete_words=WV.athlete_words, mmss=A.mmss_text, map_url=A.map_url, course_place=A.course_place, race_videos=CS.race_videos, race_routes=CS.race_routes, race_flyovers=CS.race_flyovers, fmt_clock=A.fmt_clock, fmt_secs=A.fmt_secs, describe_weather=WX.describe, fmt_time=A.fmt_time, timedelta=dt.timedelta, now=A.team_today, EVENTS=list(A.EVENTS), GROUPS=GROUPS, team_name=s.team_name,
                                  has_logo=has_logo, FEELS=FEELS, EFFORT_WORDS=EFFORT_WORDS, RUN_TYPES=A.RUN_TYPES,
                                  MISSED_REASONS=A.MISSED_REASONS, SIDES=A.SIDES, STARTED=A.STARTED, SEEN_BY=A.SEEN_BY,
                                  MORE_DAYS=A.MORE_DAYS, missed_label=A.missed_label,
@@ -1001,7 +1002,7 @@ def create_app() -> FastAPI:
         known = {c.name.strip().lower() for c in courses}
         missing = sorted({r for r in raced if r not in known})
         names = {r.strip().lower(): r for (r,) in db.execute(select(RaceResult.course).distinct()).all() if r}
-        return render(request, "courses.html", user, courses=courses, edit=edit, CS=CS, raced=raced,
+        return render(request, "courses.html", user, courses=courses, edit=edit, CS=CS, raced=raced, flyover_presets=FLY.presets(),
                       missing=[names[m] for m in missing])
 
     @app.post("/courses")
@@ -2455,7 +2456,9 @@ def create_app() -> FastAPI:
         return None
 
     from types import SimpleNamespace
-    from . import calendar_web, form_web, newsletter_web, plan_web, raceday_web, squads_web
+    from . import calendar_web, flyover_web, form_web, newsletter_web, plan_web, raceday_web, squads_web
+    flyover_web.register(app, SimpleNamespace(render=render, flash=flash, back=back, form_checked=form_checked, any_staff=any_staff,
+                                              coach_or_admin=coach_or_admin, get_db=get_db, athlete_by_token=athlete_by_token))
     plan_web.register(app, SimpleNamespace(render=render, flash=flash, back=back, form_checked=form_checked, any_staff=any_staff,
                                            coach_or_admin=coach_or_admin, get_db=get_db))
     calendar_web.register(app, SimpleNamespace(render=render, flash=flash, back=back, form_checked=form_checked, any_staff=any_staff,
