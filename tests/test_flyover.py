@@ -124,9 +124,11 @@ def test_satellite_photo():
     filler = BytesIO()
     Image.new("RGB", (256, 256), (210, 210, 210)).save(filler, "JPEG")
 
-    def usgs_blank(u):                                     # USGS has only its plain filler here: Esri's imagery instead
-        return filler.getvalue() if "nationalmap" in u else fake_tile(u)
-    assert FL.satellite_image(d["geo"], fetch=usgs_blank)[1].startswith("Imagery: Esri")
+    def usgs_blank(u):                                     # USGS has only its plain filler here: no photo (USGS only)
+        assert "nationalmap" in u
+        return filler.getvalue()
+    assert FL.satellite_image(d["geo"], fetch=usgs_blank) is None
+    assert [c for c, _ in FL.TILE_SOURCES] == ["Imagery: USGS The National Map"]
     assert FL.satellite_image(d["geo"], fetch=lambda u: None) is None
     assert FL.satellite_image(None) is None
 
@@ -251,3 +253,24 @@ def test_flyover_pages_for_coaches_and_athletes():
     db.commit()
     assert db.query(CourseFlyover).count() == 0
     db.close()
+
+
+def test_saved_esri_photos_are_removed():
+    from xcapp import db as DBM
+    from xcapp.db import SessionLocal
+    from xcapp.models import Course, CourseFlyover, FlyoverImage
+    s = SessionLocal()
+    c = Course(name="Test Park")
+    s.add(c)
+    s.flush()
+    for i, credit in enumerate(("Imagery: USGS The National Map", "Imagery: Esri, Maxar, Earthstar Geographics")):
+        f = CourseFlyover(course_id=c.id, distance=f"{i + 2} mi")
+        s.add(f)
+        s.flush()
+        s.add(FlyoverImage(flyover_id=f.id, data=b"jpeg", credit=credit, size=100))
+    s.commit()
+    s.close()
+    DBM.create_all()                                         # at startup: Esri's photos go, USGS's stay
+    s = SessionLocal()
+    assert [x.credit for x in s.query(FlyoverImage).all()] == ["Imagery: USGS The National Map"]
+    s.close()

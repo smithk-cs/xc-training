@@ -248,13 +248,12 @@ def build(track: list[tuple[float, float, float | None]], lookup=fetch_elevation
 
 # ---------- satellite photo ----------
 # Map tiles, stitched on the server when a flyover is made and kept with it, so pages load one picture from this site.
-# USGS's imagery (The National Map) is public domain; Esri's World Imagery is the fallback outside the US or where
-# USGS has none. Both are ArcGIS tile services: /tile/{z}/{y}/{x}, 256-pixel Web Mercator tiles.
+# Only USGS's imagery (The National Map), which is public domain: free to use, no key, and it covers the whole US.
+# Where it has no imagery the flyover simply has no photo (no other source is used). An ArcGIS tile service:
+# /tile/{z}/{y}/{x}, 256-pixel Web Mercator tiles.
 TILE_SOURCES = [
     ("Imagery: USGS The National Map",
      "https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/{z}/{y}/{x}"),
-    ("Imagery: Esri, Maxar, Earthstar Geographics",
-     "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"),
 ]
 IMG_PAD = 130.0       # drawing units around the 440 square, so following the runner near an edge stays on the photo
 MAX_IMG_PX = 2048

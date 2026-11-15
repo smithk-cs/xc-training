@@ -150,6 +150,10 @@ def create_all():
             for name, ddl in cols:
                 if name not in have:
                     conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}"))
+        # Satellite photos come from USGS only: any saved from Esri's imagery (the old fallback) are removed; the coach
+        # can fetch the course's photo again from USGS
+        if "flyover_images" in insp.get_table_names():
+            conn.execute(text("DELETE FROM flyover_images WHERE credit LIKE '%Esri%'"))
         if eng.dialect.name == "postgresql":  # room for the notes of merged same-day pain reports (SQLite has no limit)
             conn.execute(text("ALTER TABLE pain_reports ALTER COLUMN note TYPE VARCHAR(1000)"))
             lock_down(conn)
