@@ -8,7 +8,7 @@
   </header>
 
   <div class="fly-stage">
-    <div class="fly-map" id="fly-mapbox"><svg id="fly-map" aria-label="Course map" role="img"></svg><img id="fly-offmap" alt="Official course map" hidden></div>
+    <div class="fly-map" id="fly-mapbox"><svg id="fly-map" aria-label="Course map" role="img"></svg><img id="fly-offmap" alt="Official course map" hidden><span class="fly-credit" id="fly-credit" hidden></span></div>
     <div class="fly-panel">
       <div class="fly-figs">
         <div class="fly-fig"><b id="fly-mi">0.00</b><span>miles</span></div>
@@ -26,7 +26,8 @@
           <button type="button" data-speed="2.5" aria-pressed="false">Fast</button>
         </span>
         <button type="button" id="fly-follow" aria-pressed="true">Follow runner</button>
-        <button type="button" id="fly-ov" aria-pressed="false" hidden>Satellite photo</button>
+        <button type="button" id="fly-sat" aria-pressed="true" hidden>Satellite</button>
+        <button type="button" id="fly-ov" aria-pressed="false" hidden>Official map</button>
       </div>
     </div>
   </div>

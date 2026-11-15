@@ -5,7 +5,7 @@
   var $ = function (id) { return document.getElementById(id); };
   var NS = 'http://www.w3.org/2000/svg';
   var map = $('fly-map'), prof = $('fly-prof');
-  var mile = 0, playing = false, speed = 1, follow = true, view = null, lastTs = 0, dragging = false, ovOn = false;
+  var mile = 0, playing = false, speed = 1, follow = true, view = null, lastTs = 0, dragging = false, ovOn = false, satOn = !!C.satellite;
   var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   var SEGC = ['var(--fly-c1)', 'var(--fly-c2)', 'var(--fly-c3)'];
   var GHOST = ['var(--fly-ghost1)', 'var(--fly-ghost2)', 'var(--fly-ghost3)'];
@@ -41,6 +41,7 @@
 
   function buildMap() {
     var h = '<rect class="fly-land" x="-2000" y="-2000" width="5000" height="5000"/>' + (C.base || '');
+    if (C.satellite) { var sa = C.satellite; h += '<image id="fly-satimg" href="' + esc(sa.href) + '" x="' + sa.x + '" y="' + sa.y + '" width="' + sa.w + '" height="' + sa.h + '" preserveAspectRatio="none"/>'; }
     if (C.overlay) { var o = C.overlay; h += '<image id="fly-ovimg" href="' + esc(o.href) + '" x="' + o.x + '" y="' + o.y + '" width="' + o.w + '" height="' + o.h + '" preserveAspectRatio="none" style="display:none"/>'; }
     SEGS.forEach(function (s, i) { h += '<path class="fly-ghost" style="stroke:' + col(GHOST, i) + '" d="' + pathD(s[0], s[1]) + '"/>'; });
     SEGS.forEach(function () { h += '<path class="fly-case" d="M0 0"/>'; });
@@ -164,12 +165,17 @@
     });
   });
   function applyOverlay() {
+    $('fly-sat').setAttribute('aria-pressed', satOn ? 'true' : 'false');
+    var sat = map.querySelector('#fly-satimg'); if (sat) sat.style.display = satOn ? '' : 'none';
+    $('fly-credit').hidden = !(satOn && C.satellite);
+    $('fly-mapbox').classList.toggle('on-photo', satOn && !!C.satellite);
     $('fly-ov').setAttribute('aria-pressed', ovOn ? 'true' : 'false');
     var img = map.querySelector('#fly-ovimg'); if (img) img.style.display = ovOn ? '' : 'none';
     map.querySelectorAll('.t-cp').forEach(function (el) { el.style.display = ovOn && C.overlay ? 'none' : ''; });
     $('fly-offmap').hidden = !(ovOn && C.official);
   }
   $('fly-ov').addEventListener('click', function () { ovOn = !ovOn; applyOverlay(); });
+  $('fly-sat').addEventListener('click', function () { satOn = !satOn; applyOverlay(); });
   $('fly-follow').addEventListener('click', function () { follow = !follow; this.setAttribute('aria-pressed', follow ? 'true' : 'false'); });
 
   var scrub = $('fly-scrub'), plot = $('fly-plot');
@@ -191,6 +197,7 @@
     var ob = $('fly-ov'); ob.hidden = false; ob.textContent = (C.overlay || C.official).label;
     if (C.official) $('fly-offmap').src = C.official.href;
   }
+  if (C.satellite) { $('fly-sat').hidden = false; $('fly-credit').textContent = C.satellite.credit || ''; }
   applyOverlay();
   requestAnimationFrame(frame);
 })();

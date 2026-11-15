@@ -9,6 +9,27 @@ import pytest
 from xcapp import flyover as FL
 
 
+def fake_tile(url):
+    """A stand-in map tile: a different color for each tile, with a little detail so it isn't 'no imagery' filler."""
+    from io import BytesIO
+
+    from PIL import Image
+    z, y, x = (int(v) for v in url.rsplit("/tile/", 1)[1].split("/"))
+    im = Image.new("RGB", (256, 256), ((x * 37) % 256, (y * 53) % 256, 90))
+    for k in range(0, 256, 16):
+        im.putpixel((k, k), (255, 255, 255))
+    out = BytesIO()
+    im.save(out, "JPEG")
+    return out.getvalue()
+
+
+@pytest.fixture(autouse=True)
+def no_real_tiles(monkeypatch):
+    """Tests never reach the real imagery services."""
+    monkeypatch.setattr(FL, "fetch_tile", fake_tile)
+    monkeypatch.setattr(FL.satellite_image, "__defaults__", (fake_tile,))
+
+
 def loop_track(n=600, laps=1.0, with_ele=True):
     """A loop of about 1.9 miles near Folsom with three rolling hills."""
     out = []
@@ -83,6 +104,31 @@ def test_track_from_a_fit_file():
     assert len(pts) == 300 and abs(pts[0][0] - 38.65) < 1e-4 and abs(pts[0][1] - (-121.144)) < 1e-3
     assert pts[0][2] is not None and abs(pts[0][2] - 100) < 1
     assert 1.8 < FL.build(pts)["total"] < 2.0
+
+
+def test_satellite_photo():
+    from io import BytesIO
+
+    from PIL import Image
+    d = FL.build(loop_track())
+    lat, lon = FL.to_lat_lon(d["geo"], d["P"][0][0], d["P"][0][1])          # the drawing maps back to the earth
+    assert abs(lat - 38.65) < 1e-6 and abs(lon - (-121.144)) < 1e-5
+    urls = []
+    img, credit = FL.satellite_image(d["geo"], fetch=lambda u: urls.append(u) or fake_tile(u))
+    assert credit.startswith("Imagery: USGS") and urls[0].startswith("https://basemap.nationalmap.gov/")
+    w, h = Image.open(BytesIO(img)).size
+    assert w == h and 1000 <= w <= FL.MAX_IMG_PX and len(urls) <= FL.MAX_TILES
+    z = int(urls[0].rsplit("/tile/", 1)[1].split("/")[0])
+    assert 15 <= z <= 18
+
+    filler = BytesIO()
+    Image.new("RGB", (256, 256), (210, 210, 210)).save(filler, "JPEG")
+
+    def usgs_blank(u):                                     # USGS has only its plain filler here: Esri's imagery instead
+        return filler.getvalue() if "nationalmap" in u else fake_tile(u)
+    assert FL.satellite_image(d["geo"], fetch=usgs_blank)[1].startswith("Imagery: Esri")
+    assert FL.satellite_image(d["geo"], fetch=lambda u: None) is None
+    assert FL.satellite_image(None) is None
 
 
 def test_notes_and_sections():
@@ -164,11 +210,18 @@ def test_flyover_pages_for_coaches_and_athletes():
     page = c.get(f"/courses/{cid}/flyovers/{f2}")
     assert page.status_code == 200 and "/static/flyover.js" in page.text
     view = json.loads(re.search(r'<script type="application/json" id="fly-data">(.*?)</script>', page.text, re.S).group(1))
+    assert view["satellite"]["href"].startswith(f"/courses/{cid}/flyovers/{f2}/satellite.jpg?v=") and "geo" not in view
+    assert view["satellite"]["credit"].startswith("Imagery: USGS") and view["satellite"]["x"] == -FL.IMG_PAD
+    sat = c.get(view["satellite"]["href"])
+    assert sat.status_code == 200 and sat.headers["content-type"] == "image/jpeg" and sat.content[:2] == b"\xff\xd8"
+    assert "🛰 Satellite photo saved" in c.get(f"/courses?edit={cid}").text
     assert view["title"] == "Willow Hill 2 mi" and view["place"] == "Folsom" and view["heights"] == "track"
     assert view["notes"] == [[0.0, "Off the line"], [1.2, "<b>Big</b> hill"]] and "<b>" not in page.text   # escaped in the page
     assert [s[2] for s in view["sections"]] == ["Out", "Back"]
     v5 = json.loads(re.search(r'id="fly-data">(.*?)</script>', c.get(f"/courses/{cid}/flyovers/{f5}").text, re.S).group(1))
     assert v5["overlay"]["href"].endswith("willow-satellite.jpg") and v5["place"].startswith("Willow Hills Reservoir")
+    assert "satellite" not in v5 and v5["overlay"]["label"] == "Official map"
+    assert c.get(f"/courses/{cid}/flyovers/{f5}/satellite.jpg").status_code == 404
     assert c.get("/static/flyover/willow-satellite.jpg").status_code == 200
     assert c.get(f"/courses/{cid + 1}/flyovers/{f5}").status_code == 404
     anon = TestClient(app, follow_redirects=False)
@@ -179,7 +232,11 @@ def test_flyover_pages_for_coaches_and_athletes():
     assert f'href="/a/t-ava/flyovers/{f5}">🏃 5K course flyover</a>' in ava and "2 mi course flyover" not in ava
     bea = anon.get("/a/t-bea").text
     assert "🏃 5K course flyover" in bea and "🏃 2 mi course flyover" in bea
-    assert anon.get(f"/a/t-ava/flyovers/{f2}").status_code == 200
+    athlete_view = anon.get(f"/a/t-ava/flyovers/{f2}")
+    assert athlete_view.status_code == 200 and f'"/a/t-ava/flyovers/{f2}/satellite.jpg?v=' in athlete_view.text
+    assert anon.get(f"/a/t-ava/flyovers/{f2}/satellite.jpg").status_code == 200
+    assert anon.get(f"/a/nope/flyovers/{f2}/satellite.jpg").status_code == 404
+    assert anon.get(f"/courses/{cid}/flyovers/{f2}/satellite.jpg").status_code in (303, 401, 403)
     assert anon.get(f"/a/nope/flyovers/{f2}").status_code == 404
 
     # a new track keeps the notes; removing; the course takes its flyovers with it

@@ -241,7 +241,99 @@ def build(track: list[tuple[float, float, float | None]], lookup=fetch_elevation
         "start": P[0][:2], "finish": P[-1][:2], "fmin": round(lo - pad), "fmax": round(hi + pad),
         "grid": nice_grid(lo - pad, hi + pad), "heights": source, "climb_ft": round(climb), "measured_mi": round(total, 2),
         "high": [E[i_hi][0], round(hi)], "low": [E[i_lo][0], round(lo)],
+        # how drawing units map back to the earth, for the satellite photo (to_lat_lon)
+        "geo": {"lat0": lat0, "lon0": lon0, "kx": kx, "ky": ky, "s": s, "ox": ox, "oy": oy},
     }
+
+
+# ---------- satellite photo ----------
+# Map tiles, stitched on the server when a flyover is made and kept with it, so pages load one picture from this site.
+# USGS's imagery (The National Map) is public domain; Esri's World Imagery is the fallback outside the US or where
+# USGS has none. Both are ArcGIS tile services: /tile/{z}/{y}/{x}, 256-pixel Web Mercator tiles.
+TILE_SOURCES = [
+    ("Imagery: USGS The National Map",
+     "https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/{z}/{y}/{x}"),
+    ("Imagery: Esri, Maxar, Earthstar Geographics",
+     "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"),
+]
+IMG_PAD = 130.0       # drawing units around the 440 square, so following the runner near an edge stays on the photo
+MAX_IMG_PX = 2048
+MAX_TILES = 200
+
+
+def to_lat_lon(geo: dict, u: float, v: float) -> tuple[float, float]:
+    """The latitude and longitude of a point in the drawing (build's projection, undone)."""
+    return geo["lat0"] - (v - geo["oy"]) / geo["s"] / geo["ky"], geo["lon0"] + (u - geo["ox"]) / geo["s"] / geo["kx"]
+
+
+def _tile_xy(lat: float, lon: float, z: int) -> tuple[float, float]:
+    """Web Mercator position in tiles (fractional) at zoom z."""
+    n = 2 ** z
+    lat = max(-85.0, min(85.0, lat))
+    y = (1 - math.log(math.tan(math.radians(lat)) + 1 / math.cos(math.radians(lat))) / math.pi) / 2 * n
+    return (lon + 180.0) / 360.0 * n, y
+
+
+def fetch_tile(url: str) -> bytes | None:
+    import httpx
+    try:
+        with httpx.Client(timeout=httpx.Timeout(10.0, connect=5.0), headers={"User-Agent": "xc-training course flyover"}) as http:
+            r = http.get(url)
+    except Exception:   # noqa: BLE001 - a missing tile is handled by the caller
+        return None
+    if r.status_code != 200 or not r.headers.get("content-type", "").startswith("image/"):
+        return None
+    return r.content
+
+
+def _stitch(geo: dict, z: int, template: str, fetch) -> bytes | None:
+    from concurrent.futures import ThreadPoolExecutor
+    from io import BytesIO
+
+    from PIL import Image
+    lat_n, lon_w = to_lat_lon(geo, -IMG_PAD, -IMG_PAD)
+    lat_s, lon_e = to_lat_lon(geo, SIDE + IMG_PAD, SIDE + IMG_PAD)
+    (x0, y0), (x1, y1) = _tile_xy(lat_n, lon_w, z), _tile_xy(lat_s, lon_e, z)
+    tiles = [(tx, ty) for ty in range(int(y0), int(y1) + 1) for tx in range(int(x0), int(x1) + 1)]
+    if not tiles or len(tiles) > MAX_TILES:
+        return None
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        got = list(pool.map(lambda t: fetch(template.format(z=z, x=t[0], y=t[1])), tiles))
+    canvas = Image.new("RGB", ((int(x1) - int(x0) + 1) * 256, (int(y1) - int(y0) + 1) * 256))
+    missing = 0
+    for (tx, ty), raw in zip(tiles, got):
+        try:
+            im = Image.open(BytesIO(raw)).convert("RGB") if raw else None
+        except Exception:   # noqa: BLE001 - a broken tile counts as missing
+            im = None
+        # a tile all one shade is the service's "no imagery here" filler
+        if im is None or max(hi - lo for lo, hi in im.getextrema()) < 6:
+            missing += 1
+            continue
+        canvas.paste(im.resize((256, 256)), ((tx - int(x0)) * 256, (ty - int(y0)) * 256))
+    if missing > len(tiles) * 0.05:
+        return None
+    box = tuple(round(v) for v in ((x0 - int(x0)) * 256, (y0 - int(y0)) * 256, (x1 - int(x0)) * 256, (y1 - int(y0)) * 256))
+    side = min(MAX_IMG_PX, max(box[2] - box[0], box[3] - box[1]))
+    out = BytesIO()
+    canvas.crop(box).resize((side, side), Image.LANCZOS).save(out, "JPEG", quality=80, optimize=True, progressive=True)
+    return out.getvalue()
+
+
+def satellite_image(geo: dict | None, fetch=fetch_tile) -> tuple[bytes, str] | None:
+    """(JPEG, credit) of the satellite photo covering the drawing and IMG_PAD around it, or None when no source has
+    imagery for the whole of it. MAX_IMG_PX across, from the zoom just more detailed than that (sharper when shrunk)."""
+    if not geo:
+        return None
+    meters = (SIDE + 2 * IMG_PAD) / geo["s"]
+    per_px = 156543.03392 * math.cos(math.radians(geo["lat0"]))      # meters per pixel at zoom 0
+    best = max(10, min(18, math.ceil(math.log2(per_px * MAX_IMG_PX / meters))))   # then shrunk to MAX_IMG_PX
+    for credit, template in TILE_SOURCES:
+        for z in (best, best - 1):
+            img = _stitch(geo, z, template, fetch)
+            if img:
+                return img, credit
+    return None
 
 
 def default_notes(d: dict) -> str:
@@ -324,9 +416,14 @@ def preset_record(pid: str) -> tuple[dict, str, str]:
     return p, notes_text(notes), sections_text(sections)
 
 
-def view_data(fly, course) -> dict:
-    """What the flyover page draws: the saved drawing with the coach's notes and sections, title and place."""
+def view_data(fly, course, satellite_url: str = "") -> dict:
+    """What the flyover page draws: the saved drawing with the coach's notes and sections, title and place, and the
+    satellite photo under it when there is one."""
     d = json.loads(fly.data or "{}")
+    d.pop("geo", None)
+    sat = fly.satellite
+    if sat is not None and satellite_url:
+        d["satellite"] = {"href": satellite_url, "x": sat.x, "y": sat.y, "w": sat.size, "h": sat.size, "credit": sat.credit}
     total = d.get("total") or 0
     d["notes"] = parse_notes(fly.notes, total) or [[0, "Start"]]
     d["sections"] = parse_sections(fly.sections, total)
