@@ -1002,8 +1002,14 @@ def create_app() -> FastAPI:
         known = {c.name.strip().lower() for c in courses}
         missing = sorted({r for r in raced if r not in known})
         names = {r.strip().lower(): r for (r,) in db.execute(select(RaceResult.course).distinct()).all() if r}
+        fl_heights = {}   # where each flyover's heights came from (usgs, track, map, none), for the course being edited
+        for fl in (edit.flyovers if edit else []):
+            try:
+                fl_heights[fl.id] = json.loads(fl.data or "{}").get("heights", "track")
+            except ValueError:
+                fl_heights[fl.id] = ""
         return render(request, "courses.html", user, courses=courses, edit=edit, CS=CS, raced=raced, flyover_presets=FLY.presets(),
-                      missing=[names[m] for m in missing])
+                      missing=[names[m] for m in missing], fl_heights=fl_heights)
 
     @app.post("/courses")
     async def courses_save(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):

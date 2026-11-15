@@ -81,10 +81,14 @@ def register(app, h: SimpleNamespace) -> None:
                 fly.satellite = None
             elif not get_satellite(fly, data):
                 msg += " The satellite photo couldn’t be fetched just now; try Get satellite photo later."
-            if not preset and data["heights"] == "map":
-                msg += " The file had no heights, so they come from an elevation map."
+            if not preset and data["heights"] == "usgs":
+                msg += " Heights come from USGS elevation data."
+            elif not preset and data["heights"] == "track":
+                msg += " USGS elevation data couldn’t be reached, so heights come from the file’s GPS; press Get USGS heights later."
+            elif not preset and data["heights"] == "map":
+                msg += " USGS couldn’t be reached and the file had no heights, so they come from a coarse elevation map; press Get USGS heights later."
             elif not preset and data["heights"] == "none":
-                msg += " The file had no heights and none could be looked up, so the profile is flat."
+                msg += " No heights could be found, so the profile is flat; press Get USGS heights later."
             flash(request, msg)
             return back(to)
         if fly is None:
@@ -110,6 +114,25 @@ def register(app, h: SimpleNamespace) -> None:
             flash(request, f"Saved the satellite photo for the {fly.distance} flyover.")
         else:
             flash(request, "The satellite photo couldn’t be fetched just now. Try again later.", "error")
+        return back(f"/courses?edit={cid}#flyovers")
+
+    @app.post("/courses/{cid}/flyovers/{fid}/heights")
+    async def flyover_heights(request: Request, cid: int, fid: int, user=Depends(coach_or_admin, scope="function"),
+                              db: Session = Depends(get_db, scope="function")):
+        """USGS heights for a flyover already made from a GPS track (its route, notes and sections stay)."""
+        await form_checked(request)
+        fly = db.get(CourseFlyover, fid)
+        if fly is None or fly.course_id != cid:
+            raise HTTPException(404, "Flyover not found.")
+        data = json.loads(fly.data or "{}")
+        if not data.get("geo"):
+            flash(request, "This flyover has no map position (a built-in course). Make it from a GPX or FIT file to get USGS heights.", "error")
+        elif FL.reheight(data):
+            fly.data = json.dumps(data, separators=(",", ":"))
+            flash(request, f"The {fly.distance} flyover now has USGS heights: about {data['climb_ft']:,} ft of climbing, "
+                           f"{data['low'][1]:,} to {data['high'][1]:,} ft.")
+        else:
+            flash(request, "USGS elevation data couldn’t be reached just now. Try again later.", "error")
         return back(f"/courses?edit={cid}#flyovers")
 
     def satellite_jpeg(fly: CourseFlyover | None) -> Response:

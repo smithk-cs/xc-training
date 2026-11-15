@@ -37,6 +37,8 @@ def env(tmp_path, monkeypatch):
         monkeypatch.delenv(k, raising=False)
     from xcapp import config, db, web
     monkeypatch.setattr(web, "BACKFILL_IN_BACKGROUND", False)  # tests drive the Garmin past-run queue themselves
+    from xcapp import flyover
+    monkeypatch.setattr(flyover, "fetch_usgs_elevations", lambda coords, post=None: None)   # no USGS from tests
     config.reload_settings()
     db.init_engine(os.environ["DATABASE_URL"])
     db.create_all()

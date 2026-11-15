@@ -6,8 +6,11 @@ A flyover comes from a GPS track of the course (a GPX file from Strava, Garmin C
 from the official course maps and have a drawn base map and a satellite photo or official map to switch to.
 
 The route is projected onto a flat 440 x 440 drawing (fine at the size of a cross country course), thinned to a point
-about every 10 m, with the miles along it. Heights come from the track (smoothed, since GPS heights are noisy), or,
-when the track has none, from Open-Meteo's elevation map (about 90 m detail). Either way they're approximate.
+about every 10 m, with the miles along it. Heights come from USGS's 3DEP elevation data (The National Map: the bare
+ground, mostly from aircraft lidar, about 1 to 10 m detail, public domain), sampled about every 10 m along the route.
+When USGS can't be reached: the track's own heights (smoothed, since GPS heights are noisy), else Open-Meteo's
+elevation map (about 90 m detail, too coarse for small hills), else a flat profile. A flyover already made can get
+USGS heights later (reheight), from the route's map position.
 
 Coaches add what's at each point ('1.0 Big climb out of G') and name the course's sections ('1.56 Reservoir lap: H, D,
 E to G'), one per line.
@@ -28,6 +31,8 @@ MAX_TRACK_BYTES = 10 * 1024 * 1024
 SIDE = 440.0          # the drawing is SIDE x SIDE, with the route inside a margin
 MARGIN = 24.0
 ELEVATION_URL = "https://api.open-meteo.com/v1/elevation"
+USGS_ELEVATION_URL = "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/getSamples"
+USGS_BATCH = 150      # points per request
 PRESET_DIR = Path(__file__).with_name("flyover_presets")
 
 
@@ -136,6 +141,54 @@ def fetch_elevations(coords: list[tuple[float, float]]) -> list[float] | None:
     return [float(x) for x in out]
 
 
+def fetch_usgs_elevations(coords: list[tuple[float, float]], post=None) -> list[float] | None:
+    """Heights (m) from USGS 3DEP for (lat, lon) points, in order; None when USGS can't be reached or has no data for
+    more than a few of them (a few gaps are filled from their neighbours). `post(url, form) -> dict` is for tests."""
+    if not coords:
+        return None
+    if post is None:
+        import httpx
+
+        def post(url, form):
+            with httpx.Client(timeout=httpx.Timeout(20.0, connect=5.0), headers={"User-Agent": "xc-training course flyover"}) as http:
+                r = http.post(url, data=form)
+                r.raise_for_status()
+                return r.json()
+    out: list[float | None] = []
+    for i in range(0, len(coords), USGS_BATCH):
+        part = coords[i:i + USGS_BATCH]
+        form = {"geometry": json.dumps({"points": [[round(lon, 6), round(lat, 6)] for lat, lon in part],
+                                        "spatialReference": {"wkid": 4326}}, separators=(",", ":")),
+                "geometryType": "esriGeometryMultipoint", "returnFirstValueOnly": "true",
+                "interpolation": "RSP_BilinearInterpolation", "f": "json"}
+        try:
+            got = post(USGS_ELEVATION_URL, form)
+        except Exception:   # noqa: BLE001 - no USGS heights; the caller falls back
+            return None
+        vals: list[float | None] = [None] * len(part)
+        for smp in (got or {}).get("samples") or []:
+            try:
+                k, v = int(smp.get("locationId")), float(smp.get("value"))
+            except (TypeError, ValueError):
+                continue
+            if 0 <= k < len(part) and -500 < v < 9000:
+                vals[k] = v
+        out += vals
+    if sum(v is None for v in out) > max(1, len(out) // 20):
+        return None
+    known = [(i, v) for i, v in enumerate(out) if v is not None]
+    for i, v in enumerate(out):      # fill the few gaps from the nearest known heights
+        if v is None:
+            before = [kv for kv in known if kv[0] < i]
+            after = [kv for kv in known if kv[0] > i]
+            if before and after:
+                (i0, v0), (i1, v1) = before[-1], after[0]
+                out[i] = v0 + (v1 - v0) * (i - i0) / (i1 - i0)
+            else:
+                out[i] = (before[-1] if before else after[0])[1]
+    return out
+
+
 def nice_grid(lo: float, hi: float) -> list[int]:
     for step in (5, 10, 20, 25, 50, 100, 200, 250, 500):
         first = math.ceil(lo / step) * step
@@ -151,42 +204,9 @@ def marker_label(m: float) -> str:
     return ("½" if not whole else f"{whole}½") + " mi" if half else f"{whole} mi"
 
 
-def build(track: list[tuple[float, float, float | None]], lookup=fetch_elevations) -> dict:
-    """The flyover drawing for a track: P [[x, y, mile]], E [[mile, feet]], view box, markers and figures."""
-    cum = [0.0]
-    for a, b in zip(track, track[1:]):
-        cum.append(cum[-1] + _hav(a, b))
-    total_m = cum[-1]
-    if total_m < 400:
-        raise FlyoverError("That track is shorter than 400 m. Is it the whole course?")
-    if total_m > 25000:
-        raise FlyoverError("That track is longer than 15 miles. Is it the course, or a whole day's run?")
-    lat0 = sum(p[0] for p in track) / len(track)
-    lon0 = sum(p[1] for p in track) / len(track)
-    kx, ky = math.cos(math.radians(lat0)) * 111320.0, 110574.0
-    xs = [(p[1] - lon0) * kx for p in track]
-    ys = [-(p[0] - lat0) * ky for p in track]
-    w, h = max(xs) - min(xs), max(ys) - min(ys)
-    s = (SIDE - 2 * MARGIN) / max(w, h, 1.0)
-    ox = MARGIN + (SIDE - 2 * MARGIN - w * s) / 2 - min(xs) * s
-    oy = MARGIN + (SIDE - 2 * MARGIN - h * s) / 2 - min(ys) * s
-    step = max(10.0, total_m / 700)
-    P, last = [], None
-    for i, (x, y) in enumerate(zip(xs, ys)):
-        if last is None or cum[i] - last >= step or i == len(xs) - 1:
-            P.append([round(x * s + ox, 1), round(y * s + oy, 1), round(cum[i] / METERS_PER_MILE, 4)])
-            last = cum[i]
-    total = P[-1][2]
-
-    # Heights: the track's own when most points have one, else Open-Meteo's map, else none
-    have = [(cum[i], p[2]) for i, p in enumerate(track) if p[2] is not None]
-    source = "track"
-    if len(have) < len(track) * 0.6:
-        n = min(100, max(20, int(total_m / 40)))
-        idx = [min(len(track) - 1, bisect.bisect_left(cum, total_m * k / (n - 1))) for k in range(n)]
-        got = lookup([(track[i][0], track[i][1]) for i in idx]) if lookup else None
-        have = [(cum[i], e) for i, e in zip(idx, got)] if got else []
-        source = "map" if got else "none"
+def _profile(have: list[tuple[float, float]], source: str, total_m: float, total: float) -> dict:
+    """The elevation profile from (meters along, height in m) points: E [[mile, feet]], its range and grid, the climb
+    and the high and low points. GPS heights are smoothed over 70 m; map heights are joined straight."""
     E: list[list[float]] = []
     if have:
         hd = [d for d, _ in have]
@@ -220,6 +240,71 @@ def build(track: list[tuple[float, float, float | None]], lookup=fetch_elevation
         elif f - base >= 3:
             climb += f - base
             base = f
+    i_hi, i_lo = feet.index(hi), feet.index(lo)
+    return {"E": E, "fmin": round(lo - pad), "fmax": round(hi + pad), "grid": nice_grid(lo - pad, hi + pad), "heights": source,
+            "climb_ft": round(climb), "high": [E[i_hi][0], round(hi)], "low": [E[i_lo][0], round(lo)]}
+
+
+def reheight(d: dict, usgs=None) -> bool:
+    """Give a flyover already made from a GPS track USGS heights, from its route's map position (geo); False when it
+    has none (a built-in course) or USGS can't be reached. Its route, notes and sections stay."""
+    geo, P = d.get("geo"), d.get("P") or []
+    if not geo or len(P) < 2:
+        return False
+    got = (usgs or fetch_usgs_elevations)([to_lat_lon(geo, x, y) for x, y, _ in P])
+    if not got:
+        return False
+    total = P[-1][2]
+    d.update(_profile([(m * METERS_PER_MILE, e) for (_, _, m), e in zip(P, got)], "usgs", total * METERS_PER_MILE, total))
+    return True
+
+
+def build(track: list[tuple[float, float, float | None]], lookup=fetch_elevations, usgs="usgs") -> dict:
+    """The flyover drawing for a track: P [[x, y, mile]], E [[mile, feet]], view box, markers and figures."""
+    cum = [0.0]
+    for a, b in zip(track, track[1:]):
+        cum.append(cum[-1] + _hav(a, b))
+    total_m = cum[-1]
+    if total_m < 400:
+        raise FlyoverError("That track is shorter than 400 m. Is it the whole course?")
+    if total_m > 25000:
+        raise FlyoverError("That track is longer than 15 miles. Is it the course, or a whole day's run?")
+    lat0 = sum(p[0] for p in track) / len(track)
+    lon0 = sum(p[1] for p in track) / len(track)
+    kx, ky = math.cos(math.radians(lat0)) * 111320.0, 110574.0
+    xs = [(p[1] - lon0) * kx for p in track]
+    ys = [-(p[0] - lat0) * ky for p in track]
+    w, h = max(xs) - min(xs), max(ys) - min(ys)
+    s = (SIDE - 2 * MARGIN) / max(w, h, 1.0)
+    ox = MARGIN + (SIDE - 2 * MARGIN - w * s) / 2 - min(xs) * s
+    oy = MARGIN + (SIDE - 2 * MARGIN - h * s) / 2 - min(ys) * s
+    step = max(10.0, total_m / 700)
+    P, last = [], None
+    for i, (x, y) in enumerate(zip(xs, ys)):
+        if last is None or cum[i] - last >= step or i == len(xs) - 1:
+            P.append([round(x * s + ox, 1), round(y * s + oy, 1), round(cum[i] / METERS_PER_MILE, 4)])
+            last = cum[i]
+    total = P[-1][2]
+
+    # Heights: USGS 3DEP about every 10 m along the route; else the track's own when most points have one, else
+    # Open-Meteo's map, else none
+    n = min(600, max(40, int(total_m / 10)))
+    idx = [min(len(track) - 1, bisect.bisect_left(cum, total_m * k / (n - 1))) for k in range(n)]
+    if usgs == "usgs":
+        usgs = fetch_usgs_elevations          # looked up when called, so tests can stand in for USGS
+    got = usgs([(track[i][0], track[i][1]) for i in idx]) if usgs else None
+    if got:
+        have, source = [(cum[i], e) for i, e in zip(idx, got)], "usgs"
+    else:
+        have = [(cum[i], p[2]) for i, p in enumerate(track) if p[2] is not None]
+        source = "track"
+        if len(have) < len(track) * 0.6:
+            n = min(100, max(20, int(total_m / 40)))
+            idx = [min(len(track) - 1, bisect.bisect_left(cum, total_m * k / (n - 1))) for k in range(n)]
+            got = lookup([(track[i][0], track[i][1]) for i in idx]) if lookup else None
+            have = [(cum[i], e) for i, e in zip(idx, got)] if got else []
+            source = "map" if got else "none"
+    prof = _profile(have, source, total_m, total)
 
     def at(m):
         for a, b in zip(P, P[1:]):
@@ -235,12 +320,9 @@ def build(track: list[tuple[float, float, float | None]], lookup=fetch_elevation
         side = ("r" if nx > 0 else "l") if abs(nx) > abs(ny) else ("d" if ny > 0 else "u")
         MK.append([m, marker_label(m), side])
         m += 0.5
-    i_hi, i_lo = feet.index(hi), feet.index(lo)
     return {
-        "total": total, "vb": [0, 0, SIDE, SIDE], "P": P, "E": E, "MK": MK, "CP": [], "LAB": [], "base": "",
-        "start": P[0][:2], "finish": P[-1][:2], "fmin": round(lo - pad), "fmax": round(hi + pad),
-        "grid": nice_grid(lo - pad, hi + pad), "heights": source, "climb_ft": round(climb), "measured_mi": round(total, 2),
-        "high": [E[i_hi][0], round(hi)], "low": [E[i_lo][0], round(lo)],
+        "total": total, "vb": [0, 0, SIDE, SIDE], "P": P, "MK": MK, "CP": [], "LAB": [], "base": "",
+        "start": P[0][:2], "finish": P[-1][:2], "measured_mi": round(total, 2), **prof,
         # how drawing units map back to the earth, for the satellite photo (to_lat_lon)
         "geo": {"lat0": lat0, "lon0": lon0, "kx": kx, "ky": ky, "s": s, "ox": ox, "oy": oy},
     }
@@ -345,11 +427,14 @@ def default_notes(d: dict) -> str:
 
 
 def about_text(d: dict, filename: str) -> str:
-    src = {"track": "Heights come from the file's GPS, smoothed", "map": "The file had no heights, so they come from an "
-           "elevation map (Open-Meteo, about 90 m detail)", "none": "The file had no heights and none could be looked up, "
-           "so the profile is flat"}[d.get("heights", "track")]
-    return (f"Route from {filename or 'a GPS track'} ({d['measured_mi']:.2f} miles as measured). {src}, so treat them as "
-            f"approximate. About {d['climb_ft']:,} ft of climbing.")
+    src = {"usgs": "Heights come from USGS elevation data (the bare ground, about 1 to 10 m detail), so they follow the "
+                   "real hills closely",
+           "track": "Heights come from the file's GPS, smoothed, so treat them as approximate",
+           "map": "The file had no heights, so they come from an elevation map (Open-Meteo, about 90 m detail, which "
+                  "flattens small hills)",
+           "none": "The file had no heights and none could be looked up, so the profile is flat"}[d.get("heights", "track")]
+    return (f"Route from {filename or 'a GPS track'} ({d['measured_mi']:.2f} miles as measured). {src}. "
+            f"About {d['climb_ft']:,} ft of climbing.")
 
 
 # ---------- coaches' notes and sections ----------

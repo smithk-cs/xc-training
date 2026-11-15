@@ -123,7 +123,9 @@
       </form>
       <p class="small" style="margin:0 0 8px">{% if fl.preset %}<span class="muted">Built-in course: shown on its official map. To put it on a satellite photo, make this distance’s flyover again from a GPX file of the course; your notes and sections stay.</span>
         {% elif fl.satellite %}🛰 Satellite photo saved <span class="muted">({{ fl.satellite.credit }})</span>{% else %}<span class="muted">No satellite photo yet.</span>{% endif %}
-        {% if not fl.preset %}<form method="post" action="/courses/{{ edit.id }}/flyovers/{{ fl.id }}/satellite" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="link" type="submit">{{ 'Refresh' if fl.satellite else 'Get' }} satellite photo</button></form>{% endif %}</p>
+        {% if not fl.preset %}<form method="post" action="/courses/{{ edit.id }}/flyovers/{{ fl.id }}/satellite" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="link" type="submit">{{ 'Refresh' if fl.satellite else 'Get' }} satellite photo</button></form>{% endif %}
+        {% if not fl.preset %}{% set hs = fl_heights.get(fl.id, '') %}<br>⛰ {% if hs == 'usgs' %}Heights from USGS elevation data{% elif hs == 'track' %}<span class="muted">Heights from the file’s GPS</span>{% elif hs == 'map' %}<span class="muted">Heights from a coarse elevation map</span>{% else %}<span class="muted">No heights (flat profile)</span>{% endif %}
+        <form method="post" action="/courses/{{ edit.id }}/flyovers/{{ fl.id }}/heights" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="link" type="submit">{{ 'Refresh' if hs == 'usgs' else 'Get' }} USGS heights</button></form>{% endif %}</p>
       <form method="post" action="/courses/{{ edit.id }}/flyovers/{{ fl.id }}/delete" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="link" type="submit" onclick="return confirm('Remove the {{ fl.distance }} flyover?')">Remove this flyover</button></form>
     </details>
     {% else %}<p class="small muted" style="margin:0 0 8px">No flyovers yet.</p>{% endfor %}

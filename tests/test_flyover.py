@@ -8,6 +8,8 @@ import pytest
 
 from xcapp import flyover as FL
 
+REAL_USGS = FL.fetch_usgs_elevations    # before the tests' stand-in that keeps USGS out of every other test
+
 
 def fake_tile(url):
     """A stand-in map tile: a different color for each tile, with a little detail so it isn't 'no imagery' filler."""
@@ -274,3 +276,80 @@ def test_saved_esri_photos_are_removed():
     s = SessionLocal()
     assert [x.credit for x in s.query(FlyoverImage).all()] == ["Imagery: USGS The National Map"]
     s.close()
+
+
+def usgs_post(calls=None, missing=lambda k: False):
+    """A stand-in for USGS 3DEP's getSamples: the ground rises with latitude (1 m per 0.0001°), samples out of order."""
+    def post(url, form):
+        assert url == FL.USGS_ELEVATION_URL and form["geometryType"] == "esriGeometryMultipoint" and form["f"] == "json"
+        g = json.loads(form["geometry"])
+        assert g["spatialReference"] == {"wkid": 4326}
+        if calls is not None:
+            calls.append(len(g["points"]))
+        samples = [{"locationId": k, "value": "NoData" if missing(k) else str(30 + (lat - 38.64) * 10000)}
+                   for k, (lon, lat) in enumerate(g["points"])]          # points are [lon, lat]
+        return {"samples": list(reversed(samples))}
+    return post
+
+
+def test_usgs_elevations():
+    coords = [(38.64 + i * 0.0001, -121.15) for i in range(400)]
+    calls = []
+    got = REAL_USGS(coords, post=usgs_post(calls))
+    assert calls == [150, 150, 100] and len(got) == 400                    # in batches, back in order
+    assert abs(got[0] - 30) < 1e-6 and abs(got[399] - 429) < 1e-6
+    gappy = REAL_USGS(coords, post=usgs_post(missing=lambda k: k in (5, 6)))
+    assert abs(gappy[5] - got[5]) < 1e-6 and abs(gappy[6] - got[6]) < 1e-6   # a few gaps filled from neighbours
+    assert REAL_USGS(coords, post=usgs_post(missing=lambda k: k % 3 == 0)) is None   # too many
+    def down(url, form):
+        raise OSError("unreachable")
+    assert REAL_USGS(coords, post=down) is None and REAL_USGS([], post=down) is None
+
+
+def test_flyover_heights_from_usgs():
+    track = loop_track(with_ele=True)
+    usgs = lambda coords: REAL_USGS(coords, post=usgs_post())
+    d = FL.build(track, usgs=usgs)
+    assert d["heights"] == "usgs" and "USGS elevation data" in FL.about_text(d, "x.gpx")
+    span_ft = (max(p[0] for p in track) - min(p[0] for p in track)) * 10000 * FL.FEET_PER_METER   # the loop's north-south rise
+    assert abs((d["high"][1] - d["low"][1]) - span_ft) < 0.1 * span_ft
+    gps = FL.build(track)                                                    # USGS unreachable: the file's GPS heights
+    assert gps["heights"] == "track"
+    # A flyover already made without heights gets USGS heights later; the route stays
+    flat = FL.build(loop_track(with_ele=False), lookup=lambda c: None)
+    assert flat["heights"] == "none" and flat["climb_ft"] == 0
+    P = [p[:] for p in flat["P"]]
+    assert FL.reheight(flat, usgs=usgs) and flat["heights"] == "usgs" and flat["climb_ft"] > 50 and flat["P"] == P
+    assert not FL.reheight({"P": P}, usgs=usgs)                              # no map position (a built-in course)
+    assert not FL.reheight(FL.build(track, lookup=lambda c: None), usgs=lambda c: None)
+
+
+def test_get_usgs_heights_button(monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from xcapp.db import SessionLocal
+    from xcapp.models import Course, CourseFlyover, StaffUser
+    from xcapp.security import hash_password
+    db = SessionLocal()
+    db.add(StaffUser(username="coach1", role="coach", password_hash=hash_password("correct-horse-1")))
+    course = Course(name="Test Park")
+    db.add(course)
+    db.flush()
+    fly = CourseFlyover(course_id=course.id, distance="2 mi", data=json.dumps(FL.build(loop_track(with_ele=False), lookup=lambda c: None)))
+    db.add(fly)
+    db.commit()
+    cid, fid = course.id, fly.id
+    db.close()
+    from xcapp.web import create_app
+    c = TestClient(create_app(), follow_redirects=False)
+    csrf = re.search(r'name="csrf" value="([^"]+)"', c.get("/login").text).group(1)
+    c.post("/login", data={"csrf": csrf, "username": "coach1", "password": "correct-horse-1"})
+    page = c.get(f"/courses?edit={cid}").text
+    assert "No heights (flat profile)" in page and "Get USGS heights" in page
+    csrf = re.search(r'name="csrf" value="([^"]+)"', page).group(1)
+    c.post(f"/courses/{cid}/flyovers/{fid}/heights", data={"csrf": csrf})          # USGS unreachable (tests): nothing changes
+    assert "couldn’t be reached" in c.get(f"/courses?edit={cid}").text
+    monkeypatch.setattr(FL, "fetch_usgs_elevations", lambda coords, post=None: REAL_USGS(coords, post=usgs_post()))
+    c.post(f"/courses/{cid}/flyovers/{fid}/heights", data={"csrf": csrf})
+    page = c.get(f"/courses?edit={cid}").text
+    assert "now has USGS heights" in page and "Heights from USGS elevation data" in page and "Refresh USGS heights" in page
