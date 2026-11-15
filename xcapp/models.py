@@ -586,6 +586,20 @@ class CourseFlyover(Base):
     preset: Mapped[str] = mapped_column(String(40), default="")  # a built-in course's id, else ""
     uploaded_by: Mapped[str] = mapped_column(String(80), default="")
     uploaded_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
+    satellite: Mapped["FlyoverImage | None"] = relationship(cascade="all, delete-orphan", uselist=False)
+
+
+class FlyoverImage(Base):
+    """The satellite photo under a flyover's route: map tiles stitched into one picture when the flyover was made."""
+    __tablename__ = "flyover_images"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    flyover_id: Mapped[int] = mapped_column(ForeignKey("course_flyovers.id", ondelete="CASCADE"), unique=True, index=True)
+    data: Mapped[bytes] = mapped_column(LargeBinary, deferred=True)
+    credit: Mapped[str] = mapped_column(String(120), default="")     # whose imagery, shown on the map
+    x: Mapped[float] = mapped_column(Float, default=0)                # where it sits in the drawing (flyover.py)
+    y: Mapped[float] = mapped_column(Float, default=0)
+    size: Mapped[float] = mapped_column(Float, default=0)
+    fetched_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
 
 
 class RaceTeamResult(Base):

@@ -110,7 +110,7 @@
   </section>
   <section class="course-routes course-flyovers" id="flyovers" aria-labelledby="flyovers-h">
     <h3 id="flyovers-h">Course flyovers</h3>
-    <p class="small muted" style="margin:0 0 8px">A runner moving along the route with the elevation profile, mile markers and your notes, for athletes to preview the course. Upload a GPX file of the course (Strava, Garmin Connect and route planners export one) or a watch’s .fit file from running it. Athletes see a flyover button on their upcoming meets here, like the route maps.</p>
+    <p class="small muted" style="margin:0 0 8px">A runner moving along the route on a satellite photo of the course, with the elevation profile, mile markers and your notes, for athletes to preview it. Upload a GPX file of the course (Strava, Garmin Connect and route planners export one) or a watch’s .fit file from running it. Athletes see a flyover button on their upcoming meets here, like the route maps.</p>
     {% for fl in edit.flyovers %}
     <details class="flyover-item"{% if loop.length == 1 %} open{% endif %}>
       <summary><span class="dist">{{ fl.distance }}</span> <a href="/courses/{{ edit.id }}/flyovers/{{ fl.id }}" target="_blank" rel="noopener">🏃 Watch the flyover</a>
@@ -121,6 +121,9 @@
         <label>Sections (optional), one per line: the mile where it starts, the name, then a colon and the checkpoints<textarea name="sections" rows="3" maxlength="3000" placeholder="0 Back hills: Start, A, B, C&#10;1 School loop: G, C, B, A&#10;1.56 Reservoir lap: H, D, E to G">{{ fl.sections }}</textarea></label>
         <div class="form-row"><button type="submit">Save notes</button></div>
       </form>
+      <p class="small" style="margin:0 0 8px">{% if fl.preset %}<span class="muted">Built-in course: shown on its official map. To put it on a satellite photo, make this distance’s flyover again from a GPX file of the course; your notes and sections stay.</span>
+        {% elif fl.satellite %}🛰 Satellite photo saved <span class="muted">({{ fl.satellite.credit }})</span>{% else %}<span class="muted">No satellite photo yet.</span>{% endif %}
+        {% if not fl.preset %}<form method="post" action="/courses/{{ edit.id }}/flyovers/{{ fl.id }}/satellite" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="link" type="submit">{{ 'Refresh' if fl.satellite else 'Get' }} satellite photo</button></form>{% endif %}</p>
       <form method="post" action="/courses/{{ edit.id }}/flyovers/{{ fl.id }}/delete" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="link" type="submit" onclick="return confirm('Remove the {{ fl.distance }} flyover?')">Remove this flyover</button></form>
     </details>
     {% else %}<p class="small muted" style="margin:0 0 8px">No flyovers yet.</p>{% endfor %}
