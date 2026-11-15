@@ -535,6 +535,7 @@ class Course(Base):
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
 
     routes: Mapped[list["CourseRoute"]] = relationship(cascade="all, delete-orphan", order_by="CourseRoute.distance")
+    flyovers: Mapped[list["CourseFlyover"]] = relationship(cascade="all, delete-orphan", order_by="CourseFlyover.distance")
 
     @property
     def videos(self) -> dict[str, str]:
@@ -569,6 +570,23 @@ class CourseRoute(Base):
     data: Mapped[bytes] = mapped_column(LargeBinary, deferred=True)   # loaded only when the PDF is opened
     uploaded_by: Mapped[str] = mapped_column(String(80), default="")
     uploaded_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
+
+class CourseFlyover(Base):
+    """A course flyover for one distance: the route and elevation profile drawn from a GPS track or a built-in course,
+    with the coach's notes on what's where and the course's sections (see flyover.py)."""
+    __tablename__ = "course_flyovers"
+    __table_args__ = (UniqueConstraint("course_id", "distance"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    course_id: Mapped[int] = mapped_column(ForeignKey("courses.id", ondelete="CASCADE"), index=True)
+    distance: Mapped[str] = mapped_column(String(20))
+    data: Mapped[str] = mapped_column(Text, default="", deferred=True)    # the drawing, as JSON
+    notes: Mapped[str] = mapped_column(Text, default="")        # '1.0 Big climb out of G', one per line
+    sections: Mapped[str] = mapped_column(Text, default="")     # '1.56 Reservoir lap: H, D, E to G', one per line
+    filename: Mapped[str] = mapped_column(String(200), default="")
+    preset: Mapped[str] = mapped_column(String(40), default="")  # a built-in course's id, else ""
+    uploaded_by: Mapped[str] = mapped_column(String(80), default="")
+    uploaded_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
+
 
 class RaceTeamResult(Base):
     """How the team did in one race at a meet (such as Boys Frosh/Soph): its place among the teams and its score."""

@@ -45,13 +45,20 @@ def race_label(race_distance: str) -> str:
         return ""
 
 
+def _for_distance(items, race_distance: str) -> list:
+    label = race_label(race_distance)
+    mine = [r for r in items if r.distance == label]
+    return mine or list(items)
+
+
 def race_routes(course, race_distance: str = "") -> list:
     """The route maps an athlete entered at a race distance should see: that distance's, else every distance's."""
-    if course is None:
-        return []
-    label = race_label(race_distance)
-    mine = [r for r in course.routes if r.distance == label]
-    return mine or list(course.routes)
+    return [] if course is None else _for_distance(course.routes, race_distance)
+
+
+def race_flyovers(course, race_distance: str = "") -> list:
+    """The course flyovers for an athlete entered at a race distance: that distance's, else every distance's."""
+    return [] if course is None else _for_distance(course.flyovers, race_distance)
 
 
 def race_videos(course, race_distance: str = "") -> list[tuple[str, str]]:
