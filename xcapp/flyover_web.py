@@ -206,23 +206,74 @@ def register(app, h: SimpleNamespace) -> None:
             return JSONResponse({"error": "Those points aren’t on the photo. Reload the page and trace again."}, status_code=400)
         if not 2 <= len(pts) <= 3000:
             return JSONResponse({"error": "Tap at least two points along the route."}, status_code=400)
+        return store_route(request, c, dist, fly, pts, user, "Traced on the satellite photo")
+
+    def store_route(request, c, dist, fly, pts, user, filename: str, notes="", sections="", marks=None):
+        """Make (or remake) a distance's flyover from a route given as latitudes and longitudes, as a GPS file would:
+        USGS heights, the satellite photo under it. The flyover's notes and sections stay; a new one starts from
+        `notes` and `sections` (a built-in course's), or notes made from the route. `marks`: checkpoints and labels
+        {"CP": [[label, lat, lon]], "LAB": [...]} to place in the drawing."""
+        from fastapi.responses import JSONResponse
         try:
             data = FL.build(FL.densify(pts))
         except FL.FlyoverError as exc:
             return JSONResponse({"error": str(exc)}, status_code=400)
+        for k in ("CP", "LAB"):
+            data[k] = [[str(lbl)[:40], *(round(v, 1) for v in FL.to_draw(data["geo"], lat, lon))]
+                       for lbl, lat, lon in (marks or {}).get(k, [])]
         if fly is None:
             fly = CourseFlyover(distance=dist)
             c.flyovers.append(fly)
-        notes = fly.notes if fly.notes and fly.notes.strip() else FL.default_notes(data)
-        fly.data, fly.notes, fly.sections = json.dumps(data, separators=(",", ":")), notes, fly.sections or ""
-        fly.filename, fly.preset = "Traced on the satellite photo", ""
+        keep_notes = fly.notes if fly.notes and fly.notes.strip() else (notes or FL.default_notes(data))
+        keep_sections = fly.sections if fly.sections and fly.sections.strip() else sections
+        fly.data, fly.notes, fly.sections = json.dumps(data, separators=(",", ":")), keep_notes, keep_sections
+        fly.filename, fly.preset = filename[:200], ""
         fly.uploaded_by, fly.uploaded_at = user.username, utcnow()
-        msg = f"Saved the traced {dist} flyover for {c.name} ({data['measured_mi']:.2f} miles)."
+        msg = f"Saved the {dist} flyover for {c.name} ({data['measured_mi']:.2f} miles), {filename[0].lower() + filename[1:]}."
         if not get_satellite(fly, data):
             msg += " The satellite photo couldn’t be fetched just now; try Get satellite photo later."
         msg += heights_note(data)
         flash(request, msg)
-        return JSONResponse({"ok": True, "next": f"/courses?edit={cid}#flyovers"})
+        return JSONResponse({"ok": True, "next": f"/courses?edit={c.id}#flyovers"})
+
+    @app.post("/courses/{cid}/place")
+    async def course_place(request: Request, cid: int, user=Depends(coach_or_admin, scope="function"),
+                           db: Session = Depends(get_db, scope="function")):
+        """A built-in course placed on the area photo (its start tapped, turned and sized to the paths) becomes the
+        distance's flyover, with its checkpoints, labels, notes and sections."""
+        from fastapi.responses import JSONResponse
+        raw = await request.body()
+        try:
+            body = json.loads(raw or b"{}") if len(raw) <= 300_000 else None
+            if not isinstance(body, dict):
+                raise ValueError
+        except ValueError:
+            return JSONResponse({"error": "Bad request."}, status_code=400)
+        if not csrf_ok(request.session, body.get("csrf")):
+            return JSONResponse({"error": "Your session expired. Reload the page and try again."}, status_code=400)
+        c = course_or_404(db, cid)
+        a = c.area
+        pid = str(body.get("preset", ""))
+        if pid not in FL.presets():
+            return JSONResponse({"error": "Pick one of the built-in courses."}, status_code=400)
+        dist = str(body.get("distance", ""))
+        allowed = [d for d in (c.distances or "").split(",") if d] or list(CS.DISTANCES)
+        fly = next((x for x in c.flyovers if x.distance == dist), None)
+        if dist not in allowed and fly is None:
+            return JSONResponse({"error": "Pick the distance this course is for."}, status_code=400)
+        inside = lambda lat, lon: a is not None and a.south - 0.02 <= lat <= a.north + 0.02 and a.west - 0.02 <= lon <= a.east + 0.02
+        try:
+            pts = [(float(p[0]), float(p[1])) for p in body.get("points") or []]
+            marks = {k: [(str(m[0]), float(m[1]), float(m[2])) for m in body.get(k.lower()) or []] for k in ("CP", "LAB")}
+            if not pts or not all(inside(*p) for p in pts) or not all(inside(m[1], m[2]) for v in marks.values() for m in v):
+                raise ValueError
+        except (TypeError, ValueError, IndexError):
+            return JSONResponse({"error": "The course isn’t on the photo. Tap its start on the photo and try again."}, status_code=400)
+        if not 2 <= len(pts) <= 3000:
+            return JSONResponse({"error": "That isn’t a whole course."}, status_code=400)
+        _, notes, sections = FL.preset_record(pid)
+        title = FL.presets()[pid]["title"]
+        return store_route(request, c, dist, fly, pts, user, f"{title}, placed on the satellite photo", notes, sections, marks)
 
     def satellite_jpeg(fly: CourseFlyover | None) -> Response:
         if fly is None or fly.satellite is None:

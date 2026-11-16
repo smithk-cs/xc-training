@@ -167,7 +167,33 @@
       <span class="small muted" id="tr-status" role="status"></span>
     </div>
     <p class="small muted" style="margin:4px 0 0">Tap the start, then each turn or bend in order to the finish (more taps on curves). Pinch to zoom in on a phone. Saving replaces that distance’s flyover route and keeps its notes and sections.</p>
-    <script type="application/json" id="tr-cfg">{{ {'csrf': csrf, 'save': '/courses/%d/trace' % edit.id, 'box': [edit.area.north, edit.area.west, edit.area.south, edit.area.east]}|tojson }}</script>
+    {% if placing %}
+    <details class="place-box" id="place" style="margin-top:12px">
+      <summary><b>Or place a built-in course on the photo</b></summary>
+      <p class="small muted" style="margin:6px 0">Pick the course, tap where it starts, then turn and size it until the orange route and its checkpoints sit on the paths. It comes in at its real length, north up.</p>
+      <div class="form-row" style="align-items:flex-end">
+        <label>Built-in course<select id="pl-preset">{% for pid, p in placing.items() %}<option value="{{ pid }}">{{ p.title }}</option>{% endfor %}</select></label>
+        <button type="button" id="pl-start">Tap its start on the photo</button>
+      </div>
+      <div class="form-row" style="align-items:center; margin-top:6px">
+        <span class="small">Turn</span>
+        <button type="button" class="secondary" data-turn="-10" title="Turn left 10°">⟲ 10°</button>
+        <button type="button" class="secondary" data-turn="-1" title="Turn left 1°">⟲ 1°</button>
+        <button type="button" class="secondary" data-turn="1" title="Turn right 1°">⟳ 1°</button>
+        <button type="button" class="secondary" data-turn="10" title="Turn right 10°">⟳ 10°</button>
+        <span class="small">Size</span>
+        <button type="button" class="secondary" data-size="0.98" title="2% smaller">−</button>
+        <button type="button" class="secondary" data-size="1.02" title="2% bigger">+</button>
+        <b id="pl-info" class="small" aria-live="polite"></b>
+      </div>
+      <div class="form-row" style="align-items:flex-end; margin-top:6px">
+        <label>Save as the flyover for<select id="pl-distance">{% for d in route_dists %}<option>{{ d }}</option>{% endfor %}</select></label>
+        <button type="button" id="pl-save" disabled>Save placed course</button>
+        <span class="small muted" id="pl-status" role="status"></span>
+      </div>
+    </details>
+    {% endif %}
+    <script type="application/json" id="tr-cfg">{{ {'csrf': csrf, 'save': '/courses/%d/trace' % edit.id, 'place': '/courses/%d/place' % edit.id, 'presets': placing, 'box': [edit.area.north, edit.area.west, edit.area.south, edit.area.east]}|tojson }}</script>
     <script src="/static/course-trace.js?v={{ asset_v }}" defer></script>
     {% endif %}
   </section>

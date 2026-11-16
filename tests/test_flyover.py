@@ -418,7 +418,7 @@ def test_trace_a_route_into_a_flyover(monkeypatch):
     fly.notes = "0.5 Big hill"
     db.commit()
     db.close()
-    assert "Saved the traced 2 mi flyover" in c.get(f"/courses?edit={cid}").text
+    assert "Saved the 2 mi flyover for Test Park" in (pg := c.get(f"/courses?edit={cid}").text) and "traced on the satellite photo" in pg
     c.post(f"/courses/{cid}/trace", json={"csrf": csrf, "distance": "2 mi", "points": loop[:20]})   # traced again: notes stay
     db = SessionLocal()
     assert db.query(CourseFlyover).count() == 1 and db.query(CourseFlyover).one().notes == "0.5 Big hill"
@@ -431,3 +431,65 @@ def test_trace_a_route_into_a_flyover(monkeypatch):
     db = SessionLocal()
     assert db.query(CourseArea).count() == 1
     db.close()
+
+
+def place_preset(pid, lat0, lon0, turn_deg=0.0):
+    """Where the placing page puts a built-in course: its start at lat0, lon0, north up (turned turn_deg clockwise),
+    at its real length. Returns (route, checkpoints, labels) as latitudes and longitudes."""
+    p = FL.placing_data()[pid]
+    units = sum(math.dist(a, b) for a, b in zip(p["P"], p["P"][1:]))
+    m_u = p["total"] * FL.METERS_PER_MILE / units
+    t = math.radians(turn_deg)
+    x0, y0 = p["P"][0]
+
+    def ll(x, y):
+        dx, dy = (x - x0) * m_u, (y - y0) * m_u                    # meters east, meters south
+        ex, sy = dx * math.cos(t) - dy * math.sin(t), dx * math.sin(t) + dy * math.cos(t)
+        return lat0 - sy / 110574.0, lon0 + ex / (111320.0 * math.cos(math.radians(lat0)))
+    return ([list(ll(*q)) for q in p["P"]], [[c[0], *ll(c[1], c[2])] for c in p["CP"]], [[c[0], *ll(c[1], c[2])] for c in p["LAB"]])
+
+
+def test_place_a_built_in_course(monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from xcapp.db import SessionLocal
+    from xcapp.models import Course, CourseFlyover, StaffUser
+    from xcapp.security import hash_password
+    pd = FL.placing_data()
+    assert set(pd) == {"frogtown", "wildfire", "willow"} and pd["willow"]["distance"] == "5K" and len(pd["willow"]["CP"]) == 11
+    geo = FL.build(loop_track(), lookup=lambda c: None, usgs=None)["geo"]
+    u, v = FL.to_draw(geo, *FL.to_lat_lon(geo, 123.4, 321.0))
+    assert abs(u - 123.4) < 1e-6 and abs(v - 321.0) < 1e-6                      # to_draw undoes to_lat_lon
+    monkeypatch.setattr(FL, "fetch_usgs_elevations", lambda coords, post=None: REAL_USGS(coords, post=usgs_post()))
+    db = SessionLocal()
+    db.add(StaffUser(username="coach1", role="coach", password_hash=hash_password("correct-horse-1")))
+    course = Course(name="Willow Hill", distances="5K,2 mi", latitude=38.672, longitude=-121.155)
+    db.add(course)
+    db.commit()
+    cid = course.id
+    db.close()
+    from xcapp.web import create_app
+    c = TestClient(create_app(), follow_redirects=False)
+    csrf = re.search(r'name="csrf" value="([^"]+)"', c.get("/login").text).group(1)
+    c.post("/login", data={"csrf": csrf, "username": "coach1", "password": "correct-horse-1"})
+    csrf = re.search(r'name="csrf" value="([^"]+)"', c.get(f"/courses?edit={cid}").text).group(1)
+    c.post(f"/courses/{cid}/area", data={"csrf": csrf, "size": "2500", "lat": "", "lon": ""})
+    page = c.get(f"/courses?edit={cid}").text
+    assert "Or place a built-in course on the photo" in page and "Willow Hills 5K" in page and '"place": "/courses/' in page
+    route, cp, lab = place_preset("willow", 38.672, -121.155, turn_deg=15)
+    r = c.post(f"/courses/{cid}/place", json={"csrf": csrf, "preset": "willow", "distance": "5K", "points": route, "cp": cp, "lab": lab})
+    assert r.status_code == 200, r.text
+    db = SessionLocal()
+    fly = db.query(CourseFlyover).one()
+    data = json.loads(fly.data)
+    assert fly.distance == "5K" and fly.preset == "" and fly.filename == "Willow Hills 5K, placed on the satellite photo"
+    assert abs(data["measured_mi"] - 3.057) < 0.03 and data["heights"] == "usgs" and data["geo"] and fly.satellite is not None
+    assert [x[0] for x in data["CP"]] == [x[0] for x in cp] and len(data["LAB"]) == 3
+    # the checkpoints land where they were placed
+    lat, lon = FL.to_lat_lon(data["geo"], data["CP"][0][1], data["CP"][0][2])
+    assert abs(lat - cp[0][1]) < 2e-5 and abs(lon - cp[0][2]) < 2e-5
+    assert "Flat start along the reservoir" in fly.notes and "Reservoir lap" in fly.sections      # the built-in notes and sections
+    db.close()
+    far = [[p[0] + 1, p[1]] for p in route]
+    assert "isn’t on the photo" in c.post(f"/courses/{cid}/place", json={"csrf": csrf, "preset": "willow", "distance": "5K", "points": far}).json()["error"]
+    assert "built-in" in c.post(f"/courses/{cid}/place", json={"csrf": csrf, "preset": "nope", "distance": "5K", "points": route}).json()["error"]

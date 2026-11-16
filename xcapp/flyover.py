@@ -347,6 +347,21 @@ def to_lat_lon(geo: dict, u: float, v: float) -> tuple[float, float]:
     return geo["lat0"] - (v - geo["oy"]) / geo["s"] / geo["ky"], geo["lon0"] + (u - geo["ox"]) / geo["s"] / geo["kx"]
 
 
+def to_draw(geo: dict, lat: float, lon: float) -> tuple[float, float]:
+    """Where a latitude and longitude falls in the drawing (to_lat_lon, the other way)."""
+    return (lon - geo["lon0"]) * geo["kx"] * geo["s"] + geo["ox"], -(lat - geo["lat0"]) * geo["ky"] * geo["s"] + geo["oy"]
+
+
+def placing_data() -> dict:
+    """What the Courses page needs to place each built-in course on a satellite photo: its route and checkpoints in
+    drawing units, its official length and distance."""
+    out = {}
+    for pid, p in presets().items():
+        out[pid] = {"title": p["title"], "distance": p["distance"], "total": p["total"], "P": [pt[:2] for pt in p["P"]],
+                    "CP": [list(c[:3]) for c in p.get("CP", [])], "LAB": [list(c[:3]) for c in p.get("LAB", [])]}
+    return out
+
+
 def _tile_xy(lat: float, lon: float, z: int) -> tuple[float, float]:
     """Web Mercator position in tiles (fractional) at zoom z."""
     n = 2 ** z

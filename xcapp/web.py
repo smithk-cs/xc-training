@@ -1010,7 +1010,8 @@ def create_app() -> FastAPI:
             except ValueError:
                 fl_heights[fl.id] = ""
         return render(request, "courses.html", user, courses=courses, edit=edit, CS=CS, raced=raced, flyover_presets=FLY.presets(),
-                      missing=[names[m] for m in missing], fl_heights=fl_heights, area_sizes=FLY.AREA_SIZES)
+                      missing=[names[m] for m in missing], fl_heights=fl_heights, area_sizes=FLY.AREA_SIZES,
+                      placing=FLY.placing_data())
 
     @app.post("/courses")
     async def courses_save(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
