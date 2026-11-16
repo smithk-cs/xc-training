@@ -5,6 +5,7 @@ from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
 
+from xcapp import analysis as A
 from xcapp import dashboard as DB
 
 
@@ -58,7 +59,7 @@ def test_dashboard_page(monkeypatch):
     assert "<details" in page and " open>" not in page.split('class="dash-tabs"')[1]      # every list starts collapsed
     assert 'class="miles-bar dash-bar"' in page and '% of the target so far"' in page          # a progress bar for each athlete
     assert "Team briefing" not in page                                  # the old tabs are gone
-    last = c.get("/dashboard?start=" + (dt.date.today() - dt.timedelta(days=7)).isoformat()).text
+    last = c.get("/dashboard?start=" + (A.team_today() - dt.timedelta(days=7)).isoformat()).text
     assert "This week</a>" in last
     # Same week arrows as the Week page: back from this week, forward only from an earlier one
     assert 'aria-label="Week before"' in page and 'aria-label="Week after"' not in page and "This week</a>" not in page

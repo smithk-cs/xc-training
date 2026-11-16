@@ -353,3 +353,81 @@ def test_get_usgs_heights_button(monkeypatch):
     c.post(f"/courses/{cid}/flyovers/{fid}/heights", data={"csrf": csrf})
     page = c.get(f"/courses?edit={cid}").text
     assert "now has USGS heights" in page and "Heights from USGS elevation data" in page and "Refresh USGS heights" in page
+
+
+def test_area_photo_and_densify():
+    from io import BytesIO
+
+    from PIL import Image
+    n, w, s, e = FL.area_box(38.65, -121.15, 1500)
+    assert abs(FL._hav((n, -121.15), (s, -121.15)) - 1500) < 15 and abs(FL._hav((38.65, w), (38.65, e)) - 1500) < 15
+    img, credit, box = FL.area_image(38.65, -121.15, 1500)
+    assert credit.startswith("Imagery: USGS") and box == (n, w, s, e)
+    pw, ph = Image.open(BytesIO(img)).size
+    assert pw == ph and 1000 <= pw <= FL.MAX_IMG_PX
+    assert FL.area_image(38.65, -121.15, 1234) is None and FL.area_image(95, 0, 1500) is None   # only the offered sizes
+    assert FL.area_image(38.65, -121.15, 1500, fetch=lambda u: None) is None                   # no imagery
+    # The photo is linear in Web Mercator: the tracing page's formula (course-trace.js) lands where the tiles say
+    merc = lambda lat: math.log(math.tan(math.pi / 4 + math.radians(lat) / 2))
+    for fy in (0.0, 0.25, 0.5, 0.9):
+        y = merc(n) - fy * (merc(n) - merc(s))
+        lat = math.degrees(math.atan(math.sinh(y)))
+        (_, ty0), (_, ty1), (_, t) = FL._tile_xy(n, w, 17), FL._tile_xy(s, e, 17), FL._tile_xy(lat, w, 17)
+        assert abs((t - ty0) / (ty1 - ty0) - fy) < 1e-9
+    dense = FL.densify([(38.65, -121.15), (38.651, -121.15), (38.651, -121.149)])
+    gaps = [FL._hav(a, b) for a, b in zip(dense, dense[1:])]
+    assert max(gaps) <= 5.01 and dense[0][:2] == (38.65, -121.15) and dense[-1][:2] == (38.651, -121.149)
+    assert all(p[2] is None for p in dense)
+
+
+def test_trace_a_route_into_a_flyover(monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from xcapp.db import SessionLocal
+    from xcapp.models import Course, CourseArea, CourseFlyover, StaffUser
+    from xcapp.security import hash_password
+    monkeypatch.setattr(FL, "fetch_usgs_elevations", lambda coords, post=None: REAL_USGS(coords, post=usgs_post()))
+    db = SessionLocal()
+    db.add(StaffUser(username="coach1", role="coach", password_hash=hash_password("correct-horse-1")))
+    course = Course(name="Test Park", distances="5K,2 mi", latitude=38.65, longitude=-121.15)
+    db.add(course)
+    db.commit()
+    cid = course.id
+    db.close()
+    from xcapp.web import create_app
+    c = TestClient(create_app(), follow_redirects=False)
+    csrf = re.search(r'name="csrf" value="([^"]+)"', c.get("/login").text).group(1)
+    c.post("/login", data={"csrf": csrf, "username": "coach1", "password": "correct-horse-1"})
+    page = c.get(f"/courses?edit={cid}").text
+    assert "Satellite view and route tracing" in page and "Get the satellite photo" in page and 'name="map_url"' not in page
+    csrf = re.search(r'name="csrf" value="([^"]+)"', page).group(1)
+    c.post(f"/courses/{cid}/area", data={"csrf": csrf, "size": "1500", "lat": "", "lon": ""})   # the course's own location
+    page = c.get(f"/courses?edit={cid}").text
+    assert "Saved the satellite photo of the area" in page and 'id="tr-img"' in page and "course-trace.js" in page
+    jpg = c.get(f"/courses/{cid}/area.jpg")
+    assert jpg.status_code == 200 and jpg.headers["content-type"] == "image/jpeg" and jpg.content[:2] == b"\xff\xd8"
+    # A loop traced in about 30 taps, about 1 mile around
+    loop = [(38.65 + 0.0035 * math.sin(2 * math.pi * k / 30), -121.15 + 0.0045 * math.cos(2 * math.pi * k / 30)) for k in range(31)]
+    r = c.post(f"/courses/{cid}/trace", json={"csrf": csrf, "distance": "2 mi", "points": loop})
+    assert r.status_code == 200 and r.json()["next"] == f"/courses?edit={cid}#flyovers"
+    db = SessionLocal()
+    fly = db.query(CourseFlyover).one()
+    data = json.loads(fly.data)
+    assert fly.distance == "2 mi" and fly.filename == "Traced on the satellite photo" and data["heights"] == "usgs"
+    assert 1.0 < data["measured_mi"] < 1.6 and data["geo"] and fly.satellite is not None and fly.notes
+    fly.notes = "0.5 Big hill"
+    db.commit()
+    db.close()
+    assert "Saved the traced 2 mi flyover" in c.get(f"/courses?edit={cid}").text
+    c.post(f"/courses/{cid}/trace", json={"csrf": csrf, "distance": "2 mi", "points": loop[:20]})   # traced again: notes stay
+    db = SessionLocal()
+    assert db.query(CourseFlyover).count() == 1 and db.query(CourseFlyover).one().notes == "0.5 Big hill"
+    db.close()
+    # Refused: off the photo, too few points, an unknown distance, a stale session
+    assert "aren’t on the photo" in c.post(f"/courses/{cid}/trace", json={"csrf": csrf, "distance": "2 mi", "points": [[40, -100], [40, -100.1]]}).json()["error"]
+    assert "at least two" in c.post(f"/courses/{cid}/trace", json={"csrf": csrf, "distance": "2 mi", "points": loop[:1]}).json()["error"]
+    assert "Pick the distance" in c.post(f"/courses/{cid}/trace", json={"csrf": csrf, "distance": "10K", "points": loop}).json()["error"]
+    assert c.post(f"/courses/{cid}/trace", json={"csrf": "nope", "distance": "2 mi", "points": loop}).status_code == 400
+    db = SessionLocal()
+    assert db.query(CourseArea).count() == 1
+    db.close()

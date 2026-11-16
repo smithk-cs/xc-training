@@ -536,6 +536,7 @@ class Course(Base):
 
     routes: Mapped[list["CourseRoute"]] = relationship(cascade="all, delete-orphan", order_by="CourseRoute.distance")
     flyovers: Mapped[list["CourseFlyover"]] = relationship(cascade="all, delete-orphan", order_by="CourseFlyover.distance")
+    area: Mapped["CourseArea | None"] = relationship(cascade="all, delete-orphan", uselist=False)
 
     @property
     def videos(self) -> dict[str, str]:
@@ -587,6 +588,21 @@ class CourseFlyover(Base):
     uploaded_by: Mapped[str] = mapped_column(String(80), default="")
     uploaded_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
     satellite: Mapped["FlyoverImage | None"] = relationship(cascade="all, delete-orphan", uselist=False)
+
+
+class CourseArea(Base):
+    """The satellite photo of the area around a course (flyover.area_image), for tracing its route on: one per course."""
+    __tablename__ = "course_areas"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    course_id: Mapped[int] = mapped_column(ForeignKey("courses.id", ondelete="CASCADE"), unique=True, index=True)
+    data: Mapped[bytes] = mapped_column(LargeBinary, deferred=True)
+    credit: Mapped[str] = mapped_column(String(120), default="")
+    north: Mapped[float] = mapped_column(Float)      # the photo's edges (it's linear in Web Mercator between them)
+    west: Mapped[float] = mapped_column(Float)
+    south: Mapped[float] = mapped_column(Float)
+    east: Mapped[float] = mapped_column(Float)
+    size_m: Mapped[int] = mapped_column(Integer, default=1500)
+    fetched_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
 
 
 class FlyoverImage(Base):

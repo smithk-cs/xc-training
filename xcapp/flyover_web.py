@@ -6,11 +6,13 @@ from types import SimpleNamespace
 
 from fastapi import Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, Response
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from . import courses as CS
 from . import flyover as FL
-from .models import Course, CourseFlyover, FlyoverImage, utcnow
+from .models import Course, CourseArea, CourseFlyover, FlyoverImage, utcnow
+from .security import csrf_ok
 
 
 def register(app, h: SimpleNamespace) -> None:
@@ -31,6 +33,12 @@ def register(app, h: SimpleNamespace) -> None:
         sat.x = sat.y = -FL.IMG_PAD
         sat.size = FL.SIDE + 2 * FL.IMG_PAD
         return True
+
+    def heights_note(data: dict) -> str:
+        return {"usgs": " Heights come from USGS elevation data.",
+                "track": " USGS elevation data couldn’t be reached, so heights come from the file’s GPS; press Get USGS heights later.",
+                "map": " USGS couldn’t be reached and the file had no heights, so they come from a coarse elevation map; press Get USGS heights later.",
+                "none": " No heights could be found, so the profile is flat; press Get USGS heights later."}.get(data.get("heights"), "")
 
     def course_or_404(db: Session, cid: int) -> Course:
         c = db.get(Course, cid)
@@ -81,14 +89,8 @@ def register(app, h: SimpleNamespace) -> None:
                 fly.satellite = None
             elif not get_satellite(fly, data):
                 msg += " The satellite photo couldn’t be fetched just now; try Get satellite photo later."
-            if not preset and data["heights"] == "usgs":
-                msg += " Heights come from USGS elevation data."
-            elif not preset and data["heights"] == "track":
-                msg += " USGS elevation data couldn’t be reached, so heights come from the file’s GPS; press Get USGS heights later."
-            elif not preset and data["heights"] == "map":
-                msg += " USGS couldn’t be reached and the file had no heights, so they come from a coarse elevation map; press Get USGS heights later."
-            elif not preset and data["heights"] == "none":
-                msg += " No heights could be found, so the profile is flat; press Get USGS heights later."
+            if not preset:
+                msg += heights_note(data)
             flash(request, msg)
             return back(to)
         if fly is None:
@@ -134,6 +136,93 @@ def register(app, h: SimpleNamespace) -> None:
         else:
             flash(request, "USGS elevation data couldn’t be reached just now. Try again later.", "error")
         return back(f"/courses?edit={cid}#flyovers")
+
+    # ---------- the course's area photo, and tracing the route on it ----------
+
+    @app.post("/courses/{cid}/area")
+    async def course_area(request: Request, cid: int, user=Depends(coach_or_admin, scope="function"),
+                          db: Session = Depends(get_db, scope="function")):
+        """Fetch (or fetch again) the USGS photo of the area around the course, or around a point the coach gives."""
+        f = await form_checked(request)
+        c = course_or_404(db, cid)
+        to = f"/courses?edit={cid}#trace"
+        try:
+            size = int(f.get("size", 1500))
+            lat = float(f.get("lat") or c.latitude)
+            lon = float(f.get("lon") or c.longitude)
+        except (TypeError, ValueError):
+            flash(request, "Add the course’s latitude and longitude first (above), or type a centre point.", "error")
+            return back(to)
+        got = FL.area_image(lat, lon, size)
+        if got is None:
+            flash(request, "The satellite photo couldn’t be fetched (USGS has no imagery there, or can’t be reached). Try again later.", "error")
+            return back(to)
+        img, credit, (n, w, s_, e) = got
+        if c.area is None:
+            c.area = CourseArea()
+        a = c.area
+        a.data, a.credit, a.north, a.west, a.south, a.east, a.size_m, a.fetched_at = img, credit, n, w, s_, e, size, utcnow()
+        flash(request, f"Saved the satellite photo of the area around {c.name} ({FL.AREA_SIZES[size]} across). Tap along the route to trace it.")
+        return back(to)
+
+    @app.get("/courses/{cid}/area.jpg")
+    def course_area_jpeg(cid: int, user=Depends(any_staff, scope="function"), db: Session = Depends(get_db, scope="function")):
+        a = db.scalar(select(CourseArea).where(CourseArea.course_id == cid))
+        if a is None:
+            raise HTTPException(404, "No area photo.")
+        return Response(a.data, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=86400"})
+
+    @app.post("/courses/{cid}/trace")
+    async def course_trace(request: Request, cid: int, user=Depends(coach_or_admin, scope="function"),
+                           db: Session = Depends(get_db, scope="function")):
+        """A route traced on the area photo becomes the course's flyover for a distance (as a GPS file would)."""
+        from fastapi.responses import JSONResponse
+        raw = await request.body()
+        if len(raw) > 300_000:
+            return JSONResponse({"error": "That route is too long."}, status_code=413)
+        try:
+            body = json.loads(raw or b"{}")
+            if not isinstance(body, dict):
+                raise ValueError
+        except ValueError:
+            return JSONResponse({"error": "Bad request."}, status_code=400)
+        if not csrf_ok(request.session, body.get("csrf")):
+            return JSONResponse({"error": "Your session expired. Reload the page and try again."}, status_code=400)
+        c = course_or_404(db, cid)
+        a = c.area
+        dist = str(body.get("distance", ""))
+        allowed = [d for d in (c.distances or "").split(",") if d] or list(CS.DISTANCES)
+        fly = next((x for x in c.flyovers if x.distance == dist), None)
+        if dist not in allowed and fly is None:
+            return JSONResponse({"error": "Pick the distance this route is for."}, status_code=400)
+        pts = []
+        try:
+            for p in body.get("points") or []:
+                lat, lon = float(p[0]), float(p[1])
+                if a is None or not (a.south - 0.01 <= lat <= a.north + 0.01 and a.west - 0.01 <= lon <= a.east + 0.01):
+                    raise ValueError
+                pts.append((lat, lon))
+        except (TypeError, ValueError, IndexError):
+            return JSONResponse({"error": "Those points aren’t on the photo. Reload the page and trace again."}, status_code=400)
+        if not 2 <= len(pts) <= 3000:
+            return JSONResponse({"error": "Tap at least two points along the route."}, status_code=400)
+        try:
+            data = FL.build(FL.densify(pts))
+        except FL.FlyoverError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=400)
+        if fly is None:
+            fly = CourseFlyover(distance=dist)
+            c.flyovers.append(fly)
+        notes = fly.notes if fly.notes and fly.notes.strip() else FL.default_notes(data)
+        fly.data, fly.notes, fly.sections = json.dumps(data, separators=(",", ":")), notes, fly.sections or ""
+        fly.filename, fly.preset = "Traced on the satellite photo", ""
+        fly.uploaded_by, fly.uploaded_at = user.username, utcnow()
+        msg = f"Saved the traced {dist} flyover for {c.name} ({data['measured_mi']:.2f} miles)."
+        if not get_satellite(fly, data):
+            msg += " The satellite photo couldn’t be fetched just now; try Get satellite photo later."
+        msg += heights_note(data)
+        flash(request, msg)
+        return JSONResponse({"ok": True, "next": f"/courses?edit={cid}#flyovers"})
 
     def satellite_jpeg(fly: CourseFlyover | None) -> Response:
         if fly is None or fly.satellite is None:

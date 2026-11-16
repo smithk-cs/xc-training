@@ -970,10 +970,11 @@ def create_app() -> FastAPI:
         tier = num("hill_tier", 1, 5, "Hill tier")
         c.hill_tier = int(tier) if tier else None
         c.adjust_s_per_mile = num("adjust_s_per_mile", -30, 120, "Course adjustment")
-        url = str(f.get("map_url", "")).strip()[:500]
-        if url and not url.startswith(("https://", "http://")):
-            raise ValueError("The map link should start with https://.")
-        c.map_url = url
+        if "map_url" in f:   # the form no longer has a map link field; links saved before are kept
+            url = str(f.get("map_url", "")).strip()[:500]
+            if url and not url.startswith(("https://", "http://")):
+                raise ValueError("The map link should start with https://.")
+            c.map_url = url
         video = str(f.get("video_url", "")).strip()[:500]
         if video and not video.startswith("https://"):
             raise ValueError("The video link should start with https:// (copy it from YouTube's Share button).")
@@ -1009,7 +1010,7 @@ def create_app() -> FastAPI:
             except ValueError:
                 fl_heights[fl.id] = ""
         return render(request, "courses.html", user, courses=courses, edit=edit, CS=CS, raced=raced, flyover_presets=FLY.presets(),
-                      missing=[names[m] for m in missing], fl_heights=fl_heights)
+                      missing=[names[m] for m in missing], fl_heights=fl_heights, area_sizes=FLY.AREA_SIZES)
 
     @app.post("/courses")
     async def courses_save(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):

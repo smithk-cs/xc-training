@@ -76,7 +76,6 @@
     </div>
     <div class="form-row">
       <label>Course adjustment (s/mile)<input type="number" name="adjust_s_per_mile" value="{{ '%g' % edit.adjust_s_per_mile if edit and edit.adjust_s_per_mile is not none else '' }}" step="1" min="-30" max="120" placeholder="worked out" style="width:8em"></label>
-      <label style="flex:1">Map link<input type="url" name="map_url" value="{{ edit.map_url if edit else '' }}" maxlength="500" placeholder="https://www.strava.com/routes/..."></label>
       <label style="flex:1">Course video, any distance (YouTube)<input type="url" name="video_url" value="{{ edit.video_url if edit else '' }}" maxlength="500" placeholder="https://youtu.be/..."></label>
     </div>
     <div class="form-row" style="align-items:flex-end">
@@ -138,6 +137,41 @@
     </form>
     <p class="small muted" style="margin:4px 0 0">Making a flyover again for a distance replaces its route and keeps your notes (a built-in course brings its own).</p>
   </section>
+  {% if user.role in ('admin', 'coach') %}
+  <section class="course-routes" id="trace" aria-labelledby="trace-h">
+    <h3 id="trace-h">Satellite view and route tracing</h3>
+    <p class="small muted" style="margin:0 0 8px">A USGS satellite photo (public domain) of the area around the course, to look it over and to trace the route on: tap along the course in order, and save it as a distance’s flyover. It gets USGS heights and the satellite photo, like a GPS file. No GPX needed.</p>
+    <form method="post" action="/courses/{{ edit.id }}/area" class="form-row" style="align-items:flex-end">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <label>Area across<select name="size">{% for m, label in area_sizes.items() %}<option value="{{ m }}"{{ ' selected' if (edit.area and edit.area.size_m == m) or (not edit.area and m == 1500) }}>{{ label }}</option>{% endfor %}</select></label>
+      <label>Centre latitude<input type="number" name="lat" step="0.00001" min="-85" max="85" value="{{ '%.5f' % ((edit.area.north + edit.area.south) / 2) if edit.area else ('%g' % edit.latitude if edit.latitude is not none else '') }}" style="width:9em" placeholder="the course’s"></label>
+      <label>Centre longitude<input type="number" name="lon" step="0.00001" min="-180" max="180" value="{{ '%.5f' % ((edit.area.west + edit.area.east) / 2) if edit.area else ('%g' % edit.longitude if edit.longitude is not none else '') }}" style="width:9em" placeholder="the course’s"></label>
+      <button type="submit"{% if edit.area %} class="secondary"{% endif %}>{{ 'Get the photo again' if edit.area else 'Get the satellite photo' }}</button>
+    </form>
+    {% if edit.area %}
+    <p class="small muted" style="margin:6px 0">{{ edit.area.credit }} · {{ area_sizes.get(edit.area.size_m, '') }} across. Tip: tap <b>Centre here</b>, then tap the photo, to move the centre to that spot for the next photo.</p>
+    <div class="trace-tools form-row" style="align-items:center">
+      <button type="button" class="secondary" id="tr-undo">Undo</button>
+      <button type="button" class="secondary" id="tr-clear">Clear</button>
+      <button type="button" class="secondary" id="tr-close" title="Finish where you started">Back to start</button>
+      <button type="button" class="link" id="tr-centre">Centre here</button>
+      <b id="tr-dist" aria-live="polite">0.00 mi</b>
+    </div>
+    <div class="trace-wrap" id="tr-wrap">
+      <img id="tr-img" src="/courses/{{ edit.id }}/area.jpg?v={{ edit.area.fetched_at.timestamp()|int }}" alt="Satellite photo of the area around {{ edit.name }}" draggable="false">
+      <svg id="tr-svg" aria-hidden="true"></svg>
+    </div>
+    <div class="form-row" style="align-items:flex-end; margin-top:8px">
+      <label>Save as the flyover for<select id="tr-distance">{% for d in route_dists %}<option>{{ d }}</option>{% endfor %}</select></label>
+      <button type="button" id="tr-save" disabled>Save traced route</button>
+      <span class="small muted" id="tr-status" role="status"></span>
+    </div>
+    <p class="small muted" style="margin:4px 0 0">Tap the start, then each turn or bend in order to the finish (more taps on curves). Pinch to zoom in on a phone. Saving replaces that distance’s flyover route and keeps its notes and sections.</p>
+    <script type="application/json" id="tr-cfg">{{ {'csrf': csrf, 'save': '/courses/%d/trace' % edit.id, 'box': [edit.area.north, edit.area.west, edit.area.south, edit.area.east]}|tojson }}</script>
+    <script src="/static/course-trace.js?v={{ asset_v }}" defer></script>
+    {% endif %}
+  </section>
+  {% endif %}
   <form method="post" action="/courses/{{ edit.id }}/delete" class="form-row" style="margin-top:8px"><input type="hidden" name="csrf" value="{{ csrf }}">
     <button class="danger" type="submit" onclick="return confirm('Delete {{ edit.name }}? Race results keep their course name.')">Delete course</button></form>
   {% endif %}

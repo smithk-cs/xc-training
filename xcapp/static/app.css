@@ -864,3 +864,9 @@ a.route-link { white-space: nowrap; }
 .flyover-item summary { cursor: pointer; }
 .flyover-item .dist { display: inline-block; width: 5.5rem; font-weight: 600; }
 .flyover-item label { display: block; margin-bottom: 8px; }
+
+/* Courses: tracing the route on the area's satellite photo */
+.trace-wrap { position: relative; width: 100%; max-width: 900px; margin-top: 8px; border-radius: 8px; overflow: hidden; touch-action: manipulation; }
+.trace-wrap img { display: block; width: 100%; height: auto; user-select: none; -webkit-user-select: none; }
+.trace-wrap svg { position: absolute; inset: 0; width: 100%; height: 100%; cursor: crosshair; }
+.trace-wrap.centring svg { cursor: copy; }

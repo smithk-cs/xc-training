@@ -367,13 +367,14 @@ def fetch_tile(url: str) -> bytes | None:
     return r.content
 
 
-def _stitch(geo: dict, z: int, template: str, fetch) -> bytes | None:
+def _stitch_box(lat_n: float, lon_w: float, lat_s: float, lon_e: float, z: int, template: str, fetch,
+                square: bool = True) -> bytes | None:
+    """One JPEG of the map tiles covering the box (cropped to it exactly, so it's linear in Web Mercator), at most
+    MAX_IMG_PX across; None when the tiles are missing (the service's plain filler counts as missing)."""
     from concurrent.futures import ThreadPoolExecutor
     from io import BytesIO
 
     from PIL import Image
-    lat_n, lon_w = to_lat_lon(geo, -IMG_PAD, -IMG_PAD)
-    lat_s, lon_e = to_lat_lon(geo, SIDE + IMG_PAD, SIDE + IMG_PAD)
     (x0, y0), (x1, y1) = _tile_xy(lat_n, lon_w, z), _tile_xy(lat_s, lon_e, z)
     tiles = [(tx, ty) for ty in range(int(y0), int(y1) + 1) for tx in range(int(x0), int(x1) + 1)]
     if not tiles or len(tiles) > MAX_TILES:
@@ -395,10 +396,18 @@ def _stitch(geo: dict, z: int, template: str, fetch) -> bytes | None:
     if missing > len(tiles) * 0.05:
         return None
     box = tuple(round(v) for v in ((x0 - int(x0)) * 256, (y0 - int(y0)) * 256, (x1 - int(x0)) * 256, (y1 - int(y0)) * 256))
-    side = min(MAX_IMG_PX, max(box[2] - box[0], box[3] - box[1]))
+    w, h = box[2] - box[0], box[3] - box[1]
+    k = min(1.0, MAX_IMG_PX / max(w, h, 1))
+    size = (min(MAX_IMG_PX, max(w, h)),) * 2 if square else (max(1, round(w * k)), max(1, round(h * k)))
     out = BytesIO()
-    canvas.crop(box).resize((side, side), Image.LANCZOS).save(out, "JPEG", quality=80, optimize=True, progressive=True)
+    canvas.crop(box).resize(size, Image.LANCZOS).save(out, "JPEG", quality=80, optimize=True, progressive=True)
     return out.getvalue()
+
+
+def _stitch(geo: dict, z: int, template: str, fetch) -> bytes | None:
+    lat_n, lon_w = to_lat_lon(geo, -IMG_PAD, -IMG_PAD)
+    lat_s, lon_e = to_lat_lon(geo, SIDE + IMG_PAD, SIDE + IMG_PAD)
+    return _stitch_box(lat_n, lon_w, lat_s, lon_e, z, template, fetch)
 
 
 def satellite_image(geo: dict | None, fetch=fetch_tile) -> tuple[bytes, str] | None:
@@ -415,6 +424,46 @@ def satellite_image(geo: dict | None, fetch=fetch_tile) -> tuple[bytes, str] | N
             if img:
                 return img, credit
     return None
+
+
+# ---------- a course's area photo, for tracing the route ----------
+AREA_SIZES = {800: "0.8 km (½ mile)", 1500: "1.5 km (1 mile)", 2500: "2.5 km (1½ miles)"}
+
+
+def area_box(lat: float, lon: float, size_m: float) -> tuple[float, float, float, float]:
+    """(north, west, south, east) of a square size_m across, centred on lat, lon."""
+    half = size_m / 2
+    dlat = half / 110574.0
+    dlon = half / (111320.0 * math.cos(math.radians(lat)))
+    return lat + dlat, lon - dlon, lat - dlat, lon + dlon
+
+
+def area_image(lat: float, lon: float, size_m: float, fetch=None) -> tuple[bytes, str, tuple] | None:
+    """(JPEG, credit, (north, west, south, east)) of the satellite photo of the area around a point, MAX_IMG_PX
+    across, from USGS; None when it has no imagery there or can't be reached."""
+    if not (-85 < lat < 85 and -180 <= lon <= 180) or size_m not in AREA_SIZES:
+        return None
+    fetch = fetch or fetch_tile
+    box = area_box(lat, lon, size_m)
+    per_px = 156543.03392 * math.cos(math.radians(lat))
+    best = max(10, min(18, math.ceil(math.log2(per_px * MAX_IMG_PX / size_m))))
+    for credit, template in TILE_SOURCES:
+        for z in (best, best - 1):
+            img = _stitch_box(*box, z, template, fetch)
+            if img:
+                return img, credit, box
+    return None
+
+
+def densify(points: list[tuple[float, float]], step_m: float = 5.0) -> list[tuple[float, float, None]]:
+    """A traced route (the points tapped) as a track with a point about every step_m, for build."""
+    out: list[tuple[float, float, None]] = []
+    for a, b in zip(points, points[1:]):
+        n = max(1, math.ceil(_hav(a, b) / step_m))
+        out += [(a[0] + (b[0] - a[0]) * k / n, a[1] + (b[1] - a[1]) * k / n, None) for k in range(n)]
+    if points:
+        out.append((points[-1][0], points[-1][1], None))
+    return out
 
 
 def default_notes(d: dict) -> str:
