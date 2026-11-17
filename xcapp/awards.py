@@ -11,11 +11,14 @@
   default; the coach can change them), so a freshman racing up to varsity gets credit for the stronger field. The MVP
   score is the average over every race in the window with a place and a finisher count; ties go to the faster average
   adjusted time. Without any finisher counts in the window, it falls back to the lowest average place.
-- Most improved: every race in the window as an adjusted mile pace (the time adjusted for the course and weather, as a
-  5K: a 5K's own pace; another distance's 5K equivalent by VDOT, so a 2-mile race and a 5K compare fairly), and a
-  best-fit line through them over the dates. The improvement is how much faster the line is at the athlete's last race
-  than at their first, as a share of the first pace (seconds a mile shown too): the trend over all the races, not one
-  good or bad day at either end, and fair to faster runners, for whom each second is harder to find.
+- Most improved, from adjusted mile paces (the time adjusted for the course and weather, as a 5K: a 5K's own pace;
+  another distance's 5K equivalent by VDOT, so a 2-mile race and a 5K compare fairly), ranked by how much faster as a
+  share of the earlier pace (seconds a mile shown too), which is fair to faster runners:
+  - Sophomores and Varsity: their best pace last cross country season against their best this season (in the
+    window). An athlete with no race last season is measured like a freshman, and marked so.
+  - Freshmen (no earlier season): every race in the window and a best-fit line through them over the dates; the
+    improvement is how much faster the line is at their last race than at their first, so one good or bad day at
+    either end doesn't decide it.
 """
 from __future__ import annotations
 
@@ -137,6 +140,33 @@ def trend(points: list[tuple[float, float]]) -> tuple[float, float] | None:
     return slope, my - slope * mx
 
 
+SEASON_TO_SEASON = ("sophomores", "varsity")   # most improved from last season's best (freshmen have no last season)
+
+
+def _pace5k(r: RaceResult, t: float | None) -> float | None:
+    """Adjusted mile pace as a 5K: a 5K's own pace, another distance's 5K equivalent by VDOT."""
+    if not r.distance_m or not t:
+        return None
+    pace = t / (r.distance_m / MILE)
+    return pace if abs(r.distance_m - 5000) < 50 else A.equivalent_time(5000, A.vdot(r.distance_m, t)) / (5000 / MILE)
+
+
+def last_season_bests(db: Session, season: dict, athlete_ids: list[int]) -> dict[int, dict]:
+    """Each athlete's best adjusted mile pace in the cross country season before this one: {id: {"pace5k", "r"}}."""
+    if not athlete_ids:
+        return {}
+    prev = SE.period(season["school_year"] - 1, "xc")
+    races = db.scalars(select(RaceResult).where(RaceResult.athlete_id.in_(athlete_ids), RaceResult.date >= prev["start"],
+                                                RaceResult.date <= prev["end"])).all()
+    adj = adjusted_times(db, races)
+    out: dict[int, dict] = {}
+    for r in races:
+        p = _pace5k(r, adj.get(r.id) or r.time_s)
+        if p and (r.athlete_id not in out or p < out[r.athlete_id]["pace5k"]):
+            out[r.athlete_id] = {"pace5k": p, "r": r, "season": prev["label"]}
+    return out
+
+
 def awards(db: Session, season: dict, team: str, today: dt.date, span: tuple[Meet | None, Meet | None] = (None, None)) -> dict:
     """{class key: {"label", "meets", "need", "eligible", "mvp": [...], "improved": [...], "span": (from, to), "short": [...]}}.
     span: the first and last meet of the window (None: the class's first or last of the season)."""
@@ -154,14 +184,13 @@ def awards(db: Session, season: dict, team: str, today: dt.date, span: tuple[Mee
         g = grade_in(a, start, today)
         e = by_athlete.setdefault(a.id, {"a": a, "grade": g, "races": []})
         t = adj.get(r.id) or r.time_s
-        pace = pace5k = None
-        if r.distance_m and t:
-            pace = t / (r.distance_m / MILE)
-            pace5k = pace if abs(r.distance_m - 5000) < 50 else A.equivalent_time(5000, A.vdot(r.distance_m, t)) / (5000 / MILE)
+        pace = t / (r.distance_m / MILE) if r.distance_m and t else None
+        pace5k = _pace5k(r, t)
         lvl, fin = level_of(r.race), fields.get((r.meet, r.date, r.race))
         share = field_share(r.place, fin)
         e["races"].append({"r": r, "meet": (r.date, r.meet), "adj": t, "pace": pace, "pace5k": pace5k, "level": lvl,
                            "finishers": fin, "share": share, "score": share * wts[lvl] if share is not None else None})
+    last_best = last_season_bests(db, season, list(by_athlete)) if season.get("school_year") else {}
     out = {}
     for key, label, grades in CLASSES:
         people = [e for e in by_athlete.values() if e["grade"] in grades]
@@ -209,6 +238,16 @@ def awards(db: Session, season: dict, team: str, today: dt.date, span: tuple[Mee
         improved = []
         for e in eligible:
             rs = [x for x in e["races"] if x["pace5k"]]
+            prev = last_best.get(e["a"].id) if key in SEASON_TO_SEASON else None
+            if prev and rs:     # last season's best against this season's best
+                best = min(rs, key=lambda x: x["pace5k"])
+                gain = prev["pace5k"] - best["pace5k"]
+                if gain > 0:
+                    improved.append({"a": e["a"], "grade": e["grade"], "ran": e["ran"], "n": len(rs), "gain": gain,
+                                     "pct": 100 * gain / prev["pace5k"], "p_from": prev["pace5k"], "p_to": best["pace5k"],
+                                     "races": rs, "how": "seasons", "last": prev, "best": best,
+                                     "mixed": abs(prev["r"].distance_m - best["r"].distance_m) >= 50})
+                continue
             line = trend([((x["r"].date - d0).days, x["pace5k"]) for x in rs])
             if not line:
                 continue
@@ -220,9 +259,11 @@ def awards(db: Session, season: dict, team: str, today: dt.date, span: tuple[Mee
                 continue
             improved.append({"a": e["a"], "grade": e["grade"], "ran": e["ran"], "n": len(rs), "gain": gain,
                              "pct": 100 * gain / p_from, "p_from": p_from, "p_to": p_to, "races": rs,
+                             "how": "trend", "no_last": key in SEASON_TO_SEASON,
                              "mixed": len({round(x["r"].distance_m, -2) for x in rs}) > 1})
         improved.sort(key=lambda m: -m["pct"])      # the biggest share faster along the trend: fair to fast and slower runners
         entry.update(meets=len(meets), need=need, eligible=len(eligible), mvp=mvp[:TOP], improved=improved[:TOP],
+                     seasons=key in SEASON_TO_SEASON,
                      by_field=by_field, missing=missing,
                      short=sorted(short, key=lambda e: (-e["ran"], e["a"].last_name)))
     return out

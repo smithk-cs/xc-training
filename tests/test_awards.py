@@ -62,12 +62,17 @@ def test_awards_by_class(session):
     assert [e["a"].first_name for e in v["short"]] == ["Winner"]
     assert [m["a"].first_name for m in v["mvp"]] == ["Steady", "Climber", "Other"]          # avg 3, 6, 6 (Climber faster)
     assert v["mvp"][0]["avg_place"] == 3 and v["mvp"][1]["avg_place"] == 6
-    assert [m["a"].first_name for m in v["improved"]] == ["Climber"]                          # the others didn't get faster
-    c = v["improved"][0]                       # 19:00 → 17:32 over five 5Ks: the trend through all five, 27 s a mile
-    assert c["n"] == 5 and round(c["gain"]) == 27 and not c["mixed"] and c["p_from"] > c["p_to"]
+    # Varsity: last season's best against this season's. Steady ran 21:40 last season and 16:40 now (23% faster);
+    # Climber has no race last season, so their trend this season counts instead, marked so
+    assert [m["a"].first_name for m in v["improved"]] == ["Steady", "Climber"]
+    st = v["improved"][0]
+    assert st["how"] == "seasons" and st["last"]["r"].meet == "Old" and round(st["pct"]) == 23 and v["seasons"]
+    c = v["improved"][1]                       # 19:00 → 17:32 over five 5Ks: the trend through all five, 27 s a mile
+    assert c["how"] == "trend" and c["no_last"] and c["n"] == 5 and round(c["gain"]) == 27 and not c["mixed"] and c["p_from"] > c["p_to"]
     f = b["freshmen"]
     assert f["meets"] == 3 and f["need"] == 3 and f["eligible"] == 2                          # held to their own meets
     assert [m["a"].first_name for m in f["mvp"]] == ["Frosh", "Frosh2"]
+    assert not f["seasons"]                    # freshmen: this season only
     fi = f["improved"]                         # two 2-mile races, then a 5K: the 2-milers as the 5K pace they're worth
     assert [m["a"].first_name for m in fi] == ["Frosh"] and round(fi[0]["gain"]) == 32 and fi[0]["mixed"] and fi[0]["n"] == 3
     assert AW.trend([(0, 400), (10, 390), (20, 380)]) == (-1.0, 400.0) and AW.trend([(0, 400), (0, 390)]) is None
@@ -76,8 +81,9 @@ def test_awards_by_class(session):
     assert [m[1] for m in meets] == ["Meet 1", "Meet 2", "Meet 3", "Meet 4", "Meet 5"]
     picked = AW.awards(session, SE.period(2026, "xc"), "Boys", TODAY, (meets[1], meets[3]))
     pv = picked["varsity"]                     # only Meets 2 to 4 count: 3 meets, all 3 needed
-    assert pv["span"] == (meets[1], meets[3]) and pv["meets"] == 3 and pv["need"] == 3 and round(pv["improved"][0]["gain"]) == 14
-    assert pv["improved"][0]["n"] == 3 and [e["a"].first_name for e in pv["short"]] == ["Winner"]
+    assert pv["span"] == (meets[1], meets[3]) and pv["meets"] == 3 and pv["need"] == 3 and round(next(m for m in pv["improved"] if m["a"].first_name == "Climber")["gain"]) == 14
+    assert pv["improved"][0]["a"].first_name == "Steady" and pv["improved"][0]["how"] == "seasons"   # last season against the window's best
+    assert next(m for m in pv["improved"] if m["a"].first_name == "Climber")["n"] == 3 and [e["a"].first_name for e in pv["short"]] == ["Winner"]
     assert picked["freshmen"]["span"] == (meets[1], None) and picked["freshmen"]["improved"] == []
     assert AW.parse_meet(AW.meet_key(meets[2])) == meets[2] and AW.parse_meet("junk") is None
     assert b["sophomores"]["meets"] == 0
@@ -216,3 +222,16 @@ def test_attendance_form(session):
     r = c.post("/races/awards/attendance", data={"csrf": csrf, "min_pct": "70", "next": "/races/awards?team=Girls"})
     assert r.headers["location"] == "/races/awards?team=Girls"
     assert 'name="min_pct" value="70"' in c.get("/races/awards").text and "at least 70% of the meets" in c.get("/races/awards").text
+
+
+def test_improved_page_shows_last_season(session):
+    build(session)
+    session.add(StaffUser(username="coach1", role="coach", password_hash=hash_password("correct-horse-1")))
+    session.commit()
+    from xcapp.web import create_app
+    c = TestClient(create_app(), follow_redirects=False)
+    csrf = re.search(r'name="csrf" value="([^"]+)"', c.get("/login").text).group(1)
+    c.post("/login", data={"csrf": csrf, "username": "coach1", "password": "correct-horse-1"})
+    page = c.get("/races/awards?season=2026").text
+    assert "Best mile pace, last season → this" in page and "Best last season: 6:58/mi at Old (Sep 6, 2025). Best this season: 5:22/mi at Meet 1" in page
+    assert ">no race last season</span>" in page and "Mile pace trend" in page          # freshmen keep the trend
