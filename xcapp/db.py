@@ -88,7 +88,7 @@ ADDED_COLUMNS = {
                  ("alumni", "BOOLEAN DEFAULT FALSE"), ("left_on", "DATE"), ("vdot_mark", "VARCHAR(10) DEFAULT ''"), ("weekly_plan", "VARCHAR(20) DEFAULT ''"),
                  ("experience", "INTEGER DEFAULT 2"), ("show_name", "BOOLEAN DEFAULT FALSE"), ("show_photo", "BOOLEAN DEFAULT FALSE"),
                  ("show_spotlight", "BOOLEAN DEFAULT FALSE"), ("show_vdot", "BOOLEAN DEFAULT FALSE"), ("is_captain", "BOOLEAN DEFAULT FALSE"), ("consent_by", "VARCHAR(160) DEFAULT ''"),
-                 ("consent_at", "TIMESTAMP")],
+                 ("consent_at", "TIMESTAMP"), ("link_sent_at", "TIMESTAMP")],
     "staff_users": [("email", "VARCHAR(254) DEFAULT ''"), ("full_name", "VARCHAR(120) DEFAULT ''"), ("first_name", "VARCHAR(60) DEFAULT ''"),
                     ("last_name", "VARCHAR(60) DEFAULT ''"), ("title", "VARCHAR(80) DEFAULT ''"),
                     ("phone", "VARCHAR(30) DEFAULT ''"), ("on_entries", "BOOLEAN DEFAULT TRUE"), ("hidden_sections", "VARCHAR(400) DEFAULT ''")],

@@ -84,6 +84,45 @@ def compose(a: Athlete, lines: list[str]) -> tuple[str, str, str]:
     return subject, text, html
 
 
+def compose_link(a: Athlete) -> tuple[str, str, str]:
+    """The welcome email with an athlete's own page link and how to use it."""
+    s = settings()
+    link = f"{s.base_url.rstrip('/')}/a/{a.link_token}"
+    subject = f"{s.team_name}: your training page"
+    steps = [
+        ("Save it", "Open the link on your phone and add it to your home screen (Share, then Add to Home Screen), so it's one tap away."),
+        ("Connect Garmin", "If you run with a Garmin watch, tap Connect Garmin on your page once. Your runs then arrive on their own."),
+        ("After each run", "Rate how hard it felt (0 to 10) and how your legs felt. It takes a few seconds and shapes your training."),
+        ("If something hurts", "Report pain on your page the same day. Your coaches and the athletic trainer see it."),
+        ("Meets", "Answer whether you'll be at each meet, so your coaches can enter the races."),
+        ("Reminders", "Tick Email me reminders on your page if you'd like a nudge when something's left to do."),
+    ]
+    text = "\n".join([f"Hi {a.first_name},", "", "Here is your own training page from your coaches:", "", link, ""]
+                     + [f"  • {t}: {d}" for t, d in steps]
+                     + ["", "This link is just for you: please don't share it, since it opens your page without a password.",
+                        "Questions? Reply to this email.", "", s.team_name])
+    items = "".join(f'<li style="margin:8px 0"><b>{escape(t)}.</b> {escape(d)}</li>' for t, d in steps)
+    html = f"""<div style="font-family:Arial,Helvetica,sans-serif;max-width:520px;color:#1B1B1F">
+<div style="background:#A6192E;color:#fff;padding:14px 18px;border-bottom:4px solid #C99A2E;font-weight:bold;font-size:18px">{escape(s.team_name)}</div>
+<div style="padding:16px 18px">
+<p>Hi {escape(a.first_name)},</p><p>Here is your own training page from your coaches:</p>
+<p><a href="{escape(link)}" style="display:inline-block;background:#A6192E;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none;font-weight:bold">Open my page</a></p>
+<p style="font-size:12px;color:#6B645C;word-break:break-all">{escape(link)}</p>
+<ul style="padding-left:20px">{items}</ul>
+<p style="font-size:12px;color:#6B645C">This link is just for you: please don’t share it, since it opens your page without a password. Questions? Reply to this email.</p>
+</div></div>"""
+    return subject, text, html
+
+
+def send_link(db: Session, a: Athlete, http: httpx.Client | None = None) -> None:
+    """Email an athlete their page link; raises EmailError (no email address, or the service refused it)."""
+    if not a.email:
+        raise EmailError(f"{a.name} has no email address yet.")
+    send_email(a.email, *compose_link(a), http=http, reply=reply_to(db))
+    from .models import utcnow
+    a.link_sent_at = utcnow()
+
+
 REPLY_TO_KEY = "email_reply_to"
 
 

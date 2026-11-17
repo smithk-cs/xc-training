@@ -54,7 +54,14 @@
   <p class="small muted">Their runs, results and races are kept, but they’re left out of team numbers and the AI, and their personal links don’t work. Put one back if they return: their runs and results are still there and their personal link works again.</p>
 </details>
 {% endif %}
-{% if user.role != 'trainer' %}<p><a href="/reminders">Reminder emails</a> · <a class="button" href="/athletes/links.csv">Download every athlete’s link (CSV for a mail merge)</a></p>{% endif %}
+{% if user.role != 'trainer' %}<p><a href="/reminders">Reminder emails</a> · <a class="button" href="/athletes/links.csv">Download every athlete’s link (CSV for a mail merge)</a></p>
+<form method="post" action="/athletes/email-links" class="form-row" id="links" style="align-items:center">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  {% set with_email = athletes|selectattr('email')|list %}{% set unsent = with_email|rejectattr('link_sent_at')|list %}
+  <button type="submit" name="which" value="unsent"{% if not settings.email_configured or not unsent %} disabled{% endif %} onclick="return confirm('Email page links to {{ unsent|length }} athlete{{ 's' if unsent|length != 1 }}?')">Email links to those not sent yet ({{ unsent|length }})</button>
+  <button type="submit" name="which" value="all" class="secondary"{% if not settings.email_configured or not with_email %} disabled{% endif %} onclick="return confirm('Email page links to all {{ with_email|length }} athletes with an email, again?')">Email everyone’s link again ({{ with_email|length }})</button>
+  <span class="small muted">{% if settings.email_configured %}Each gets their own page link and how to use it. {{ athletes|length - with_email|length }} without an email.{% else %}Email isn’t set up yet (see Reminder emails).{% endif %}</span>
+</form>{% endif %}
 {% if user.role != 'trainer' %}
 <details style="margin:12px 0"><summary class="small" style="cursor:pointer; font-weight:600; color:var(--brand-red)">Add athlete photos</summary>
   <form method="post" action="/athletes/photos" enctype="multipart/form-data" class="form-row" style="margin-top:8px">

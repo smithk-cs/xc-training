@@ -133,3 +133,49 @@ def test_reply_to(app):
     mock2 = Resend()
     RM.send_email("x@example.org", "s", "t", "<p>h</p>", http=httpx.Client(transport=httpx.MockTransport(mock2)))
     assert "reply_to" not in mock2.sent[0]                                           # none given: none sent
+
+
+def test_email_athletes_their_links(app, monkeypatch):
+    sent = []
+    monkeypatch.setattr(RM, "send_email", lambda to, subj, text, html, http=None, reply="": sent.append((to, subj, text, html, reply)) or "id")
+    db = SessionLocal()
+    sam = db.query(Athlete).filter_by(first_name="Sam").one()
+    subject, text, html = RM.compose_link(sam)
+    assert subject.endswith("your training page") and "https://xc.test/a/t0" in text and "Connect Garmin" in text
+    assert "Add to Home Screen" in html and "please don’t share it" in html and "Hi Sam," in html
+    db.close()
+    c, _ = login(app)
+    page = c.get("/athletes/1").text
+    csrf = re.search(r'name="csrf" value="([^"]+)"', page).group(1)
+    assert "Email this link to sam@example.org" in page and "Not emailed yet." in page
+    c.post("/reminders", data={"csrf": csrf, "action": "reply", "reply_to": "coach@school.example.org"})
+    c.post("/athletes/1/email-link", data={"csrf": csrf})
+    assert sent[-1][0] == "sam@example.org" and sent[-1][4] == "coach@school.example.org"
+    assert "Emailed Sam Lowry their page link" in c.get("/athletes/1").text and "Last emailed" in c.get("/athletes/1").text
+    assert "Add an email address above" in c.get("/athletes/2").text                    # Theo has none
+    roster = c.get("/athletes").text
+    assert "Email links to those not sent yet (1)" in roster and "Email everyone’s link again (2)" in roster
+    c.post("/athletes/email-links", data={"csrf": csrf, "which": "unsent"})             # Pat only: Sam already has his
+    assert [s[0] for s in sent] == ["sam@example.org", "pat@example.org"]
+    c.post("/athletes/email-links", data={"csrf": csrf, "which": "unsent"})
+    assert "already been sent their link" in c.get("/athletes").text and len(sent) == 2
+    c.post("/athletes/email-links", data={"csrf": csrf, "which": "all"})
+    assert len(sent) == 4
+    c.post("/athletes/1/new-link", data={"csrf": csrf})                                  # a new link: not sent yet
+    db = SessionLocal()
+    sam = db.get(Athlete, 1)
+    assert sam.link_sent_at is None and sam.link_token != "t0"
+    db.close()
+    assert "Email links to those not sent yet (1)" in c.get("/athletes").text
+
+
+def test_link_email_needs_email_set_up(app, monkeypatch):
+    monkeypatch.setenv("RESEND_API_KEY", "")
+    config.reload_settings()
+    from xcapp.web import create_app
+    c, _ = login(create_app())                                                           # an app started without the key
+    page = c.get("/athletes/1").text
+    csrf = re.search(r'name="csrf" value="([^"]+)"', page).group(1)
+    assert 'title="Email isn’t set up yet"' in page
+    c.post("/athletes/1/email-link", data={"csrf": csrf})
+    assert "Email isn’t set up yet" in c.get("/athletes/1").text

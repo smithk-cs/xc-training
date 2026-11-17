@@ -146,7 +146,11 @@
     <input type="hidden" name="csrf" value="{{ csrf }}">
     <div class="form-row"><label>Add runs from .fit files (several at once, a .zip such as Garmin&rsquo;s data export, or the activity list .csv from Garmin Connect)<input type="file" name="file" accept=".fit,.zip,.csv" multiple required></label><button type="submit">Upload</button></div>
   </form>
-  <p class="small">Personal link: <code class="copy">{{ settings.base_url.rstrip('/') }}/a/{{ a.link_token }}</code></p>
+  <p class="small" id="link">Personal link: <code class="copy">{{ settings.base_url.rstrip('/') }}/a/{{ a.link_token }}</code></p>
+  <form method="post" action="/athletes/{{ a.id }}/email-link" class="inline" style="margin:0 0 6px"><input type="hidden" name="csrf" value="{{ csrf }}">
+    {% if a.email %}<button class="secondary" type="submit"{% if not settings.email_configured %} disabled title="Email isn’t set up yet"{% endif %}>Email this link to {{ a.email }}</button>
+    <span class="small muted">{% if a.link_sent_at %}Last emailed {{ (a.link_sent_at|local).strftime('%b %-d, %Y') }}.{% else %}Not emailed yet.{% endif %} It comes with how to use the page.</span>
+    {% else %}<span class="small muted">Add an email address above to email them this link.</span>{% endif %}</form>
   <form method="post" action="/athletes/{{ a.id }}/new-link" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="secondary" type="submit">Make a new link (the old one stops working)</button></form>
   <h3 style="margin-top:1.5em">Roster status</h3>
   {% if user.role != 'trainer' %}<form method="post" action="/athletes/{{ a.id }}/captain" class="form-row">

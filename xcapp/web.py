@@ -632,8 +632,48 @@ def create_app() -> FastAPI:
         await form_checked(request)
         a = get_athlete(db, athlete_id)
         a.link_token = new_link_token()
-        flash(request, f"Made a new link for {a.name}. The old link no longer works.")
+        a.link_sent_at = None       # the new link hasn't been sent yet
+        flash(request, f"Made a new link for {a.name}. The old link no longer works." + (" Email them the new one below." if a.email else ""))
         return back(f"/athletes/{a.id}")
+
+    @app.post("/athletes/{athlete_id}/email-link")
+    async def athlete_email_link(request: Request, athlete_id: int, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
+        """Email one athlete their page link, with how to use it."""
+        await form_checked(request)
+        a = get_athlete(db, athlete_id)
+        try:
+            RM.send_link(db, a)
+            log(db, "email", f"{user.username} emailed {a.name} their page link.")
+            flash(request, f"Emailed {a.name} their page link at {a.email}.")
+        except RM.EmailError as exc:
+            flash(request, str(exc), "error")
+        return back(f"/athletes/{a.id}#link")
+
+    @app.post("/athletes/email-links")
+    async def athletes_email_links(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
+        """Email page links to every athlete on the team with an email: those not sent yet, or everyone again."""
+        f = await form_checked(request)
+        everyone = f.get("which") == "all"
+        people = [a for a in db.scalars(select(Athlete).where(A.on_team()).order_by(Athlete.last_name, Athlete.first_name)).all()
+                  if a.email and (everyone or a.link_sent_at is None)]
+        sent, failed, last_err = 0, 0, ""
+        for a in people:
+            try:
+                RM.send_link(db, a)
+                sent += 1
+            except RM.EmailError as exc:
+                failed, last_err = failed + 1, str(exc)
+                log(db, "email", f"Page link to {a.name} not sent: {exc}", "error")
+                if "isn’t set up" in last_err:
+                    break
+        if sent:
+            log(db, "email", f"{user.username} emailed page links to {sent} athlete{'s' if sent != 1 else ''}.")
+        if not people:
+            flash(request, "Everyone with an email has already been sent their link." if not everyone else "No athlete has an email address yet.")
+        else:
+            flash(request, f"Emailed {sent} page link{'s' if sent != 1 else ''}." + (f" {failed} not sent: {last_err}" if failed else ""),
+                  "error" if failed and not sent else "ok")
+        return back("/athletes#links")
 
     @app.post("/athletes/{athlete_id}/upload")
     async def athlete_upload_staff(request: Request, athlete_id: int, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
