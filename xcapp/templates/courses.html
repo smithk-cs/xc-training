@@ -137,7 +137,7 @@
     </form>
     <p class="small muted" style="margin:4px 0 0">Making a flyover again for a distance replaces its route and keeps your notes (a built-in course brings its own).</p>
   </section>
-  {% if user.role in ('admin', 'coach') %}
+  {% if user.role in ('admin', 'coach') and tracing_on %}{# archived while flyover.TRACING_ON is False #}
   <section class="course-routes" id="trace" aria-labelledby="trace-h">
     <h3 id="trace-h">Satellite view and route tracing</h3>
     <p class="small muted" style="margin:0 0 8px">A USGS satellite photo (public domain) of the area around the course, to look it over and to trace the route on: tap along the course in order, and save it as a distance’s flyover. It gets USGS heights and the satellite photo, like a GPS file. No GPX needed.</p>

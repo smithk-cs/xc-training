@@ -386,6 +386,7 @@ def test_trace_a_route_into_a_flyover(monkeypatch):
     from xcapp.db import SessionLocal
     from xcapp.models import Course, CourseArea, CourseFlyover, StaffUser
     from xcapp.security import hash_password
+    monkeypatch.setattr(FL, "TRACING_ON", True)                                    # archived: switched on for this test
     monkeypatch.setattr(FL, "fetch_usgs_elevations", lambda coords, post=None: REAL_USGS(coords, post=usgs_post()))
     db = SessionLocal()
     db.add(StaffUser(username="coach1", role="coach", password_hash=hash_password("correct-horse-1")))
@@ -460,6 +461,7 @@ def test_place_a_built_in_course(monkeypatch):
     geo = FL.build(loop_track(), lookup=lambda c: None, usgs=None)["geo"]
     u, v = FL.to_draw(geo, *FL.to_lat_lon(geo, 123.4, 321.0))
     assert abs(u - 123.4) < 1e-6 and abs(v - 321.0) < 1e-6                      # to_draw undoes to_lat_lon
+    monkeypatch.setattr(FL, "TRACING_ON", True)                                    # archived: switched on for this test
     monkeypatch.setattr(FL, "fetch_usgs_elevations", lambda coords, post=None: REAL_USGS(coords, post=usgs_post()))
     db = SessionLocal()
     db.add(StaffUser(username="coach1", role="coach", password_hash=hash_password("correct-horse-1")))
@@ -493,3 +495,31 @@ def test_place_a_built_in_course(monkeypatch):
     far = [[p[0] + 1, p[1]] for p in route]
     assert "isn’t on the photo" in c.post(f"/courses/{cid}/place", json={"csrf": csrf, "preset": "willow", "distance": "5K", "points": far}).json()["error"]
     assert "built-in" in c.post(f"/courses/{cid}/place", json={"csrf": csrf, "preset": "nope", "distance": "5K", "points": route}).json()["error"]
+
+
+def test_route_tracing_is_archived():
+    from fastapi.testclient import TestClient
+
+    from xcapp.db import SessionLocal
+    from xcapp.models import Course, StaffUser
+    from xcapp.security import hash_password
+    assert FL.TRACING_ON is False
+    db = SessionLocal()
+    db.add(StaffUser(username="coach1", role="coach", password_hash=hash_password("correct-horse-1")))
+    course = Course(name="Test Park", distances="5K", latitude=38.65, longitude=-121.15)
+    db.add(course)
+    db.commit()
+    cid = course.id
+    db.close()
+    from xcapp.web import create_app
+    c = TestClient(create_app(), follow_redirects=False)
+    csrf = re.search(r'name="csrf" value="([^"]+)"', c.get("/login").text).group(1)
+    c.post("/login", data={"csrf": csrf, "username": "coach1", "password": "correct-horse-1"})
+    page = c.get(f"/courses?edit={cid}").text
+    assert 'id="flyovers"' in page                                                 # flyovers stay
+    assert "Satellite view and route tracing" not in page and 'id="trace"' not in page and "course-trace.js" not in page
+    csrf = re.search(r'name="csrf" value="([^"]+)"', page).group(1)
+    assert c.post(f"/courses/{cid}/area", data={"csrf": csrf, "size": "1500", "lat": "", "lon": ""}).status_code == 404
+    assert c.get(f"/courses/{cid}/area.jpg").status_code == 404
+    assert c.post(f"/courses/{cid}/trace", json={"csrf": csrf, "distance": "5K", "points": [[38.65, -121.15], [38.66, -121.15]]}).status_code == 404
+    assert c.post(f"/courses/{cid}/place", json={"csrf": csrf}).status_code == 404

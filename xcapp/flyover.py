@@ -442,6 +442,10 @@ def satellite_image(geo: dict | None, fetch=fetch_tile) -> tuple[bytes, str] | N
 
 
 # ---------- a course's area photo, for tracing the route ----------
+# Archived: the Courses page's "Satellite view and route tracing" section (the area photo, tracing a route on it and
+# placing a built-in course on it) is hidden, and its pages answer 404. The code and any saved area photos stay; set
+# this to True to bring the section back.
+TRACING_ON = False
 AREA_SIZES = {800: "0.8 km (½ mile)", 1500: "1.5 km (1 mile)", 2500: "2.5 km (1½ miles)"}
 
 
