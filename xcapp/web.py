@@ -501,6 +501,23 @@ def create_app() -> FastAPI:
             flash(request, str(exc), "error")
         return back("/athletes")
 
+    @app.post("/athletes/emails", response_class=HTMLResponse)
+    async def athletes_emails(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
+        """School emails pasted in bulk, matched to athletes by last name, first initial and graduation year."""
+        from . import student_emails as SEM
+        f = await form_checked(request)
+        emails = SEM.parse(str(f.get("emails", "")))
+        if not emails:
+            flash(request, "Paste at least one email address.", "error")
+            return back("/athletes#student-emails")
+        rows = SEM.match(db, emails, A.team_today())
+        result = SEM.apply(rows, bool(f.get("replace")))
+        db.flush()
+        if result["saved"]:
+            log(db, "roster", f"{user.username} added {len(result['saved'])} student email{'s' if len(result['saved']) != 1 else ''}.")
+        return render(request, "student_emails.html", user, rows=rows, result=result,
+                      missed=[r for r in rows if r["status"] != "match"])
+
     @app.post("/athletes/import")
     async def athletes_import(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
         f = await form_checked(request)

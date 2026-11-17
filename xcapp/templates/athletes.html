@@ -91,6 +91,15 @@
     <div class="form-row"><input type="file" name="file" accept=".csv,text/csv" required><button type="submit">Import</button></div>
   </form>
 </details>
+<details class="card fold-card" id="student-emails"><summary><h2>Add student emails</h2></summary>
+  <p class="small muted">Paste school email addresses, any layout (one per line is fine). Each is matched to its athlete by the school’s pattern: last name, first initial and the last two digits of the graduation year, so <code>albertsl27@…</code> is Alberts, L…, class of 2027. Anything that fits no athlete, or more than one, is listed for you instead of guessed.</p>
+  <form method="post" action="/athletes/emails">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label>Email addresses<textarea name="emails" rows="8" required placeholder="albertsl27@student.jhs.net&#10;bentonw30@student.jhs.net"></textarea></label>
+    <div class="form-row" style="align-items:center"><label class="check"><input type="checkbox" name="replace" value="1"> Replace an email already on file</label>
+      <button type="submit">Add emails</button></div>
+  </form>
+</details>
 </div>
 {% endif %}
 <script>

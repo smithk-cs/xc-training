@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Student emails · {{ team_name }}{% endblock %}
+{% block content %}
+<p class="small"><a href="/athletes">← Athletes</a></p>
+<h1>Student emails</h1>
+<p>{{ rows|length }} address{{ 'es' if rows|length != 1 }}: <b>{{ result.saved|length }} added</b>{% if result.same %}, {{ result.same|length }} already on file{% endif %}{% if result.kept %}, {{ result.kept|length }} not replaced (a different email is on file){% endif %}{% if missed %}, <b>{{ missed|length }} not matched</b>{% endif %}.</p>
+{% if missed %}
+<section class="card">
+  <h2>Not matched</h2>
+  <p class="small muted">Open the athlete and enter the email on their page, or fix their name or class year so it matches and paste again.</p>
+  <table class="list compact"><thead><tr><th>Email</th><th>Why</th></tr></thead><tbody>
+  {% for r in missed %}<tr><td class="nowrap">{{ r.email }}</td><td class="small">{% if r.status == 'odd' %}Doesn’t follow the last name + initial + year pattern{% elif r.status == 'many' %}More than one athlete fits: {% for a in r.candidates %}<a href="/athletes/{{ a.id }}">{{ a.name }}</a>{{ ', ' if not loop.last }}{% endfor %}{% else %}No athlete with that last name, first initial and class year{% endif %}</td></tr>{% endfor %}
+  </tbody></table>
+</section>
+{% endif %}
+{% if result.kept %}
+<section class="card">
+  <h2>Not replaced</h2>
+  <p class="small muted">These athletes already have a different email. Paste again with “Replace an email already on file” ticked to use the school address.</p>
+  <table class="list compact"><thead><tr><th>Athlete</th><th>On file</th><th>Pasted</th></tr></thead><tbody>
+  {% for r in result.kept %}<tr><td><a href="/athletes/{{ r.athlete.id }}">{{ r.athlete.name }}</a></td><td class="small">{{ r.athlete.email }}</td><td class="small">{{ r.email }}</td></tr>{% endfor %}
+  </tbody></table>
+</section>
+{% endif %}
+{% if result.saved %}
+<section class="card">
+  <h2>Added</h2>
+  <table class="list compact"><thead><tr><th>Athlete</th><th>Class</th><th>Email</th></tr></thead><tbody>
+  {% for r in result.saved %}<tr><td><a href="/athletes/{{ r.athlete.id }}">{{ r.athlete.name }}</a></td><td>{{ r.athlete.grad_year or '' }}</td><td class="small">{{ r.email }}</td></tr>{% endfor %}
+  </tbody></table>
+</section>
+{% endif %}
+{% endblock %}
