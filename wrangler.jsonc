@@ -39,7 +39,7 @@
     "NIGHTLY_HOUR": "4",
     // Daily reminder emails to athletes who opted in (team time, 24-hour clock). EMAIL_FROM must use a domain verified with Resend.
     "REMINDER_HOUR": "17",
-    "EMAIL_FROM": "",
+    "EMAIL_FROM": "Jesuit Cross Country <team@mail.jesuitxc.org>",
     // Days of past runs requested from Garmin when an athlete connects (also stated in the privacy policy).
     "GARMIN_BACKFILL_DAYS": "90",
     "ANTHROPIC_MODEL": "claude-sonnet-5-5",

@@ -84,14 +84,23 @@ def compose(a: Athlete, lines: list[str]) -> tuple[str, str, str]:
     return subject, text, html
 
 
-def send_email(to: str, subject: str, text: str, html: str, http: httpx.Client | None = None) -> str:
+REPLY_TO_KEY = "email_reply_to"
+
+
+def reply_to(db: Session) -> str:
+    """Where replies to the app's emails go (set on the Reminder emails page): the sender's domain has no inbox."""
+    return A.get_setting(db, REPLY_TO_KEY, "")
+
+
+def send_email(to: str, subject: str, text: str, html: str, http: httpx.Client | None = None, reply: str = "") -> str:
     s = settings()
     if not s.email_configured:
         raise EmailError("Email isn’t set up yet: add RESEND_API_KEY and EMAIL_FROM.")
     client = http or httpx.Client(timeout=20)
     try:
         r = client.post(RESEND_URL, headers={"Authorization": f"Bearer {s.resend_api_key}"},
-                        json={"from": s.email_from, "to": [to], "subject": subject, "text": text, "html": html})
+                        json={"from": s.email_from, "to": [to], "subject": subject, "text": text, "html": html,
+                              **({"reply_to": [reply]} if reply else {})})
     finally:
         if http is None:
             client.close()
@@ -118,7 +127,7 @@ def run(db: Session, today: dt.date, http: httpx.Client | None = None) -> dict:
     out = {"sent": 0, "errors": 0}
     for a, lines in recipients(db, today):
         try:
-            send_email(a.email, *compose(a, lines), http=http)
+            send_email(a.email, *compose(a, lines), http=http, reply=reply_to(db))
             out["sent"] += 1
         except (EmailError, httpx.HTTPError) as exc:
             out["errors"] += 1

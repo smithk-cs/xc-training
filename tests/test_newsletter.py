@@ -120,7 +120,7 @@ def test_snapshot_does_not_change_when_a_result_is_corrected(team):
 def test_sending_needs_approval_and_a_coach_and_is_logged(team, monkeypatch):
     app, (ok, _) = team
     sent = []
-    monkeypatch.setattr(NW, "send_email", lambda to, subj, text, html: sent.append((to, subj, html)) or "id")
+    monkeypatch.setattr(NW, "send_email", lambda to, subj, text, html, reply="": sent.append((to, subj, html)) or "id")
     c, csrf = login(app)
     iid = new_issue(c, csrf)
     c.post(f"/newsletter/{iid}/save", data={"csrf": csrf, "enabled_spotlight": "1", "spotlight_athlete": str(ok),

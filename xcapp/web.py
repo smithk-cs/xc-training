@@ -2948,7 +2948,7 @@ def create_app() -> FastAPI:
         return render(request, "reminders.html", user, enabled=RM.enabled(db), items=RM.ITEMS, chosen=RM.chosen_items(db),
                       preview=RM.recipients(db, today), opted=sum(1 for a in people if a.email_reminders and a.email),
                       with_email=sum(1 for a in people if a.email), total=len(people),
-                      last_sent=A.get_setting(db, "reminders_last_sent", ""))
+                      last_sent=A.get_setting(db, "reminders_last_sent", ""), reply_to=RM.reply_to(db))
 
     @app.post("/reminders")
     async def reminders_save(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
@@ -2964,10 +2964,18 @@ def create_app() -> FastAPI:
                 sample = a or Athlete(first_name="Sam", last_name="Sample", link_token="sample")
                 try:
                     subject, text, html = RM.compose(sample, lines)
-                    RM.send_email(user.email, "[Test] " + subject, text, html)
+                    RM.send_email(user.email, "[Test] " + subject, text, html, reply=RM.reply_to(db))
                     flash(request, f"Sent a test reminder to {user.email}" + (f", as {sample.first_name} would get it." if a else "."))
                 except RM.EmailError as exc:
                     flash(request, str(exc), "error")
+            return back("/reminders")
+        if action == "reply":
+            addr = str(f.get("reply_to", "")).strip()
+            if addr and not re.fullmatch(r"[^@\s]+@[^@\s]+\.[A-Za-z]{2,}", addr):
+                flash(request, "That doesn’t look like an email address.", "error")
+            else:
+                A.set_setting(db, RM.REPLY_TO_KEY, addr[:254])
+                flash(request, f"Replies to the app’s emails now go to {addr}." if addr else "Reply address cleared.")
             return back("/reminders")
         if action == "send":
             if not s.email_configured:

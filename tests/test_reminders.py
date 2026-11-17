@@ -110,3 +110,26 @@ def test_errors_and_not_set_up(app, monkeypatch):
     from xcapp.web import create_app
     c2, _ = login(create_app())                                                               # settings are read when the app starts
     assert "Email isn’t set up yet." in c2.get("/reminders").text and "Resend, Inc." not in c2.get("/privacy").text
+
+
+def test_reply_to(app):
+    c, csrf = login(app)
+    page = c.get("/reminders").text
+    assert "Replies go to" in page and "No reply address yet" in page
+    csrf = re.search(r'name="csrf" value="([^"]+)"', page).group(1)
+    c.post("/reminders", data={"csrf": csrf, "action": "reply", "reply_to": "not an address"})
+    assert "doesn’t look like an email address" in c.get("/reminders").text
+    c.post("/reminders", data={"csrf": csrf, "action": "reply", "reply_to": "coach@school.example.org"})
+    page = c.get("/reminders").text
+    assert 'value="coach@school.example.org"' in page and "Replies to the app’s emails now go to coach@school.example.org" in page
+    db = SessionLocal()
+    for a in db.query(Athlete).filter(Athlete.email != "").all():
+        a.email_reminders = True
+    mock = Resend()
+    RM.run(db, A.team_today(), http=httpx.Client(transport=httpx.MockTransport(mock)))
+    db.commit()
+    assert mock.sent and all(m["reply_to"] == ["coach@school.example.org"] for m in mock.sent)
+    db.close()
+    mock2 = Resend()
+    RM.send_email("x@example.org", "s", "t", "<p>h</p>", http=httpx.Client(transport=httpx.MockTransport(mock2)))
+    assert "reply_to" not in mock2.sent[0]                                           # none given: none sent

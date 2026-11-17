@@ -15,7 +15,7 @@ from . import photos as P
 from .ingest import log
 from .models import (Athlete, CaptainPost, NewsletterDeadline, NewsletterIssue, NewsletterPhoto, NewsletterSend, RecoveryTip, Spotlight,
                      StaffUser, utcnow)
-from .reminders import EmailError, send_email
+from .reminders import EmailError, reply_to, send_email
 
 MAX_PHOTOS = 8
 CAPTAIN_POSTS_PER_WEEK = 3
@@ -222,7 +222,7 @@ def register(app, h: SimpleNamespace) -> None:
         sent, failed, last_err = 0, 0, ""
         for u in to:
             try:
-                send_email(u.email, subj, text, html)
+                send_email(u.email, subj, text, html, reply=reply_to(db))
                 sent += 1
             except EmailError as exc:
                 failed, last_err = failed + 1, str(exc)

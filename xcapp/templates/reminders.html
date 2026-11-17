@@ -25,6 +25,16 @@
     </div>
   </form>
 </div>
+<div class="card" id="reply-to">
+  <h2 style="margin-top:0">Replies go to</h2>
+  <p class="small muted" style="margin-top:0">The app sends from {{ settings.email_from or 'its own address' }}, which has no inbox. When an athlete or coach replies to a reminder, test or newsletter, the reply goes to this address instead, such as your school email.</p>
+  <form method="post" action="/reminders" class="form-row" style="align-items:flex-end">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label style="flex:1">Reply-to email<input type="email" name="reply_to" value="{{ reply_to }}" maxlength="254" placeholder="you@school.org" autocomplete="email"></label>
+    <button type="submit" name="action" value="reply" class="secondary">Save</button>
+  </form>
+  {% if not reply_to %}<p class="small" style="margin:6px 0 0">No reply address yet: replies would bounce.</p>{% endif %}
+</div>
 <div class="card">
   <h2>Who would get one today</h2>
   {% if preview %}

@@ -128,14 +128,18 @@ Garmin the link. Edit `wrangler.jsonc` on GitHub (open the file, click the penci
   explain or meets to answer, each day at `REMINDER_HOUR` (17 = 5 p.m. team time). It sends through Resend (free for
   3,000 emails a month, 100 a day):
   1. Sign up at resend.com.
-  2. **Domains** → **Add Domain**. Resend sends only from a domain you control. Either ask school IT to add the DNS
-     records Resend shows for a subdomain such as `xc.jesuithighschool.org`, or buy a domain in Cloudflare (about $10 a
-     year) and let Resend add the records to Cloudflare for you. Wait until the domain shows **Verified**.
-  3. **API Keys** → **Create API Key** (sending access) → add it as the GitHub secret `RESEND_API_KEY`.
-  4. In `wrangler.jsonc`, set `EMAIL_FROM`, for example `"Jesuit Cross Country <reminders@xc.jesuithighschool.org>"`, and
-     commit. The deploy that follows turns email on.
-  5. Add your own email on the **Staff** page, then on **Reminder emails** (linked from Athletes) use **Email me a test**,
-     choose what to remind about, and tick **Send daily reminders**.
+  2. **Domains** → **Add Domain** → `mail.jesuitxc.org`. Resend sends only from a domain you control, so it uses the
+     team's own domain (a subdomain keeps sending separate from the website). Copy the DNS records Resend shows (MX and
+     TXT) into the domain's DNS: at GoDaddy, **My Products** → jesuitxc.org → **DNS** → **Add New Record**, each one
+     exactly (type, name, value); once the domain moves to Cloudflare, they come across with it. Wait until the domain
+     shows **Verified**.
+  3. **API Keys** → **Create API Key** (sending access) → add it as the GitHub secret `RESEND_API_KEY` (never in a file).
+  4. `EMAIL_FROM` in `wrangler.jsonc` is already `"Jesuit Cross Country <team@mail.jesuitxc.org>"`; the deploy after the
+     secret is added turns email on (run the workflow again from the Actions tab, or push any change).
+  5. On **Reminder emails** (linked from Athletes), set **Replies go to** to an inbox you check (the sending address has
+     none). It's kept in the app's database, not in the code, so it isn't public.
+  6. Add your own email on the **Staff** page, then on **Reminder emails** use **Email me a test**, choose what to
+     remind about, and tick **Send daily reminders**.
   The privacy policy lists Resend once email is set up. Athletes need an email address on their athlete page to opt in.
 * **Race Day live switching** (coaches' phones as live cameras; a coach picks which one goes to YouTube, no laptop):
   1. Cloudflare dashboard → **Realtime** → **RealtimeKit** → **Create App**. Copy the **App ID**.
