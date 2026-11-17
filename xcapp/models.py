@@ -591,6 +591,20 @@ class CourseFlyover(Base):
     satellite: Mapped["FlyoverImage | None"] = relationship(cascade="all, delete-orphan", uselist=False)
 
 
+class PushSubscription(Base):
+    """A phone an athlete turned notifications on for (push.py): where its push service takes messages for it, and the
+    keys to encrypt them with. Deleted when the push service says it's gone."""
+    __tablename__ = "push_subscriptions"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    athlete_id: Mapped[int] = mapped_column(ForeignKey("athletes.id", ondelete="CASCADE"), index=True)
+    endpoint: Mapped[str] = mapped_column(Text)
+    p256dh: Mapped[str] = mapped_column(String(200))
+    auth: Mapped[str] = mapped_column(String(100))
+    device: Mapped[str] = mapped_column(String(120), default="")      # "iPhone", "Android", ..., to tell phones apart
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
+    last_ok_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)
+
+
 class CourseArea(Base):
     """The satellite photo of the area around a course (flyover.area_image), for tracing its route on: one per course."""
     __tablename__ = "course_areas"

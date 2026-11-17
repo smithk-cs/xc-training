@@ -1,7 +1,10 @@
 {% extends "base.html" %}
 {% block title %}{{ a.first_name }} · {{ team_name }}{% endblock %}
 {% block bodyclass %}athlete-page{% endblock %}
-{% block head %}<script src="/static/d3.v7.9.0.min.js"></script><script src="/static/athlete-charts.js?v={{ asset_v }}" defer></script>{% endblock %}
+{% block head %}<script src="/static/d3.v7.9.0.min.js"></script><script src="/static/athlete-charts.js?v={{ asset_v }}" defer></script>
+<link rel="manifest" href="/a/{{ token }}/manifest.webmanifest"><link rel="apple-touch-icon" href="/static/icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="XC"><meta name="theme-color" content="#A6192E">
+<script src="/static/athlete-push.js?v={{ asset_v }}" defer></script>{% endblock %}
 {% block flashes %}{% endblock %}
 {% block content %}
 {% from '_icons.html' import badges %}
@@ -363,6 +366,22 @@
   <details class="panel fold garmin-fold" id="privacy"{% if not a.ai_consent_at %} open{% endif %}>
     <summary><h2 id="pv-h">Your data and privacy</h2>{% if a.ai_consent_at %}<span class="pill good">AI analysis ✓ On</span>{% endif %}</summary>
     <details class="sub-fold"{% if a.ai_consent_at %} open{% endif %}>
+    <summary><h3 id="notifications" style="margin:0; font-size:17px">Phone notifications{% if push_phones %} <span class="small muted" style="font-weight:400">· on</span>{% endif %}</h3></summary>
+    <div id="push-panel" data-key="{{ push_key }}" data-token="{{ token }}" data-csrf="{{ csrf }}" data-phones="{{ push_phones }}">
+      <p class="small" style="margin:6px 0">Get a notification on your phone when your coaches send one, and when you have runs to rate, days to explain or meets to answer. Tapping it opens this page.</p>
+      <p class="small muted" data-push="ios" hidden>On an iPhone, add this page to your home screen first: tap Share, then <b>Add to Home Screen</b>, then open it from the new XC icon and come back here. (Needs iOS 16.4 or newer.)</p>
+      <p class="small muted" data-push="unsupported" hidden>This browser can’t show notifications. Try Safari on an iPhone (from the home screen) or Chrome on Android.</p>
+      <p class="small muted" data-push="blocked" hidden>Notifications are blocked for this page. Turn them on in your phone’s Settings for this app, then reload.</p>
+      <div class="form-row">
+        <button type="button" class="secondary" data-push="on" hidden>Turn on notifications</button>
+        <button type="button" class="secondary" data-push="test" hidden>Send me a test</button>
+        <button type="button" class="ghost-btn" data-push="off" hidden>Turn off on this phone</button>
+      </div>
+      <p class="small" data-push="msg" role="status"></p>
+      <p class="small muted">Notifications go through your phone’s own service (Apple’s or Google’s), which only passes them on; the message is encrypted so they can’t read it.</p>
+    </div>
+    </details>
+    <details class="sub-fold">
     <summary><h3 id="reminders" style="margin:0; font-size:17px">Reminder emails{% if a.email and a.email_reminders %} <span class="small muted" style="font-weight:400">· on</span>{% endif %}</h3></summary>
     {% if a.email %}
     <form method="post" action="/a/{{ token }}/reminders" class="form-row">

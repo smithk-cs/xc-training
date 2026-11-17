@@ -13,7 +13,7 @@ from . import analysis as A
 from . import registration as REG
 from .config import settings
 from .ingest import log
-from .models import Activity, Athlete, MeetEntry, RestingHeartRate
+from .models import Activity, Athlete, MeetEntry, PushSubscription, RestingHeartRate
 
 RESEND_URL = "https://api.resend.com/emails"
 ITEMS = {
@@ -95,6 +95,8 @@ def compose_link(a: Athlete) -> tuple[str, str, str]:
         ("After each run", "Rate how hard it felt (0 to 10) and how your legs felt. It takes a few seconds and shapes your training."),
         ("If something hurts", "Report pain on your page the same day. Your coaches and the athletic trainer see it."),
         ("Meets", "Answer whether you'll be at each meet, so your coaches can enter the races."),
+        ("Notifications", "Under Your data and privacy, tap Turn on notifications to hear from your coaches on your phone "
+                          "(on an iPhone, open the page from your home screen first)."),
         ("Reminders", "Tick Email me reminders on your page if you'd like a nudge when something's left to do."),
     ]
     text = "\n".join([f"Hi {a.first_name},", "", "Here is your own training page from your coaches:", "", link, ""]
@@ -163,14 +165,29 @@ def run(db: Session, today: dt.date, http: httpx.Client | None = None) -> dict:
     """Send today's reminders, once per day."""
     if A.get_setting(db, "reminders_last_sent", "") == today.isoformat():
         return {"skipped": "already sent today"}
-    out = {"sent": 0, "errors": 0}
-    for a, lines in recipients(db, today):
-        try:
-            send_email(a.email, *compose(a, lines), http=http, reply=reply_to(db))
-            out["sent"] += 1
-        except (EmailError, httpx.HTTPError) as exc:
-            out["errors"] += 1
-            log(db, "email", f"Reminder to {a.name} not sent: {exc}", "error")
+    out = {"sent": 0, "errors": 0, "pushed": 0}
+    if settings().email_configured:
+        for a, lines in recipients(db, today):
+            try:
+                send_email(a.email, *compose(a, lines), http=http, reply=reply_to(db))
+                out["sent"] += 1
+            except (EmailError, httpx.HTTPError) as exc:
+                out["errors"] += 1
+                log(db, "email", f"Reminder to {a.name} not sent: {exc}", "error")
+    # Phone notifications, to athletes who turned them on (push.py): the same things to finish, in a line
+    from . import push as PU
+    s = settings()
+    items = chosen_items(db)
+    with_phones = {x.athlete_id for x in db.scalars(select(PushSubscription)).all()}
+    for a in db.scalars(select(Athlete).where(Athlete.active.is_(True), Athlete.id.in_(with_phones))).all() if with_phones else []:
+        lines = todo(db, a, today, items)
+        if not lines:
+            continue
+        body = lines[0] if len(lines) == 1 else f"{lines[0]} (and {len(lines) - 1} more)"
+        r = PU.send(db, [a.id], f"{len(lines)} thing{'' if len(lines) == 1 else 's'} to finish", body,
+                    f"{s.base_url.rstrip('/')}/a/{a.link_token}", http=http)
+        out["pushed"] += r["sent"]
     A.set_setting(db, "reminders_last_sent", today.isoformat())
-    log(db, "email", f"Reminder emails: {out['sent']} sent" + (f", {out['errors']} failed" if out["errors"] else "") + ".")
+    log(db, "email", f"Reminders: {out['sent']} emails" + (f" ({out['errors']} failed)" if out["errors"] else "")
+        + f", {out['pushed']} phone notifications.")
     return out

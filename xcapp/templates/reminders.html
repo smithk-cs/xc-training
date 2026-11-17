@@ -25,6 +25,19 @@
     </div>
   </form>
 </div>
+<div class="card" id="notify">
+  <h2 style="margin-top:0">Send a notification</h2>
+  <p class="small muted" style="margin-top:0">Goes to the phones of athletes who turned on notifications on their own page ({{ phones.All }} so far: {{ phones.Boys }} boys, {{ phones.Girls }} girls). Tapping it opens their page. Daily reminders also go to these phones when reminders are on.</p>
+  <form method="post" action="/reminders/notify" class="stack" style="display:flex; flex-direction:column; gap:8px; max-width:60ch">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label>Title <span class="small muted">(optional)</span><input name="title" maxlength="80" placeholder="{{ team_name }}"></label>
+    <label>Message<textarea name="message" maxlength="240" rows="3" required placeholder="Practice moved to 3:30 at the track."></textarea></label>
+    <div class="form-row" style="align-items:flex-end">
+      <label>Send to<select name="team"><option value="All">Whole team ({{ phones.All }})</option><option value="Boys">Boys ({{ phones.Boys }})</option><option value="Girls">Girls ({{ phones.Girls }})</option></select></label>
+      <button type="submit"{% if not phones.All %} disabled{% endif %}>Send</button>
+    </div>
+  </form>
+</div>
 <div class="card" id="reply-to">
   <h2 style="margin-top:0">Replies go to</h2>
   <p class="small muted" style="margin-top:0">The app sends from {{ settings.email_from or 'its own address' }}, which has no inbox. When an athlete or coach replies to a reminder, test or newsletter, the reply goes to this address instead, such as your school email.</p>

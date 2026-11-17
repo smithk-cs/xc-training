@@ -40,6 +40,7 @@ from . import photos as P
 from . import registration as REG
 from . import reports as RP
 from . import reminders as RM
+from . import push as PU
 from . import garmin_csv as GCSV
 from . import weather as WX
 from . import team_calendar as TC
@@ -2130,7 +2131,8 @@ def create_app() -> FastAPI:
                       notes=[n for n in db.scalars(select(Announcement).where(Announcement.start_date <= today, Announcement.end_date >= today)
                                                    .order_by(Announcement.start_date.desc(), Announcement.id.desc())).all()
                              if n.for_athlete(a.gender, mine.get("group") or "")], paces_link=f"/a/{token}/paces" if show_group and mine.get("vdot") else None,
-                      areas=BODY_AREAS, token=token, today=today.isoformat())
+                      areas=BODY_AREAS, token=token, today=today.isoformat(), push_key=PU.public_key(db),
+                      push_phones=len(PU.subscriptions(db, [a.id])))
 
     @app.post("/a/{token}/connect")
     async def athlete_connect(request: Request, token: str, db: Session = Depends(get_db, scope="function")):
@@ -2535,6 +2537,9 @@ def create_app() -> FastAPI:
     form_web.register(app, SimpleNamespace(render=render, flash=flash, back=back, form_checked=form_checked, any_staff=any_staff,
                                            coach_or_admin=coach_or_admin, get_db=get_db, get_athlete=get_athlete,
                                            athlete_by_token=athlete_by_token, logo_bytes=logo_bytes, team_name=s.team_name))
+    from . import push_web
+    push_web.register(app, SimpleNamespace(flash=flash, back=back, form_checked=form_checked, coach_or_admin=coach_or_admin,
+                                           get_db=get_db, athlete_by_token=athlete_by_token))
     newsletter_web.register(app, SimpleNamespace(render=render, flash=flash, back=back, form_checked=form_checked, any_staff=any_staff,
                                                  coach_or_admin=coach_or_admin, get_db=get_db, logo_bytes=logo_bytes, settings=s,
                                                  templates=templates))
@@ -2983,12 +2988,14 @@ def create_app() -> FastAPI:
 
     @app.get("/reminders", response_class=HTMLResponse)
     def reminders_page(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
+        from .push_web import counts as phone_counts
         today = A.team_today()
         people = db.scalars(select(Athlete).where(Athlete.active.is_(True))).all()
         return render(request, "reminders.html", user, enabled=RM.enabled(db), items=RM.ITEMS, chosen=RM.chosen_items(db),
                       preview=RM.recipients(db, today), opted=sum(1 for a in people if a.email_reminders and a.email),
                       with_email=sum(1 for a in people if a.email), total=len(people),
-                      last_sent=A.get_setting(db, "reminders_last_sent", ""), reply_to=RM.reply_to(db))
+                      last_sent=A.get_setting(db, "reminders_last_sent", ""), reply_to=RM.reply_to(db),
+                      phones=phone_counts(db))
 
     @app.post("/reminders")
     async def reminders_save(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
@@ -3633,7 +3640,7 @@ def create_app() -> FastAPI:
         now_hour = dt.datetime.now(dt.timezone.utc).astimezone(s.tz).hour
         if not force and now_hour == s.reminder_hour:
             with session_scope() as db:
-                if not RM.enabled(db) or not s.email_configured:
+                if not RM.enabled(db):     # emails go only when email is set up; phone notifications either way
                     return {"reminders": "off"}
                 return {"reminders": RM.run(db, A.team_today())}
         if not force and not is_nightly_hour():

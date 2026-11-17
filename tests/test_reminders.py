@@ -74,7 +74,7 @@ def test_opt_in_and_daily_send(app, monkeypatch):
     assert any(x.startswith("Tell your coaches whether you’ll be at Clovis Invitational") for x in got["Pat"])
     mock = Resend()
     http = httpx.Client(transport=httpx.MockTransport(mock))
-    assert RM.run(db, A.team_today(), http=http) == {"sent": 2, "errors": 0}
+    assert RM.run(db, A.team_today(), http=http) == {"sent": 2, "errors": 0, "pushed": 0}
     assert RM.run(db, A.team_today(), http=http) == {"skipped": "already sent today"}
     db.commit()
     db.close()
@@ -98,7 +98,7 @@ def test_errors_and_not_set_up(app, monkeypatch):
         a.email_reminders = True
     db.commit()
     http = httpx.Client(transport=httpx.MockTransport(Resend(status=403)))
-    assert RM.run(db, A.team_today(), http=http) == {"sent": 0, "errors": 2}
+    assert RM.run(db, A.team_today(), http=http) == {"sent": 0, "errors": 2, "pushed": 0}
     db.commit()
     db.close()
     c, csrf = login(app)
