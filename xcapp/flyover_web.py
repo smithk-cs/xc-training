@@ -139,8 +139,13 @@ def register(app, h: SimpleNamespace) -> None:
 
     # ---------- the course's area photo, and tracing the route on it ----------
 
+    def tracing_on() -> None:
+        """The tracing section is archived (FL.TRACING_ON): its pages answer as if they weren't there."""
+        if not FL.TRACING_ON:
+            raise HTTPException(404, "Route tracing is archived.")
+
     @app.post("/courses/{cid}/area")
-    async def course_area(request: Request, cid: int, user=Depends(coach_or_admin, scope="function"),
+    async def course_area(request: Request, cid: int, _on=Depends(tracing_on), user=Depends(coach_or_admin, scope="function"),
                           db: Session = Depends(get_db, scope="function")):
         """Fetch (or fetch again) the USGS photo of the area around the course, or around a point the coach gives."""
         f = await form_checked(request)
@@ -166,14 +171,14 @@ def register(app, h: SimpleNamespace) -> None:
         return back(to)
 
     @app.get("/courses/{cid}/area.jpg")
-    def course_area_jpeg(cid: int, user=Depends(any_staff, scope="function"), db: Session = Depends(get_db, scope="function")):
+    def course_area_jpeg(cid: int, _on=Depends(tracing_on), user=Depends(any_staff, scope="function"), db: Session = Depends(get_db, scope="function")):
         a = db.scalar(select(CourseArea).where(CourseArea.course_id == cid))
         if a is None:
             raise HTTPException(404, "No area photo.")
         return Response(a.data, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=86400"})
 
     @app.post("/courses/{cid}/trace")
-    async def course_trace(request: Request, cid: int, user=Depends(coach_or_admin, scope="function"),
+    async def course_trace(request: Request, cid: int, _on=Depends(tracing_on), user=Depends(coach_or_admin, scope="function"),
                            db: Session = Depends(get_db, scope="function")):
         """A route traced on the area photo becomes the course's flyover for a distance (as a GPS file would)."""
         from fastapi.responses import JSONResponse
@@ -237,7 +242,7 @@ def register(app, h: SimpleNamespace) -> None:
         return JSONResponse({"ok": True, "next": f"/courses?edit={c.id}#flyovers"})
 
     @app.post("/courses/{cid}/place")
-    async def course_place(request: Request, cid: int, user=Depends(coach_or_admin, scope="function"),
+    async def course_place(request: Request, cid: int, _on=Depends(tracing_on), user=Depends(coach_or_admin, scope="function"),
                            db: Session = Depends(get_db, scope="function")):
         """A built-in course placed on the area photo (its start tapped, turned and sized to the paths) becomes the
         distance's flyover, with its checkpoints, labels, notes and sections."""
