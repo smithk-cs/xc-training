@@ -23,7 +23,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from . import analysis as A
-from .models import Activity, Athlete, MissedDay, PainReport, PlannedWorkout, RaceResult, TrainingGroup
+from .models import Activity, Athlete, MissedDay, PainReport, PlannedWorkout, RaceResult, TrainingGroup, WeekGoal
 
 RATES = {"Easy": 0.2, "Moderate": 0.4, "Threshold": 0.6, "Interval": 1.0, "Repetition": 1.5}   # points per minute
 ZONES = [n for n, _ in A.PACE_ZONES]           # slowest first
@@ -335,6 +335,55 @@ def settings_for(db: Session) -> tuple[int, int]:
     return days, mins
 
 
+def _keep_goals(db: Session, monday: dt.date, goals: dict[str, tuple[float, float]], replace: bool) -> None:
+    """Save the week's goals per group. Inside a savepoint: when another request saves the same week at the same moment,
+    its copy stands and this one is dropped (the unique monday + group)."""
+    from sqlalchemy.exc import IntegrityError
+    try:
+        with db.begin_nested():
+            have = {r.group: r for r in db.scalars(select(WeekGoal).where(WeekGoal.monday == monday)).all()}
+            for name, (boys, girls) in goals.items():
+                r = have.get(name)
+                if r is None:
+                    db.add(WeekGoal(monday=monday, group=name, boys=boys, girls=girls))
+                elif replace:
+                    r.boys, r.girls = boys, girls
+    except IntegrityError:
+        pass
+
+
+def remember_week_goals(db: Session, monday: dt.date, replace: bool = True) -> None:
+    """Keep each group's current weekly miles goals as the goals of the week starting monday (replace=False: only for
+    groups not kept yet)."""
+    _keep_goals(db, monday, {g.name: (g.weekly_miles or 0, g.weekly_miles_girls or 0)
+                             for g in db.scalars(select(TrainingGroup)).all()}, replace)
+
+
+def goals_for_week(db: Session, monday: dt.date, today: dt.date) -> dict[str, tuple[float, float]] | None:
+    """The groups' weekly miles goals (boys, girls) for a week, so a finished week is scored against the goals it had.
+    The current week uses the groups' goals as they are, and keeps a copy (also kept nightly, and by the season plan
+    before it sets a new week's goals). A finished week uses its copy; one with no copy yet (from before copies were
+    kept) gets one now, from the season plan's miles for that week if it has a plan, else the groups' goals, and keeps
+    it from then on. None: use the groups' goals as they are (a future week)."""
+    this_monday = A.week_monday(today)
+    if monday >= this_monday:
+        if monday == this_monday:
+            remember_week_goals(db, monday)
+        return None
+    kept = {r.group: (r.boys, r.girls) for r in db.scalars(select(WeekGoal).where(WeekGoal.monday == monday)).all()}
+    if kept:
+        return kept
+    from . import season_plan as SP
+    sw = SP.week_of(db, monday)
+    planned = {} if sw is None else {
+        name: (SP.planned_miles(p.get("Boys", 0), sw.miles_pct), SP.planned_miles(p.get("Girls", 0), sw.miles_pct))
+        for name, p in SP.peaks(db).items() if p.get("Boys") or p.get("Girls")}
+    out = {g.name: planned.get(g.name) or (g.weekly_miles or 0, g.weekly_miles_girls or 0)
+           for g in db.scalars(select(TrainingGroup)).all()}
+    _keep_goals(db, monday, out, replace=False)
+    return out or None
+
+
 def team_week(db: Session, monday: dt.date, gender: str | None = None, athletes: list[Athlete] | None = None) -> list[dict]:
     """Each athlete's week: target, points, miles, score, days run, and per day the runs, points, heart rate, effort,
     pain, missed-day reason and flags."""
@@ -366,14 +415,15 @@ def team_week(db: Session, monday: dt.date, gender: str | None = None, athletes:
     pain_by = by(pains, lambda r: (r.athlete_id, r.date))
     missed_by = by(missed, lambda r: (r.athlete_id, r.date))
     sh = shares_for(db, monday)
+    week_goals = goals_for_week(db, monday, today) or {}
     out = []
     for a in athletes:
         me = ab.get(a.id, {})
         v, group = me.get("vdot"), me.get("group") or ""
         g = groups.get(group)
         mine = lambda d: [w for w in plans if w.date == d and w.applies_to(a.group, group, gender=a.gender)]  # noqa: E731
-        rows = [_athlete_week(a, v, g, days, mine, acts_by, pain_by, missed_by, min_minutes, offset, target_days, race_days)
-                for offset in (0, -7)]
+        rows = [_athlete_week(a, v, g, days, mine, acts_by, pain_by, missed_by, min_minutes, offset, target_days, race_days,
+                              week_goals.get(group)) for offset in (0, -7)]
         week, last = rows
         week["score"] = week_score(week["points"], week["target"] or 0, week["run_days"], target_days, week["miles"],
                                    week["goal_miles"], sh)
@@ -392,9 +442,9 @@ def team_week(db: Session, monday: dt.date, gender: str | None = None, athletes:
 
 
 def _athlete_week(a, v, g, days, mine, acts_by, pain_by, missed_by, min_minutes, offset, target_days: int = DEFAULT_TARGET_DAYS,
-                  race_days: set | None = None) -> dict:
+                  race_days: set | None = None, week_goal: tuple[float, float] | None = None) -> dict:
     from .ingest import pick_workout
-    goal_miles = A.athlete_miles_goal(g, a.gender, a.experience)   # adjusted for experience
+    goal_miles = A.athlete_miles_goal(g, a.gender, a.experience, week_goal)   # the week's goal, adjusted for experience
     workout_miles = workout_pts = 0.0
     breakdown = []   # how the target is built, for "Show why": (day, workout, miles, points, other workouts not counted)
     cells, total, miles, run_days, flags = [], 0.0, 0.0, 0, []

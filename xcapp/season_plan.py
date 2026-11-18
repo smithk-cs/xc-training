@@ -120,6 +120,9 @@ def planned_miles(peak: float, pct: int) -> float:
 def apply_miles(db: Session, sw: SeasonWeek) -> list[str]:
     """Set each group's weekly miles goal to the plan's for that week. Returns 'Gold 42 mi' lines for the change."""
     ensure_peaks(db)
+    from .points import remember_week_goals
+    # Last week keeps the goals it ran with (if nothing kept them yet), before this week's replace them
+    remember_week_goals(db, A.week_monday(A.team_today()) - dt.timedelta(days=7), replace=False)
     pk, out = peaks(db), []
     for g in db.scalars(select(TrainingGroup).order_by(TrainingGroup.position)).all():
         p = pk.get(g.name) or {}

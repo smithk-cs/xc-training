@@ -394,3 +394,54 @@ def test_score_mix_form(session):
     assert 'name="base_miles" value="50"' in c.get("/week").text
     c.post("/week/score-mix", data=good)
     assert 'name="base_miles" value="55"' in c.get("/week").text
+
+
+def test_a_finished_week_keeps_the_miles_goal_it_had(session, monkeypatch):
+    """The season plan changes the groups' miles goals week by week; a finished week's score and medal don't move."""
+    from xcapp import analysis as A
+    from xcapp import medals as MD
+    from xcapp import points as PT
+    from xcapp import season_plan as SP
+    from xcapp.fitfile import ParsedActivity
+    from xcapp.ingest import ingest
+    from xcapp.models import Athlete, SeasonWeek, TrainingGroup, WeekGoal
+    today = dt.date(2026, 11, 18)
+    monkeypatch.setattr(A, "team_today", lambda: today)
+    g = session.query(TrainingGroup).filter_by(name="Gold").one()
+    g.weekly_miles = g.weekly_miles_girls = 28
+    a = Athlete(first_name="Sam", last_name="Lowry", gender="Boys", grade=11, group="Varsity", link_token="t0", ability_override="Gold")
+    session.add(a)
+    session.flush()
+    mon = dt.date(2026, 11, 2)
+    for i in range(6):
+        st = dt.datetime.combine(mon + dt.timedelta(days=i), dt.time(23, 0), tzinfo=dt.timezone.utc)
+        ingest(session, a, ParsedActivity(external_id=f"g{i}", start=st, duration_s=2400, distance_m=28 / 6 * 1609.344), "upload")
+    r = MD.ensure_weeks(session, [a], [mon], today)[(a.id, mon)]
+    assert (r.goal_miles, r.medal) == (28, "gold")
+    # The coach applies a bigger week from the plan; two weeks back is worked out again and keeps its 28-mile goal
+    session.add(SeasonWeek(monday=dt.date(2026, 11, 16), phase=1, miles_pct=100))
+    session.flush()
+    SP.save_peaks(session, {x.name: {"Boys": 40, "Girls": 40} for x in session.query(TrainingGroup).all()})
+    SP.apply_miles(session, session.query(SeasonWeek).filter_by(monday=dt.date(2026, 11, 16)).one())
+    MD.recalculate(session, mon)
+    r = MD.ensure_weeks(session, [a], [mon], today)[(a.id, mon)]
+    assert (r.score, r.goal_miles, r.medal) == (100.0, 28, "gold")
+    # Applying the plan kept last week's goals before replacing them; this week follows the groups' goals as they are
+    assert session.query(WeekGoal).filter_by(monday=dt.date(2026, 11, 9), group="Gold").one().boys == 28
+    assert PT.goals_for_week(session, dt.date(2026, 11, 16), today) is None
+    assert session.query(WeekGoal).filter_by(monday=dt.date(2026, 11, 16), group="Gold").one().boys == 40
+
+
+def test_an_old_week_with_a_plan_uses_the_plan_s_miles(session, monkeypatch):
+    from xcapp import analysis as A
+    from xcapp import points as PT
+    from xcapp import season_plan as SP
+    from xcapp.models import SeasonWeek, TrainingGroup
+    today = dt.date(2026, 11, 18)
+    monkeypatch.setattr(A, "team_today", lambda: today)
+    SP.save_peaks(session, {x.name: {"Boys": 40, "Girls": 30} for x in session.query(TrainingGroup).all()})
+    session.add(SeasonWeek(monday=dt.date(2026, 10, 26), phase=1, miles_pct=75))
+    session.flush()
+    goals = PT.goals_for_week(session, dt.date(2026, 10, 26), today)
+    assert goals["Gold"] == (30, 22.5)                           # 75% of the peaks, to the half mile
+    assert PT.goals_for_week(session, dt.date(2026, 10, 26), today) == goals    # kept from now on

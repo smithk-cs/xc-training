@@ -70,7 +70,10 @@ def test_payload_has_race_results_and_grades(session, team):
     assert [(r["meet"], r["division"]) for r in payload["races"]] == [("Clovis Invitational", "Frosh/Soph")] * 2
     assert sorted(r["team_athletes_in_it"] for r in payload["races"]) == [1, 2]
     adrian = next(a for a in payload["athletes"] if code_map[a["code"]]["name"] == "Adrian Iverson")
-    assert adrian["grade"] == 9 and adrian["race_results"] == [{"race_no": adrian["race_results"][0]["race_no"], "place": 5, "time_s": 1160.0, "adjusted_s": adrian["race_results"][0]["adjusted_s"], "team_points": 5}]
+    assert adrian["grade"] == 9 and adrian["race_results"] == [{"race_no": adrian["race_results"][0]["race_no"], "adjusted_s": adrian["race_results"][0]["adjusted_s"], "team_points": 5}]
+    # Not enough to look a code up in published results: no date, course, overall place or actual time
+    assert all(set(r) == {"race_no", "weeks_ago", "meet", "division", "distance", "team_athletes_in_it"} for r in payload["races"])
+    assert payload["races"][0]["weeks_ago"] == 2 and "2026-10-10" not in text
     assert any(s["season"].endswith("Cross Country") and s["start"] <= "2026-10-10" <= s["end"] for s in payload["season_dates"])
     assert "9 = freshman" in AI.SYSTEM_QUESTION and "haven't turned on AI analysis" in AI.SYSTEM_QUESTION
 

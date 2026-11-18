@@ -14,6 +14,7 @@ from .reps import analyze
 # Higher number wins when two copies of the same run arrive (e.g. a summary first, the file later).
 SOURCE_RANK = {"manual": -1, "garmin_csv": 0, "garmin_summary": 1, "garmin_details": 2, "upload": 3, "garmin_file": 3, "demo": 3}
 DUPLICATE_WINDOW_S = 90
+TYPED_IN_WINDOW = dt.timedelta(minutes=60)   # a typed-in start time is the athlete's memory, not the watch's clock
 
 
 def log(db: Session, kind: str, message: str, level: str = "info") -> None:
@@ -125,14 +126,41 @@ def ingest(db: Session, athlete: Athlete, parsed: ParsedActivity, source: str) -
     return act, outcome
 
 
+def _same_run(a_miles: float, b_miles: float) -> bool:
+    return abs(a_miles - b_miles) <= 0.15 * max(a_miles, b_miles)
+
+
+def _close_in_time(typed_start: dt.datetime, timed: bool, other_start: dt.datetime) -> bool:
+    """A typed-in start the athlete gave must be within TYPED_IN_WINDOW of the watch's; with no start given, any time
+    that day fits."""
+    return not timed or abs(typed_start - other_start) <= TYPED_IN_WINDOW
+
+
+def synced_twin(db: Session, athlete: Athlete, parsed: ParsedActivity) -> Activity | None:
+    """A run the watch already sent that a run being typed in looks like (same day, miles within 15%, and close in
+    time when the athlete gave a start time), so it isn't counted twice."""
+    from .manual_runs import start_given
+    start = _naive_utc(parsed.start)
+    for w in db.scalars(select(Activity).where(Activity.athlete_id == athlete.id, Activity.source != "manual",
+                                               Activity.local_date == local_date(parsed.start))).all():
+        if "run" in (w.sport or "running") and _same_run(w.distance_m, parsed.distance_m) \
+                and _close_in_time(start, start_given(parsed.external_id), w.start_utc):
+            return w
+    return None
+
+
 def replace_typed_in(db: Session, athlete: Athlete, act: Activity) -> Activity | None:
     """When the watch's record of a run arrives after the athlete typed it in by hand (manual_runs.py), the typed-in
-    one goes, so the miles aren't counted twice: same day, miles within 15%. What the athlete added to it (effort,
-    legs, note, run type, a pain report) moves to the watch's run. Returns the typed-in run that was replaced."""
+    one goes, so the miles aren't counted twice: same day, miles within 15%, and starting within an hour of the
+    typed-in start when the athlete gave one (so a second run that day isn't mistaken for it). What the athlete added
+    to it (effort, legs, note, run type, a pain report) moves to the watch's run, and the day's team workout is matched
+    again. Returns the typed-in run that was replaced."""
+    from .manual_runs import start_given
     from .models import PainReport
     typed = [m for m in db.scalars(select(Activity).where(
         Activity.athlete_id == athlete.id, Activity.source == "manual", Activity.local_date == act.local_date,
-        Activity.id != act.id)).all() if abs(m.distance_m - act.distance_m) <= 0.15 * max(m.distance_m, act.distance_m)]
+        Activity.id != act.id)).all()
+        if _same_run(m.distance_m, act.distance_m) and _close_in_time(m.start_utc, start_given(m.external_id), act.start_utc)]
     if not typed:
         return None
     m = min(typed, key=lambda x: abs(x.distance_m - act.distance_m))
@@ -146,6 +174,7 @@ def replace_typed_in(db: Session, athlete: Athlete, act: Activity) -> Activity |
         p.activity_id = act.id
     db.delete(m)
     db.flush()
+    rematch_day(db, act.local_date, athlete_id=athlete.id)
     return m
 
 
@@ -166,10 +195,14 @@ def _save_zone_seconds(db: Session, athlete: Athlete, act: Activity, parsed: Par
     act.zone_seconds, act.zone_vdot = json.dumps({z: round(s) for z, s in zones.items()}), v
 
 
-def rematch_day(db: Session, day: dt.date) -> int:
-    """Re-link already-synced activities after a coach adds or edits a planned workout for that day."""
+def rematch_day(db: Session, day: dt.date, athlete_id: int | None = None) -> int:
+    """Re-link already-synced activities after a coach adds or edits a planned workout for that day (or, with
+    athlete_id, after one of that athlete's runs that day is replaced or deleted)."""
     n = 0
-    acts = db.scalars(select(Activity).where(Activity.local_date == day)).all()
+    q = select(Activity).where(Activity.local_date == day)
+    if athlete_id is not None:
+        q = q.where(Activity.athlete_id == athlete_id)
+    acts = db.scalars(q).all()
     best: dict[int, Activity] = {}
     acts = [a for a in acts if not a.workout_locked]
     for act in acts:
