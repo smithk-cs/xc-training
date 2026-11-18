@@ -55,7 +55,7 @@
   <div class="stat"><b>{{ stats.athletes }}</b><span class="muted small">athletes on the roster</span></div>
   <div class="stat"><b>{{ stats.connected }}</b><span class="muted small">connected to Garmin</span></div>
   <div class="stat"><b>{{ stats.activities_7d }}</b><span class="muted small">runs synced in the last 7 days</span></div>
-  <div class="stat"><b>{{ snap.kpis.injured_now }}</b><span class="muted small">injured now</span></div>
+  {% if user.sees("injuries") %}<div class="stat"><b>{{ snap.kpis.injured_now }}</b><span class="muted small">injured now</span></div>{% endif %}
 </div>
 <div class="grid">
   <div class="card">

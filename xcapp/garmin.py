@@ -116,12 +116,16 @@ def _permissions_list(body) -> list[str]:
     return []
 
 
+def state_expired(st: OAuthState) -> bool:
+    return _now() - st.created_at > STATE_MAX_AGE
+
+
 def complete_authorization(db: Session, code: str, state: str, http: httpx.Client) -> Athlete:
     st = db.get(OAuthState, state) if state else None
     if st is None:
         raise GarminError("This Garmin link has expired. Please start again from your athlete page.")
     db.delete(st)
-    if _now() - st.created_at > STATE_MAX_AGE:
+    if state_expired(st):
         raise GarminError("This Garmin link has expired. Please start again from your athlete page.")
     athlete = db.get(Athlete, st.athlete_id)
     if athlete is None:

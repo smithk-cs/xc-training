@@ -29,6 +29,9 @@ SECTIONS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("sync", "Sync log", ("/sync", "/data-check")),
 )
 KEYS = {k for k, _, _ in SECTIONS}
+# The dashboard's data feeds (/api/datasets/<name>.csv, datasets.COLUMNS) share one address, so each names its section here.
+DATASETS = {"roster": "athletes", "benchmarks": "charts", "goals": "goals", "weekly_load": "dashboard",
+            "injuries": "injuries", "pain_reports": "injuries", "segments": "workouts", "ai_insights": "ai"}
 LABELS = {k: label for k, label, _ in SECTIONS}
 
 # Archived sections: out of everyone's menu (admins too) and their pages closed, with their data kept, until an admin
