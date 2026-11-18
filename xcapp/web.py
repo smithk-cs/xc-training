@@ -787,7 +787,7 @@ def create_app() -> FastAPI:
         if not files and not csv_runs and not csv_skipped:
             return "No .fit activity files were found in that upload.", "error"
         if len(files) == 1 and not csv_runs and not csv_skipped and not files[0][0].lower().endswith(".zip"):
-            return _upload_one(db, a, files[0][1])
+            return _upload_one(db, a, files[0][1], files[0][0])
         if len(files) > BIG_UPLOAD:
             # Reading hundreds of .fit files takes minutes and would hold up every other page; do it in the background.
             threading.Thread(target=_upload_in_background, args=(a.id, a.name, files), daemon=True).start()
@@ -853,10 +853,13 @@ def create_app() -> FastAPI:
         finally:
             db.close()
 
-    def _upload_one(db: Session, a: Athlete, raw: bytes) -> tuple[str, str]:
+    def _upload_one(db: Session, a: Athlete, raw: bytes, name: str = "") -> tuple[str, str]:
         try:
             parsed = parse_fit(raw)
         except FitError as exc:
+            if name and not name.lower().endswith(".fit") and str(exc) == "This is not a FIT file.":   # a photo or document picked by mistake
+                return (f"{name} isn’t a run file. Choose the run’s .fit file (or a .zip of them, "
+                        "or a Garmin Connect activity list .csv)."), "error"
             return str(exc), "error"
         if not parsed.is_running:
             return "That file is not a run, so it was not added.", "error"

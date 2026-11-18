@@ -58,7 +58,8 @@ def runs():
 
 def test_several_files_at_once(client):
     page = client.get("/a/tok-ava").text
-    assert 'accept=".fit,.zip,.csv" multiple' in page and "Export Your Data" in page
+    assert '<input type="file" name="file" multiple required' in page and "Export Your Data" in page   # no accept=: iPhones grey out .fit
+    assert "Save to Files" in page
     msgs = upload(client, [("a.fit", run(20)), ("b.fit", run(21)), ("c.fit", ride(22))])
     assert msgs == [("ok", "Added 2 runs (Oct 20 to Oct 21), 1 skipped because they weren&#39;t runs.")]
     assert runs() == [20, 21]
@@ -93,6 +94,8 @@ def test_bad_uploads_explain_themselves(client):
         ("error", "Added 0 runs, 2 skipped because they weren&#39;t runs.")]
     assert upload(client, [("ride.zip", zipped([("r.fit", ride(3))]))]) == [  # one file inside: the one-file message
         ("error", "That file is not a run, so it was not added.")]
+    assert upload(client, [("IMG_0042.HEIC", b"\x00\x00\x00\x18ftypheic")]) == [
+        ("error", "IMG_0042.HEIC isn’t a run file. Choose the run’s .fit file (or a .zip of them, or a Garmin Connect activity list .csv).")]
     csrf = re.search(r'name="csrf" value="([^"]+)"', client.get("/a/tok-ava").text).group(1)
     client.post("/a/tok-ava/upload", data={"csrf": csrf})
     assert "Choose a .fit or .zip file first." in client.get("/a/tok-ava").text
@@ -106,7 +109,7 @@ def test_coaches_can_upload_a_batch_for_an_athlete(client):
     aid = db.query(Athlete).one().id
     db.close()
     page = client.get(f"/athletes/{aid}").text
-    assert 'accept=".fit,.zip,.csv" multiple' in page
+    assert '<input type="file" name="file" multiple required>' in page
     msgs = upload(client, [("runs.zip", zipped([("1.fit", run(1)), ("2.fit", run(2))]))],
                   url=f"/athletes/{aid}/upload", page=f"/athletes/{aid}")
     assert ("ok", "Added 2 runs (Oct 1 to Oct 2).") in msgs and runs() == [1, 2]

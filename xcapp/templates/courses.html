@@ -131,7 +131,7 @@
     <form method="post" action="/courses/{{ edit.id }}/flyovers" enctype="multipart/form-data" class="form-row" style="margin-top:10px">
       <input type="hidden" name="csrf" value="{{ csrf }}">
       <label>Distance<select name="distance" required>{% if route_dists|length > 1 %}<option value="">Pick one</option>{% endif %}{% for d in route_dists %}<option>{{ d }}</option>{% endfor %}</select></label>
-      <label style="flex:1">GPS track<input type="file" name="file" accept=".gpx,.fit,application/gpx+xml"></label>
+      <label style="flex:1">GPS track<input type="file" name="file"></label>
       {% if flyover_presets %}<label>Or a built-in course<select name="preset"><option value="">None</option>{% for pid, p in flyover_presets.items() %}<option value="{{ pid }}">{{ p.title }}</option>{% endfor %}</select></label>{% endif %}
       <button type="submit">Make flyover</button>
     </form>
