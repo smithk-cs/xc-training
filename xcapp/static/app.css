@@ -47,14 +47,11 @@ a:hover { color: var(--brand-red-dark); }
 
 /* Staff header */
 .top { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 22px; padding: 10px 28px; background: var(--brand-red); color: var(--on-red); border-bottom: 5px solid var(--brand-gold); }
-.brand { display: inline-flex; align-items: center; gap: 10px; color: var(--on-red); text-decoration: none; }
+.brand { display: inline-flex; align-items: center; gap: 10px; min-height: 32px; color: var(--on-red); text-decoration: none; }
 .brand:hover { color: var(--on-red); }
 .brand img { height: 40px; width: auto; display: block; }
 .brand span { font-family: var(--font-display); font-weight: 700; font-size: 20px; letter-spacing: .08em; text-transform: uppercase; color: var(--brand-gold-light); }
-.top nav { display: flex; flex-wrap: wrap; gap: 4px 18px; flex: 1; }
-.top nav a { color: var(--on-red-soft); text-decoration: none; padding: 6px 0; border-bottom: 2px solid transparent; font-weight: 500; }
-.top nav a:hover { color: #FFFFFF; }
-.top nav a[aria-current="page"] { color: #FFFFFF; border-bottom-color: var(--brand-gold-light); }
+.top nav { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; flex: 1; }
 .top .who { color: var(--on-red-soft); font-size: var(--cds-font-size-caption); }
 .top form { margin: 0; }
 .top button { background: transparent; color: #FFFFFF; border-color: rgba(255, 255, 255, .6); }
@@ -345,7 +342,8 @@ details.panel.fold:not([open]) { gap: 0; }
 
 .up-arrows { display: inline-flex; align-items: center; gap: 0; margin-left: 4px; vertical-align: middle; }
 .up-arrows svg + svg { margin-left: -7px; }   /* several arrows sit close together */
-.up-arrows small { color: #1F9D55; font-weight: 700; margin-left: 2px; }
+.up-arrows small { color: #177A42; font-weight: 700; margin-left: 2px; }   /* the "+9": 4.5:1 or better on white and the shaded columns */
+@media (prefers-color-scheme: dark) { .up-arrows small { color: #6FCF97; } }
 .badges { display: flex; flex-wrap: wrap; gap: 8px; }
 .badge { display: inline-flex; align-items: center; gap: 8px; background: var(--color-panel); border: 1px solid var(--color-border-line); border-radius: 999px; padding: 6px 12px 6px 8px; }
 .badge > span { display: flex; flex-direction: column; line-height: 1.15; }
@@ -403,7 +401,7 @@ table.list.week-table td.num, table.list.week-table th.num, table.list.week-tabl
 }
 /* On pace for the week's miles and points: green 90%+, amber 80-89%, red below. */
 .pace-good { color: #1E7B34; font-weight: 700; }
-.pace-warn { color: #B26A00; font-weight: 700; }
+.pace-warn { color: #8A5200; font-weight: 700; }   /* 5:1 or better on the shaded and tinted cells (was #B26A00, under 4.5:1) */
 .pace-bad { color: #D0191B; font-weight: 700; }
 td.pace-good { background: color-mix(in srgb, #1E7B34 10%, transparent); }
 td.pace-warn { background: color-mix(in srgb, #B26A00 12%, transparent); }
@@ -502,11 +500,27 @@ table.workouts-by-day tr.day-row th { background: var(--color-soft); color: var(
 /* Week page: the reason behind each colour, shown when "Show why" is ticked */
 .week-table .why { display: none; }
 .week-table.show-why .why { display: block; font-size: 11px; line-height: 1.3; font-weight: 400; color: var(--color-fg-muted); white-space: normal; max-width: 150px; margin: 2px auto 4px; }
-/* Top bar: the menu spreads across the full width; the signed-in user and Sign out sit on their own line beneath it */
-.top nav { flex: 1 1 0; min-width: 0; justify-content: flex-start; }
-.top .top-user { flex-basis: 100%; display: flex; justify-content: flex-end; align-items: center; gap: 12px; margin-top: -4px; }
+/* Top bar: the menu in labelled groups (Today, Athletes, Training, Racing, Team, Admin). On wide screens the brand, the group
+   labels and the signed-in user share one row, and each label opens its links in a small panel below it. */
+.top nav { flex: 1 1 auto; min-width: 0; }
+.top .nav-group { position: relative; }
+.top .nav-label { background: transparent; color: var(--on-red-soft); border: 0; border-bottom: 2px solid transparent; border-radius: 0;
+  min-height: 36px; padding: 6px 10px; gap: 6px; font-weight: 500; }
+.top .nav-label::after { content: "▾"; font-size: 11px; opacity: .85; }
+.top .nav-label[aria-expanded="true"]::after { content: "▴"; }
+.top .nav-label:hover, .top .nav-label[aria-expanded="true"] { background: rgba(255, 255, 255, .12); border-color: transparent; color: #FFFFFF; }
+.top .nav-group.current .nav-label { color: #FFFFFF; border-bottom-color: var(--brand-gold-light); }
+.top .nav-title { display: none; }
+.top .nav-links { display: none; list-style: none; margin: 0; padding: 6px 0; position: absolute; top: calc(100% + 6px); left: 0; z-index: 60; min-width: 12rem;
+  background: var(--cds-surface-popover); border: 1px solid var(--cds-border); border-top: 3px solid var(--brand-gold); border-radius: 0 0 10px 10px; box-shadow: var(--cds-shadow-popover); }
+.top .nav-group.open .nav-links { display: block; }
+.top:not(.js-menu) .nav-group:is(:hover, :focus-within) .nav-links { display: block; }   /* without JavaScript, pointing or tabbing opens a group */
+.top .nav-links a { display: block; padding: 8px 16px; color: var(--color-fg); text-decoration: none; font-weight: 500; white-space: nowrap; }
+.top .nav-links a:hover { background: var(--color-soft); color: var(--color-fg); }
+.top .nav-links a[aria-current="page"] { color: var(--brand-red); font-weight: 600; box-shadow: inset 3px 0 var(--brand-gold); }
+@media (prefers-color-scheme: dark) { .top .nav-links a[aria-current="page"] { color: #FF9C9C; } }
+.top .top-user { display: flex; justify-content: flex-end; align-items: center; gap: 12px; margin-left: auto; }
 .top .top-user button { min-height: 30px; padding: 2px 12px; font-size: 13px; }
-@media (min-width: 1300px) { .top nav { justify-content: space-between; } }   /* spread out once the menu fits on one line */
 /* The menu wrapper is invisible to the layout on wide screens; on phones it folds behind the Menu button. */
 .top .top-menu { display: contents; }
 .top .menu-btn { display: none; }
@@ -517,11 +531,22 @@ table.workouts-by-day tr.day-row th { background: var(--color-soft); color: var(
   .top .menu-btn { display: inline-flex; flex: none; min-height: 36px; padding: 4px 14px; }
   .top.js-menu .top-menu { display: none; }
   .top.js-menu.menu-open { flex-wrap: wrap; }
-  .top.js-menu.menu-open .top-menu { display: block; flex-basis: 100%; padding: 6px 0 4px; }
-  .top .top-menu nav { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2px 12px; }
-  .top .top-menu nav a { padding: 8px 0; }
-  .top .top-user { margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255, 255, 255, .25); }
-  .top:not(.js-menu) .top-menu { display: block; flex-basis: 100%; }   /* without JavaScript the menu just shows */
+  .top.js-menu.menu-open .top-menu { display: block; flex-basis: 100%; padding: 2px 0 4px; }
+  /* Phones: every group open, its name above its links */
+  .top .top-menu nav { display: block; }
+  .top .nav-group { padding: 6px 0 2px; }
+  .top .nav-group + .nav-group { border-top: 1px solid rgba(255, 255, 255, .18); }
+  .top .nav-label { display: none; }
+  .top .nav-title { display: block; font-size: 11.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--brand-gold-light); }
+  .top .nav-links, .top:not(.js-menu) .nav-group:is(:hover, :focus-within) .nav-links { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 12px;
+    position: static; min-width: 0; padding: 0; background: none; border: 0; border-radius: 0; box-shadow: none; }
+  .top .nav-links a { padding: 7px 0; color: var(--on-red-soft); border-bottom: 2px solid transparent; white-space: normal; }
+  .top .nav-links a:hover { background: none; color: #FFFFFF; }
+  .top .nav-links a[aria-current="page"] { color: #FFFFFF; border-bottom-color: var(--brand-gold-light); box-shadow: none; }
+  .top .top-user { margin: 8px 0 0; padding-top: 8px; border-top: 1px solid rgba(255, 255, 255, .25); flex-basis: 100%; }
+  .top:not(.js-menu) { flex-wrap: wrap; }   /* without JavaScript the menu just shows */
+  .top:not(.js-menu) .top-menu { display: block; flex-basis: 100%; }
+  .top:not(.js-menu) .menu-btn { display: none; }
 }
 .adj { color: var(--color-ok); font-weight: 600; }
 .runs .r .adj { display: block; }
@@ -548,9 +573,36 @@ html { scroll-padding-top: calc(var(--top-h, 0px) + 8px); }
 /* Workout parts: drag handle and arrows to reorder */
 table.parts td.drag { width: 1%; color: var(--color-fg-muted); }
 table.parts .handle { cursor: grab; padding: 0 6px; font-size: 16px; user-select: none; }
-table.parts .move-up, table.parts .move-down { font-size: 11px; padding: 0 2px; text-decoration: none; }
+table.parts .move-up, table.parts .move-down { font-size: 11px; padding: 0 2px; min-width: 24px; min-height: 24px; text-decoration: none; }
 table.parts tr.dragging { opacity: .45; }
 @media (pointer: fine) { table.parts .move-up, table.parts .move-down { opacity: .5; } }
+/* Phones: each part becomes a small card, its fields two to a row with their names above them */
+@media (max-width: 600px) {
+  .parts-wrap { overflow-x: visible; }
+  table.parts, table.parts tbody, table.parts tfoot { display: block; }
+  table.parts thead { display: none; }
+  table.parts tr.part { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px 10px; align-items: end;
+    grid-template-areas: "move move pts rm" "sets sets reps reps" "dist dist zone zone" "hr hr rest rest" "note note note note";
+    padding: 10px 12px 12px; margin-bottom: 10px; border: 1px solid var(--color-border-line); border-radius: 12px; background: var(--color-panel); }
+  table.parts tr.part > td { display: block; padding: 0; border: 0; min-width: 0; }
+  table.parts tr.part > td[data-label]::before { content: attr(data-label); display: block; margin-bottom: 3px; font-size: 13px; font-weight: 500; color: var(--color-fg-muted); }
+  table.parts tr.part input, table.parts tr.part select { width: 100% !important; }
+  table.parts tr.part > td.drag { grid-area: move; width: auto; display: flex; gap: 6px; align-self: center; }
+  table.parts td.drag .handle { display: none; }   /* dragging needs a mouse; the arrows move a part on a phone */
+  table.parts .move-up, table.parts .move-down { min-width: 40px; min-height: 36px; font-size: 13px; border: 1px solid var(--color-input-line); border-radius: 8px; }
+  table.parts td.p-sets { grid-area: sets; } table.parts td.p-reps { grid-area: reps; }
+  table.parts tr.part > td.p-dist { grid-area: dist; display: flex; flex-wrap: wrap; gap: 0 6px; white-space: normal; }
+  table.parts td.p-dist::before { flex-basis: 100%; }
+  table.parts td.p-dist input { flex: 1 1 0; width: auto !important; -moz-appearance: textfield; appearance: textfield; }
+  table.parts td.p-dist input::-webkit-inner-spin-button { display: none; } table.parts td.p-dist select { flex: none; width: auto !important; }
+  table.parts td.p-zone { grid-area: zone; } table.parts td.p-hr { grid-area: hr; } table.parts td.p-rest { grid-area: rest; }
+  table.parts td.p-note { grid-area: note; }
+  table.parts td.p-points { grid-area: pts; align-self: center; text-align: right; }
+  table.parts td.p-remove { grid-area: rm; align-self: center; text-align: right; }
+  table.parts tfoot tr { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+  table.parts tfoot td { display: block; border: 0; padding: 0; }
+  table.parts tfoot td:empty { display: none; }
+}
 .week-table.show-why .why-target { text-align: left; max-width: 260px; white-space: normal; margin: 6px 0 0; }
 
 .squad-dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; vertical-align: middle; border: 1px solid rgba(0,0,0,.2); }
@@ -873,3 +925,16 @@ a.route-link { white-space: nowrap; }
 
 /* A run typed in by hand (manual_runs.py), not from a watch */
 .tag.manual-tag { color: var(--color-fg-muted); background: var(--color-soft); border: 1px dashed var(--color-input-line); }
+
+/* Tap targets (WCAG 2.2: at least 24 × 24 px). Links in tables and lists get vertical padding: on an inline link it makes the tap
+   area taller without changing the line height, so dense tables such as the Week page keep their height. Links and small link
+   buttons that sit as blocks take the padding back with a negative margin, so nothing moves. */
+:is(table.list td, table.list th, .dash-who, p) > a:not(.button, .pill, .tag, .zone-line, .rec-pill),
+p > a:only-child:not(.button, .pill, .tag), main > a.small, a.map-link, .vdot-group td.name a { padding-block: 5px; }
+.notice > a, .panel-head > a, .hero a.back { padding-block: 4px; margin-block: -4px; }
+table.list td a.pill { min-height: 24px; margin-block: -1px; }
+table.list td button.link { min-height: 24px; margin-block: -2px; }
+.form-row button.link { min-height: 24px; }
+table.list td summary { padding-block: 3px; margin-block: -3px; }
+.week-table a.zone-line { padding-block: 4px; margin-top: 0; margin-bottom: -4px; }   /* was margin-top: 4px */
+.week-table a.tag { padding-top: 3px; padding-bottom: 3px; margin-bottom: -4px; }

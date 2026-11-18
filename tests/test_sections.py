@@ -40,12 +40,19 @@ def test_admin_turns_sections_off_for_a_coach():
     coach = login(app, "coach1")
     home = coach.get("/").text
     assert '<a href="/week"' not in home and '<a href="/ai"' not in home and '<a href="/races"' in home
+    # the menu is grouped; Staff is admin-only, so this coach's Admin group holds just the Sync log
+    assert re.findall(r'class="nav-label"[^>]*>([^<]+)</button>', home) == ["Today", "Athletes", "Training", "Racing", "Team", "Admin"]
+    assert '<a href="/staff"' not in home and '<a href="/sync"' in home
     r = coach.get("/week")
     assert r.status_code == 403 and "Week is turned off for your account" in r.text
     csrf = re.search(r'name="csrf" value="([^"]+)"', home).group(1)
     assert coach.post("/week/settings", data={"csrf": csrf, "target_days": "6", "min_minutes": "30"}).status_code == 403
     assert coach.get("/races").status_code == 200
     assert admin.get("/week").status_code == 200 and '<a href="/week"' in admin.get("/").text     # admins see everything
+    admin.post("/staff/sections", data={"csrf": re.search(r'name="csrf" value="([^"]+)"', admin.get("/staff").text).group(1),
+                                        "users": [str(cid)], f"show_{cid}": [k for k in keep if k != "dashboard"]})
+    home = coach.get("/").text
+    assert 'aria-controls="nav-today"' not in home and 'aria-controls="nav-athletes"' in home    # a group with no links left is hidden
     admin.post("/staff/sections", data={"csrf": re.search(r'name="csrf" value="([^"]+)"', admin.get("/staff").text).group(1),
                                         "users": [str(cid)], f"show_{cid}": [k for k, _, _ in SEC.SECTIONS]})
     assert coach.get("/week").status_code == 200

@@ -60,9 +60,9 @@
 <div class="grid">
   <div class="card">
     <h2>Watch list</h2>
-    {% if snap.watchlist %}
+    {% if watch %}
     <table class="list"><thead><tr><th>Athlete</th><th>Why</th></tr></thead><tbody>
-    {% for w in snap.watchlist %}<tr><td>{{ w.athlete }}</td><td>{{ w.reasons }}</td></tr>{% endfor %}
+    {% for w in watch %}<tr><td>{% if w.id %}<a href="/athletes/{{ w.id }}">{{ w.athlete }}</a>{% else %}{{ w.athlete }}{% endif %}</td><td>{{ w.reasons }}</td></tr>{% endfor %}
     </tbody></table>
     {% else %}<p class="muted">Nobody is flagged this week.</p>{% endif %}
     {% if user.sees("dashboard") %}<p><a href="/dashboard">Open the dashboard</a></p>{% endif %}

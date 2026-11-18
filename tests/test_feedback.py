@@ -57,9 +57,11 @@ def test_effort_and_pain_per_run(setup):
     c.post(f"/a/tok-ava/runs/{act_id}", data={"csrf": csrf, "rpe": "7", "pain_area": "Knee"})
     assert "Also pick how much" in c.get(f"/a/tok-ava/runs/{act_id}").text
     r = c.post(f"/a/tok-ava/runs/{act_id}", data={"csrf": csrf, "rpe": "8", "feel": "Heavy", "pain_area": "Lower leg", "pain_level": "6", "note": "left shin sore"})
-    assert r.status_code == 303 and r.headers["location"] == "/a/tok-ava/runs"
+    assert r.status_code == 303 and r.headers["location"] == "/a/tok-ava"          # no other run waits for an effort: back home
+    home = c.get("/a/tok-ava").text
+    assert "tell your coach or athletic trainer in person" in home and "need your effort rating" not in home
     runs_page = c.get("/a/tok-ava/runs").text
-    assert "tell your coach or athletic trainer in person" in runs_page and "Effort 8 · Heavy" in runs_page and "Pain 6/10 Lower leg" in runs_page
+    assert "Effort 8 · Heavy" in runs_page and "Pain 6/10 Lower leg" in runs_page
     db = SessionLocal()
     act = db.get(Activity, act_id)
     pain = db.query(PainReport).one()
@@ -74,6 +76,33 @@ def test_effort_and_pain_per_run(setup):
     # another athlete cannot open or change this run
     assert c.get(f"/a/tok-mateo/runs/{act_id}").status_code == 404
     assert c.post(f"/a/tok-mateo/runs/{act_id}", data={"csrf": csrf, "rpe": "1", "pain_area": "None"}).status_code == 404
+
+
+def test_add_effort_walks_through_the_unrated_runs(setup):
+    c, csrf, act_id = setup
+    db = SessionLocal()
+    ava = db.query(Athlete).filter_by(first_name="Ava").one()
+    def run(day, ext):
+        act = Activity(athlete_id=ava.id, source="upload", external_id=ext, start_utc=dt.datetime(2026, 10, day, 22), local_date=dt.date(2026, 10, day),
+                       duration_s=1800, distance_m=6000)
+        db.add(act)
+        db.flush()
+        return act.id
+    old, first, last = run(5, "old"), run(18, "first"), run(23, "last")   # Oct 5 is over two weeks back, so not asked for
+    db.commit()
+    db.close()
+    page = c.get("/a/tok-ava").text
+    assert "3 recent runs need your effort rating" in page and f'<a href="/a/tok-ava/runs/{first}#effort">Add effort ›</a>' in page   # the oldest first
+    r = c.post(f"/a/tok-ava/runs/{first}", data={"csrf": csrf, "rpe": "5", "pain_area": "None"})
+    assert r.headers["location"] == f"/a/tok-ava/runs/{act_id}" and "2 more runs to rate" in c.get(r.headers["location"]).text
+    r = c.post(f"/a/tok-ava/runs/{act_id}", data={"csrf": csrf, "rpe": "6", "pain_area": "None"})
+    assert r.headers["location"] == f"/a/tok-ava/runs/{last}" and "1 more run to rate" in c.get(r.headers["location"]).text
+    r = c.post(f"/a/tok-ava/runs/{last}", data={"csrf": csrf, "rpe": "4", "pain_area": "None"})
+    assert r.headers["location"] == "/a/tok-ava"
+    page = c.get("/a/tok-ava").text
+    assert "Thanks for adding your effort" in page and "Add effort ›" not in page
+    # editing an older run's effort, with nothing left to rate, also goes back to the athlete's page
+    assert c.post(f"/a/tok-ava/runs/{old}", data={"csrf": csrf, "rpe": "3", "pain_area": "None"}).headers["location"] == "/a/tok-ava"
 
 
 def test_pain_from_a_run_reaches_the_watch_list(setup):
@@ -91,7 +120,17 @@ def test_pain_from_a_run_reaches_the_watch_list(setup):
     payload, _ = build_payload(snap)
     me = next(x for x in payload["athletes"] if x["runs_last_7_days"])
     assert me["runs_last_7_days"][0]["rpe"] == 8 and "note" not in str(me).lower()
+    # the home page's watch list links each name to the athlete's page, like its other lists
+    from xcapp.models import StaffUser
+    from xcapp.security import hash_password
+    ava = db.query(Athlete).filter_by(first_name="Ava").one()
+    db.add(StaffUser(username="coach1", role="coach", password_hash=hash_password("correct-horse-1")))
+    db.commit()
     db.close()
+    c.post("/login", data={"csrf": re.search(r'name="csrf" value="([^"]+)"', c.get("/login").text).group(1),
+                           "username": "coach1", "password": "correct-horse-1"})
+    home = c.get("/").text
+    assert f'<tr><td><a href="/athletes/{ava.id}">Ava Doyle</a></td><td>Pain 5/10: Knee</td></tr>' in home
 
 
 def test_series_scoping_and_content(setup):
