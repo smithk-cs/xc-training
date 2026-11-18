@@ -12,7 +12,7 @@ from .models import Activity, Athlete, Lap, PlannedWorkout, SyncLog
 from .reps import analyze
 
 # Higher number wins when two copies of the same run arrive (e.g. a summary first, the file later).
-SOURCE_RANK = {"garmin_csv": 0, "garmin_summary": 1, "garmin_details": 2, "upload": 3, "garmin_file": 3, "demo": 3}
+SOURCE_RANK = {"manual": -1, "garmin_csv": 0, "garmin_summary": 1, "garmin_details": 2, "upload": 3, "garmin_file": 3, "demo": 3}
 DUPLICATE_WINDOW_S = 90
 
 
@@ -120,7 +120,33 @@ def ingest(db: Session, athlete: Athlete, parsed: ParsedActivity, source: str) -
                     other.planned_workout_id = None
                 act.planned_workout_id = pw.id
     db.flush()
+    if outcome == "created" and source != "manual" and parsed.is_running:
+        replace_typed_in(db, athlete, act)
     return act, outcome
+
+
+def replace_typed_in(db: Session, athlete: Athlete, act: Activity) -> Activity | None:
+    """When the watch's record of a run arrives after the athlete typed it in by hand (manual_runs.py), the typed-in
+    one goes, so the miles aren't counted twice: same day, miles within 15%. What the athlete added to it (effort,
+    legs, note, run type, a pain report) moves to the watch's run. Returns the typed-in run that was replaced."""
+    from .models import PainReport
+    typed = [m for m in db.scalars(select(Activity).where(
+        Activity.athlete_id == athlete.id, Activity.source == "manual", Activity.local_date == act.local_date,
+        Activity.id != act.id)).all() if abs(m.distance_m - act.distance_m) <= 0.15 * max(m.distance_m, act.distance_m)]
+    if not typed:
+        return None
+    m = min(typed, key=lambda x: abs(x.distance_m - act.distance_m))
+    if act.rpe is None and m.rpe is not None:
+        act.rpe, act.feel, act.feedback_at = m.rpe, m.feel, m.feedback_at
+    act.athlete_note = act.athlete_note or m.athlete_note
+    act.run_type = act.run_type or m.run_type
+    if m.workout_locked and not act.workout_locked:
+        act.planned_workout_id, act.workout_locked = m.planned_workout_id, True
+    for p in db.scalars(select(PainReport).where(PainReport.activity_id == m.id)).all():
+        p.activity_id = act.id
+    db.delete(m)
+    db.flush()
+    return m
 
 
 def _save_zone_seconds(db: Session, athlete: Athlete, act: Activity, parsed: ParsedActivity) -> None:

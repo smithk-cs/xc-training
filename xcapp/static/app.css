@@ -870,3 +870,6 @@ a.route-link { white-space: nowrap; }
 .trace-wrap img { display: block; width: 100%; height: auto; user-select: none; -webkit-user-select: none; }
 .trace-wrap svg { position: absolute; inset: 0; width: 100%; height: 100%; cursor: crosshair; }
 .trace-wrap.centring svg { cursor: copy; }
+
+/* A run typed in by hand (manual_runs.py), not from a watch */
+.tag.manual-tag { color: var(--color-fg-muted); background: var(--color-soft); border: 1px dashed var(--color-input-line); }

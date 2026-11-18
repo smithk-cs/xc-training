@@ -23,7 +23,11 @@
       <tbody>{% for l in reps %}<tr><td>{{ l.rep_num }}</td><td class="num">{{ fmt_time(l.timer_s / l.distance_m * 1609.344)[:-2] }}</td><td class="num">{{ l.avg_hr|round|int if l.avg_hr else '' }}</td><td class="num">{{ l.hr_drop_60s|int if l.hr_drop_60s is not none else '' }}</td></tr>{% endfor %}</tbody>
     </table></div>
     {% endif %}
-    {% if act.device %}<p class="muted small">Recorded on {{ act.device }}.</p>{% endif %}
+    {% if act.is_manual %}<p class="small" style="display:flex; flex-wrap:wrap; gap:8px; align-items:center"><span class="tag manual-tag" title="Typed in by hand, not recorded by a watch">✎ Manual</span>
+      <span class="muted">You typed this run in. If your watch file arrives later, it replaces this one.</span></p>
+    <form method="post" action="/a/{{ token }}/runs/{{ act.id }}/delete" onsubmit="return confirm('Delete this run?')">
+      <input type="hidden" name="csrf" value="{{ csrf }}"><button type="submit" class="ghost-btn">Delete this run</button></form>
+    {% elif act.device %}<p class="muted small">Recorded on {{ act.device }}.</p>{% endif %}
   </section>
 
   <details class="panel fold" id="effort"{% if act.rpe is none %} open{% endif %}>

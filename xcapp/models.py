@@ -208,7 +208,7 @@ class Activity(Base):
     __table_args__ = (UniqueConstraint("athlete_id", "external_id"),)
     id: Mapped[int] = mapped_column(primary_key=True)
     athlete_id: Mapped[int] = mapped_column(ForeignKey("athletes.id", ondelete="CASCADE"), index=True)
-    source: Mapped[str] = mapped_column(String(30))  # garmin_file | garmin_details | garmin_summary | upload | demo
+    source: Mapped[str] = mapped_column(String(30))  # garmin_file | garmin_details | garmin_summary | upload | garmin_csv | manual | demo
     external_id: Mapped[str] = mapped_column(String(120))
     start_utc: Mapped[dt.datetime] = mapped_column(DateTime, index=True)
     local_date: Mapped[dt.date] = mapped_column(Date, index=True)
@@ -245,6 +245,11 @@ class Activity(Base):
     athlete: Mapped[Athlete] = relationship(back_populates="activities")
     laps: Mapped[list["Lap"]] = relationship(back_populates="activity", cascade="all, delete-orphan", order_by="Lap.idx")
     planned: Mapped[PlannedWorkout | None] = relationship()
+
+    @property
+    def is_manual(self) -> bool:
+        """Typed in by hand (manual_runs.py), not from a watch."""
+        return self.source == "manual"
 
 
 class Lap(Base):

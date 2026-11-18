@@ -19,6 +19,7 @@
         <a class="row" href="/a/{{ token }}/runs/{{ act.id }}">
           <span class="l"><span class="d">{{ day.strftime('%a, %b %-d') }}</span>
             <span style="display:flex; flex-wrap:wrap; gap:6px">
+              {% if act.is_manual %}<span class="tag manual-tag" title="Typed in by hand, not recorded by a watch">✎ Manual</span>{% endif %}
               {% if act.planned %}<span class="tag">{{ act.planned.title }}</span>{% elif act.run_type in ('Long', 'Race') %}<span class="tag">{{ 'Long run' if act.run_type == 'Long' else 'Race' }}</span>{% endif %}
               {% if pain %}<span class="pill bad">Pain {{ pain.severity }}/10 {{ pain.body_area }}</span>{% endif %}
             </span>{% if act.vo2_max %}<span class="small muted">VO2 max {{ '%.1f' % act.vo2_max }}</span>{% endif %}</span>

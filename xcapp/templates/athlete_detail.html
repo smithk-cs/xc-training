@@ -46,7 +46,7 @@
   <div class="scroll"><table class="list" id="runs-table"><thead><tr><th>Date</th><th>Type</th><th class="num">Miles</th><th class="num">Time</th><th class="num">Avg HR</th><th class="num">VO2 max</th><th>Workout</th><th class="num">Effort</th><th>Legs</th><th>Pain</th><th>Device</th></tr></thead><tbody>
   {% for act in acts %}
   {% if loop.index0 == 5 %}</tbody><tbody id="more-runs" hidden>{% endif %}
-  <tr><td><a href="/athletes/{{ a.id }}/runs/{{ act.id }}">{{ act.local_date.strftime('%a %b %-d') }}</a></td><td>{{ run_type_of(act) }}</td><td class="num">{{ '%.1f' % (act.distance_m / 1609.344) }}</td>
+  <tr><td><a href="/athletes/{{ a.id }}/runs/{{ act.id }}">{{ act.local_date.strftime('%a %b %-d') }}</a>{% if act.is_manual %} <span class="tag manual-tag" title="Typed in by hand, not recorded by a watch">✎ Manual</span>{% endif %}</td><td>{{ run_type_of(act) }}</td><td class="num">{{ '%.1f' % (act.distance_m / 1609.344) }}</td>
   <td class="num">{{ fmt_time(act.duration_s)[:-2] }}</td><td class="num">{{ act.avg_hr|round|int if act.avg_hr else '' }}</td>
   <td class="num">{{ '%.1f' % act.vo2_max if act.vo2_max else '' }}</td>
   <td>{% if act.planned %}{{ act.planned.title }}{% elif act.laps|selectattr('is_rep')|list %}{{ act.laps|selectattr('is_rep')|list|length }} reps (no plan that day){% endif %}</td>
@@ -146,6 +146,20 @@
     <input type="hidden" name="csrf" value="{{ csrf }}">
     <div class="form-row"><label>Add runs from .fit files (several at once, a .zip such as Garmin&rsquo;s data export, or the activity list .csv from Garmin Connect)<input type="file" name="file" multiple required></label><button type="submit">Upload</button></div>
   </form>
+  <details id="add-run" style="margin:6px 0 10px"><summary>Type in a run (no file)</summary>
+    <form method="post" action="/athletes/{{ a.id }}/runs/new" style="margin-top:6px">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <div class="form-row" style="align-items:flex-end">
+        <label>Day<input type="date" name="date" value="{{ today }}" max="{{ today }}" required></label>
+        <label>Start <span class="small muted">(optional)</span><input type="time" name="start"></label>
+        <label>Miles<input type="number" name="miles" step="0.01" min="0.1" max="40" inputmode="decimal" required style="width:6em"></label>
+        <label>Time <span class="small muted">(min:sec)</span><input type="text" name="duration" placeholder="42:30" inputmode="numeric" required style="width:7em"></label>
+        <label>Avg heart rate <span class="small muted">(optional)</span><input type="number" name="avg_hr" min="60" max="230" inputmode="numeric" style="width:6em"></label>
+      </div>
+      <p class="small muted" style="margin:4px 0">It counts toward miles and points and is tagged ✎ Manual. If the watch file arrives later, it replaces this run.</p>
+      <button type="submit" class="secondary">Add run</button>
+    </form>
+  </details>
   <p class="small" id="link">Personal link: <code class="copy">{{ settings.base_url.rstrip('/') }}/a/{{ a.link_token }}</code></p>
   <form method="post" action="/athletes/{{ a.id }}/email-link" class="inline" style="margin:0 0 6px"><input type="hidden" name="csrf" value="{{ csrf }}">
     {% if a.email %}<button class="secondary" type="submit"{% if not settings.email_configured %} disabled title="Email isn’t set up yet"{% endif %}>Email this link to {{ a.email }}</button>

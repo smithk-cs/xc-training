@@ -3,7 +3,7 @@
 {% block head %}<script src="/static/d3.v7.9.0.min.js"></script><script src="/static/workout-chart.js?v={{ asset_v }}" defer></script>{% endblock %}
 {% block content %}
 <p><a href="/athletes/{{ a.id }}">‹ {{ a.name }}</a></p>
-<h1>{{ act.local_date.strftime('%A, %b %-d, %Y') }}</h1>
+<h1>{{ act.local_date.strftime('%A, %b %-d, %Y') }}{% if act.is_manual %} <span class="tag manual-tag" title="Typed in by hand, not recorded by a watch">✎ Manual</span>{% endif %}</h1>
 {% set miles = act.distance_m / 1609.344 %}
 <div class="grid">
 <div class="card">
@@ -20,8 +20,11 @@
   <div class="scroll"><table class="list"><thead><tr><th>Rep</th><th class="num">Distance</th><th class="num">Pace /mi</th><th class="num">Avg HR</th><th class="num">Max HR</th><th class="num">HR drop in 60 s</th></tr></thead><tbody>
   {% for l in reps %}<tr><td>{{ l.rep_num }}</td><td class="num">{{ l.distance_m|round|int }} m</td><td class="num">{{ fmt_time(l.timer_s / l.distance_m * 1609.344)[:-2] }}</td><td class="num">{{ l.avg_hr|round|int if l.avg_hr else '' }}</td><td class="num">{{ l.max_hr|round|int if l.max_hr else '' }}</td><td class="num">{{ l.hr_drop_60s|int if l.hr_drop_60s is not none else '' }}</td></tr>{% endfor %}
   </tbody></table></div>
-  {% else %}<p class="muted small">No reps found in this run’s laps.</p>{% endif %}
-  {% if act.device %}<p class="muted small">Recorded on {{ act.device }}.</p>{% endif %}
+  {% elif not act.is_manual %}<p class="muted small">No reps found in this run’s laps.</p>{% endif %}
+  {% if act.is_manual %}<p class="muted small">Typed in by hand, not recorded by a watch: no laps, heart-rate detail or GPS. If the watch file arrives later, it replaces this run.</p>
+  {% if user.role in ('admin', 'coach') %}<form method="post" action="/athletes/{{ a.id }}/runs/{{ act.id }}/delete" onsubmit="return confirm('Delete this typed-in run?')">
+    <input type="hidden" name="csrf" value="{{ csrf }}"><button type="submit" class="danger">Delete this run</button></form>{% endif %}
+  {% elif act.device %}<p class="muted small">Recorded on {{ act.device }}.</p>{% endif %}
 </div>
 <div class="card">
   <h2>From the athlete</h2>

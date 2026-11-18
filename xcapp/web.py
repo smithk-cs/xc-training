@@ -41,6 +41,7 @@ from . import registration as REG
 from . import reports as RP
 from . import reminders as RM
 from . import push as PU
+from . import manual_runs as MR
 from . import garmin_csv as GCSV
 from . import weather as WX
 from . import team_calendar as TC
@@ -681,6 +682,43 @@ def create_app() -> FastAPI:
         f = await form_checked(request)
         a = get_athlete(db, athlete_id)
         flash(request, *await _upload(db, a, f.getlist("file")))
+        return back(f"/athletes/{a.id}")
+
+    def _add_typed_run(db: Session, a: Athlete, f) -> tuple[Activity | None, str, str]:
+        """A run typed in by hand (manual_runs.py): (the run, message, level)."""
+        try:
+            parsed = MR.build(f.get("date", ""), f.get("start", ""), f.get("miles", ""), f.get("duration", ""), f.get("avg_hr", ""))
+        except ValueError as exc:
+            return None, str(exc), "error"
+        act, outcome = ingest(db, a, parsed, MR.SOURCE)
+        if outcome == "duplicate":
+            return act, "There’s already a run at that time on that day, so nothing was added.", "error"
+        return act, f"Added a {act.distance_m / A.METERS_PER_MILE:.1f} mile run on {act.local_date:%b %-d}, marked Manual.", "ok"
+
+    @app.post("/athletes/{athlete_id}/runs/new")
+    async def staff_add_run(request: Request, athlete_id: int, user=Depends(coach_or_admin, scope="function"),
+                            db: Session = Depends(get_db, scope="function")):
+        f = await form_checked(request)
+        a = get_athlete(db, athlete_id)
+        act, msg, level = _add_typed_run(db, a, f)
+        if level == "ok":
+            log(db, "app", f"{user.username} typed in a run for {a.name} ({act.local_date}).")
+        flash(request, msg, level)
+        return back(f"/athletes/{a.id}#runs-table" if level == "ok" else f"/athletes/{a.id}#add-run")
+
+    @app.post("/athletes/{athlete_id}/runs/{activity_id}/delete")
+    async def staff_delete_run(request: Request, athlete_id: int, activity_id: int, user=Depends(coach_or_admin, scope="function"),
+                               db: Session = Depends(get_db, scope="function")):
+        """Only runs typed in by hand can be deleted: a watch's record is the athlete's data, handled under privacy."""
+        await form_checked(request)
+        a = get_athlete(db, athlete_id)
+        act = db.get(Activity, activity_id)
+        if act is None or act.athlete_id != a.id or not act.is_manual:
+            raise HTTPException(404, "Run not found.")
+        day = act.local_date
+        db.delete(act)
+        log(db, "app", f"{user.username} deleted a typed-in run for {a.name} ({day}).")
+        flash(request, f"Deleted the typed-in run from {day:%b %-d}.")
         return back(f"/athletes/{a.id}")
 
     @app.post("/athletes/{athlete_id}/status")
@@ -2169,6 +2207,27 @@ def create_app() -> FastAPI:
         a = athlete_by_token(db, token)
         flash(request, *await _upload(db, a, f.getlist("file")))
         return back(f"/a/{token}")
+
+    @app.post("/a/{token}/runs/new")
+    async def athlete_add_run(request: Request, token: str, db: Session = Depends(get_db, scope="function")):
+        f = await form_checked(request)
+        a = athlete_by_token(db, token)
+        act, msg, level = _add_typed_run(db, a, f)
+        flash(request, msg + (" Now add how hard it felt." if level == "ok" and act.rpe is None else ""), level)
+        return back(f"/a/{token}/runs/{act.id}#effort" if level == "ok" else f"/a/{token}#add-runs")
+
+    @app.post("/a/{token}/runs/{activity_id}/delete")
+    async def athlete_delete_run(request: Request, token: str, activity_id: int, db: Session = Depends(get_db, scope="function")):
+        """An athlete can delete a run they typed in (to fix a mistake), not one from their watch."""
+        await form_checked(request)
+        a = athlete_by_token(db, token)
+        act = _own_run(db, a, activity_id)
+        if not act.is_manual:
+            raise HTTPException(404, "Run not found.")
+        day = act.local_date
+        db.delete(act)
+        flash(request, f"Deleted the run you typed in for {day:%b %-d}.")
+        return back(f"/a/{token}/runs")
 
     @app.post("/a/{token}/pain")
     async def athlete_pain(request: Request, token: str, db: Session = Depends(get_db, scope="function")):
