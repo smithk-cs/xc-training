@@ -6,7 +6,11 @@
   "name": "xc-training",
   "main": "cloudflare/worker.js",
   "compatibility_date": "2026-10-01",
-  "observability": { "enabled": true },
+  // Cloudflare's per-request "invocation logs" record each full address, and athlete pages, the Garmin webhook and
+  // the team calendar keep their secret in the address. So those are off; the Worker's own messages (the nightly job)
+  // and the app's container logs (which hide the secrets: security.RedactSecrets) are kept.
+  "observability": { "enabled": true, "head_sampling_rate": 1, "redact_query_string": true,
+                     "logs": { "enabled": true, "invocation_logs": false } },
   // jesuitxc.org goes here as custom domains once it is Active in Cloudflare (see DEPLOY.md, "Your own address").
   "workers_dev": true,
   "containers": [

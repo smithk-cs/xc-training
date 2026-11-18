@@ -219,3 +219,9 @@ def film_status(db: Session, today: dt.date) -> dict:
     by = lambda s: [a for a in team if status.get(a.id) == s]
     return {"block": block, "kind": kind, "from": start, "label": label, "status": status, "due": by("due"),
             "wait": by("wait"), "done": by("done"), "soon": by("soon"), "team": len(team)}
+
+
+def hide_injured(film: dict) -> dict:
+    """film_status for staff without the Injuries section: who is waiting for an injury to clear is left out (they
+    appear as neither due nor waiting), since "film after the injury clears" says who is injured."""
+    return {**film, "status": {k: v for k, v in film["status"].items() if v != "wait"}, "wait": []}

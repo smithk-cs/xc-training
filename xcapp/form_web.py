@@ -63,7 +63,9 @@ def register(app, h: SimpleNamespace) -> None:
         recent = db.execute(select(FormAnalysis, Athlete).join(Athlete, Athlete.id == FormAnalysis.athlete_id)
                             .order_by(FormAnalysis.created_at.desc()).limit(30)).all()
         resp = render(request, "form_page.html", user, athletes=athletes, picked=athlete, recent=recent,
-                      can_film=user.role in ("admin", "coach"), film=FP.film_status(db, A.team_today()), conditions=FP.CONDITIONS,
+                      can_film=user.role in ("admin", "coach"),
+                      film=FP.film_status(db, A.team_today()) if user.sees("injuries") else FP.hide_injured(FP.film_status(db, A.team_today())),
+                      conditions=FP.CONDITIONS,
                       phases=SPL.PHASES)
         resp.headers["Content-Security-Policy"] = CAPTURE_CSP
         return resp

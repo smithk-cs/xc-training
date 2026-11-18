@@ -306,3 +306,45 @@ def test_access_log_hides_athlete_links_and_the_webhook_secret(caplog):
     assert '"GET /a/…/runs/12 HTTP/1.1" 200' in text and '"GET /garmin/webhook/… HTTP/1.1" 200' in text
     assert '"GET /garmin/callback?… HTTP/1.1" 303' in text and '"GET /athletes/3 HTTP/1.1" 200' in text   # still logged
     assert redact_path("/team-calendar/abc/All.ics") == "/team-calendar/…/All.ics" and redact_path("/a") == "/a"
+
+
+def test_injuries_off_hides_injury_details_on_athlete_and_run_pages():
+    """The other pages the review noted: the athlete page (pain column, injuries box, film-after-injury note), the
+    run page's pain pill, and the athletes list and Running form page's "film later" notes."""
+    from xcapp import form_plan as FP
+    from xcapp.models import Activity, MissedDay
+    for hidden, shown in (("injuries", False), ("", True)):
+        app, aid = mkapp(hidden=hidden)
+        db = SessionLocal()
+        d = dt.date.today() - dt.timedelta(days=1)
+        act = Activity(athlete_id=aid, source="upload", external_id=f"r{hidden}", start_utc=dt.datetime(d.year, d.month, d.day, 23),
+                       local_date=d, duration_s=1800, distance_m=6000, rpe=7)
+        db.add(act)
+        db.flush()
+        db.add(PainReport(athlete_id=aid, date=d, body_area="Hip", severity=6, note="sharp after hills", activity_id=act.id))
+        db.add(MissedDay(athlete_id=aid, date=d - dt.timedelta(days=2), reason="Injury", body_area="Achilles", side="Left",
+                         description="couldn't push off"))
+        db.commit()
+        rid = act.id
+        db.close()
+        c = TestClient(app, follow_redirects=False)
+        login(c)
+        page = c.get(f"/athletes/{aid}").text
+        run = c.get(f"/athletes/{aid}/runs/{rid}").text
+        for secret in ("Injuries and pain reports", "Tibial", "hurts on stairs", "sharp after hills", "6/10 Hip", "achilles", "<th>Pain</th>"):
+            assert (secret in page) == shown, (hidden, secret)
+        assert ("Pain 6/10: Hip" in run) == shown
+        db = SessionLocal()
+        db.query(Activity).delete()
+        db.query(PainReport).delete()
+        db.query(MissedDay).delete()
+        db.query(Injury).delete()
+        db.query(Athlete).delete()
+        db.query(StaffUser).delete()
+        db.commit()
+        db.close()
+    film = {"block": None, "kind": "fresh", "from": None, "label": "", "status": {1: "due", 2: "wait", 3: "done"},
+            "due": ["a"], "wait": ["b"], "done": ["c"], "soon": [], "team": 3}
+    hidden = FP.hide_injured(film)
+    assert hidden["status"] == {1: "due", 3: "done"} and hidden["wait"] == [] and hidden["due"] == ["a"]
+    assert film["wait"] == ["b"]                                         # the original isn't changed

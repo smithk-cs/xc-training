@@ -490,7 +490,7 @@ def create_app() -> FastAPI:
         for a in alumni:
             by_class.setdefault(a.grad_year or 0, []).append(a)
         return render(request, "athletes.html", user, athletes=rows, ab=A.abilities(db, today), ranks=ranks, moves=A.vdot_moves(db, today),
-                      film=FP.film_status(db, today),
+                      film=FP.film_status(db, today) if user.sees("injuries") else FP.hide_injured(FP.film_status(db, today)),
                       photos=photo_versions(db), former=former, delete_by=lambda a: delete_by(a), alumni=by_class,
                       n_alumni=len(alumni), confirm=[x for x in CY.to_confirm(db, today) if team == "All" or x["athlete"].gender == team],
                       this_year=CY.school_year_end(today), dupes=dupes, team=team)
@@ -608,10 +608,14 @@ def create_app() -> FastAPI:
         races = db.scalars(select(RaceResult).where(RaceResult.athlete_id == a.id).order_by(RaceResult.date.desc())).all()   # all; 5 shown
         from .form_web import for_athlete as form_reports
         form_last = FP.latest(db, [a.id]).get(a.id)
+        hurt_ok = user.sees("injuries")        # without the Injuries section: no pain, injury or missed-day details
+        if not hurt_ok:
+            run_pain, missed = {}, []
         return render(request, "athlete_detail.html", user, a=a, experience_labels=A.EXPERIENCE_LABELS, acts=acts, results=results, run_pain=run_pain, races=races,
                       forms=form_reports(db, a.id), form_focus=FP.focus(form_last), form_hist=FP.history(db, a.id),
                       refilm=FP.refilm_on(db, a.id), fatigue=FP.fatigue(db, a.id), today=A.team_today(),
-                      film=FP.film_status(db, A.team_today()), phases=SPL.PHASES,
+                      film=FP.film_status(db, A.team_today()) if hurt_ok else FP.hide_injured(FP.film_status(db, A.team_today())),
+                      phases=SPL.PHASES, show_injuries=hurt_ok,
                       adjusted=CS.adjusted_times(db, races), marks=A.race_marks(db.scalars(select(RaceResult).where(RaceResult.athlete_id == a.id)).all()),
                       ability=ability, group_names=group_names, missed=missed, vo2=A.latest_vo2(db, a.id),
                       goal_v=A.goal_vdot(db, a.id, A.team_today()),
@@ -620,8 +624,8 @@ def create_app() -> FastAPI:
                       wins=A.achievements(db, a, A.team_today()), gain=A.vdot_gains(db, A.team_today()).get(a.id), move=A.vdot_moves(db, A.team_today()).get(a.id),
                       others=db.scalars(select(Athlete).where(Athlete.id != a.id).order_by(Athlete.last_name, Athlete.first_name)).all(),
                       merge_pick=request.query_params.get("merge", ""),
-                      injuries=sorted(a.injuries, key=lambda i: i.onset_date, reverse=True),
-                      pains=sorted(a.pain_reports, key=lambda p: p.date, reverse=True)[:10],
+                      injuries=sorted(a.injuries, key=lambda i: i.onset_date, reverse=True) if hurt_ok else [],
+                      pains=sorted(a.pain_reports, key=lambda p: p.date, reverse=True)[:10] if hurt_ok else [],
                       goals=sorted(a.goals, key=lambda g: (g.season, g.event)), show_notes=user.role in ("admin", "trainer"))
 
     @app.post("/athletes/{athlete_id}/edit")
@@ -2479,7 +2483,7 @@ def create_app() -> FastAPI:
         act = db.get(Activity, activity_id)
         if act is None or act.athlete_id != a.id:
             raise HTTPException(404, "Run not found.")
-        pain = next((p for p in a.pain_reports if p.activity_id == act.id), None)
+        pain = next((p for p in a.pain_reports if p.activity_id == act.id), None) if user.sees("injuries") else None
         wv = WV.build(db, act) if (act.planned_workout_id or act.stream or act.laps) else None
         if wv is not None:
             wv["summary"] = WV.summary(wv)

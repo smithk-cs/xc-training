@@ -43,7 +43,7 @@
 <div class="grid">
 <div class="card wide-card">
   <h2>Recent runs</h2>
-  <div class="scroll"><table class="list" id="runs-table"><thead><tr><th>Date</th><th>Type</th><th class="num">Miles</th><th class="num">Time</th><th class="num">Avg HR</th><th class="num">VO2 max</th><th>Workout</th><th class="num">Effort</th><th>Legs</th><th>Pain</th><th>Device</th></tr></thead><tbody>
+  <div class="scroll"><table class="list" id="runs-table"><thead><tr><th>Date</th><th>Type</th><th class="num">Miles</th><th class="num">Time</th><th class="num">Avg HR</th><th class="num">VO2 max</th><th>Workout</th><th class="num">Effort</th><th>Legs</th>{% if show_injuries %}<th>Pain</th>{% endif %}<th>Device</th></tr></thead><tbody>
   {% for act in acts %}
   {% if loop.index0 == 5 %}</tbody><tbody id="more-runs" hidden>{% endif %}
   <tr><td><a href="/athletes/{{ a.id }}/runs/{{ act.id }}">{{ act.local_date.strftime('%a %b %-d') }}</a>{% if act.is_manual %} <span class="tag manual-tag" title="Typed in by hand, not recorded by a watch">✎ Manual</span>{% endif %}</td><td>{{ run_type_of(act) }}</td><td class="num">{{ '%.1f' % (act.distance_m / 1609.344) }}</td>
@@ -51,7 +51,7 @@
   <td class="num">{{ '%.1f' % act.vo2_max if act.vo2_max else '' }}</td>
   <td>{% if act.planned %}{{ act.planned.title }}{% elif act.laps|selectattr('is_rep')|list %}{{ act.laps|selectattr('is_rep')|list|length }} reps (no plan that day){% endif %}</td>
   <td class="num">{{ act.rpe if act.rpe is not none else '' }}</td><td>{{ act.feel }}</td>
-  <td>{% set rp = run_pain.get(act.id) %}{% if rp %}<span class="pill bad">{{ rp.severity }}/10 {{ rp.body_area }}</span>{% if rp.saw_trainer %} <span class="pill good">Saw trainer</span>{% endif %}{% endif %}</td>
+  {% if show_injuries %}<td>{% set rp = run_pain.get(act.id) %}{% if rp %}<span class="pill bad">{{ rp.severity }}/10 {{ rp.body_area }}</span>{% if rp.saw_trainer %} <span class="pill good">Saw trainer</span>{% endif %}{% endif %}</td>{% endif %}
   <td class="small">{{ act.device }}</td></tr>
   {% if act.athlete_note %}<tr><td></td><td colspan="9" class="small muted">Athlete note: {{ act.athlete_note }}</td></tr>{% endif %}
   {% else %}<tr><td colspan="10" class="muted">No runs yet.</td></tr>{% endfor %}
@@ -94,7 +94,7 @@
   <p class="small">{% if goal_v %}<b>Goal VDOT {{ goal_v }}</b>, from the fastest goal time this season (or the latest season with goals). {% else %}No goal VDOT yet. {% endif %}It sets the “Goal VDOT” workout targets the athlete sees. {% if user.role != 'trainer' %}<a href="/results?athlete={{ a.id }}#set-goal">Set or change goals ›</a>{% endif %}</p>
   <table class="list"><tbody>{% for g in goals %}<tr><td>{{ g.season }}</td><td>{{ g.event }}</td><td class="num">{{ fmt_time(g.goal_s) }}</td></tr>{% else %}<tr><td class="muted">No goals yet.</td></tr>{% endfor %}</tbody></table>
 </div>
-<div class="card">
+{% if show_injuries %}<div class="card">
   <h2>Injuries and pain reports</h2>
   <table class="list"><tbody>
   {% for i in injuries %}<tr><td>{{ i.onset_date.strftime('%b %-d') }}</td><td>{{ i.injury }} ({{ i.body_area }})</td><td>{{ 'returned ' + i.return_date.strftime('%b %-d') if i.return_date else 'no return date' }}</td></tr>
@@ -103,7 +103,7 @@
   {% for m in missed %}<tr><td>{{ m.date.strftime('%b %-d') }}</td><td>Missed run ({{ m.reason|lower }}){% if m.reason == 'Injury' %}: {{ m.body_area|lower }}, {{ m.side|lower }}{% endif %}{% if m.pain %}, pain {{ m.pain }}/10{% endif %}</td><td class="small">{{ m.description }}</td></tr>{% endfor %}
   {% if not injuries and not pains and not missed %}<tr><td class="muted">Nothing logged.</td></tr>{% endif %}
   </tbody></table>
-</div>
+</div>{% endif %}
 {% if user.role != 'trainer' %}
 <div class="card">
   <h2>Manage</h2>
