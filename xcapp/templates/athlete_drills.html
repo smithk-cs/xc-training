@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}My form drills · {{ team_name }}{% endblock %}
+{% block bodyclass %}athlete-page{% endblock %}
+{% block flashes %}{% endblock %}
+{% block head %}<script src="/static/drill-anim.js?v={{ asset_v }}" defer></script>{% endblock %}
+{% block content %}
+{% with hero_title="My form drills", hero_text=("From your latest running-form video: what to work on and how." if mine else "How to do the team’s form drills."), back_url="/a/" ~ token, back_label="My page" %}{% include "_hero.html" %}{% endwith %}
+<div class="stack">
+  {% for c in focus %}
+  <section class="panel" aria-label="{{ c.summary }}">
+    <h2 style="margin:0">{{ loop.index }}. {{ c.summary }}</h2>
+    <p class="small" style="margin:0">{{ c.why }} <b>Cue:</b> {{ c.cue }}</p>
+    {% for d in c.drills %}{% include "_drill_card.html" %}{% endfor %}
+  </section>
+  {% endfor %}
+  {% if others %}
+  <details class="panel fold" id="more-drills"{% if not mine %} open{% endif %}>
+    <summary><h2>{{ 'More drills' if mine else 'All drills' }}</h2></summary>
+    {% for d in others %}{% include "_drill_card.html" %}{% endfor %}
+  </details>
+  {% endif %}
+</div>
+{% endblock %}

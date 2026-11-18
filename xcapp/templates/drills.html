@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Form drills · {{ team_name }}{% endblock %}
+{% block head %}<script src="/static/drill-anim.js?v={{ asset_v }}" defer></script>{% endblock %}
+{% block content %}
+<p class="small"><a href="/form">← Running form</a></p>
+<h1>Form drills</h1>
+<p class="muted" style="max-width:80ch">How to do each drill the running-form reports prescribe, with an animated demonstration (the near arm and leg are orange). Athletes see the drills for their own focus on their page.{% if can_edit %} You can add a link to your own video of any drill.{% endif %}</p>
+{% if groups %}
+<div class="card">
+  <h2>This season’s focus groups</h2>
+  {% for g in groups %}<p class="small" style="margin:4px 0"><b>{{ g.summary }}</b> ({{ g.people|length }}):
+    {% for d in g.drills %}<a href="#drill-{{ d.key }}">{{ d.name }}</a>{{ ', ' if not loop.last }}{% else %}<span class="muted">{{ g.drill }}</span>{% endfor %}</p>{% endfor %}
+</div>
+{% endif %}
+<div class="drill-grid">
+  {% for d in drills %}{% with editable=can_edit %}{% include "_drill_card.html" %}{% endwith %}{% endfor %}
+</div>
+{% endblock %}

@@ -2,7 +2,9 @@
 {% if form_focus %}
 <div class="form-focus" style="margin:8px 0 12px">
   <h3 style="margin:0 0 4px">{{ 'What to work on' if token is defined else 'Focus and drills' }}</h3>
-  <ol class="small" style="margin:0; padding-left:1.3em">{% for c in form_focus %}<li style="margin-bottom:4px"><b>{{ c.summary }}</b> {{ c.why }}<br><b>Cue:</b> {{ c.cue }} <b>Drill:</b> {{ c.drill }}</li>{% endfor %}</ol>
+  <ol class="small" style="margin:0; padding-left:1.3em">{% for c in form_focus %}<li style="margin-bottom:4px"><b>{{ c.summary }}</b> {{ c.why }}<br><b>Cue:</b> {{ c.cue }} <b>Drill:</b> {{ c.drill }}
+    {% if c.drills %}<span class="drill-chips">{% for d in c.drills %}<a class="pill" href="{{ ('/a/' ~ token ~ '/drills') if token is defined else '/form/drills' }}#drill-{{ d.key }}">▶ {{ d.name }}</a>{% endfor %}</span>{% endif %}</li>{% endfor %}</ol>
+  {% if token is defined %}<p style="margin:8px 0 0"><a class="button secondary" href="/a/{{ token }}/drills">▶ Watch how to do my drills</a></p>{% endif %}
 </div>
 {% endif %}
 {% if form_hist and form_hist.rows|length > 1 %}

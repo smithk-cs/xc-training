@@ -170,10 +170,11 @@
 {% endif %}
 {% if form_focus %}
 <details class="card fold-card" id="form-focus"><summary><h2>Form focus groups</h2></summary>
-  <p class="small muted">From each athlete’s latest running-form analysis (filmed fresh): who needs what, for drill stations in the warm-up or strides after easy runs. Each athlete also sees their own focus and drills on their page.</p>
+  <p class="small muted">From each athlete’s latest running-form analysis (filmed fresh): who needs what, for drill stations in the warm-up or strides after easy runs. Each athlete also sees their own focus and drills on their page. Tap a drill to see how it’s done, or open <a href="/form/drills">all form drills</a>.</p>
   {% for g in form_focus %}<div style="padding:8px 0; border-top:1px solid var(--color-border-line)">
     <b>{{ g.summary }}</b> <span class="pill">{{ g.people|length }}</span>
     <div class="small"><b>Drill:</b> {{ g.drill }} <b>Cue:</b> {{ g.cue }}</div>
+    {% if g.drills %}<div class="drill-chips small">{% for d in g.drills %}<a class="pill" href="/form/drills#drill-{{ d.key }}">▶ {{ d.name }}</a>{% endfor %}</div>{% endif %}
     <div class="small muted">{% for a in g.people %}<a href="/athletes/{{ a.id }}#form">{{ a.name }}</a>{{ ', ' if not loop.last }}{% endfor %}</div></div>{% endfor %}
 </details>
 {% endif %}

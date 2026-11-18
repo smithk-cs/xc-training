@@ -14,6 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from . import analysis as A
+from . import drills as DR
 from . import form as F
 from . import form_plan as FP
 from . import reminders as RM
@@ -69,6 +70,29 @@ def register(app, h: SimpleNamespace) -> None:
                       phases=SPL.PHASES)
         resp.headers["Content-Security-Policy"] = CAPTURE_CSP
         return resp
+
+    @app.get("/form/drills", response_class=HTMLResponse)
+    def drills_page(request: Request, user=Depends(any_staff, scope="function"), db: Session = Depends(get_db, scope="function")):
+        """Every form drill with its demonstration, and the team's focus groups linked to them."""
+        return render(request, "drills.html", user, drills=[{"key": k, **d} for k, d in DR.DRILLS.items()],
+                      videos=DR.videos(db), used=DR.used_for(), groups=FP.focus_groups(db),
+                      can_edit=user.role in ("admin", "coach"))
+
+    @app.post("/form/drills/{key}/video")
+    async def drill_video(request: Request, key: str, user=Depends(coach_or_admin, scope="function"),
+                          db: Session = Depends(get_db, scope="function")):
+        f = await h.form_checked(request)
+        if key not in DR.DRILLS:
+            raise HTTPException(404, "Not found.")
+        url = str(f.get("url", "")).strip()
+        try:
+            DR.set_video(db, key, url)
+        except ValueError as exc:
+            flash(request, str(exc), "error")
+            return back(f"/form/drills#drill-{key}")
+        log(db, "app", f"{user.username} {'set' if url else 'removed'} the video for the {DR.DRILLS[key]['name']} drill.")
+        flash(request, f"{'Saved' if url else 'Removed'} the video for {DR.DRILLS[key]['name']}.")
+        return back(f"/form/drills#drill-{key}")
 
     @app.get("/athletes/{athlete_id}/form/new")
     def form_new(athlete_id: int, user=Depends(coach_or_admin, scope="function")):
@@ -161,6 +185,18 @@ def register(app, h: SimpleNamespace) -> None:
         flash(request, "Deleted the form analysis.")
         return back(f"/athletes/{a.id}")
 
+    @app.get("/a/{token}/drills", response_class=HTMLResponse)
+    def athlete_drills(request: Request, token: str, db: Session = Depends(get_db, scope="function")):
+        """The athlete's own form focus with its drills first, then the rest."""
+        a = athlete_by_token(db, token)
+        fa = FP.latest(db, [a.id]).get(a.id)
+        focus = FP.focus(fa)
+        shown = {d["key"] for c in focus for d in c["drills"]}
+        cadence = FP.metrics(fa).get("cadence") if fa else None
+        return render(request, "athlete_drills.html", None, a=a, token=token, focus=focus, mine=bool(shown),
+                      others=[{"key": k, **d} for k, d in DR.DRILLS.items() if k not in shown], videos=DR.videos(db),
+                      bpm=round(cadence * 1.05) if cadence else None)
+
     @app.get("/a/{token}/form/{fid}/pdf")
     def athlete_form_pdf(token: str, fid: int, db: Session = Depends(get_db, scope="function")):
         a = athlete_by_token(db, token)
@@ -195,6 +231,8 @@ def compose_report(a: Athlete, fa: FormAnalysis) -> tuple[str, str, str]:
         text_lines += ["Everything we measured is in the usual range. Keep it up.", ""]
     if fa.note:
         text_lines += [f"Coach's note: {fa.note}", ""]
+    if focus:
+        text_lines += [f"See how to do your drills: {link}/drills", ""]
     text_lines += [f"Your page: {link}", "", "Questions? Reply to this email.", "", s.team_name]
     items = "".join(
         f'<li style="margin:10px 0"><b>{escape(c["title"])}</b>: {escape(c["summary"])}'
@@ -209,7 +247,8 @@ def compose_report(a: Athlete, fa: FormAnalysis) -> tuple[str, str, str]:
 {f'<p style="margin-bottom:0"><b>What to work on first:</b></p><ol style="padding-left:20px;margin-top:4px">{items}</ol>' if focus
  else '<p>Everything we measured is in the usual range. Keep it up.</p>'}
 {f'<p><b>Coach’s note:</b> {escape(fa.note)}</p>' if fa.note else ''}
-<p><a href="{escape(link)}" style="display:inline-block;background:#A6192E;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none;font-weight:bold">Open my page</a></p>
+<p><a href="{escape(link)}" style="display:inline-block;background:#A6192E;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none;font-weight:bold">Open my page</a>
+{f'&nbsp; <a href="{escape(link)}/drills" style="color:#A6192E;font-weight:bold">See how to do my drills</a>' if focus else ''}</p>
 <p style="font-size:12px;color:#6B645C">Questions? Reply to this email.</p>
 </div></div>"""
     return subject, "\n".join(text_lines), html

@@ -64,8 +64,13 @@ def latest(db: Session, athlete_ids=None) -> dict[int, FormAnalysis]:
 
 
 def focus(fa: FormAnalysis | None) -> list[dict]:
-    """Up to three things to work on, furthest out of range first: {key, state, title, summary, why, cue, drill}."""
-    return F.report(metrics(fa), fa.pace_s)["focus"] if fa else []
+    """Up to three things to work on, furthest out of range first: {key, state, title, summary, why, cue, drill,
+    drills (the demonstrations, drills.py)}."""
+    from . import drills as DR
+    out = F.report(metrics(fa), fa.pace_s)["focus"] if fa else []
+    for c in out:
+        c["drills"] = DR.for_focus(c["key"], c["state"])
+    return out
 
 
 def focus_groups(db: Session) -> list[dict]:
@@ -76,7 +81,8 @@ def focus_groups(db: Session) -> list[dict]:
     for aid, fa in latest(db, list(team)).items():
         for c in focus(fa):
             g = groups.setdefault((c["key"], c["state"]), {"key": c["key"], "state": c["state"], "summary": c["summary"],
-                                                          "cue": c["cue"], "drill": c["drill"], "title": c["title"], "people": []})
+                                                          "cue": c["cue"], "drill": c["drill"], "title": c["title"],
+                                                          "drills": c["drills"], "people": []})
             g["people"].append(team[aid])
     for g in groups.values():
         g["people"].sort(key=lambda a: (a.last_name, a.first_name))

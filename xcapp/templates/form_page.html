@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Running form · {{ team_name }}{% endblock %}
 {% block content %}
-<h1>Running form</h1>
+<div class="form-row" style="justify-content:space-between; align-items:center"><h1 style="margin:0">Running form</h1><a class="button secondary" href="/form/drills">▶ Form drills</a></div>
 <p class="muted">Film or choose a side-view clip of an athlete; the phone finds their joints and measures the stride. The analysis is saved to the athlete: their page and yours. The video stays on the phone.</p>
 {% if can_film %}
 <div class="card form-howto">

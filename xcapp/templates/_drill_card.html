@@ -1,0 +1,21 @@
+{# One drill: the animation, how to do it, the cue and how much. Needs `d` (drills.DRILLS entry plus "key"), `videos`;
+   optional `bpm` (the metronome's starting step rate), `used` (form problems it's for), `editable` (coach's video form). #}
+<article class="drill-card" id="drill-{{ d.key }}">
+  <h3>{{ d.name }}</h3>
+  <p class="small muted" style="margin:0">{{ d['for'] }}</p>
+  <div class="drill-anim" data-drill="{{ d.key }}" data-name="{{ d.name }}"{% if bpm is defined and bpm and d.key == 'metronome' %} data-bpm="{{ bpm }}"{% endif %}></div>
+  {% if videos.get(d.key) %}<p style="margin:0"><a class="button secondary" href="{{ videos[d.key] }}" target="_blank" rel="noopener noreferrer">▶ Watch the coach’s video</a></p>{% endif %}
+  <ol class="drill-steps">{% for s in d.steps %}<li>{{ s }}</li>{% endfor %}</ol>
+  <p class="small" style="margin:0"><b>Cue:</b> {{ d.cue }} <b>How much:</b> {{ d.dose }}</p>
+  {% if used is defined and used.get(d.key) %}<p class="small muted" style="margin:0">For: {{ used[d.key]|join('; ') }}</p>{% endif %}
+  {% if editable is defined and editable %}
+  <details class="small"><summary>{{ 'Change' if videos.get(d.key) else 'Add' }} your own video</summary>
+    <form method="post" action="/form/drills/{{ d.key }}/video" class="form-row" style="align-items:flex-end; margin-top:6px">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <label style="flex:1">Link (YouTube, Google Drive …)<input type="url" name="url" value="{{ videos.get(d.key, '') }}" placeholder="https://" maxlength="500"></label>
+      <button type="submit" class="secondary">Save</button>
+    </form>
+    <p class="small muted" style="margin:4px 0 0">Film a captain doing it and share the link (set so anyone with the link can view). Athletes see it under the animation. Clear the box and save to remove it.</p>
+  </details>
+  {% endif %}
+</article>
