@@ -185,6 +185,20 @@ def create_app() -> FastAPI:
     garmin_origin = "{0.scheme}://{0.netloc}".format(urlparse(s.garmin_authorize_url))
 
     @app.middleware("http")
+    async def archived_links(request: Request, call_next):
+        """Links that open without signing in (Race Day's) stop working while their section is archived."""
+        sec = SEC.public_section(request.url.path)
+        if sec:
+            with SessionLocal() as db:
+                closed = sec in SEC.archived(db)
+            if closed:
+                return HTMLResponse(f"<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width'>"
+                                    f"<title>{SEC.LABELS[sec]}</title><body style='font-family:system-ui;padding:24px'>"
+                                    f"<h1>{SEC.LABELS[sec]} is archived</h1><p>This link isn’t in use right now. Ask a coach.</p>",
+                                    status_code=404)
+        return await call_next(request)
+
+    @app.middleware("http")
     async def headers(request: Request, call_next):
         resp = await call_next(request)
         resp.headers.setdefault("X-Content-Type-Options", "nosniff")
@@ -224,6 +238,8 @@ def create_app() -> FastAPI:
     def current_user(request: Request, db: Session = Depends(get_db, scope="function")) -> StaffUser | None:
         uid = request.session.get("uid")
         u = db.get(StaffUser, uid) if uid else None
+        if u is not None:
+            u.archived = SEC.archived(db)
         if u is not None and not hmac.compare_digest(str(request.session.get("pv", "")), session_mark(u.password_hash)):
             request.session.clear()   # signed in before a password change: sign in again
             return None
@@ -236,6 +252,8 @@ def create_app() -> FastAPI:
             if roles and user.role not in roles:
                 raise HTTPException(403, "Your account does not have access to this page.")
             sec = SEC.section_for(request.url.path)
+            if sec and sec in user.archived:
+                raise HTTPException(404, f"{SEC.LABELS[sec]} is archived. An admin can bring it back on the Staff page.")
             if sec and not user.sees(sec):
                 raise HTTPException(403, f"{SEC.LABELS[sec]} is turned off for your account. Ask an admin if you need it.")
             return user
@@ -1927,7 +1945,7 @@ def create_app() -> FastAPI:
     @app.get("/staff", response_class=HTMLResponse)
     def staff_page(request: Request, user=Depends(staff("admin"), scope="function"), db: Session = Depends(get_db, scope="function")):
         return render(request, "staff.html", user, rows=db.scalars(select(StaffUser).order_by(StaffUser.username)).all(), roles=ROLES,
-                      sections=SEC.SECTIONS,
+                      sections=SEC.SECTIONS, archived=SEC.archived(db),
                       uploaded_logo=db.get(AppSetting, LOGO_TYPE_KEY) is not None)
 
     @app.post("/staff")
@@ -1966,6 +1984,21 @@ def create_app() -> FastAPI:
             log(db, "admin", f"{user.username} changed the sections for {', '.join(changed)}.")
         flash(request, f"Saved the sections for {', '.join(changed)}." if changed else "No changes.")
         return back("/staff#sections")
+
+    @app.post("/staff/archive")
+    async def staff_archive(request: Request, user=Depends(staff("admin"), scope="function"), db: Session = Depends(get_db, scope="function")):
+        """Archive sections for the whole team (their data stays), or bring them back."""
+        f = await form_checked(request)
+        before = SEC.archived(db)
+        after = {k for k in f.getlist("archived") if k in SEC.KEYS}
+        SEC.set_archived(db, after)
+        gone, back_again = sorted(after - before), sorted(before - after)
+        parts = ([f"archived {', '.join(SEC.LABELS[k] for k in gone)}"] if gone else []) + \
+                ([f"brought back {', '.join(SEC.LABELS[k] for k in back_again)}"] if back_again else [])
+        if parts:
+            log(db, "admin", f"{user.username} {' and '.join(parts)}.")
+        flash(request, ("Saved: " + " and ".join(parts) + ".") if parts else "No changes.")
+        return back("/staff#archive")
 
     @app.post("/staff/{uid}/password")
     async def staff_password(request: Request, uid: int, user=Depends(any_staff, scope="function"), db: Session = Depends(get_db, scope="function")):

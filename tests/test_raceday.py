@@ -103,6 +103,8 @@ def app():
     for name, role in (("boss", "admin"), ("coach1", "coach"), ("helper", "assistant")):
         db.add(StaffUser(username=name, role=role, password_hash=hash_password("correct-horse-1")))
     db.add(Course(name="Gibson Ranch", map_url="https://example.org/map.png"))
+    from xcapp import sections as SEC
+    SEC.set_archived(db, [])            # Race Day is archived on the team's site; these tests use it
     db.commit()
     db.close()
     return create_app()
@@ -250,3 +252,36 @@ def test_spot_order_and_coaches_keep_taps_with_their_spot(session):
     assert race["checkpoints"] == ["Finish", "Two Mile"] and race["order"] == [0, 1]
     assert RD.state(session, b, first)["race"]["order"] == [2, 1, 3]
     assert session.query(RaceBoardLog).filter_by(race_id=first).count() == 2
+
+
+def test_archived_race_day(app):
+    """Archived (as on the team's site): out of every menu, pages and shared links closed, data kept, and back again."""
+    from xcapp import sections as SEC
+    from xcapp.db import SessionLocal
+    from xcapp.models import RaceBoard
+    boss = login(app, "boss")
+    csrf = re.search(r'name="csrf" value="([^"]+)"', boss.get("/race-day").text).group(1)
+    boss.post("/race-day/new", data={"csrf": csrf, "label": "Sac Meet"})
+    tap = re.search(r'href="/rd/([A-Za-z0-9]+)"', boss.get("/race-day").text).group(1)
+    staff_page = boss.get("/staff").text
+    assert 'action="/staff/archive"' in staff_page
+    csrf = re.search(r'name="csrf" value="([^"]+)"', staff_page).group(1)
+    boss.post("/staff/archive", data={"csrf": csrf, "archived": "raceday"})
+    assert "archived Race Day" in boss.get("/staff").text
+    assert 'href="/race-day"' not in boss.get("/week").text                  # gone from the admin's menu too
+    r = boss.get("/race-day")
+    assert r.status_code == 404 and "archived" in r.text
+    coach = login(app, "coach1")
+    assert 'href="/race-day"' not in coach.get("/week").text and coach.get("/race-day").status_code == 404
+    shared = TestClient(app).get(f"/rd/{tap}")
+    assert shared.status_code == 404 and "Race Day is archived" in shared.text
+    with SessionLocal() as db:
+        assert db.query(RaceBoard).count() == 1 and SEC.archived(db) == {"raceday"}     # nothing deleted
+    boss.post("/staff/archive", data={"csrf": csrf})                         # bring it back
+    assert "brought back Race Day" in boss.get("/staff").text
+    assert 'href="/race-day"' in boss.get("/week").text and TestClient(app).get(f"/rd/{tap}").status_code == 200
+
+
+def test_archived_by_default_on_the_site(session):
+    from xcapp import sections as SEC
+    assert SEC.archived(session) == {"raceday"}

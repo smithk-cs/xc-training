@@ -52,6 +52,11 @@ def test_password_change_signs_out_other_devices():
 
 def test_security_headers_and_race_day_permissions():
     app, _ = setup_app()
+    from xcapp import sections as SEC
+    from xcapp.db import SessionLocal
+    with SessionLocal() as db:
+        SEC.set_archived(db, [])        # Race Day is archived on the team's site; this test uses it
+        db.commit()
     c = login(app, "boss")
     h = c.get("/week").headers
     assert "camera=()" in h["permissions-policy"] and "geolocation=()" in h["permissions-policy"]

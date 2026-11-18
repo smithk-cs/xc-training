@@ -31,6 +31,29 @@ SECTIONS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
 KEYS = {k for k, _, _ in SECTIONS}
 LABELS = {k: label for k, label, _ in SECTIONS}
 
+# Archived sections: out of everyone's menu (admins too) and their pages closed, with their data kept, until an admin
+# brings them back on the Staff page. Race Day was archived in November 2026; until the list is first saved, that's it.
+ARCHIVED_KEY = "archived_sections"
+ARCHIVED_DEFAULT = "raceday"
+PUBLIC_PREFIXES = {"raceday": ("/rd/", "/rw/")}     # links that work without signing in (Race Day's tap and watch links)
+
+
+def archived(db) -> set[str]:
+    from .analysis import get_setting
+    return {k for k in get_setting(db, ARCHIVED_KEY, ARCHIVED_DEFAULT).split(",") if k in KEYS}
+
+
+def set_archived(db, keys) -> None:
+    from .analysis import set_setting
+    set_setting(db, ARCHIVED_KEY, ",".join(k for k, _, _ in SECTIONS if k in set(keys)))
+
+
+def public_section(path: str) -> str | None:
+    for key, prefixes in PUBLIC_PREFIXES.items():
+        if path.startswith(prefixes):
+            return key
+    return None
+
 
 def section_for(path: str) -> str | None:
     """The section a page address belongs to ('/newsletter-tips' is Newsletter, '/races/edit-meet' is Races)."""

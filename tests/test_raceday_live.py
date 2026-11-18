@@ -61,6 +61,8 @@ def app():
     from xcapp.web import create_app
     db = SessionLocal()
     db.add(StaffUser(username="coach1", role="coach", password_hash=hash_password("correct-horse-1")))
+    from xcapp import sections as SEC
+    SEC.set_archived(db, [])            # Race Day is archived on the team's site; these tests use it
     db.commit()
     db.close()
     return create_app()

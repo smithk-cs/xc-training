@@ -43,6 +43,19 @@
   </script>
 </div>
 {% endif %}
+{% if user.role == 'admin' %}
+<div class="card" id="archive">
+  <h2>Archived sections</h2>
+  <p class="small muted">An archived section leaves everyone’s menu, admins included, and its pages (and any links shared from it) say it’s archived. Nothing is deleted: untick it to bring it back as it was.</p>
+  <form method="post" action="/staff/archive">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <div style="display:flex; flex-wrap:wrap; gap:6px 16px; margin-bottom:10px">
+      {% for k, label, _ in sections %}<label class="check"><input type="checkbox" name="archived" value="{{ k }}"{{ ' checked' if k in archived }}> {{ label }}</label>{% endfor %}
+    </div>
+    <button type="submit" class="secondary">Save archived sections</button>
+  </form>
+</div>
+{% endif %}
 <div class="card">
   <h2>Add a staff member</h2>
   <form method="post" action="/staff">

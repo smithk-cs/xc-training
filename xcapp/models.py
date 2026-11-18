@@ -40,8 +40,9 @@ class StaffUser(Base):
         return set() if self.role == "admin" else {s for s in (self.hidden_sections or "").split(",") if s}
 
     def sees(self, key: str) -> bool:
-        """Whether this account has the section (admins always have every one)."""
-        return key not in self.hidden
+        """Whether this account has the section (admins always have every one), and it isn't archived for the team
+        (web.current_user sets archived, from sections.archived)."""
+        return key not in self.hidden and key not in getattr(self, "archived", ())
 
     @property
     def display_name(self) -> str:
