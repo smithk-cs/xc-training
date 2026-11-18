@@ -16,28 +16,46 @@
   <button type="button" class="menu-btn" aria-expanded="false" aria-controls="top-menu">Menu</button>
   <div class="top-menu" id="top-menu">
   <nav aria-label="Main">
+    {#- The menu in labelled groups. Each link keeps its section check (user.sees); a group with no links left is not shown.
+        Wide screens: a row of group labels, each opening its links below. Phones: the Menu button shows every group, headed. -#}
     {% set p = request.url.path %}
-    {% if user.sees("dashboard") %}<a href="/dashboard" {% if p == '/dashboard' %}aria-current="page"{% endif %}>Dashboard</a>{% endif %}
-    {% if user.sees("athletes") %}<a href="/athletes" {% if p.startswith('/athletes') %}aria-current="page"{% endif %}>Athletes</a>{% endif %}
-    {% if user.sees("charts") %}<a href="/charts" {% if p == '/charts' %}aria-current="page"{% endif %}>Charts</a>{% endif %}
-    {% if user.sees("races") %}<a href="/races" {% if p == '/races' %}aria-current="page"{% endif %}>Races</a>{% endif %}
-    {% if user.sees("courses") %}<a href="/courses" {% if p == '/courses' %}aria-current="page"{% endif %}>Courses</a>{% endif %}
-    {% if user.sees("entries") %}<a href="/registrations" {% if p.startswith('/registrations') %}aria-current="page"{% endif %}>Entries</a>{% endif %}
-    {% if user.sees("goals") %}<a href="/results" {% if p.startswith('/results') %}aria-current="page"{% endif %}>Goals</a>{% endif %}
-    {% if user.sees("workouts") %}<a href="/workouts" {% if p == '/workouts' %}aria-current="page"{% endif %}>Workouts</a>{% endif %}
-    {% if user.sees("week") %}<a href="/week" {% if p == '/week' %}aria-current="page"{% endif %}>Week</a>{% endif %}
-    {% if user.sees("squads") %}<a href="/squads" {% if p.startswith('/squads') %}aria-current="page"{% endif %}>Squads</a>{% endif %}
-    {% if user.sees("form") %}<a href="/form" {% if p == '/form' %}aria-current="page"{% endif %}>Running form</a>{% endif %}
-    {% if user.sees("raceday") %}<a href="/race-day" {% if p.startswith('/race-day') %}aria-current="page"{% endif %}>Race Day</a>{% endif %}
-    {% if user.sees("calendar") %}<a href="/calendar" {% if p.startswith('/calendar') %}aria-current="page"{% endif %}>Calendar</a>{% endif %}
-    {% if user.sees("vdot") %}<a href="/vdot" {% if p == '/vdot' %}aria-current="page"{% endif %}>VDOT</a>{% endif %}
-    {% if user.sees("reports") %}<a href="/reports" {% if p.startswith('/reports') %}aria-current="page"{% endif %}>Reports</a>{% endif %}
-    {% if user.sees("newsletter") %}<a href="/newsletter" {% if p.startswith('/newsletter') %}aria-current="page"{% endif %}>Newsletter</a>{% endif %}
-    {% if user.sees("groups") %}<a href="/groups" {% if p == '/groups' %}aria-current="page"{% endif %}>Groups</a>{% endif %}
-    {% if user.sees("injuries") %}<a href="/injuries" {% if p == '/injuries' %}aria-current="page"{% endif %}>Injuries</a>{% endif %}
-    {% if user.sees("ai") %}<a href="/ai" {% if p == '/ai' %}aria-current="page"{% endif %}>AI</a>{% endif %}
-    {% if user.sees("sync") %}<a href="/sync" {% if p == '/sync' %}aria-current="page"{% endif %}>Sync log</a>{% endif %}
-    {% if user.role == 'admin' %}<a href="/staff" {% if p == '/staff' %}aria-current="page"{% endif %}>Staff</a>{% endif %}
+    {% set menu = [
+      ("Today", [
+        (user.sees("dashboard"), "/dashboard", "Dashboard", p == '/dashboard'),
+        (user.sees("week"), "/week", "Week", p == '/week')]),
+      ("Athletes", [
+        (user.sees("athletes"), "/athletes", "Athletes", p.startswith('/athletes')),
+        (user.sees("vdot"), "/vdot", "VDOT", p == '/vdot'),
+        (user.sees("groups"), "/groups", "Groups", p == '/groups'),
+        (user.sees("injuries"), "/injuries", "Injuries", p == '/injuries'),
+        (user.sees("form"), "/form", "Running form", p == '/form')]),
+      ("Training", [
+        (user.sees("workouts"), "/workouts", "Workouts", p == '/workouts'),
+        (user.sees("calendar"), "/calendar", "Calendar", p.startswith('/calendar')),
+        (user.sees("squads"), "/squads", "Squads", p.startswith('/squads')),
+        (user.sees("goals"), "/results", "Goals", p.startswith('/results'))]),
+      ("Racing", [
+        (user.sees("races"), "/races", "Races", p == '/races'),
+        (user.sees("entries"), "/registrations", "Entries", p.startswith('/registrations')),
+        (user.sees("courses"), "/courses", "Courses", p == '/courses'),
+        (user.sees("raceday"), "/race-day", "Race Day", p.startswith('/race-day'))]),
+      ("Team", [
+        (user.sees("newsletter"), "/newsletter", "Newsletter", p.startswith('/newsletter')),
+        (user.sees("reports"), "/reports", "Reports", p.startswith('/reports')),
+        (user.sees("charts"), "/charts", "Charts", p == '/charts'),
+        (user.sees("ai"), "/ai", "AI", p == '/ai')]),
+      ("Admin", [
+        (user.sees("sync"), "/sync", "Sync log", p == '/sync'),
+        (user.role == 'admin', "/staff", "Staff", p == '/staff')]),
+    ] %}
+    {% for label, items in menu %}{% set links = items|selectattr("0")|list %}{% if links %}
+    <div class="nav-group{% if links|selectattr('3')|list %} current{% endif %}">
+      <button type="button" class="nav-label" aria-expanded="false" aria-controls="nav-{{ label|lower }}">{{ label }}</button>
+      <span class="nav-title" aria-hidden="true">{{ label }}</span>
+      <ul class="nav-links" id="nav-{{ label|lower }}" aria-label="{{ label }}">
+        {% for _, href, text, here in links %}<li><a href="{{ href }}" {% if here %}aria-current="page"{% endif %}>{{ text }}</a></li>{% endfor %}
+      </ul>
+    </div>{% endif %}{% endfor %}
   </nav>
   <div class="top-user"><span class="who">{{ user.username }} ({{ user.role }})</span>
     <form method="post" action="/logout"><input type="hidden" name="csrf" value="{{ csrf }}"><button type="submit">Sign out</button></form></div>
@@ -53,6 +71,31 @@
       b.setAttribute('aria-expanded', open ? 'true' : 'false');
       b.textContent = open ? 'Close' : 'Menu';
     });
+    // wide screens: each group label opens its links below it, one group at a time
+    var groups = [].slice.call(top.querySelectorAll('.nav-group'));
+    function shut(except) {
+      groups.forEach(function (g) {
+        if (g === except) return;
+        g.classList.remove('open');
+        g.querySelector('.nav-label').setAttribute('aria-expanded', 'false');
+      });
+    }
+    groups.forEach(function (g) {
+      var label = g.querySelector('.nav-label');
+      label.addEventListener('click', function () {
+        var open = g.classList.toggle('open');
+        label.setAttribute('aria-expanded', open ? 'true' : 'false');
+        shut(g);
+      });
+      g.addEventListener('focusout', function (e) { if (e.relatedTarget && !g.contains(e.relatedTarget)) shut(); });
+    });
+    document.addEventListener('click', function (e) { if (!e.target.closest('.nav-group')) shut(); });
+    document.addEventListener('keydown', function (e) {
+      if (e.key !== 'Escape') return;
+      var g = groups.filter(function (x) { return x.classList.contains('open'); })[0];
+      if (g) { shut(); g.querySelector('.nav-label').focus(); }
+    });
+    window.addEventListener('resize', function () { shut(); });
   })();</script>
 </header>
 {% endif %}

@@ -387,7 +387,9 @@ def create_app() -> FastAPI:
                if delete_by(a) <= soon]
         today_ = A.team_today()
         notes = db.scalars(select(Announcement).order_by(Announcement.start_date.desc(), Announcement.id.desc())).all()
-        return render(request, "home.html", user, snap=snap, stats=stats, last_ai=last_ai, webhook=webhook, deletions=deletions, due=due,
+        ids = {a.code: a.id for a in db.scalars(select(Athlete).where(A.on_team())).all()}   # the watch list carries athlete codes (A07)
+        watch = [{**w, "id": ids.get(w["athlete_id"])} for w in snap["watchlist"]]
+        return render(request, "home.html", user, snap=snap, watch=watch, stats=stats, last_ai=last_ai, webhook=webhook, deletions=deletions, due=due,
                       notes_now=[n for n in notes if n.start_date <= today_ <= n.end_date], notes_later=[n for n in notes if n.start_date > today_][::-1],
                       notes_past=[n for n in notes if n.end_date < today_][:20], audiences=["Boys", "Girls"] + [g.name for g in
                       db.scalars(select(TrainingGroup).order_by(TrainingGroup.position)).all()], today_iso=today_.isoformat(),
@@ -2240,8 +2242,8 @@ def create_app() -> FastAPI:
         acts = db.scalars(select(Activity).where(Activity.athlete_id == a.id).order_by(Activity.start_utc.desc()).limit(10)).all()
         today = A.team_today()
         open_delete = db.scalar(select(DeletionRequest).where(DeletionRequest.athlete_id == a.id, DeletionRequest.status == "open"))
-        need = db.scalar(select(func.count(Activity.id)).where(
-            Activity.athlete_id == a.id, Activity.rpe.is_(None), Activity.local_date > today - dt.timedelta(days=14)))
+        unrated = _unrated_runs(db, a, today)
+        need, first_unrated = len(unrated), (unrated[0] if unrated else None)
         roster, bench = A.roster_rows(db, athlete=a), A.benchmark_rows(db, athlete=a)
         prog, seasons = A.progress(bench, A.goal_rows(db, athlete=a), roster)
         tiles = [p for p in prog if p["current"] is not None]
@@ -2260,7 +2262,7 @@ def create_app() -> FastAPI:
             RaceTeamResult.video_url != "", RaceTeamResult.date.in_({r.date for r in races} or {today}))).all()}
         from .form_web import for_athlete as form_reports
         return render(request, "athlete.html", None, history=history, videos=videos, forms=form_reports(db, a.id),
-                      form_focus=FP.focus(FP.latest(db, [a.id]).get(a.id)), form_hist=FP.history(db, a.id), adjusted=CS.adjusted_times(db, races), paces=paces, a=a, acts=acts, tiles=tiles, seasons=seasons, need=need, ability=ability,
+                      form_focus=FP.focus(FP.latest(db, [a.id]).get(a.id)), form_hist=FP.history(db, a.id), adjusted=CS.adjusted_times(db, races), paces=paces, a=a, acts=acts, tiles=tiles, seasons=seasons, need=need, first_unrated=first_unrated, ability=ability,
                       show_group=show_group, open_delete=open_delete, races=races, vo2=A.latest_vo2(db, a.id),
                       rhr=A.resting_hr(db, a.id, today), rhr_range=(A.RESTING_HR_MIN, A.RESTING_HR_MAX),
                       rhr_cal=A.resting_hr_calendar(db, a.id, today), photo_v=photo_versions(db).get(a.id), meets=my_meets(db, a, today),
@@ -3411,6 +3413,12 @@ def create_app() -> FastAPI:
 
     # ---------- athlete: my runs, effort and pain per run ----------
 
+    def _unrated_runs(db: Session, a: Athlete, today: dt.date) -> list[Activity]:
+        """The athlete's runs from the last two weeks still without an effort rating, oldest first."""
+        return list(db.scalars(select(Activity).where(
+            Activity.athlete_id == a.id, Activity.rpe.is_(None), Activity.local_date > today - dt.timedelta(days=14))
+            .order_by(Activity.start_utc, Activity.id)).all())
+
     def _own_run(db: Session, a: Athlete, activity_id: int) -> Activity:
         act = db.get(Activity, activity_id)
         if act is None or act.athlete_id != a.id:
@@ -3496,8 +3504,14 @@ def create_app() -> FastAPI:
         msg = "Saved. Thanks for adding your effort."
         if level is not None and level >= A.PAIN_FLAG:
             msg += " That’s a lot of pain: please also tell your coach or athletic trainer in person."
+        db.flush()
+        nxt = _unrated_runs(db, a, A.team_today())
+        if nxt:   # on to the next run still waiting for its effort (its form opens near the top, below the note), else home
+            n = len(nxt)
+            flash(request, msg + f" {n} more run{'' if n == 1 else 's'} to rate.")
+            return back(f"/a/{token}/runs/{nxt[0].id}")
         flash(request, msg)
-        return back(f"/a/{token}/runs")
+        return back(f"/a/{token}")
 
     # ---------- athlete: a day I didn't run ----------
 
