@@ -202,11 +202,15 @@ def test_zip_with_false_sizes_is_refused(chunk):
 
 def test_too_many_files_in_a_zip():
     assert FF.MAX_FITS_PER_UPLOAD <= 1000
-    with pytest.raises(FF.FitError, match=f"more than {FF.MAX_FITS_PER_UPLOAD} activity files"):
+    with pytest.raises(FF.FitError, match=f"more than {FF.MAX_FITS_PER_UPLOAD:,} activity files"):
         FF.fit_files("many.zip", zipped([(f"{i}.fit", b"x") for i in range(FF.MAX_FITS_PER_UPLOAD + 1)]))
 
 
-def test_zip_bomb_upload_gets_a_clear_message(chunk):
+def test_zip_bomb_upload_gets_a_clear_message(chunk, monkeypatch):
+    """The upload page reads one file at a time, to a larger total (a whole Garmin export); past it, a clear message.
+    The limit is lowered here so the test needn't unpack gigabytes."""
+    from xcapp import web
+    monkeypatch.setattr(web, "MAX_STREAM_UNPACKED_BYTES", 100 * 1024 * 1024)
     app, aid = mkapp()
     c = TestClient(app, follow_redirects=False)
     half = zipped([(f"run{i}.fit", chunk) for i in range(3)])   # 75 MB each: two together are over the limit

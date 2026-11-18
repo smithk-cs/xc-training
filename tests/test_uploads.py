@@ -167,10 +167,48 @@ def test_big_uploads_run_in_the_background(client, monkeypatch):
     monkeypatch.setattr(web, "BIG_UPLOAD", 2)
     monkeypatch.setattr(web.threading, "Thread", NowThread)
     msgs = upload(client, [("runs.zip", zipped([(f"{d}.fit", run(d)) for d in (1, 2, 3)] + [("ride.fit", ride(4))]))])
-    assert msgs == [("ok", "Adding 4 files in the background. Runs appear over the next few minutes; the Sync log says when "
-                           "it&#39;s done. The rest of the app works as usual meanwhile.")]
+    assert msgs == [("ok", "Adding the runs in that upload in the background. They appear over the next few minutes (a whole "
+                           "Garmin export can take longer); the Sync log says when it&#39;s done. The rest of the app works as "
+                           "usual meanwhile.")]
     assert started == [True] and runs() == [1, 2, 3]
     from xcapp.models import SyncLog
     db = SessionLocal()
     assert db.query(SyncLog).filter_by(kind="upload").one().message == "Upload for Ava Doyle: 3 runs added, 0 already there, 1 not runs, 0 unreadable."
     db.close()
+
+
+def test_a_whole_export_is_read_one_file_at_a_time(client, monkeypatch):
+    """A Garmin export: zips inside a zip, unpacked as the background job goes; one that turns out damaged partway
+    stops it, keeping the runs already added."""
+    from xcapp import fitfile as FF
+    from xcapp import web
+    from xcapp.models import SyncLog
+
+    class NowThread:
+        def __init__(self, target, args, daemon):
+            self.target, self.args = target, args
+
+        def start(self):
+            self.target(*self.args)
+    monkeypatch.setattr(web, "BIG_UPLOAD", 2)
+    monkeypatch.setattr(web.threading, "Thread", NowThread)
+    held = []
+    real = FF.iter_fit_files
+
+    def watching(name, data, budget, _depth=0):      # how many files are unpacked at once
+        for item in real(name, data, budget, _depth):
+            held.append(budget.files)
+            yield item
+    monkeypatch.setattr(web, "iter_fit_files", watching)
+    part1 = zipped([(f"{d}.fit", run(d)) for d in (1, 2, 3)])
+    part2 = zipped([(f"{d}.fit", run(d)) for d in (4, 5)])
+    upload(client, [("export.zip", zipped([("DI_CONNECT/part1.zip", part1), ("DI_CONNECT/part2.zip", part2)]))])
+    assert runs() == [1, 2, 3, 4, 5] and held == [1, 2, 3, 4, 5]
+    # A damaged inner zip after the first three runs: those stay, and the Sync log says why it stopped
+    upload(client, [("export2.zip", zipped([("a.zip", zipped([(f"{d}.fit", run(d)) for d in (6, 7, 8)])),
+                                            ("b.zip", b"PK\x03\x04 not really a zip")]))])
+    assert runs() == [1, 2, 3, 4, 5, 6, 7, 8]
+    db = SessionLocal()
+    msg = db.query(SyncLog).filter_by(kind="upload").order_by(SyncLog.id.desc()).first().message
+    db.close()
+    assert msg == "Upload for Ava Doyle stopped after 3 runs were added: b.zip is not a readable .zip file."

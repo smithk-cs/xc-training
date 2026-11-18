@@ -17,6 +17,10 @@ MAX_FIT_BYTES = 25 * 1024 * 1024
 MAX_UPLOAD_BYTES = 200 * 1024 * 1024  # one uploaded file, e.g. a Garmin "Export Your Data" zip
 MAX_UNPACKED_BYTES = 100 * 1024 * 1024  # everything unpacked from one upload's zips (and zips inside them), together
 MAX_FITS_PER_UPLOAD = 1000
+# Read one file at a time (iter_fit_files, for the upload page), memory holds only the zip and the file being read, so
+# a whole Garmin "Export Your Data" file fits: years of runs. These limits only bound the time it takes.
+MAX_STREAM_UNPACKED_BYTES = 2 * 1024 * 1024 * 1024
+MAX_STREAM_FITS = 5000
 RUNNING_SPORTS = {"running", "track_running", "trail_running", "treadmill_running", "indoor_running", "virtual_running"}
 
 
@@ -186,24 +190,33 @@ def parse_fit(data: bytes) -> ParsedActivity:
     )
 
 
-def fit_files(name: str, data: bytes, _depth: int = 0, unpacked: list[int] | None = None) -> list[tuple[str, bytes]]:
-    """The .fit files in one upload: the file itself, or every .fit inside a .zip (zips inside zips too, as in
-    Garmin's data export). Everything else in a zip is ignored. Raises FitError for a damaged or oversized zip.
+class UploadBudget:
+    """What one upload may unpack, shared across its files and the zips inside them: bytes and .fit files."""
+    def __init__(self, max_bytes: int = MAX_UNPACKED_BYTES, max_files: int = MAX_FITS_PER_UPLOAD):
+        self.max_bytes, self.max_files, self.bytes, self.files = max_bytes, max_files, 0, 0
 
-    A small zip can unpack to gigabytes, so everything unpacked from one upload counts toward MAX_UNPACKED_BYTES: each
-    entry's stated size is checked before it is unpacked, and the bytes actually read are counted too, since a zip
-    can state a size that isn't true. Pass the same unpacked ([0] to start) for several files uploaded together."""
+    def too_big(self) -> FitError:
+        return FitError(f"That upload unpacks to more than {self.max_bytes // (1024 * 1024):,} MB. Upload it in smaller parts.")
+
+
+def iter_fit_files(name: str, data: bytes, budget: UploadBudget, _depth: int = 0):
+    """The .fit files in one upload, one at a time (name, bytes): the file itself, or each .fit inside a .zip (zips
+    inside zips too, as in Garmin's data export). Everything else in a zip is ignored. Raises FitError, as it reaches
+    it, for a damaged zip or one past the budget.
+
+    A small zip can unpack to gigabytes, so everything unpacked counts toward the budget: each entry's stated size is
+    checked before it is unpacked, and the bytes actually read are counted too, since a zip can state a size that
+    isn't true."""
     if not data.startswith(b"PK\x03\x04"):
-        return [(name, data)]
+        budget.files += 1
+        yield name, data
+        return
     if _depth > 3:
-        return []
-    unpacked = unpacked if unpacked is not None else [0]     # bytes so far, shared with the zips inside this one
-    too_big = FitError(f"That upload unpacks to more than {MAX_UNPACKED_BYTES // (1024 * 1024)} MB. Upload it in smaller parts.")
+        return
     try:
         zf = zipfile.ZipFile(io.BytesIO(data))
     except zipfile.BadZipFile as exc:
         raise FitError(f"{name} is not a readable .zip file.") from exc
-    out: list[tuple[str, bytes]] = []
     for info in zf.infolist():
         low = info.filename.lower()
         if info.is_dir() or not low.endswith((".fit", ".zip")):
@@ -211,19 +224,29 @@ def fit_files(name: str, data: bytes, _depth: int = 0, unpacked: list[int] | Non
         limit = MAX_FIT_BYTES if low.endswith(".fit") else MAX_UPLOAD_BYTES
         if info.file_size > limit:  # sizes are checked before anything is unpacked
             continue
-        if unpacked[0] + info.file_size > MAX_UNPACKED_BYTES:
-            raise too_big
+        if budget.bytes + info.file_size > budget.max_bytes:
+            raise budget.too_big()
         try:
             with zf.open(info) as f:
-                inner = f.read(min(limit, MAX_UNPACKED_BYTES - unpacked[0]) + 1)
+                inner = f.read(min(limit, budget.max_bytes - budget.bytes) + 1)
         except (zipfile.BadZipFile, zlib.error, EOFError, NotImplementedError, RuntimeError) as exc:   # damaged, or locked with a password
             raise FitError(f"{name} is not a readable .zip file.") from exc
-        unpacked[0] += len(inner)
-        if unpacked[0] > MAX_UNPACKED_BYTES:
-            raise too_big
+        budget.bytes += len(inner)
+        if budget.bytes > budget.max_bytes:
+            raise budget.too_big()
         if len(inner) > limit:
             continue
-        out.extend([(info.filename, inner)] if low.endswith(".fit") else fit_files(info.filename, inner, _depth + 1, unpacked))
-        if len(out) > MAX_FITS_PER_UPLOAD:
-            raise FitError(f"That upload holds more than {MAX_FITS_PER_UPLOAD} activity files. Upload it in smaller parts.")
-    return out
+        if low.endswith(".fit"):
+            budget.files += 1
+            if budget.files > budget.max_files:
+                raise FitError(f"That upload holds more than {budget.max_files:,} activity files. Upload it in smaller parts.")
+            yield info.filename, inner
+        else:
+            yield from iter_fit_files(info.filename, inner, budget, _depth + 1)
+        del inner
+
+
+def fit_files(name: str, data: bytes) -> list[tuple[str, bytes]]:
+    """All the .fit files in one upload at once (see iter_fit_files), held in memory together, so within the smaller
+    limits: MAX_UNPACKED_BYTES and MAX_FITS_PER_UPLOAD."""
+    return list(iter_fit_files(name, data, UploadBudget()))

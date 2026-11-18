@@ -6,6 +6,7 @@ import datetime as dt
 import hmac
 import json
 import re
+import itertools
 import threading
 import time
 from collections import defaultdict, deque
@@ -56,7 +57,8 @@ from . import workout_view as WV
 from . import seasons as SE
 from .config import settings
 from .db import SessionLocal, create_all
-from .fitfile import MAX_FITS_PER_UPLOAD, MAX_UPLOAD_BYTES, FitError, fit_files, parse_fit
+from .fitfile import (MAX_STREAM_FITS, MAX_STREAM_UNPACKED_BYTES, MAX_UPLOAD_BYTES, FitError, UploadBudget, iter_fit_files,
+                      parse_fit)
 from .imports import (GROUPS, ImportErrors, clean_email, clean_phone, import_goals, import_races, import_results, import_roster,
                       import_vdots, parse_date, parse_distance, set_goal, sync_benchmark)
 from .ingest import ingest, log, rematch_day
@@ -879,8 +881,9 @@ def create_app() -> FastAPI:
         uploads = [u for u in uploads if getattr(u, "filename", "")]
         if not uploads:
             return "Choose a .fit or .zip file first.", "error"
-        files: list[tuple[str, bytes]] = []
-        unpacked = [0]          # bytes unpacked from all of this upload's zips together (fitfile.MAX_UNPACKED_BYTES)
+        raws: list[tuple[str, bytes]] = []
+        # Run files are unpacked one at a time (fitfile.iter_fit_files), so a whole Garmin export fits in memory
+        budget = UploadBudget(MAX_STREAM_UNPACKED_BYTES, MAX_STREAM_FITS)
         csv_runs, csv_skipped, unit = [], 0, ""
         try:
             for up in uploads:
@@ -894,9 +897,9 @@ def create_app() -> FastAPI:
                     csv_runs += runs
                     csv_skipped += skipped
                     continue
-                files.extend(fit_files(up.filename, raw, unpacked=unpacked))
-                if len(files) > MAX_FITS_PER_UPLOAD:
-                    raise FitError(f"That upload holds more than {MAX_FITS_PER_UPLOAD} activity files. Upload it in smaller parts.")
+                raws.append((up.filename, raw))
+            stream = (f for name, raw in raws for f in iter_fit_files(name, raw, budget))
+            files = list(itertools.islice(stream, BIG_UPLOAD + 1))   # the rest, if any, are read in the background
         except FitError as exc:
             return str(exc), "error"
         except GCSV.CsvError as exc:
@@ -906,10 +909,12 @@ def create_app() -> FastAPI:
         if len(files) == 1 and not csv_runs and not csv_skipped and not files[0][0].lower().endswith(".zip"):
             return _upload_one(db, a, files[0][1], files[0][0])
         if len(files) > BIG_UPLOAD:
-            # Reading hundreds of .fit files takes minutes and would hold up every other page; do it in the background.
-            threading.Thread(target=_upload_in_background, args=(a.id, a.name, files), daemon=True).start()
-            return (f"Adding {len(files)} files in the background. Runs appear over the next few minutes; "
-                    "the Sync log says when it's done. The rest of the app works as usual meanwhile."), "ok"
+            # Reading hundreds of .fit files takes minutes and would hold up every other page; do it in the background,
+            # unpacking the rest of the files one at a time as it goes.
+            threading.Thread(target=_upload_in_background, args=(a.id, a.name, itertools.chain(files, stream)), daemon=True).start()
+            return ("Adding the runs in that upload in the background. They appear over the next few minutes (a whole "
+                    "Garmin export can take longer); the Sync log says when it's done. The rest of the app works as usual "
+                    "meanwhile."), "ok"
         counts, dates = {"created": 0, "upgraded": 0, "duplicate": 0, "not_run": csv_skipped, "unreadable": 0}, []
         for parsed in csv_runs:
             act, outcome = ingest(db, a, parsed, "garmin_csv")
@@ -940,8 +945,9 @@ def create_app() -> FastAPI:
             parts.append(f"distances read as {unit}; runs from a Garmin Connect list have no laps, so no reps")
         return ", ".join(parts) + ".", "ok" if added or counts["duplicate"] else "error"
 
-    def _upload_in_background(athlete_id: int, name: str, files: list[tuple[str, bytes]]) -> None:
-        """Add a large batch of .fit files, saving every 25 so a restart loses little, then log the outcome."""
+    def _upload_in_background(athlete_id: int, name: str, files) -> None:
+        """Add a large batch of .fit files (an iterator: zips are unpacked as it goes), saving every 25 so a restart loses
+        little, then log the outcome. A zip that turns out damaged or too big stops it; what was added stays."""
         counts = {"created": 0, "upgraded": 0, "duplicate": 0, "not_run": 0, "unreadable": 0}
         db = SessionLocal()
         try:
@@ -962,6 +968,11 @@ def create_app() -> FastAPI:
             added = counts["created"] + counts["upgraded"]
             log(db, "upload", f"Upload for {name}: {added} runs added, {counts['duplicate']} already there, "
                               f"{counts['not_run']} not runs, {counts['unreadable']} unreadable.")
+            db.commit()
+        except FitError as exc:   # found partway through a zip: keep what was added
+            db.commit()
+            added = counts["created"] + counts["upgraded"]
+            log(db, "upload", f"Upload for {name} stopped after {added} runs were added: {exc}", "error")
             db.commit()
         except Exception as exc:
             db.rollback()
