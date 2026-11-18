@@ -1015,6 +1015,7 @@ class FormAnalysis(Base):
     note: Mapped[str] = mapped_column(String(300), default="")
     condition: Mapped[str] = mapped_column(String(10), default="fresh", server_default="fresh")   # fresh | tired (end of a workout)
     data: Mapped[str] = mapped_column(Text, default="{}")                 # form.clean(): metrics, curves, figure, fps...
+    emailed_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)   # last emailed to the athlete
 
 
 class SeasonWeek(Base):

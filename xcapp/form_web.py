@@ -2,8 +2,10 @@
 report (page and PDF) is kept with the athlete. Athletes see their own reports on their page. See form.py."""
 from __future__ import annotations
 
+import base64
 import json
 import re
+from html import escape
 from types import SimpleNamespace
 
 from fastapi import Depends, HTTPException, Request
@@ -14,9 +16,11 @@ from sqlalchemy.orm import Session
 from . import analysis as A
 from . import form as F
 from . import form_plan as FP
+from . import reminders as RM
 from . import season_plan as SPL
+from .config import settings
 from .ingest import log
-from .models import Athlete, FormAnalysis
+from .models import Athlete, FormAnalysis, utcnow
 from .security import csrf_ok
 
 # The capture page runs the pose model in the browser: WebAssembly needs 'wasm-unsafe-eval', the model runs in a
@@ -119,6 +123,33 @@ def register(app, h: SimpleNamespace) -> None:
         a = get_athlete(db, athlete_id)
         return pdf_response(db, a, one(db, a.id, fid))
 
+    @app.post("/athletes/{athlete_id}/form/{fid}/email")
+    async def form_email(request: Request, athlete_id: int, fid: int, user=Depends(coach_or_admin, scope="function"),
+                         db: Session = Depends(get_db, scope="function")):
+        """Email the athlete this report: the score and what to work on, with the PDF attached."""
+        await h.form_checked(request)
+        a = get_athlete(db, athlete_id)
+        fa = one(db, a.id, fid)
+        back_to = f"/athletes/{a.id}/form/{fa.id}"
+        if not a.email:
+            flash(request, f"{a.name} has no email address yet. Add it on their athlete page.", "error")
+            return back(back_to)
+        pdf = pdf_response(db, a, fa)
+        name = re.search(r'filename="([^"]+)"', pdf.headers["Content-Disposition"]).group(1)
+        try:
+            RM.send_email(a.email, *compose_report(a, fa), reply=RM.reply_to(db),
+                          attachments=[{"filename": name, "content": base64.b64encode(pdf.body).decode()}])
+        except RM.EmailError as exc:
+            flash(request, str(exc), "error")
+            return back(back_to)
+        fa.emailed_at = utcnow()
+        from . import push as PU
+        PU.send(db, [a.id], "Your running form report", "Your coaches emailed you your video analysis. Tap to see it on your page.",
+                f"{settings().base_url.rstrip('/')}/a/{a.link_token}#form")
+        log(db, "email", f"{user.username} emailed {a.name} their running-form report.")
+        flash(request, f"Emailed the report to {a.name} at {a.email}.")
+        return back(back_to)
+
     @app.post("/athletes/{athlete_id}/form/{fid}/delete")
     async def form_delete(request: Request, athlete_id: int, fid: int, user=Depends(coach_or_admin, scope="function"),
                           db: Session = Depends(get_db, scope="function")):
@@ -136,3 +167,47 @@ def register(app, h: SimpleNamespace) -> None:
 
 def for_athlete(db: Session, athlete_id: int) -> list[FormAnalysis]:
     return db.scalars(select(FormAnalysis).where(FormAnalysis.athlete_id == athlete_id).order_by(FormAnalysis.created_at.desc())).all()
+
+
+def compose_report(a: Athlete, fa: FormAnalysis) -> tuple[str, str, str]:
+    """The email with a running-form report: the score, the top things to work on (cue and drill), and the PDF."""
+    s = settings()
+    rep = F.report(json.loads(fa.data).get("metrics", {}), fa.pace_s)
+    day = A.local_time(fa.created_at).date() if fa.created_at else A.team_today()
+    link = f"{s.base_url.rstrip('/')}/a/{a.link_token}"
+    subject = f"{s.team_name}: your running form report ({day:%b %-d})"
+    score = f"{rep['score']:.0f}%" if rep["score"] is not None else None
+    focus = rep["focus"]
+    intro = f"Here is the video analysis of your running form from {day:%B %-d}" + (f", filmed by {fa.by}" if fa.by else "") + "."
+    text_lines = [f"Hi {a.first_name},", "", intro, "The full report is attached as a PDF.", ""]
+    if score:
+        text_lines += [f"Form score: {score}", ""]
+    if focus:
+        text_lines += ["What to work on first:"]
+        for c in focus:
+            text_lines += [f"  {c['priority']}. {c['title']}: {c['summary']}"]
+            text_lines += [f"     Cue: {c['cue']}"] if c["cue"] else []
+            text_lines += [f"     Drill: {c['drill']}"] if c["drill"] else []
+        text_lines += [""]
+    else:
+        text_lines += ["Everything we measured is in the usual range. Keep it up.", ""]
+    if fa.note:
+        text_lines += [f"Coach's note: {fa.note}", ""]
+    text_lines += [f"Your page: {link}", "", "Questions? Reply to this email.", "", s.team_name]
+    items = "".join(
+        f'<li style="margin:10px 0"><b>{escape(c["title"])}</b>: {escape(c["summary"])}'
+        + (f'<br><span style="color:#6B645C">Cue:</span> {escape(c["cue"])}' if c["cue"] else "")
+        + (f'<br><span style="color:#6B645C">Drill:</span> {escape(c["drill"])}' if c["drill"] else "") + "</li>"
+        for c in focus)
+    html = f"""<div style="font-family:Arial,Helvetica,sans-serif;max-width:520px;color:#1B1B1F">
+<div style="background:#A6192E;color:#fff;padding:14px 18px;border-bottom:4px solid #C99A2E;font-weight:bold;font-size:18px">{escape(s.team_name)}</div>
+<div style="padding:16px 18px">
+<p>Hi {escape(a.first_name)},</p><p>{escape(intro)} The full report is attached as a PDF.</p>
+{f'<p style="font-size:22px;font-weight:bold;margin:12px 0">Form score: {score}</p>' if score else ''}
+{f'<p style="margin-bottom:0"><b>What to work on first:</b></p><ol style="padding-left:20px;margin-top:4px">{items}</ol>' if focus
+ else '<p>Everything we measured is in the usual range. Keep it up.</p>'}
+{f'<p><b>Coach’s note:</b> {escape(fa.note)}</p>' if fa.note else ''}
+<p><a href="{escape(link)}" style="display:inline-block;background:#A6192E;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none;font-weight:bold">Open my page</a></p>
+<p style="font-size:12px;color:#6B645C">Questions? Reply to this email.</p>
+</div></div>"""
+    return subject, "\n".join(text_lines), html

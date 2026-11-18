@@ -4,8 +4,16 @@
 <p class="small"><a href="/athletes/{{ a.id }}">← {{ a.name }}</a></p>
 <div class="form-row" style="justify-content:space-between">
   <h1 style="margin:0">Running form: {{ a.name }}</h1>
-  <a class="button" href="/athletes/{{ a.id }}/form/{{ fa.id }}/pdf">Download PDF</a>
+  <div class="form-row">
+    <a class="button" href="/athletes/{{ a.id }}/form/{{ fa.id }}/pdf">Download PDF</a>
+    {% if user.role in ('admin', 'coach') and a.email %}
+    <form method="post" action="/athletes/{{ a.id }}/form/{{ fa.id }}/email" class="inline" style="margin:0"
+          onsubmit="return confirm('Email this report to {{ a.email }}?')">
+      <input type="hidden" name="csrf" value="{{ csrf }}"><button type="submit" class="secondary">Email to {{ a.first_name }}</button></form>
+    {% endif %}
+  </div>
 </div>
+{% if user.role in ('admin', 'coach') %}<p class="small muted" style="margin:4px 0 0">{% if not a.email %}Add {{ a.first_name }}’s email on <a href="/athletes/{{ a.id }}">their athlete page</a> to email this report.{% elif fa.emailed_at %}Emailed to {{ a.email }} on {{ (fa.emailed_at|local).strftime('%b %-d, %Y') }}.{% else %}Not emailed yet. It sends the score, the top things to work on and the PDF.{% endif %}</p>{% endif %}
 <p class="small muted">{% if fa.condition == 'tired' %}<span class="pill warn">Tired: end of a workout</span> {% endif %}Filmed {{ (fa.created_at|local).strftime('%b %-d, %Y, %-I:%M %p') }}{% if fa.by %} by {{ fa.by }}{% endif %} · {{ data.contacts }} foot strikes · {{ '%.0f' % data.fps if data.fps else '?' }} frames a second{% if fa.note %} · {{ fa.note }}{% endif %}</p>
 
 <div id="view"></div>

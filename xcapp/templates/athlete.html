@@ -255,7 +255,7 @@
   {% endif %}
 
   {% if forms %}
-  <section class="panel" aria-labelledby="fm-h">
+  <section class="panel" id="form" aria-labelledby="fm-h">
     <h2 id="fm-h">My running form</h2>
     {% include "_form_progress.html" %}
     <ul class="plain-list">{% for f in forms %}<li><a href="/a/{{ token }}/form/{{ f.id }}/pdf">Form report, {{ (f.created_at|local).strftime('%b %-d, %Y') }}</a>{% if f.score is not none %} · score {{ '%.0f%%' % f.score }}{% endif %}</li>{% endfor %}</ul>

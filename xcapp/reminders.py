@@ -133,7 +133,9 @@ def reply_to(db: Session) -> str:
     return A.get_setting(db, REPLY_TO_KEY, "")
 
 
-def send_email(to: str, subject: str, text: str, html: str, http: httpx.Client | None = None, reply: str = "") -> str:
+def send_email(to: str, subject: str, text: str, html: str, http: httpx.Client | None = None, reply: str = "",
+               attachments: list[dict] | None = None) -> str:
+    """Send one email; attachments: [{"filename", "content" (base64)}]."""
     s = settings()
     if not s.email_configured:
         raise EmailError("Email isn’t set up yet: add RESEND_API_KEY and EMAIL_FROM.")
@@ -141,7 +143,7 @@ def send_email(to: str, subject: str, text: str, html: str, http: httpx.Client |
     try:
         r = client.post(RESEND_URL, headers={"Authorization": f"Bearer {s.resend_api_key}"},
                         json={"from": s.email_from, "to": [to], "subject": subject, "text": text, "html": html,
-                              **({"reply_to": [reply]} if reply else {})})
+                              **({"reply_to": [reply]} if reply else {}), **({"attachments": attachments} if attachments else {})})
     finally:
         if http is None:
             client.close()

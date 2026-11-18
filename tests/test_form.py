@@ -169,3 +169,52 @@ def test_save_view_pdf_and_who_sees_it():
     db = SessionLocal()
     assert db.query(FormAnalysis).count() == 0
     db.close()
+
+
+def test_email_report_to_the_athlete(monkeypatch):
+    import base64
+    from xcapp import push as PU
+    from xcapp import reminders as RM
+    from xcapp.db import SessionLocal
+    from xcapp.models import Athlete, FormAnalysis, StaffUser
+    from xcapp.security import hash_password
+    from xcapp.web import create_app
+    db = SessionLocal()
+    db.add(StaffUser(username="coach1", role="coach", password_hash=hash_password("correct-horse-1")))
+    a = Athlete(first_name="Sam", last_name="Reyes", gender="Boys", grade=11, group="Varsity", link_token="tok-sam")
+    db.add(a)
+    db.flush()
+    clean = F.clean(sample())
+    fa = FormAnalysis(athlete_id=a.id, by="Coach K", pace_s=380, note="tempo pace", data=json.dumps(clean),
+                      score=F.report(clean["metrics"], 380)["score"])
+    db.add(fa)
+    db.commit()
+    aid, fid = a.id, fa.id
+    db.close()
+    sent, pushed = [], []
+    monkeypatch.setattr(RM, "send_email", lambda to, subj, text, html, http=None, reply="", attachments=None:
+                        sent.append((to, subj, text, html, attachments)) or "id")
+    monkeypatch.setattr(PU, "send", lambda db, ids, title, body, url, http=None: pushed.append((ids, title, url))
+                        or {"sent": 1, "gone": 0, "failed": 0})
+    coach = login(create_app(), "coach1")
+    url = f"/athletes/{aid}/form/{fid}"
+    page = coach.get(url).text
+    assert f'action="{url}/email"' not in page and "to email this report" in page              # no email address yet
+    csrf = re.search(r'name="csrf" value="([^"]+)"', page).group(1)
+    coach.post(f"{url}/email", data={"csrf": csrf})
+    assert not sent and "has no email address" in coach.get(url).text
+    db = SessionLocal()
+    db.get(Athlete, aid).email = "sreyes27@student.example.edu"
+    db.commit()
+    db.close()
+    page = coach.get(url).text
+    assert f'action="{url}/email"' in page and "Email to Sam" in page and "Not emailed yet" in page
+    coach.post(f"{url}/email", data={"csrf": csrf})
+    to, subj, text, html, att = sent[0]
+    assert to == "sreyes27@student.example.edu" and "your running form report" in subj
+    assert "Form score:" in text and "What to work on first:" in text and "Cue:" in text and "tempo pace" in text
+    assert "filmed by Coach K" in text and "/a/tok-sam" in html
+    assert att[0]["filename"].startswith("Running-form-Sam-Reyes") and base64.b64decode(att[0]["content"]).startswith(b"%PDF")
+    assert pushed and pushed[0][0] == [aid] and pushed[0][2].endswith("/a/tok-sam#form")
+    after = coach.get(url).text
+    assert "Emailed the report to Sam Reyes" in after and "Emailed to sreyes27@student.example.edu on" in after
