@@ -905,6 +905,18 @@ class WeekResult(Base):
     note_closed: Mapped[bool] = mapped_column(Boolean, default=False)   # the athlete closed the Monday message
 
 
+class WeekGoal(Base):
+    """Each group's weekly miles goal (boys, girls) as it stood during a week, kept so a finished week is scored against
+    the goal it had, not one set later (the season plan changes the goals week by week). See points.goals_for_week."""
+    __tablename__ = "week_goals"
+    __table_args__ = (UniqueConstraint("monday", "group"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    monday: Mapped[dt.date] = mapped_column(Date, index=True)
+    group: Mapped[str] = mapped_column(String(60))
+    boys: Mapped[float] = mapped_column(Float, default=0)
+    girls: Mapped[float] = mapped_column(Float, default=0)
+
+
 class SquadCompetition(Base):
     """Athletes split into balanced squads that compete each week on practice (miles and points) and races."""
     __tablename__ = "squad_competitions"

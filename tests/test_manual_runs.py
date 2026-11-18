@@ -54,6 +54,82 @@ def test_watch_copy_replaces_the_typed_in_run(session):
     assert outcome == "duplicate"
 
 
+def _watch(session, a, when_utc, miles, ext="g1"):
+    return ingest(session, a, ParsedActivity(external_id=ext, start=when_utc, duration_s=miles * 480,
+                                             distance_m=miles * A.METERS_PER_MILE), "upload")[0]
+
+
+def test_a_second_run_that_day_is_not_taken_for_the_typed_in_one(session):
+    a = Athlete(first_name="Sam", last_name="Lowry", gender="Boys", grade=11, group="Varsity", link_token="t0")
+    session.add(a)
+    session.flush()
+    ingest(session, a, MR.build("2026-11-17", "06:30", "4", "32:00", "", today=TODAY), MR.SOURCE)        # a morning run
+    _watch(session, a, dt.datetime(2026, 11, 17, 23, 41, tzinfo=dt.timezone.utc), 4.3)                  # 3:41 PM, another run
+    assert sum(x.distance_m for x in session.query(Activity).all()) / A.METERS_PER_MILE == pytest.approx(8.3)
+    # The watch's copy of the morning run, 20 minutes off what the athlete remembered, does replace it
+    _watch(session, a, dt.datetime(2026, 11, 17, 14, 50, tzinfo=dt.timezone.utc), 4.1, ext="g2")       # 6:50 AM
+    left = session.query(Activity).all()
+    assert len(left) == 2 and not any(x.is_manual for x in left)
+
+
+def test_the_day_s_workout_moves_to_the_watch_run(session):
+    from xcapp.models import PlannedWorkout
+    a = Athlete(first_name="Sam", last_name="Lowry", gender="Boys", grade=11, group="Varsity", link_token="t0")
+    session.add(a)
+    pw = PlannedWorkout(date=dt.date(2026, 11, 17), title="Tempo", rep_distance_m=8000, groups="All")
+    session.add(pw)
+    session.flush()
+    typed, _ = ingest(session, a, MR.build("2026-11-17", "", "5", "40:00", "", today=TODAY), MR.SOURCE)
+    assert typed.planned_workout_id == pw.id
+    watch = _watch(session, a, dt.datetime(2026, 11, 17, 23, 41, tzinfo=dt.timezone.utc), 4.94)          # a little shorter
+    assert session.query(Activity).one() is watch and watch.planned_workout_id == pw.id
+
+
+def test_a_run_the_watch_already_sent_is_not_typed_in_again(client):
+    db = SessionLocal()
+    a = db.query(Athlete).one()
+    day = A.team_today() - dt.timedelta(days=1)
+    start = dt.datetime.combine(day, dt.time(7, 0), tzinfo=MR.settings().tz).astimezone(dt.timezone.utc).replace(tzinfo=None)
+    db.add(Activity(athlete_id=a.id, source="upload", external_id="w1", start_utc=start, local_date=day,
+                    duration_s=2400, distance_m=5 * A.METERS_PER_MILE))
+    db.commit()
+    db.close()
+    csrf = re.search(r'name="csrf" value="([^"]+)"', client.get("/a/tok-ava").text).group(1)
+    form = {"csrf": csrf, "date": day.isoformat(), "miles": "5.1", "duration": "41:00"}
+    client.post("/a/tok-ava/runs/new", data=form)                                   # no start time: it's the watch's run
+    page = client.get("/a/tok-ava").text
+    assert "Your watch already sent a 5.0 mile run at 7:00 AM" in page and "add its start time" in page
+    client.post("/a/tok-ava/runs/new", data={**form, "start": "07:20"})              # close to the watch's: still the same run
+    assert "check its start time" in client.get("/a/tok-ava").text
+    client.post("/a/tok-ava/runs/new", data={**form, "start": "16:00"})              # an afternoon run: a different one
+    db = SessionLocal()
+    assert db.query(Activity).count() == 2
+    db.close()
+
+
+def test_deleting_a_typed_in_run_gives_the_workout_to_another_run(client):
+    from xcapp.models import PlannedWorkout
+    db = SessionLocal()
+    a = db.query(Athlete).one()
+    day = A.team_today() - dt.timedelta(days=1)
+    db.add(PlannedWorkout(date=day, title="Tempo", rep_distance_m=8000, groups="All"))
+    db.commit()
+    db.close()
+    csrf = re.search(r'name="csrf" value="([^"]+)"', client.get("/a/tok-ava").text).group(1)
+    for start, miles in (("06:30", "6"), ("16:00", "3")):
+        client.post("/a/tok-ava/runs/new", data={"csrf": csrf, "date": day.isoformat(), "start": start, "miles": miles, "duration": "40:00"})
+    db = SessionLocal()
+    six = db.query(Activity).filter(Activity.distance_m > 5 * A.METERS_PER_MILE).one()
+    three = db.query(Activity).filter(Activity.distance_m < 5 * A.METERS_PER_MILE).one()
+    assert six.planned_workout_id and not three.planned_workout_id
+    six_id, three_id = six.id, three.id
+    db.close()
+    client.post(f"/a/tok-ava/runs/{six_id}/delete", data={"csrf": csrf})
+    db = SessionLocal()
+    assert db.get(Activity, three_id).planned_workout_id is not None
+    db.close()
+
+
 @pytest.fixture
 def client():
     db = SessionLocal()

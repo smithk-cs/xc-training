@@ -1,6 +1,8 @@
 """Runs typed in by hand, with no watch file: the date, miles and time (and, if known, the time of day and average
 heart rate). Saved like any other run, with source "manual", and tagged Manual wherever runs are listed. A watch file
-for the same run that arrives later (within 90 seconds of the typed-in start) replaces it."""
+for the same run that arrives later replaces it (see ingest.replace_typed_in): same day, miles within 15%, and when
+the athlete gave a start time, starting within an hour of it. A run the watch already sent can't be typed in again
+(ingest.synced_twin)."""
 from __future__ import annotations
 
 import datetime as dt
@@ -11,6 +13,7 @@ from .config import settings
 from .fitfile import ParsedActivity
 
 SOURCE = "manual"
+TIMED_PREFIX = "manual:t:"               # external_id of a typed-in run whose start time the athlete gave
 DEVICE = "Entered by hand"
 DEFAULT_START = dt.time(15, 30)          # practice time, when the athlete doesn't say
 MAX_DAYS_BACK = 60
@@ -68,5 +71,11 @@ def build(day: str, start: str, miles: str, duration: str, avg_hr: str = "", tod
         if not 60 <= hr <= 230:
             raise ValueError("Average heart rate should be between 60 and 230, or left empty.")
     begin = dt.datetime.combine(date, when, tzinfo=settings().tz).astimezone(dt.timezone.utc)
-    return ParsedActivity(external_id=f"manual:{uuid.uuid4().hex}", start=begin, duration_s=secs,
+    given = bool(str(start or "").strip())
+    return ParsedActivity(external_id=f"{TIMED_PREFIX if given else 'manual:'}{uuid.uuid4().hex}", start=begin, duration_s=secs,
                           distance_m=dist * A.METERS_PER_MILE, sport="running", avg_hr=hr, device=DEVICE)
+
+
+def start_given(external_id: str) -> bool:
+    """Whether the athlete gave the typed-in run's start time (else it's DEFAULT_START, a guess)."""
+    return (external_id or "").startswith(TIMED_PREFIX)

@@ -3,13 +3,26 @@
 {% block content %}
 <p class="small"><a href="/athletes">← Athletes</a></p>
 <h1>Student emails</h1>
-<p>{{ rows|length }} address{{ 'es' if rows|length != 1 }}: <b>{{ result.saved|length }} added</b>{% if result.same %}, {{ result.same|length }} already on file{% endif %}{% if result.kept %}, {{ result.kept|length }} not replaced (a different email is on file){% endif %}{% if missed %}, <b>{{ missed|length }} not matched</b>{% endif %}.</p>
+<p>{{ rows|length }} address{{ 'es' if rows|length != 1 }}: <b>{{ result.saved|length }} added</b>{% if result.same %}, {{ result.same|length }} already on file{% endif %}{% if result.kept %}, {{ result.kept|length }} not replaced (a different email is on file){% endif %}{% if check %}, <b>{{ check|length }} to confirm</b>{% endif %}{% if missed %}, <b>{{ missed|length }} not matched</b>{% endif %}.</p>
+{% if check %}
+<section class="card">
+  <h2>Confirm these</h2>
+  <p class="small muted">These nearly fit an athlete: the last names only partly match (such as Lee and Leeson), so they could be a two-part name written differently, or a different student. They weren’t saved. Tick the ones that are right. An athlete’s page link is emailed to this address, so check each one.</p>
+  <form method="post" action="/athletes/emails/confirm">
+    <input type="hidden" name="csrf" value="{{ csrf }}">{% if replace %}<input type="hidden" name="replace" value="1">{% endif %}
+    <table class="list compact"><thead><tr><th></th><th>Email</th><th>Athlete</th><th>Class</th></tr></thead><tbody>
+    {% for r in check %}<tr><td><input type="checkbox" name="pick" value="{{ r.athlete.id }}:{{ r.email }}" aria-label="Save {{ r.email }} for {{ r.athlete.name }}"></td><td class="nowrap">{{ r.email }}</td><td><a href="/athletes/{{ r.athlete.id }}">{{ r.athlete.name }}</a></td><td>{{ r.athlete.grad_year or '' }}</td></tr>{% endfor %}
+    </tbody></table>
+    <div class="form-row" style="margin-top:8px"><button type="submit">Save the ticked emails</button></div>
+  </form>
+</section>
+{% endif %}
 {% if missed %}
 <section class="card">
   <h2>Not matched</h2>
   <p class="small muted">Open the athlete and enter the email on their page, or fix their name or class year so it matches and paste again.</p>
   <table class="list compact"><thead><tr><th>Email</th><th>Why</th></tr></thead><tbody>
-  {% for r in missed %}<tr><td class="nowrap">{{ r.email }}</td><td class="small">{% if r.status == 'odd' %}Doesn’t follow the last name + initial + year pattern{% elif r.status == 'many' %}More than one athlete fits: {% for a in r.candidates %}<a href="/athletes/{{ a.id }}">{{ a.name }}</a>{{ ', ' if not loop.last }}{% endfor %}{% else %}No athlete with that last name, first initial and class year{% endif %}</td></tr>{% endfor %}
+  {% for r in missed %}<tr><td class="nowrap">{{ r.email }}</td><td class="small">{% if r.status == 'odd' %}Doesn’t follow the last name + initial + year pattern{% elif r.status == 'many' and r.clash %}Another pasted address fits the same athlete ({{ r.clash|join(', ') }}): <a href="/athletes/{{ r.candidates[0].id }}">{{ r.candidates[0].name }}</a>. Enter the right one on their page.{% elif r.status == 'many' %}More than one athlete fits: {% for a in r.candidates %}<a href="/athletes/{{ a.id }}">{{ a.name }}</a>{{ ', ' if not loop.last }}{% endfor %}{% else %}No athlete with that last name, first initial and class year{% endif %}</td></tr>{% endfor %}
   </tbody></table>
 </section>
 {% endif %}

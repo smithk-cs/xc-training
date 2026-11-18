@@ -106,6 +106,8 @@ def nightly() -> dict:
         else:
             out["class_years"] = CY.refresh(db, A.team_today())
         out["duplicate_pain_reports_removed"] = A.dedupe_pain_reports(db)
+        from . import points as PT
+        PT.remember_week_goals(db, A.week_monday(A.team_today()))   # this week's miles goals, for scoring it once it's over
         from . import data_check as DC
         today = A.team_today()
         removed = DC.auto_remove(db, today - dt.timedelta(days=60), today)

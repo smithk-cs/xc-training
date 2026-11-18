@@ -536,7 +536,32 @@ def create_app() -> FastAPI:
         if result["saved"]:
             log(db, "roster", f"{user.username} added {len(result['saved'])} student email{'s' if len(result['saved']) != 1 else ''}.")
         return render(request, "student_emails.html", user, rows=rows, result=result,
-                      missed=[r for r in rows if r["status"] != "match"])
+                      check=[r for r in rows if r["status"] == "check"],
+                      missed=[r for r in rows if r["status"] not in ("match", "check")], replace=bool(f.get("replace")))
+
+    @app.post("/athletes/emails/confirm")
+    async def athletes_emails_confirm(request: Request, user=Depends(coach_or_admin, scope="function"),
+                                      db: Session = Depends(get_db, scope="function")):
+        """Near matches the coach ticked on the Student emails page ("athlete id:email")."""
+        from . import student_emails as SEM
+        f = await form_checked(request)
+        replace, saved, kept = bool(f.get("replace")), [], []
+        for pick in f.getlist("pick"):
+            aid, _, email = str(pick).partition(":")
+            a = db.get(Athlete, int(aid)) if aid.isdigit() else None
+            email = (SEM.parse(email) or [""])[0]
+            if a is None or not email:
+                continue
+            if a.email and a.email.lower() != email and not replace:
+                kept.append(a.name)
+                continue
+            a.email = email
+            saved.append(a.name)
+        if saved:
+            log(db, "roster", f"{user.username} confirmed {len(saved)} student email{'s' if len(saved) != 1 else ''}.")
+        flash(request, (f"Saved {len(saved)} email{'s' if len(saved) != 1 else ''}." if saved else "Nothing was saved.")
+              + (f" Not replaced (a different email is on file): {', '.join(kept)}." if kept else ""))
+        return back("/athletes")
 
     @app.post("/athletes/import")
     async def athletes_import(request: Request, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
@@ -708,6 +733,14 @@ def create_app() -> FastAPI:
             parsed = MR.build(f.get("date", ""), f.get("start", ""), f.get("miles", ""), f.get("duration", ""), f.get("avg_hr", ""))
         except ValueError as exc:
             return None, str(exc), "error"
+        from .ingest import synced_twin
+        twin = synced_twin(db, a, parsed)
+        if twin is not None:   # the watch already sent this run: typing it in too would count its miles twice
+            at = twin.start_utc.replace(tzinfo=dt.timezone.utc).astimezone(s.tz)
+            ask = ("If this is a different run, check its start time." if MR.start_given(parsed.external_id)
+                   else "If this is a different run, add its start time and save it again.")
+            return None, (f"Your watch already sent a {twin.distance_m / A.METERS_PER_MILE:.1f} mile run at {at:%-I:%M %p} on "
+                          f"{twin.local_date:%b %-d}, so this one wasn’t added. {ask}"), "error"
         act, outcome = ingest(db, a, parsed, MR.SOURCE)
         if outcome == "duplicate":
             return act, "There’s already a run at that time on that day, so nothing was added.", "error"
@@ -735,6 +768,8 @@ def create_app() -> FastAPI:
             raise HTTPException(404, "Run not found.")
         day = act.local_date
         db.delete(act)
+        db.flush()
+        rematch_day(db, day, athlete_id=a.id)   # another run that day may now be the team workout
         log(db, "app", f"{user.username} deleted a typed-in run for {a.name} ({day}).")
         flash(request, f"Deleted the typed-in run from {day:%b %-d}.")
         return back(f"/athletes/{a.id}")
@@ -2259,6 +2294,8 @@ def create_app() -> FastAPI:
             raise HTTPException(404, "Run not found.")
         day = act.local_date
         db.delete(act)
+        db.flush()
+        rematch_day(db, day, athlete_id=a.id)   # another run that day may now be the team workout
         flash(request, f"Deleted the run you typed in for {day:%b %-d}.")
         return back(f"/a/{token}/runs")
 

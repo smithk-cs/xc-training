@@ -57,9 +57,9 @@ The data is one JSON object; athletes appear only as codes such as R07, and the 
 load_ratio = this week's miles / average of the previous four weeks (above 1.3 is flagged);
 recovery_bpm = heart-rate drop in the first 60 seconds of rest between reps (under 25 is flagged);
 grade: 9 = freshman, 10 = sophomore, 11 = junior, 12 = senior;
-races: each race the team ran in about the last two seasons (race_no, date, meet, division, course, distance);
-each athlete's race_results give race_no, place (overall finishing place in that race, when the results list it),
-time_s, adjusted_s (the time adjusted for the course and weather, to compare races) and team_points;
+races: each race the team ran in about the last two seasons (race_no, weeks_ago, meet, division, distance);
+each athlete's race_results give race_no, adjusted_s (the time adjusted for the course and weather, to compare
+races) and team_points;
 season_dates: the dates each season covers.
 Only athletes who have agreed to AI analysis are in the data; if a question is about athletes who aren't there, say
 that the others haven't turned on AI analysis on their athlete page yet.
@@ -202,14 +202,17 @@ def build_payload(snap: dict) -> tuple[dict, dict[str, dict]]:
     race_list = sorted({race_key(x): x for x in races_all}.values(), key=race_key)
     race_no = {race_key(x): i for i, x in enumerate(race_list, start=1)}
     no_gender = lambda t: re.sub(r"\s{2,}", " ", re.sub(r"\b(boys|girls|men'?s|women'?s|male|female)\b", "", t or "", flags=re.I)).strip() or None
-    races = [{"race_no": race_no[race_key(x)], "date": x["date"], "meet": x["meet"], "division": no_gender(x["race"]),
-              "course": x["course"] or None, "distance": x["distance"],
+    # Race results are public, so what's sent about a race stays general enough that a code can't simply be looked up
+    # in published results: weeks ago (not the date), no course, and each athlete's adjusted time and team points but
+    # not their overall place or actual time
+    races = [{"race_no": race_no[race_key(x)], "weeks_ago": _days_ago(as_of, x["date"]) // 7, "meet": x["meet"],
+              "division": no_gender(x["race"]), "distance": x["distance"],
               "team_athletes_in_it": sum(1 for y in races_all if race_key(y) == race_key(x))} for x in race_list]
     results_by: dict = {}
     for x in races_all:
         results_by.setdefault(x["athlete_id"], []).append(
-            {"race_no": race_no[race_key(x)], "place": x["place"], "time_s": round(x["time_s"], 1),
-             "adjusted_s": x["adjusted_s"], "team_points": x["points"]})
+            {"race_no": race_no[race_key(x)], "adjusted_s": None if x["adjusted_s"] is None else round(x["adjusted_s"]),
+             "team_points": x["points"]})
 
     athletes = []
     for r in roster:

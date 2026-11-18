@@ -64,3 +64,42 @@ def test_page(session):
     assert "More than one athlete fits" in r.text and "cal.dunn@example.org" in r.text
     assert "alderl27@student.example.edu" in c.get("/athletes/1").text
     assert "Paste at least one" in (c.post("/athletes/emails", data={"csrf": csrf, "emails": "no addresses here"}) and c.get("/athletes").text)
+
+
+def test_near_matches_are_confirmed_not_guessed(session):
+    """lina28 could be Andrew Lin (not on the team), not Amy Li: an athlete's page link is emailed to the address saved."""
+    amy = Athlete(first_name="Amy", last_name="Li", gender="Girls", grade=11, group="", grad_year=2028, link_token="t-amy")
+    jo = Athlete(first_name="Jordan", last_name="Lee", gender="Boys", grade=12, group="", grad_year=2027, link_token="t-jo")
+    session.add_all([amy, jo])
+    session.flush()
+    rows = {r["email"].split("@")[0]: r for r in SEM.match(session, SEM.parse(
+        "lina28@student.example.edu leej27@student.example.edu leesonj27@student.example.edu"), TODAY)}
+    assert rows["lina28"]["status"] == "check" and rows["lina28"]["athlete"] is amy        # offered, not saved
+    # Jordan's own address fits exactly, but Jamie Leeson's nearly fits him too: neither is saved
+    assert rows["leej27"]["status"] == rows["leesonj27"]["status"] == "many"
+    assert rows["leej27"]["clash"] == ["leesonj27@student.example.edu"]
+    result = SEM.apply(list(rows.values()), replace=True)
+    assert result["saved"] == [] and not amy.email and not jo.email
+
+
+def test_confirming_a_near_match(session):
+    amy = Athlete(first_name="Amy", last_name="Li", gender="Girls", grade=11, group="", grad_year=2028, link_token="t-amy")
+    session.add(amy)
+    session.add(StaffUser(username="coach1", role="coach", password_hash=hash_password("correct-horse-1")))
+    session.commit()
+    from xcapp.web import create_app
+    c = TestClient(create_app(), follow_redirects=False)
+    csrf = re.search(r'name="csrf" value="([^"]+)"', c.get("/login").text).group(1)
+    c.post("/login", data={"csrf": csrf, "username": "coach1", "password": "correct-horse-1"})
+    csrf = re.search(r'name="csrf" value="([^"]+)"', c.get("/athletes").text).group(1)
+    r = c.post("/athletes/emails", data={"csrf": csrf, "emails": "lina28@student.example.edu"})
+    assert "<b>0 added</b>" in r.text and "<b>1 to confirm</b>" in r.text and "Confirm these" in r.text
+    assert f'value="{amy.id}:lina28@student.example.edu"' in r.text
+    session.refresh(amy)
+    assert not amy.email
+    c.post("/athletes/emails/confirm", data={"csrf": csrf})                                  # nothing ticked
+    session.refresh(amy)
+    assert not amy.email and "Nothing was saved." in c.get("/athletes").text
+    c.post("/athletes/emails/confirm", data={"csrf": csrf, "pick": f"{amy.id}:lina28@student.example.edu"})
+    session.refresh(amy)
+    assert amy.email == "lina28@student.example.edu"
