@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from .config import settings
 from .db import page_cache
-from .models import (Activity, AppSetting, Athlete, Goal, Injury, MissedDay, PainReport, PlannedWorkout, RaceResult, RestingHeartRate, Result,
+from .models import (Activity, AppSetting, Athlete, Goal, Injury, Lap, MissedDay, PainReport, PlannedWorkout, RaceResult, RestingHeartRate, Result,
                      VdotChange,
                      TrainingGroup)
 
@@ -975,8 +975,12 @@ def run_type_of(act: Activity) -> str:
 
 # ---------- row builders (database -> dashboard columns) ----------
 
-def roster_rows(db: Session, as_of: dt.date | None = None) -> list[dict]:
-    rows = db.scalars(select(Athlete).where(on_team()).order_by(Athlete.id)).all()
+def roster_rows(db: Session, as_of: dt.date | None = None, athlete: Athlete | None = None) -> list[dict]:
+    """The team, or with athlete, just their row (none when they aren't on the team)."""
+    q = select(Athlete).where(on_team())
+    if athlete is not None:
+        q = q.where(Athlete.id == athlete.id)
+    rows = db.scalars(q.order_by(Athlete.id)).all()
     ab = abilities(db, as_of or team_today())
     return [{
         "athlete_id": a.code, "athlete": a.name, "gender": a.gender, "grade": a.grade, "group": a.group,
@@ -985,8 +989,10 @@ def roster_rows(db: Session, as_of: dt.date | None = None) -> list[dict]:
     } for a in rows]
 
 
-def benchmark_rows(db: Session) -> list[dict]:
+def benchmark_rows(db: Session, athlete: Athlete | None = None) -> list[dict]:
     q = select(Result, Athlete).join(Athlete, Athlete.id == Result.athlete_id).where(on_team()).order_by(Result.date, Result.id)
+    if athlete is not None:
+        q = q.where(Athlete.id == athlete.id)
     return [{
         "athlete_id": a.code, "athlete": a.name, "gender": a.gender, "group": a.group, "season": r.season,
         "event": r.event, "time_sec": round(r.time_s, 1), "date": r.date.isoformat(), "course": r.course, "kind": r.kind,
@@ -999,12 +1005,17 @@ def current_xc_season(benchmarks: list[dict], goals: list[dict] | None = None) -
     return max(seasons, key=lambda s: int(s.split()[0])) if seasons else None
 
 
-def goal_rows(db: Session, season: str | None = None) -> list[dict]:
+def goal_rows(db: Session, season: str | None = None, athlete: Athlete | None = None) -> list[dict]:
+    """Goals for the season (by default the team's current XC season), for the team or one athlete."""
+    if season is None:   # from the whole team's benchmarks and goals, whoever the rows are for
+        seasons = [*db.scalars(select(Result.season).join(Athlete, Athlete.id == Result.athlete_id).where(on_team()).distinct()),
+                   *db.scalars(select(Goal.season).join(Athlete, Athlete.id == Goal.athlete_id).where(on_team()).distinct())]
+        season = current_xc_season([{"season": x} for x in seasons])
     q = select(Goal, Athlete).join(Athlete, Athlete.id == Goal.athlete_id).where(on_team())
-    all_rows = [{"athlete_id": a.code, "event": g.event, "goal_sec": round(g.goal_s, 1), "season": g.season} for g, a in db.execute(q).all()]
-    if season is None:
-        season = current_xc_season(benchmark_rows(db), all_rows)
-    return [r for r in all_rows if r["season"] == season]
+    if athlete is not None:
+        q = q.where(Athlete.id == athlete.id)
+    return [{"athlete_id": a.code, "event": g.event, "goal_sec": round(g.goal_s, 1), "season": g.season}
+            for g, a in db.execute(q).all() if g.season == season]
 
 
 def _injury_is_on(inj_onset: dt.date, inj_return: dt.date | None, start: dt.date, end: dt.date) -> bool:
@@ -1258,12 +1269,13 @@ def workout_paces(db: Session, athlete, workouts) -> list[dict]:
     return out
 
 
-def segment_rows(db: Session) -> list[dict]:
-    acts = db.scalars(
-        select(Activity).where(Activity.planned_workout_id.is_not(None)).options(
-            selectinload(Activity.laps), selectinload(Activity.athlete), selectinload(Activity.planned))
-        .order_by(Activity.local_date, Activity.athlete_id)
-    ).all()
+def segment_rows(db: Session, on: dt.date | None = None) -> list[dict]:
+    """Every rep of every team workout run; with on, only the workouts on that day."""
+    q = select(Activity).where(Activity.planned_workout_id.is_not(None))
+    if on is not None:
+        q = q.where(Activity.planned_workout_id.in_(select(PlannedWorkout.id).where(PlannedWorkout.date == on)))
+    acts = db.scalars(q.options(selectinload(Activity.laps), selectinload(Activity.athlete), selectinload(Activity.planned))
+                      .order_by(Activity.local_date, Activity.athlete_id)).all()
     out = []
     cache: dict[tuple[int, int], float | None] = {}
     for act in acts:
@@ -1289,6 +1301,14 @@ def segment_rows(db: Session) -> list[dict]:
                 "device": act.device,
             })
     return out
+
+
+def last_workout_date(db: Session) -> dt.date | None:
+    """The latest team workout with a rep in segment_rows (the watch list's "latest workout")."""
+    return db.scalar(select(func.max(PlannedWorkout.date)).select_from(Activity)
+                     .join(PlannedWorkout, PlannedWorkout.id == Activity.planned_workout_id)
+                     .join(Athlete, Athlete.id == Activity.athlete_id).join(Lap, Lap.activity_id == Activity.id)
+                     .where(on_team(), Lap.is_rep.is_(True), Lap.distance_m != 0))
 
 
 # ---------- pure analytics (mirror the dashboard's calculations) ----------

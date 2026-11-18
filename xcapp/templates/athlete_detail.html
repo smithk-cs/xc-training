@@ -44,20 +44,10 @@
 <div class="card wide-card">
   <h2>Recent runs</h2>
   <div class="scroll"><table class="list" id="runs-table"><thead><tr><th>Date</th><th>Type</th><th class="num">Miles</th><th class="num">Time</th><th class="num">Avg HR</th><th class="num">VO2 max</th><th>Workout</th><th class="num">Effort</th><th>Legs</th>{% if show_injuries %}<th>Pain</th>{% endif %}<th>Device</th></tr></thead><tbody>
-  {% for act in acts %}
-  {% if loop.index0 == 5 %}</tbody><tbody id="more-runs" hidden>{% endif %}
-  <tr><td><a href="/athletes/{{ a.id }}/runs/{{ act.id }}">{{ act.local_date.strftime('%a %b %-d') }}</a>{% if act.is_manual %} <span class="tag manual-tag" title="Typed in by hand, not recorded by a watch">✎ Manual</span>{% endif %}</td><td>{{ run_type_of(act) }}</td><td class="num">{{ '%.1f' % (act.distance_m / 1609.344) }}</td>
-  <td class="num">{{ fmt_time(act.duration_s)[:-2] }}</td><td class="num">{{ act.avg_hr|round|int if act.avg_hr else '' }}</td>
-  <td class="num">{{ '%.1f' % act.vo2_max if act.vo2_max else '' }}</td>
-  <td>{% if act.planned %}{{ act.planned.title }}{% elif act.laps|selectattr('is_rep')|list %}{{ act.laps|selectattr('is_rep')|list|length }} reps (no plan that day){% endif %}</td>
-  <td class="num">{{ act.rpe if act.rpe is not none else '' }}</td><td>{{ act.feel }}</td>
-  {% if show_injuries %}<td>{% set rp = run_pain.get(act.id) %}{% if rp %}<span class="pill bad">{{ rp.severity }}/10 {{ rp.body_area }}</span>{% if rp.saw_trainer %} <span class="pill good">Saw trainer</span>{% endif %}{% endif %}</td>{% endif %}
-  <td class="small">{{ act.device }}</td></tr>
-  {% if act.athlete_note %}<tr><td></td><td colspan="9" class="small muted">Athlete note: {{ act.athlete_note }}</td></tr>{% endif %}
-  {% else %}<tr><td colspan="10" class="muted">No runs yet.</td></tr>{% endfor %}
-  </tbody></table></div>
-  {% if acts|length > 5 %}<p><button type="button" class="secondary show-more" aria-controls="more-runs" aria-expanded="false"
-    data-more="Show all {{ acts|length }} runs" data-less="Show the 5 most recent">Show all {{ acts|length }} runs</button></p>{% endif %}
+  {% include "_run_rows.html" %}{% if not acts %}<tr><td colspan="{{ 11 if show_injuries else 10 }}" class="muted">No runs yet.</td></tr>{% endif %}
+  </tbody>{% if n_runs > acts|length %}<tbody id="more-runs" data-src="/athletes/{{ a.id }}/more-runs" hidden></tbody>{% endif %}</table></div>
+  {% if n_runs > acts|length %}<p><button type="button" class="secondary show-more" aria-controls="more-runs" aria-expanded="false"
+    data-more="Show all {{ n_runs }} runs" data-less="Show the 5 most recent">Show all {{ n_runs }} runs</button></p>{% endif %}
   <p class="small muted">Data recorded on Garmin devices is labelled with the device model, as Garmin requires.</p>
 </div>
 <div class="card" id="form">
@@ -218,8 +208,19 @@
 </div>
 <script>
 // "Show all" buttons under Recent runs and Races: open or close the rest of the table
-document.querySelectorAll('button.show-more').forEach((b) => b.addEventListener('click', () => {
+document.querySelectorAll('button.show-more').forEach((b) => b.addEventListener('click', async () => {
   const more = document.getElementById(b.getAttribute('aria-controls'));
+  if (more.dataset.src) {   // the older runs load the first time they're opened
+    b.disabled = true;
+    try {
+      const r = await fetch(more.dataset.src, { credentials: 'same-origin' });
+      if (!r.ok || r.redirected) return;   // signed out: the sign-in page, not rows
+      more.innerHTML = await r.text();
+      delete more.dataset.src;
+    } finally {
+      b.disabled = false;
+    }
+  }
   const open = more.hidden;
   more.hidden = !open;
   b.setAttribute('aria-expanded', String(open));

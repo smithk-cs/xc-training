@@ -1,0 +1,12 @@
+{# Rows of the Recent runs table on an athlete's page: the first 5 with the page, the rest from /athletes/{id}/more-runs.
+   The Pain column only for staff with the Injuries section (show_injuries). #}
+{% for act in acts %}
+  <tr><td><a href="/athletes/{{ a.id }}/runs/{{ act.id }}">{{ act.local_date.strftime('%a %b %-d') }}</a>{% if act.is_manual %} <span class="tag manual-tag" title="Typed in by hand, not recorded by a watch">✎ Manual</span>{% endif %}</td><td>{{ run_type_of(act) }}</td><td class="num">{{ '%.1f' % (act.distance_m / 1609.344) }}</td>
+  <td class="num">{{ fmt_time(act.duration_s)[:-2] }}</td><td class="num">{{ act.avg_hr|round|int if act.avg_hr else '' }}</td>
+  <td class="num">{{ '%.1f' % act.vo2_max if act.vo2_max else '' }}</td>
+  <td>{% if act.planned %}{{ act.planned.title }}{% elif act.laps|selectattr('is_rep')|list %}{{ act.laps|selectattr('is_rep')|list|length }} reps (no plan that day){% endif %}</td>
+  <td class="num">{{ act.rpe if act.rpe is not none else '' }}</td><td>{{ act.feel }}</td>
+  {% if show_injuries %}<td>{% set rp = run_pain.get(act.id) %}{% if rp %}<span class="pill bad">{{ rp.severity }}/10 {{ rp.body_area }}</span>{% if rp.saw_trainer %} <span class="pill good">Saw trainer</span>{% endif %}{% endif %}</td>{% endif %}
+  <td class="small">{{ act.device }}</td></tr>
+  {% if act.athlete_note %}<tr><td></td><td colspan="{{ 10 if show_injuries else 9 }}" class="small muted">Athlete note: {{ act.athlete_note }}</td></tr>{% endif %}
+{% endfor %}

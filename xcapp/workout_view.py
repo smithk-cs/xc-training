@@ -27,8 +27,8 @@ import datetime as dt
 import json
 import statistics
 
-from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy import func, inspect, select
+from sqlalchemy.orm import Session, undefer
 
 from . import analysis as A
 from .models import Activity, Athlete
@@ -460,16 +460,31 @@ def zone_shares(wv: dict) -> dict:
     return {"pace": share("pace_in", "pace_band"), "hr": share("hr_in", "hr_band")}
 
 
-def day_summary(db: Session, act: Activity) -> dict | None:
-    """For the Week page: the workout's share of rep time in the pace and heart-rate zones, and the recovery line.
-    Saved with the run (worked out again if the run's workout changes)."""
-    if not act.planned_workout_id:
-        return None
+def saved_summary(act: Activity) -> dict | None:
+    """The run's saved day_summary, while it is still for the run's workout; else None."""
     try:
         saved = json.loads(act.recovery_note) if act.recovery_note else None
     except ValueError:
         saved = None
     if saved is not None and saved.get("for") == act.planned_workout_id and saved.get("v") == SUMMARY_VERSION:
+        return saved
+    return None
+
+
+def load_streams(db: Session, acts: list[Activity]) -> None:
+    """Load the second-by-second detail (Activity.stream, deferred) of many runs in one query, not one each."""
+    ids = [act.id for act in acts if "stream" in inspect(act).unloaded]
+    if ids:
+        db.scalars(select(Activity).where(Activity.id.in_(ids)).options(undefer(Activity.stream))).all()
+
+
+def day_summary(db: Session, act: Activity) -> dict | None:
+    """For the Week page: the workout's share of rep time in the pace and heart-rate zones, and the recovery line.
+    Saved with the run (worked out again if the run's workout changes)."""
+    if not act.planned_workout_id:
+        return None
+    saved = saved_summary(act)
+    if saved is not None:
         return saved.get("s")
     wv = build(db, act)
     s = {**zone_shares(wv), "recovery": summary(wv)}
