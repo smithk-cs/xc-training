@@ -18,9 +18,10 @@ from __future__ import annotations
 import bisect
 import datetime as dt
 import json
+from collections import defaultdict
 
-from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy import or_, select
+from sqlalchemy.orm import Session, selectinload
 
 from . import analysis as A
 from .models import Activity, Athlete, MissedDay, PainReport, PlannedWorkout, RaceResult, TrainingGroup, WeekGoal
@@ -266,6 +267,23 @@ def activity_zones(act: Activity, v: float | None) -> dict[str, float]:
     return segment_seconds(laps or [(act.duration_s, act.distance_m)], v)
 
 
+def fill_zone_seconds(db: Session, batch: int = 500) -> int:
+    """Runs from before zones were saved with each run get them saved now (once, from the nightly job), so the points
+    pages stop working them out from the laps on every view: worked out from the laps as those pages do, at the VDOT
+    the athlete had on the day of the run, as for a run arriving that day. Returns how many runs were filled in."""
+    ids = db.scalars(select(Activity.id).where(or_(Activity.zone_seconds == "", Activity.zone_seconds.is_(None)))).all()
+    for i in range(0, len(ids), batch):
+        for act in db.scalars(select(Activity).where(Activity.id.in_(ids[i:i + batch])).options(selectinload(Activity.laps))).all():
+            key = ("abilities", act.local_date)
+            if key not in db.info:   # one team calculation per day, as at ingest
+                db.info[key] = A.abilities(db, act.local_date)
+            v = db.info[key].get(act.athlete_id, {}).get("vdot")
+            zones = activity_zones(act, v)
+            act.zone_seconds, act.zone_vdot = json.dumps({z: round(s) for z, s in zones.items()}), v
+        db.flush()
+    return len(ids)
+
+
 def moving_minutes(zones: dict[str, float]) -> float:
     return sum(s for z, s in zones.items() if z != "walk") / 60
 
@@ -402,7 +420,7 @@ def team_week(db: Session, monday: dt.date, gender: str | None = None, athletes:
     ids = [a.id for a in athletes]
     prev_monday = monday - dt.timedelta(days=7)
     acts = db.scalars(select(Activity).where(Activity.athlete_id.in_(ids), Activity.local_date >= prev_monday,
-                                             Activity.local_date <= sunday)).all()
+                                             Activity.local_date <= sunday).options(selectinload(Activity.laps))).all()
     plans = db.scalars(select(PlannedWorkout).where(PlannedWorkout.date >= prev_monday, PlannedWorkout.date <= sunday)).all()
     pains = db.scalars(select(PainReport).where(PainReport.athlete_id.in_(ids), PainReport.date >= monday, PainReport.date <= sunday)).all()
     missed = db.scalars(select(MissedDay).where(MissedDay.athlete_id.in_(ids), MissedDay.date >= monday, MissedDay.date <= sunday)).all()
@@ -410,7 +428,12 @@ def team_week(db: Session, monday: dt.date, gender: str | None = None, athletes:
     race_days = set(db.execute(select(RaceResult.athlete_id, RaceResult.date).where(
         RaceResult.athlete_id.in_(ids), RaceResult.date >= prev_monday, RaceResult.date <= sunday)).all())
     race_days |= {(x.athlete_id, x.local_date) for x in acts if x.run_type == "Race"}
-    by = lambda rows, key: {k: [r for r in rows if key(r) == k] for k in {key(r) for r in rows}}  # noqa: E731
+
+    def by(rows, key):   # one pass, in row order
+        grouped = defaultdict(list)
+        for r in rows:
+            grouped[key(r)].append(r)
+        return grouped
     acts_by = by(acts, lambda r: (r.athlete_id, r.local_date))
     pain_by = by(pains, lambda r: (r.athlete_id, r.date))
     missed_by = by(missed, lambda r: (r.athlete_id, r.date))

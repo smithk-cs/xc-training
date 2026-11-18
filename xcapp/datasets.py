@@ -90,6 +90,20 @@ def snapshot(db: Session, as_of: dt.date | None = None) -> dict[str, list[dict]]
     return data
 
 
+def home_snapshot(db: Session, as_of: dt.date | None = None, injuries_ok: bool = True) -> dict:
+    """The part of snapshot the home page shows (the roster, injured now, the watch list), without the rest: the watch
+    list needs only the latest workout's reps, not every rep ever run. injuries_ok=False (staff without the Injuries
+    section): the watch list leaves out injuries and pain reports."""
+    as_of = as_of or A.team_today()
+    roster, injuries = A.roster_rows(db), A.injury_rows(db, as_of)
+    weekly = A.weekly_load_rows(db, as_of)
+    last = A.last_workout_date(db)
+    summaries = A.workout_summaries(A.segment_rows(db, on=last)) if last else []
+    watch = (A.watchlist(weekly, injuries, summaries, roster, A.pain_rows(db, as_of)) if injuries_ok
+             else A.watchlist(weekly, [], summaries, roster))
+    return {"roster": roster, "watchlist": watch, "kpis": A.kpis(injuries, weekly, [], watch, roster)}
+
+
 def race_results(db: Session, as_of: dt.date, days: int = 430) -> list[dict]:
     """Each race run in about the last two seasons: meet, race (division), distance, time, the time adjusted for the course
     and weather, place and team points (when the results give them)."""

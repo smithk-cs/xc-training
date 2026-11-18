@@ -48,7 +48,7 @@ def test_runs_only_at_the_nightly_hour(monkeypatch):
     db.close()
 
     r = c.post("/cron/nightly?force=true", headers=AUTH)
-    assert r.status_code == 200 and r.json() == {"ran": {"tokens_refreshed": 0, "briefing": "skipped",
+    assert r.status_code == 200 and r.json() == {"ran": {"tokens_refreshed": 0, "briefing": "skipped", "zones_filled": 0,
                                                          "class_years": {"filled": 0, "graduated": 0, "grades": 0},
                                                          "duplicate_pain_reports_removed": 0, "duplicate_runs_removed": 0,
                                                          "weather": {"forecasts": 0, "practice_forecasts": 0, "race_conditions": 0}}}

@@ -95,8 +95,10 @@ def nightly() -> dict:
     from .config import settings
     from .db import session_scope
     from .ingest import log
+    from .points import fill_zone_seconds
     out = {"tokens_refreshed": 0, "briefing": "skipped"}
     with session_scope() as db:
+        out["zones_filled"] = fill_zone_seconds(db)   # older runs, once
         from . import analysis as A
         from . import classyear as CY
         if settings().garmin_configured:

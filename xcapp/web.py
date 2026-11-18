@@ -372,9 +372,7 @@ def create_app() -> FastAPI:
 
     @app.get("/", response_class=HTMLResponse)
     def home(request: Request, user=Depends(any_staff, scope="function"), db: Session = Depends(get_db, scope="function")):
-        snap = DS.snapshot(db)
-        if not user.sees("injuries"):   # the watch list without injuries and pain reports
-            snap["watchlist"] = A.watchlist(snap["weekly_load"], [], snap["summaries"], snap["roster"])
+        snap = DS.home_snapshot(db, injuries_ok=user.sees("injuries"))   # without Injuries: no injuries or pain in the watch list
         week_ago = A.team_today() - dt.timedelta(days=7)
         stats = {
             "athletes": len(snap["roster"]),
@@ -595,11 +593,26 @@ def create_app() -> FastAPI:
             flash(request, "Nothing was imported. Fix these rows and try again: " + "; ".join(exc.errors[:8]), "error")
         return back(url)
 
+    RECENT_RUNS = 5   # runs an athlete's page shows; "Show all" loads the rest (athlete_more_runs)
+
+    def recent_runs(db: Session, a: Athlete, more: bool = False) -> list[Activity]:
+        q = (select(Activity).where(Activity.athlete_id == a.id).options(selectinload(Activity.laps), selectinload(Activity.planned))
+             .order_by(Activity.start_utc.desc(), Activity.id.desc()))
+        return db.scalars(q.offset(RECENT_RUNS) if more else q.limit(RECENT_RUNS)).all()
+
+    @app.get("/athletes/{athlete_id}/more-runs", response_class=HTMLResponse)
+    def athlete_more_runs(request: Request, athlete_id: int, user=Depends(any_staff, scope="function"), db: Session = Depends(get_db, scope="function")):
+        """The rest of an athlete's Recent runs table, for its Show all button."""
+        a = get_athlete(db, athlete_id)
+        hurt_ok = user.sees("injuries")        # without the Injuries section: no Pain column
+        return render(request, "_run_rows.html", user, a=a, acts=recent_runs(db, a, more=True), show_injuries=hurt_ok,
+                      run_pain={p.activity_id: p for p in a.pain_reports if p.activity_id} if hurt_ok else {})
+
     @app.get("/athletes/{athlete_id}", response_class=HTMLResponse)
     def athlete_detail(request: Request, athlete_id: int, user=Depends(any_staff, scope="function"), db: Session = Depends(get_db, scope="function")):
         a = get_athlete(db, athlete_id)
-        acts = db.scalars(select(Activity).where(Activity.athlete_id == a.id).options(selectinload(Activity.laps), selectinload(Activity.planned))
-                          .order_by(Activity.start_utc.desc())).all()   # every run: the page shows 5, the rest open on request
+        acts = recent_runs(db, a)
+        n_runs = db.scalar(select(func.count(Activity.id)).where(Activity.athlete_id == a.id))
         results = db.scalars(select(Result).where(Result.athlete_id == a.id).order_by(Result.date.desc())).all()
         run_pain = {p.activity_id: p for p in a.pain_reports if p.activity_id}
         ability = A.abilities(db, A.team_today()).get(a.id, {})
@@ -611,7 +624,7 @@ def create_app() -> FastAPI:
         hurt_ok = user.sees("injuries")        # without the Injuries section: no pain, injury or missed-day details
         if not hurt_ok:
             run_pain, missed = {}, []
-        return render(request, "athlete_detail.html", user, a=a, experience_labels=A.EXPERIENCE_LABELS, acts=acts, results=results, run_pain=run_pain, races=races,
+        return render(request, "athlete_detail.html", user, a=a, experience_labels=A.EXPERIENCE_LABELS, acts=acts, n_runs=n_runs, results=results, run_pain=run_pain, races=races,
                       forms=form_reports(db, a.id), form_focus=FP.focus(form_last), form_hist=FP.history(db, a.id),
                       refilm=FP.refilm_on(db, a.id), fatigue=FP.fatigue(db, a.id), today=A.team_today(),
                       film=FP.film_status(db, A.team_today()) if hurt_ok else FP.hide_injured(FP.film_status(db, A.team_today())),
@@ -2229,10 +2242,8 @@ def create_app() -> FastAPI:
         open_delete = db.scalar(select(DeletionRequest).where(DeletionRequest.athlete_id == a.id, DeletionRequest.status == "open"))
         need = db.scalar(select(func.count(Activity.id)).where(
             Activity.athlete_id == a.id, Activity.rpe.is_(None), Activity.local_date > today - dt.timedelta(days=14)))
-        roster = [r for r in A.roster_rows(db) if r["athlete_id"] == a.code]
-        bench = [b for b in A.benchmark_rows(db) if b["athlete_id"] == a.code]
-        team_goals = A.goal_rows(db)
-        prog, seasons = A.progress(bench, [g for g in team_goals if g["athlete_id"] == a.code], roster)
+        roster, bench = A.roster_rows(db, athlete=a), A.benchmark_rows(db, athlete=a)
+        prog, seasons = A.progress(bench, A.goal_rows(db, athlete=a), roster)
         tiles = [p for p in prog if p["current"] is not None]
         show_group = A.get_setting(db, "show_group_to_athletes", "1") == "1"
         mine = A.abilities(db, today).get(a.id, {})
@@ -3226,6 +3237,8 @@ def create_app() -> FastAPI:
             for i, d in enumerate(r["days"]):
                 per_day[i] += [w for w in d["workouts"] if w not in per_day[i]]
         recovery = {}   # each workout run's recovery line (saved with the run after the first time)
+        WV.load_streams(db, [act for r in rows for d in r["days"] for act in d["runs"]
+                             if act.planned_workout_id and WV.saved_summary(act) is None])   # in one query: only these need it
         for r in rows:
             for d in r["days"]:
                 for act in d["runs"]:
