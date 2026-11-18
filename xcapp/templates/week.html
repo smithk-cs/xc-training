@@ -45,8 +45,8 @@
       {% elif d.planned is not none and d.date < today %}<span class="muted">Missed workout</span>
       {% elif d.workouts %}<span class="muted">{{ '%.0f' % d.planned if d.planned is not none else '' }} pts planned</span>
       {% endif %}
-      {% if d.pain is not none %}<br><a class="pill bad" href="/injuries?pain={{ d.pain_id }}#pain-{{ d.pain_id }}" title="Open the pain report">Pain {{ d.pain }}/10</a>{% endif %}
-      {% if d.missed %}<br>{% if d.missed.reason == 'Injury' %}<a class="pill warn" href="/injuries?missed={{ d.missed.id }}#missed-{{ d.missed.id }}" title="Open the injury report">{% else %}<span class="pill warn">{% endif %}{{ d.missed.reason }}{% if d.missed.pain %} {{ d.missed.pain }}/10{% endif %}{{ '</a>'|safe if d.missed.reason == 'Injury' else '</span>'|safe }}{% endif %}
+      {% if user.sees("injuries") %}{% if d.pain is not none %}<br><a class="pill bad" href="/injuries?pain={{ d.pain_id }}#pain-{{ d.pain_id }}" title="Open the pain report">Pain {{ d.pain }}/10</a>{% endif %}
+      {% if d.missed %}<br>{% if d.missed.reason == 'Injury' %}<a class="pill warn" href="/injuries?missed={{ d.missed.id }}#missed-{{ d.missed.id }}" title="Open the injury report">{% else %}<span class="pill warn">{% endif %}{{ d.missed.reason }}{% if d.missed.pain %} {{ d.missed.pain }}/10{% endif %}{{ '</a>'|safe if d.missed.reason == 'Injury' else '</span>'|safe }}{% endif %}{% endif %}
       {% if d.flags %}<br><span class="pill warn" title="{{ d.flags|join('; ') }}">Flag</span>{% endif %}
     </td>{% endfor %}
   </tr>

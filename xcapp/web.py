@@ -61,10 +61,10 @@ from .imports import (GROUPS, ImportErrors, clean_email, clean_phone, import_goa
                       import_vdots, parse_date, parse_distance, set_goal, sync_benchmark)
 from .ingest import ingest, log, rematch_day
 from .models import (Activity, AiRun, AppSetting, Athlete, CaptainPost, RaceWeather, DeletionRequest, GarminConnection, Injury, MissedDay,
-                     OAuthState, PainReport, PlannedWorkout, RaceResult, RestingHeartRate, Result, StaffUser, AthletePhoto,
+                     OAuthState, PainReport, PlannedWorkout, PushSubscription, RaceResult, RestingHeartRate, Result, StaffUser, AthletePhoto,
                      MeetEntry, MeetDivision, MeetResponse, DivisionAthlete, SyncLog, TrainingGroup, VdotChange, Announcement, utcnow,
                      Course, MeetConditions, RaceTeamResult)
-from .security import csrf_ok, csrf_token, hash_password, new_link_token, verify_password, session_mark, csv_safe
+from .security import csrf_ok, csrf_token, hash_password, new_link_token, verify_password, session_mark, csv_safe, redact_access_log
 
 HERE = Path(__file__).parent
 BACKFILL_IN_BACKGROUND = True  # tests switch this off and run G.process_backfills themselves
@@ -157,6 +157,7 @@ def create_app() -> FastAPI:
     if problems:
         raise RuntimeError("Fix these settings before starting:\n- " + "\n- ".join(problems))
     create_all()
+    redact_access_log()     # athlete links and the Garmin webhook's secret stay out of the server's logs
 
     app = FastAPI(title="XC Training", docs_url=None, redoc_url=None, openapi_url=None)
     app.add_middleware(SessionMiddleware, secret_key=s.secret_key, https_only=s.secure_cookies,
@@ -251,13 +252,16 @@ def create_app() -> FastAPI:
                 raise HTTPException(303, headers={"Location": "/login"})
             if roles and user.role not in roles:
                 raise HTTPException(403, "Your account does not have access to this page.")
-            sec = SEC.section_for(request.url.path)
-            if sec and sec in user.archived:
-                raise HTTPException(404, f"{SEC.LABELS[sec]} is archived. An admin can bring it back on the Staff page.")
-            if sec and not user.sees(sec):
-                raise HTTPException(403, f"{SEC.LABELS[sec]} is turned off for your account. Ask an admin if you need it.")
+            check_section(user, SEC.section_for(request.url.path))
             return user
+        dep.staff_only = True       # tests/test_security_fixes.py finds staff pages by this
         return dep
+
+    def check_section(user: StaffUser, sec: str | None) -> None:
+        if sec and sec in user.archived:
+            raise HTTPException(404, f"{SEC.LABELS[sec]} is archived. An admin can bring it back on the Staff page.")
+        if sec and not user.sees(sec):
+            raise HTTPException(403, f"{SEC.LABELS[sec]} is turned off for your account. Ask an admin if you need it.")
 
     any_staff = staff()
     coach_or_admin = staff("admin", "coach")
@@ -369,6 +373,8 @@ def create_app() -> FastAPI:
     @app.get("/", response_class=HTMLResponse)
     def home(request: Request, user=Depends(any_staff, scope="function"), db: Session = Depends(get_db, scope="function")):
         snap = DS.snapshot(db)
+        if not user.sees("injuries"):   # the watch list without injuries and pain reports
+            snap["watchlist"] = A.watchlist(snap["weekly_load"], [], snap["summaries"], snap["roster"])
         week_ago = A.team_today() - dt.timedelta(days=7)
         stats = {
             "athletes": len(snap["roster"]),
@@ -412,8 +418,13 @@ def create_app() -> FastAPI:
     def dataset_csv(name: str, user=Depends(any_staff, scope="function"), db: Session = Depends(get_db, scope="function")):
         if name not in DS.COLUMNS:
             raise HTTPException(404, "Unknown dataset.")
+        check_section(user, SEC.DATASETS[name])
         try:
-            return PlainTextResponse(DS.to_csv(name, DS.build(db, name)), media_type="text/csv; charset=utf-8")
+            rows = DS.build(db, name)
+            if name == "weekly_load" and not user.sees("injuries"):
+                for r in rows:
+                    r["injured"] = ""
+            return PlainTextResponse(DS.to_csv(name, rows), media_type="text/csv; charset=utf-8")
         except Exception as exc:  # shown on the dashboard and kept in the Sync log, so it can be fixed
             import traceback
             db.rollback()
@@ -653,7 +664,17 @@ def create_app() -> FastAPI:
         a = get_athlete(db, athlete_id)
         a.link_token = new_link_token()
         a.link_sent_at = None       # the new link hasn't been sent yet
-        flash(request, f"Made a new link for {a.name}. The old link no longer works." + (" Email them the new one below." if a.email else ""))
+        # Whoever had the old link loses everything it gave them: phones that turned notifications on with it (every
+        # notification carries the current link) and Garmin sign-ins started with it (they return to the current link).
+        phones = 0
+        for sub in db.scalars(select(PushSubscription).where(PushSubscription.athlete_id == a.id)).all():
+            db.delete(sub)
+            phones += 1
+        for st in db.scalars(select(OAuthState).where(OAuthState.athlete_id == a.id)).all():
+            db.delete(st)
+        flash(request, f"Made a new link for {a.name}. The old link no longer works."
+              + (f" Phone notifications are off on {'their phone' if phones == 1 else f'their {phones} phones'} until {a.first_name} turns them on again from the new link." if phones else "")
+              + (" Email them the new one below." if a.email else ""))
         return back(f"/athletes/{a.id}")
 
     @app.post("/athletes/{athlete_id}/email-link")
@@ -820,6 +841,7 @@ def create_app() -> FastAPI:
         if not uploads:
             return "Choose a .fit or .zip file first.", "error"
         files: list[tuple[str, bytes]] = []
+        unpacked = [0]          # bytes unpacked from all of this upload's zips together (fitfile.MAX_UNPACKED_BYTES)
         csv_runs, csv_skipped, unit = [], 0, ""
         try:
             for up in uploads:
@@ -833,7 +855,7 @@ def create_app() -> FastAPI:
                     csv_runs += runs
                     csv_skipped += skipped
                     continue
-                files.extend(fit_files(up.filename, raw))
+                files.extend(fit_files(up.filename, raw, unpacked=unpacked))
                 if len(files) > MAX_FITS_PER_UPLOAD:
                     raise FitError(f"That upload holds more than {MAX_FITS_PER_UPLOAD} activity files. Upload it in smaller parts.")
         except FitError as exc:
@@ -3629,10 +3651,20 @@ def create_app() -> FastAPI:
     def garmin_callback(request: Request, background: BackgroundTasks, db: Session = Depends(get_db, scope="function"),
                         code: str = "", state: str = "", error: str = ""):
         # The athlete comes from the sign-in record, not the browser session: Garmin's app can send people back to a
-        # different browser than the one they started in.
+        # different browser than the one they started in. A sign-in record works once, within G.STATE_MAX_AGE, however
+        # Garmin sends the athlete back (cancelled too). One that's unknown or too old gives away no athlete link: the
+        # page falls back to the link this browser itself opened, if that still works.
         pending = db.get(OAuthState, state) if state else None
+        if pending is not None and G.state_expired(pending):
+            db.delete(pending)
+            db.flush()
+            pending = None
+        elif pending is not None and (error or not code):
+            db.delete(pending)      # a cancelled sign-in uses up its record too; with a code, complete_authorization does
         athlete = db.get(Athlete, pending.athlete_id) if pending else None
         token = athlete.link_token if athlete else request.session.get("athlete_token")
+        if token and not athlete and db.scalar(select(Athlete.id).where(Athlete.link_token == token)) is None:
+            token = None            # that link was replaced since
 
         def failed(msg: str):
             if token:

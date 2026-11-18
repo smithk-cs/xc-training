@@ -1,9 +1,12 @@
-"""Passwords (scrypt), encryption of Garmin tokens at rest (Fernet), and CSRF tokens."""
+"""Passwords (scrypt), encryption of Garmin tokens at rest (Fernet), CSRF tokens, and keeping secret links out of the
+access log."""
 from __future__ import annotations
 
 import base64
 import hashlib
 import hmac
+import logging
+import re
 import secrets
 
 from cryptography.fernet import Fernet, InvalidToken
@@ -93,3 +96,31 @@ def csv_safe(value):
         except ValueError:
             return "'" + value
     return value
+
+
+# Addresses where part of the path is itself the key (an athlete's link, the Garmin webhook's secret, the team calendar's
+# and Race Day's links, a newsletter photo's key), and the one-time code Garmin sends back to /garmin/callback.
+_SECRET_PATH = re.compile(r"^(/(?:a|garmin/webhook|team-calendar|rd|rw)/|/newsletter/photo/[^/?#]+/)[^/?#]+")
+_SECRET_QUERY = re.compile(r"^(/garmin/callback\?).+")
+
+
+def redact_path(path: str) -> str:
+    """The address with its secret part replaced by "…": /a/Xy12.../runs becomes /a/…/runs."""
+    return _SECRET_QUERY.sub(r"\1…", _SECRET_PATH.sub(r"\1…", path))
+
+
+class RedactSecrets(logging.Filter):
+    """On the uvicorn.access logger: requests are still logged, without the secret part of their address. Its
+    records' args are (client, method, path with query, HTTP version, status)."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        args = record.args
+        if isinstance(args, tuple) and len(args) >= 3 and isinstance(args[2], str):
+            record.args = args[:2] + (redact_path(args[2]),) + args[3:]
+        return True
+
+
+def redact_access_log() -> None:
+    access = logging.getLogger("uvicorn.access")
+    if not any(isinstance(f, RedactSecrets) for f in access.filters):
+        access.addFilter(RedactSecrets())
