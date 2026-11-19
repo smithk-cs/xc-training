@@ -22,6 +22,7 @@ from . import push as PU
 from . import registration as REG
 from . import team_calendar as TC
 from . import weather as WX
+from . import wellness as WL
 from . import workout_view as WV
 from .ingest import log, rematch_day
 from .models import (Activity, Announcement, CaptainPost, DeletionRequest, MissedDay, PainReport, PlannedWorkout, RaceResult,
@@ -98,7 +99,8 @@ def register(app, h: SimpleNamespace) -> None:
                                                    .order_by(Announcement.start_date.desc(), Announcement.id.desc())).all()
                              if n.for_athlete(a.gender, mine.get("group") or "")], paces_link=f"/a/{token}/paces" if show_group and mine.get("vdot") else None,
                       areas=BODY_AREAS, token=token, today=today.isoformat(), push_key=PU.public_key(db),
-                      push_phones=len(PU.subscriptions(db, [a.id])), rtr=return_view(db, a, today))
+                      push_phones=len(PU.subscriptions(db, [a.id])), rtr=return_view(db, a, today),
+                      checkin=next(iter(WL.for_athlete(db, a.id, today, days=1)), None), ws=WL, wl=WL.label)
 
     @app.post("/a/{token}/connect")
     async def athlete_connect(request: Request, token: str, db: Session = Depends(get_db, scope="function")):

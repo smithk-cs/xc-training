@@ -963,3 +963,8 @@ table.list td summary { padding-block: 3px; margin-block: -3px; }
   border: 2px solid var(--color-input-line); color: var(--color-fg-muted); }
 .rr-steps li.done { background: var(--color-ok); border-color: var(--color-ok); color: #fff; }
 .rr-steps li.now { border-color: var(--brand-red); color: var(--brand-red); }
+
+/* Post-race reflections (reflections.py) */
+.reflection-answers { display: grid; grid-template-columns: max-content 1fr; gap: 2px 12px; margin: 6px 0 0; }
+.reflection-answers dt { color: var(--color-fg-muted); font-weight: 600; }
+.reflection-answers dd { margin: 0; }

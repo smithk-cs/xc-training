@@ -74,6 +74,16 @@
     {% else %}<p class="muted">Nobody is flagged this week.</p>{% endif %}
     {% if user.sees("dashboard") %}<p><a href="/dashboard">Open the dashboard</a></p>{% endif %}
   </div>
+  {% if wellness_flags %}
+  <div class="card" id="checkin-flags">
+    <h2>Check-in flags</h2>
+    <table class="list"><thead><tr><th>Athlete</th><th>Last few days</th></tr></thead><tbody>
+    {% for f in wellness_flags %}<tr><td class="nowrap"><a href="/athletes/{{ f.athlete.id }}#checkins">{{ f.athlete.name }}</a>{% if f.signals >= 2 %} <span class="pill bad">{{ f.signals }} signs</span>{% endif %}</td>
+      <td>{{ f.reasons|join('; ') }}{% if f.rhr_up %}; resting heart rate up {{ '%.0f' % f.rhr_up }}{% endif %}</td></tr>{% endfor %}
+    </tbody></table>
+    <p class="small muted">From the athletes’ morning check-ins (sleep, soreness, mood) against their own usual. Two or more signs together, especially with a raised resting heart rate, often come before illness or overtraining. Worth a word with them.</p>
+  </div>
+  {% endif %}
   {% if rhr_flags %}
   <div class="card">
     <h2>Resting heart rate up</h2>

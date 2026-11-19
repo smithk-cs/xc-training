@@ -1,0 +1,13 @@
+{# The athlete's morning check-in (wellness.py): three taps, then a one-line summary that can be changed. #}
+<details class="panel fold checkin" id="checkin"{% if not checkin %} open{% endif %}>
+  <summary><h2 id="ci-h">Morning check-in</h2>{% if checkin %}<span class="small effort-done">✓ {{ checkin.sleep_h }}{{ '+' if checkin.sleep_h == 10 }} h sleep · {{ wl(ws.SORENESS, checkin.soreness)|lower }} soreness · mood {{ wl(ws.MOOD, checkin.mood)|lower }}</span>{% endif %}</summary>
+  <form method="post" action="/a/{{ token }}/checkin" style="display:flex; flex-direction:column; gap:10px">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    {% for name, legend, scale, cur in (('sleep', 'Hours of sleep last night', ws.SLEEP, checkin.sleep_h if checkin else none), ('soreness', 'How sore are your legs?', ws.SORENESS, checkin.soreness if checkin else none), ('mood', 'How do you feel today?', ws.MOOD, checkin.mood if checkin else none)) %}
+    <fieldset class="pick" style="margin:0"><legend class="small">{{ legend }}</legend>
+      <div class="chips">{% for v, text in scale %}<label class="chip"><input type="radio" name="{{ name }}" value="{{ v }}" required{% if cur == v %} checked{% endif %}><span>{{ text }}</span></label>{% endfor %}</div>
+    </fieldset>{% endfor %}
+    <button type="submit" class="ghost-btn">{{ 'Update' if checkin else 'Save check-in' }}</button>
+  </form>
+  <p class="small muted" style="margin:0">Ten seconds each morning. With your resting heart rate, it helps your coaches spot when you’re getting sick or worn down. Only your coaches see it.</p>
+</details>

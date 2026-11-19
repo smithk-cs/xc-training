@@ -45,6 +45,7 @@ from . import manual_runs as MR
 from . import garmin_csv as GCSV
 from . import weather as WX
 from . import practice_alerts as PA
+from . import wellness as WL
 from . import classyear as CY
 from . import data_check as DC
 from . import limits as LM
@@ -389,13 +390,14 @@ def create_app() -> FastAPI:
         notes = db.scalars(select(Announcement).order_by(Announcement.start_date.desc(), Announcement.id.desc())).all()
         ids = {a.code: a.id for a in db.scalars(select(Athlete).where(A.on_team())).all()}   # the watch list carries athlete codes (A07)
         watch = [{**w, "id": ids.get(w["athlete_id"])} for w in snap["watchlist"]]
+        rhr_flags = A.resting_hr_flags(db, today_)
         return render(request, "home.html", user, snap=snap, watch=watch, stats=stats, last_ai=last_ai, webhook=webhook, deletions=deletions, due=due,
                       notes_now=[n for n in notes if n.start_date <= today_ <= n.end_date], notes_later=[n for n in notes if n.start_date > today_][::-1],
                       notes_past=[n for n in notes if n.end_date < today_][:20], audiences=["Boys", "Girls"] + [g.name for g in
                       db.scalars(select(TrainingGroup).order_by(TrainingGroup.position)).all()], today_iso=today_.isoformat(),
                       week_iso=(today_ + dt.timedelta(days=7)).isoformat(),
-                      rhr_flags=A.resting_hr_flags(db, A.team_today()), rhr_flag=A.RESTING_HR_FLAG,
-                      practice_alerts=PA.upcoming(db, today_))
+                      rhr_flags=rhr_flags, rhr_flag=A.RESTING_HR_FLAG, practice_alerts=PA.upcoming(db, today_),
+                      wellness_flags=WL.flags(db, today_, {f["athlete"].id: f["up"] for f in rhr_flags}))
 
     # ---------- dashboard ----------
 
@@ -642,7 +644,8 @@ def create_app() -> FastAPI:
                       merge_pick=request.query_params.get("merge", ""),
                       injuries=sorted(a.injuries, key=lambda i: i.onset_date, reverse=True) if hurt_ok else [],
                       pains=sorted(a.pain_reports, key=lambda p: p.date, reverse=True)[:10] if hurt_ok else [],
-                      goals=sorted(a.goals, key=lambda g: (g.season, g.event)), show_notes=user.role in ("admin", "trainer"))
+                      goals=sorted(a.goals, key=lambda g: (g.season, g.event)), show_notes=user.role in ("admin", "trainer"),
+                      checkins=WL.for_athlete(db, a.id, A.team_today()), ws=WL, wl=WL.label)
 
     @app.post("/athletes/{athlete_id}/edit")
     async def athlete_edit(request: Request, athlete_id: int, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
@@ -2553,7 +2556,9 @@ def create_app() -> FastAPI:
     form_web.register(app, SimpleNamespace(render=render, flash=flash, back=back, form_checked=form_checked, any_staff=any_staff,
                                            coach_or_admin=coach_or_admin, get_db=get_db, get_athlete=get_athlete,
                                            athlete_by_token=athlete_by_token, logo_bytes=logo_bytes, team_name=s.team_name))
-    from . import push_web, pacing_web, return_web
+    from . import push_web, pacing_web, return_web, wellness_web
+    wellness_web.register(app, SimpleNamespace(flash=flash, back=back, get_db=get_db, form_checked=form_checked,
+                                               athlete_by_token=athlete_by_token))
     return_web.register(app, SimpleNamespace(flash=flash, back=back, get_db=get_db, form_checked=form_checked, medical=medical,
                                              athlete_by_token=athlete_by_token))
     pacing_web.register(app, SimpleNamespace(render=render, get_db=get_db, any_staff=any_staff, athlete_by_token=athlete_by_token))

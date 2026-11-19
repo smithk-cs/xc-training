@@ -1090,3 +1090,19 @@ class Wellness(Base):
     soreness: Mapped[int] = mapped_column(Integer)
     mood: Mapped[int] = mapped_column(Integer)
     updated_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+
+
+class RaceReflection(Base):
+    """An athlete's reflection on one of their races (reflections.py): how happy they are with it, what went well,
+    what they'd change, and their focus for the next one."""
+    __tablename__ = "race_reflections"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    race_result_id: Mapped[int] = mapped_column(ForeignKey("race_results.id", ondelete="CASCADE"), unique=True)
+    athlete_id: Mapped[int] = mapped_column(ForeignKey("athletes.id", ondelete="CASCADE"), index=True)
+    happy: Mapped[int] = mapped_column(Integer)                           # 1-5
+    went_well: Mapped[str] = mapped_column(String(500), default="")
+    change: Mapped[str] = mapped_column(String(500), default="")
+    next_focus: Mapped[str] = mapped_column(String(300), default="")
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+    race: Mapped[RaceResult] = relationship()

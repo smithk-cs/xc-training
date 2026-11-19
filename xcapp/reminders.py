@@ -21,6 +21,7 @@ ITEMS = {
     "days": "Practice days in the past week with no run and no reason given",
     "meets": "Meets they haven’t answered, when the answer closes within 3 days",
     "rhr": "Today’s resting heart rate, if they haven’t entered it",
+    "checkin": "Today’s morning check-in (sleep, soreness, mood), if they haven’t done it",
 }
 DEFAULT_ITEMS = ["effort", "days", "meets"]
 
@@ -62,6 +63,10 @@ def todo(db: Session, a: Athlete, today: dt.date, items: list[str]) -> list[str]
     if "rhr" in items and not db.scalar(select(RestingHeartRate.id).where(RestingHeartRate.athlete_id == a.id,
                                                                            RestingHeartRate.date == today)):
         out.append("Enter this morning’s resting heart rate.")
+    if "checkin" in items:
+        from .models import Wellness
+        if not db.scalar(select(Wellness.id).where(Wellness.athlete_id == a.id, Wellness.date == today)):
+            out.append("Do your morning check-in (sleep, soreness, mood).")
     return out
 
 
