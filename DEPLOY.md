@@ -158,10 +158,14 @@ Garmin the link. Edit `wrangler.jsonc` on GitHub (open the file, click the penci
   2. At the registrar (GoDaddy → **My Products** → the domain → **DNS** → **Nameservers** → **Change** → **I'll use my
      own nameservers**), enter Cloudflare's two nameservers. Wait until Cloudflare shows the domain **Active** (minutes
      to a day).
-  3. In `wrangler.jsonc`, list the domain under `routes` with `"custom_domain": true` (with `www.` too) and set
+  3. In Cloudflare → the domain → **DNS** → **Records**, delete any **A**, **AAAA** or **CNAME** record for the domain
+     itself (`@`) and for `www` (copied from the registrar, often its "parked" page). Cloudflare won't attach the
+     domain to the app while they exist, and the deploy would still switch `BASE_URL`, sending visitors to an
+     address that isn't connected yet. Keep mail records (MX, TXT).
+  4. In `wrangler.jsonc`, list the domain under `routes` with `"custom_domain": true` (with `www.` too) and set
      `BASE_URL` to it. The deploy makes the DNS records and certificates. The old workers.dev address stays on and
      sends page views to the new one (cloudflare/app.js), so old athlete links keep working.
-  4. After the deploy, in the Garmin Developer Portal set the redirect URL to `https://<domain>/garmin/callback`
+  5. After the deploy, in the Garmin Developer Portal set the redirect URL to `https://<domain>/garmin/callback`
      and the webhook addresses to the ones on the Sync log page; update any privacy-policy link you gave Garmin.
      Everyone signs in again once on the new address.
 * **Logs:** Cloudflare → Workers & Pages → `xc-training` → **Logs**. The app's own **Sync log** page shows syncs and
