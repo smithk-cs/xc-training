@@ -16,6 +16,7 @@ from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 
 from test_push import Phone          # the browser side of a push subscription: decrypts what arrives
+from xcapp import analysis as A
 from xcapp import fitfile as FF
 from xcapp import push as PU
 from xcapp import sections as SEC
@@ -31,7 +32,7 @@ def mkapp(hidden=""):
     db.add(a)
     db.flush()
     db.add(Injury(athlete_id=a.id, onset_date=dt.date(2026, 11, 1), injury="Tibial bone stress injury", body_area="Lower leg", logged_by="t"))
-    db.add(PainReport(athlete_id=a.id, date=dt.date.today(), body_area="Knee", severity=8, note="hurts on stairs"))
+    db.add(PainReport(athlete_id=a.id, date=A.team_today(), body_area="Knee", severity=8, note="hurts on stairs"))
     db.commit()
     aid = a.id
     db.close()
@@ -320,7 +321,7 @@ def test_injuries_off_hides_injury_details_on_athlete_and_run_pages():
     for hidden, shown in (("injuries", False), ("", True)):
         app, aid = mkapp(hidden=hidden)
         db = SessionLocal()
-        d = dt.date.today() - dt.timedelta(days=1)
+        d = A.team_today() - dt.timedelta(days=1)
         act = Activity(athlete_id=aid, source="upload", external_id=f"r{hidden}", start_utc=dt.datetime(d.year, d.month, d.day, 23),
                        local_date=d, duration_s=1800, distance_m=6000, rpe=7)
         db.add(act)
