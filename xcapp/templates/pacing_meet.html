@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Race plans · {{ m.name }} · {{ team_name }}{% endblock %}
+{% block content %}
+<p class="small"><a href="/registrations/{{ m.id }}">← {{ m.name }}</a></p>
+<div class="form-row" style="justify-content:space-between; align-items:center"><h1 style="margin:0">Race plans: {{ m.name }}</h1><button type="button" class="secondary" onclick="window.print()">Print</button></div>
+<p class="muted" style="max-width:80ch">Predicted time and mile splits for each entered athlete, from their current VDOT, the course and the forecast. Athletes see their own plan on their page in the three weeks before the meet.</p>
+{% for r in races %}
+<div class="card scroll">
+  <h2>{{ r.division.name }}{% if r.division.distance %} · {{ r.division.distance }}{% endif %}</h2>
+  {% if r.rows %}
+  <table class="list compact"><thead><tr><th>Athlete</th><th class="num">VDOT</th><th class="num">Target</th><th class="num">Pace</th>{% for hd in r.heads %}<th class="num">{{ hd }}</th>{% endfor %}</tr></thead><tbody>
+  {% for row in r.rows %}{% set p = row.plan %}<tr><td class="nowrap"><a href="/athletes/{{ row.athlete.id }}">{{ row.athlete.name }}</a></td>
+    {% if p %}<td class="num">{{ p.vdot }}</td><td class="num"><b>{{ fmt_secs(p.total) }}</b></td><td class="num">{{ fmt_secs(p.pace) }}</td>{% for s in p.splits %}<td class="num">{{ fmt_secs(s.cum) }}</td>{% endfor %}
+    {% else %}<td colspan="{{ 3 + r.miles }}" class="muted small">No VDOT yet, or no distance for this race.</td>{% endif %}</tr>{% endfor %}
+  </tbody></table>
+  <p class="small muted">Mile columns are the clock time at each mile.</p>
+  {% else %}<p class="muted">No one entered yet.</p>{% endif %}
+</div>
+{% else %}<div class="card"><p class="muted">No races at this meet yet.</p></div>{% endfor %}
+{% endblock %}

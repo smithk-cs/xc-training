@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Race plan · {{ m.name }} · {{ team_name }}{% endblock %}
+{% block bodyclass %}athlete-page{% endblock %}
+{% block flashes %}{% endblock %}
+{% block content %}
+{% with hero_title="My race plan", hero_text=m.name ~ ", " ~ m.date.strftime('%A %b %-d'), back_url="/a/" ~ token, back_label="My page" %}{% include "_hero.html" %}{% endwith %}
+<div class="stack">
+{% if not p %}
+  <section class="panel"><p style="margin:0">There’s no plan yet: it needs your current VDOT (from a recent race or time trial) and the race distance or the meet’s course. Ask your coach.</p></section>
+{% else %}
+  <section class="panel" aria-label="Predicted time">
+    <div class="facts">
+      <div><span class="k">Target time</span><span class="big">{{ fmt_secs(p.total) }}</span><span class="small muted">{{ p.label }}{% if p.division %}, {{ p.division.name }}{% endif %}</span></div>
+      <div><span class="k">Average pace</span><span class="big">{{ fmt_secs(p.pace) }}<small class="small muted"> /mi</small></span></div>
+      <div><span class="k">On a flat track</span><span class="big">{{ fmt_secs(p.track) }}</span><span class="small muted">VDOT {{ p.vdot }}</span></div>
+    </div>
+    <p class="small muted" style="margin:0">From your VDOT, slowed for {% if p.course %}{{ p.course.name }}{% else %}the course{% endif %}{% if p.weather %} and the forecast ({{ describe_weather(p.weather, dew=False, humidity=True) }}){% endif %}: {{ p.explain }}. A guide, not a limit: race by feel too.</p>
+  </section>
+  <section class="panel" aria-labelledby="sp-h">
+    <h2 id="sp-h" style="margin:0">Mile splits</h2>
+    <div class="scroll"><table class="list">
+      <thead><tr><th>Mile</th><th class="num">Split</th><th class="num">Pace /mi</th><th class="num">Clock</th><th>On the course</th></tr></thead>
+      <tbody>{% for s in p.splits %}<tr><td>{% if s.to - s.from >= 0.95 %}{{ s.mile }}{% else %}Finish<br><span class="small muted">{{ '%.2f' % (s.to - s.from) }} mi</span>{% endif %}</td><td class="num">{{ fmt_secs(s.time) }}</td><td class="num">{{ fmt_secs(s.pace) }}</td><td class="num"><b>{{ fmt_secs(s.cum) }}</b></td>
+        <td class="small">{% if s.climb >= 15 %}climbs {{ s.climb }} ft{% endif %}{% if s.notes %}{{ '; ' if s.climb >= 15 }}{{ s.notes|join('; ') }}{% endif %}</td></tr>{% endfor %}</tbody>
+    </table></div>
+    {% if p.even %}<p class="small muted" style="margin:0">Even splits: this course has no flyover with its hills yet.</p>{% else %}<p class="small muted" style="margin:0">Splits follow the course’s hills: slower up, a little faster down, adding up to the same time.</p>{% endif %}
+  </section>
+  <section class="panel" aria-labelledby="tp-h">
+    <h2 id="tp-h" style="margin:0">Race tips</h2>
+    <ul style="margin:0; padding-left:1.2em">{% for t in tips %}<li>{{ t }}</li>{% endfor %}</ul>
+  </section>
+{% endif %}
+</div>
+{% endblock %}

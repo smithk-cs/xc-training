@@ -2548,7 +2548,8 @@ def create_app() -> FastAPI:
     form_web.register(app, SimpleNamespace(render=render, flash=flash, back=back, form_checked=form_checked, any_staff=any_staff,
                                            coach_or_admin=coach_or_admin, get_db=get_db, get_athlete=get_athlete,
                                            athlete_by_token=athlete_by_token, logo_bytes=logo_bytes, team_name=s.team_name))
-    from . import push_web
+    from . import push_web, pacing_web
+    pacing_web.register(app, SimpleNamespace(render=render, get_db=get_db, any_staff=any_staff, athlete_by_token=athlete_by_token))
     push_web.register(app, SimpleNamespace(flash=flash, back=back, form_checked=form_checked, coach_or_admin=coach_or_admin,
                                            get_db=get_db, athlete_by_token=athlete_by_token))
     newsletter_web.register(app, SimpleNamespace(render=render, flash=flash, back=back, form_checked=form_checked, any_staff=any_staff,
