@@ -1,0 +1,5 @@
+{# A practice's smoke/heat alert (practice_alerts.assess): a badge, and with full=true the reasons and what to do. #}
+{% macro alert_badge(al, full=false) -%}
+{% if al %}<span class="pill {{ 'warn' if al.level == 'caution' else 'bad' }} practice-alert" title="{{ al.summary }}. {{ al.advice }}">{{ '⚠' if al.level == 'caution' else '⛔' }} {{ al.label }}: {{ al.reasons|map(attribute='value')|join(', ') }}</span>
+{% if full %}<span class="small practice-alert-advice">{{ al.summary }}. {{ al.advice }}</span>{% endif %}{% endif %}
+{%- endmacro %}

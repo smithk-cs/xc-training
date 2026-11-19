@@ -37,8 +37,9 @@
     // UTC. The app runs the nightly job only when it is NIGHTLY_HOUR in TEAM_TIMEZONE, so call at
     // both daylight-saving offsets: 11:00 and 12:00 UTC are 4 a.m. Pacific in summer and winter.
     // Change these if you change NIGHTLY_HOUR or TEAM_TIMEZONE.
-    // 4 a.m. Pacific (nightly job) and 5 p.m. Pacific (reminder emails), at both daylight-saving offsets.
-    "crons": ["0 11 * * *", "0 12 * * *", "0 0 * * *", "0 1 * * *"]
+    // 4 a.m. Pacific (nightly job), 6 a.m. (the morning smoke/heat re-check, practice_alerts.MORNING_HOUR) and
+    // 5 p.m. (reminder emails and tomorrow's practice alerts), at both daylight-saving offsets.
+    "crons": ["0 11 * * *", "0 12 * * *", "0 13 * * *", "0 14 * * *", "0 0 * * *", "0 1 * * *"]
   },
   // Settings that are not secret. Secrets (DATABASE_URL, SECRET_KEY, ...) are listed in cloudflare/worker.js.
   "vars": {

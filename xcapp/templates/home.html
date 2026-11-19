@@ -1,6 +1,13 @@
 {% extends "base.html" %}
 {% block content %}
 <h1>This week</h1>
+{% if practice_alerts %}{% from '_practice_alert.html' import alert_badge %}
+<div class="card practice-alerts-banner" id="practice-alerts">
+  <h2>Smoke and heat at practice</h2>
+  {% for d, team, al in practice_alerts %}<p style="margin:6px 0"><b>{{ 'Today' if d.isoformat() == today_iso else 'Tomorrow' }}, {{ team }}</b> ({{ al.slot.time }} at {{ al.slot.where }}): {{ alert_badge(al, full=true) }}</p>{% endfor %}
+  <p class="small muted" style="margin:6px 0 0">From the air-quality and weather forecast for practice time, rated with common school-sports guidance. Follow the school’s own policy. Athletes with phone notifications on hear about it the evening before, and again early that morning if it gets worse.</p>
+</div>
+{% endif %}
 {% if not settings.garmin_configured or not settings.ai_configured %}
 <div class="card">
   <h2>Setup still to do</h2>

@@ -108,6 +108,7 @@ ADDED_COLUMNS = {
     "meet_forecasts": [("pressure_inhg", "FLOAT")],
     "pain_reports": [("activity_id", "INTEGER"), ("saw_trainer", "BOOLEAN DEFAULT FALSE")],
     "form_analyses": [("condition", "VARCHAR(10) DEFAULT 'fresh'"), ("emailed_at", "TIMESTAMP")],
+    "practice_forecasts": [("aqi", "FLOAT"), ("pm25", "FLOAT")],
 }
 
 

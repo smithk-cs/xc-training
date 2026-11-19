@@ -951,3 +951,8 @@ table.list td summary { padding-block: 3px; margin-block: -3px; }
 .drill-steps { margin: 0; padding-left: 1.3em; font-size: 15px; }
 .drill-steps li { margin-bottom: 3px; }
 .drill-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+
+/* Smoke and heat alerts on practice forecasts (practice_alerts.py) */
+.practice-alert { white-space: normal; }
+.practice-alert-advice { display: block; margin-top: 2px; font-weight: 400; }
+.practice-alerts-banner { border-left: 4px solid var(--color-bad); }

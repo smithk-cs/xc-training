@@ -40,6 +40,7 @@ def with_weather(db: Session, its: list[dict], team: str, today: dt.date) -> lis
         if x["kind"] == "Practice":
             fc = WX.practice_forecast(db, x["date"], x["team"] or team)
             x["weather"] = WX.short(fc["forecast"]) if fc else None
+            x["alert"] = fc["alert"] if fc else None
         elif x["kind"] == "Meet":
             m = db.get(MeetEntry, x["meet_id"])
             sky = WX.short(m.forecast) if m and m.forecast else None

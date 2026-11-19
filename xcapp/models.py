@@ -883,6 +883,8 @@ class PracticeForecast(Base):
     rain_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
     pressure_inhg: Mapped[float | None] = mapped_column(Float, nullable=True)
     summary: Mapped[str] = mapped_column(String(60), default="")
+    aqi: Mapped[float | None] = mapped_column(Float, nullable=True)      # US AQI, the worst hour of practice (practice_alerts)
+    pm25: Mapped[float | None] = mapped_column(Float, nullable=True)     # µg/m³, the same hour range
     fetched_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
 
 

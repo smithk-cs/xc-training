@@ -44,6 +44,7 @@ from . import reminders as RM
 from . import manual_runs as MR
 from . import garmin_csv as GCSV
 from . import weather as WX
+from . import practice_alerts as PA
 from . import classyear as CY
 from . import data_check as DC
 from . import limits as LM
@@ -393,7 +394,8 @@ def create_app() -> FastAPI:
                       notes_past=[n for n in notes if n.end_date < today_][:20], audiences=["Boys", "Girls"] + [g.name for g in
                       db.scalars(select(TrainingGroup).order_by(TrainingGroup.position)).all()], today_iso=today_.isoformat(),
                       week_iso=(today_ + dt.timedelta(days=7)).isoformat(),
-                      rhr_flags=A.resting_hr_flags(db, A.team_today()), rhr_flag=A.RESTING_HR_FLAG)
+                      rhr_flags=A.resting_hr_flags(db, A.team_today()), rhr_flag=A.RESTING_HR_FLAG,
+                      practice_alerts=PA.upcoming(db, today_))
 
     # ---------- dashboard ----------
 
@@ -3395,11 +3397,15 @@ def create_app() -> FastAPI:
         if not s.cron_secret or not hmac.compare_digest(auth.encode(), f"Bearer {s.cron_secret}".encode()):
             raise HTTPException(404, "Not found.")
         now_hour = dt.datetime.now(dt.timezone.utc).astimezone(s.tz).hour
+        if not force and now_hour == PA.MORNING_HOUR:      # smoke can change overnight: tell the team if it got worse
+            with session_scope() as db:
+                return {"practice_alerts": PA.notify(db, A.team_today(), "morning")}
         if not force and now_hour == s.reminder_hour:
             with session_scope() as db:
+                alerts = PA.notify(db, A.team_today() + dt.timedelta(days=1), "evening")   # tomorrow's practice
                 if not RM.enabled(db):     # emails go only when email is set up; phone notifications either way
-                    return {"reminders": "off"}
-                return {"reminders": RM.run(db, A.team_today())}
+                    return {"reminders": "off", "practice_alerts": alerts}
+                return {"reminders": RM.run(db, A.team_today()), "practice_alerts": alerts}
         if not force and not is_nightly_hour():
             return {"skipped": f"not {s.nightly_hour}:00 in {s.team_timezone}"}
         if not nightly_lock.acquire(blocking=False):

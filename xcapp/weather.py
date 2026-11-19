@@ -370,8 +370,10 @@ def practice_forecast(db: Session, day: dt.date, team: str) -> dict | None:
     s = practice_slot(db, day, team)
     f = db.scalar(select(PracticeForecast).where(PracticeForecast.date == day, PracticeForecast.start_time == s["time"],
                                                  PracticeForecast.lat == round(s["lat"], 3), PracticeForecast.lon == round(s["lon"], 3)))
-    return ({**s, "forecast": f, "text": describe(f), "athlete_text": describe(f, dew=False, humidity=True)}
-            if f is not None and f.temp_f is not None else None)
+    if f is None or f.temp_f is None:
+        return None
+    from .practice_alerts import assess
+    return {**s, "forecast": f, "text": describe(f), "athlete_text": describe(f, dew=False, humidity=True), "alert": assess(f)}
 
 
 def refresh_practice_forecasts(db: Session, http: httpx.Client, today: dt.date, only: dt.date | None = None) -> int:
@@ -398,6 +400,12 @@ def refresh_practice_forecasts(db: Session, http: httpx.Client, today: dt.date, 
                 db.add(f)
             for k in ("temp_f", "dew_point_f", "humidity_pct", "wind_mph", "rain_pct", "pressure_inhg", "summary"):
                 setattr(f, k, w[k])
+            from .practice_alerts import air_at       # smoke: the air-quality forecast reaches a few days ahead
+            air = air_at(http, s["lat"], s["lon"], d, int(s["time"].split(":")[0]), today)
+            if air is not None:
+                f.aqi, f.pm25 = air["aqi"], air["pm25"]
+            elif d > today:
+                f.aqi = f.pm25 = None
             f.fetched_at = utcnow()
             n += 1
     return n
