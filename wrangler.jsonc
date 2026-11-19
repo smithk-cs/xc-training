@@ -11,8 +11,13 @@
   // and the app's container logs (which hide the secrets: security.RedactSecrets) are kept.
   "observability": { "enabled": true, "head_sampling_rate": 1, "redact_query_string": true,
                      "logs": { "enabled": true, "invocation_logs": false } },
-  // jesuitxc.org goes here as custom domains once Cloudflare can attach it: the domain is Active and has no A, AAAA or
-  // CNAME records of its own for jesuitxc.org or www (see DEPLOY.md, "Your own address").
+  // The team's address. Cloudflare makes the DNS records and certificates for these; the domain must be Active on this
+  // account with no A, AAAA or CNAME records of its own for jesuitxc.org or www (Cloudflare refuses to attach it
+  // otherwise). The workers.dev address stays on, and page views there or at www. are sent to BASE_URL (cloudflare/app.js).
+  "routes": [
+    { "pattern": "jesuitxc.org", "custom_domain": true },
+    { "pattern": "www.jesuitxc.org", "custom_domain": true }
+  ],
   "workers_dev": true,
   "containers": [
     {
@@ -38,6 +43,7 @@
   // Settings that are not secret. Secrets (DATABASE_URL, SECRET_KEY, ...) are listed in cloudflare/worker.js.
   "vars": {
     // The app's public https address, used in athlete links and for Garmin (no trailing slash).
+    // Step 2 of the move sets this to https://jesuitxc.org, once the domain above is attached (see DEPLOY.md).
     "BASE_URL": "https://xc-training.jesuit-xc.workers.dev",
     "TEAM_TIMEZONE": "America/Los_Angeles",
     "TEAM_NAME": "Jesuit Cross Country",
