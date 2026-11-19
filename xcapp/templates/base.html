@@ -22,7 +22,8 @@
     {% set menu = [
       ("Today", [
         (user.sees("dashboard"), "/dashboard", "Dashboard", p == '/dashboard'),
-        (user.sees("week"), "/week", "Week", p == '/week')]),
+        (user.sees("week"), "/week", "Week", p == '/week'),
+        (user.sees("attendance"), "/attendance", "Attendance", p == '/attendance')]),
       ("Athletes", [
         (user.sees("athletes"), "/athletes", "Athletes", p.startswith('/athletes')),
         (user.sees("vdot"), "/vdot", "VDOT", p == '/vdot'),
@@ -33,6 +34,7 @@
         (user.sees("workouts"), "/workouts", "Workouts", p == '/workouts'),
         (user.sees("calendar"), "/calendar", "Calendar", p.startswith('/calendar')),
         (user.sees("squads"), "/squads", "Squads", p.startswith('/squads')),
+        (user.sees("challenge"), "/challenge", "Challenge", p == '/challenge'),
         (user.sees("goals"), "/results", "Goals", p.startswith('/results'))]),
       ("Racing", [
         (user.sees("races"), "/races", "Races", p == '/races'),

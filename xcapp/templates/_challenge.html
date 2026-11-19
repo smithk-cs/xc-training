@@ -1,0 +1,14 @@
+{# The athlete's mileage challenge (challenge.py): their standing, goal and streak, and the top of the board. #}
+{% if challenge %}{% set c = challenge.c %}{% set me = challenge.me %}
+<section class="panel challenge" id="challenge" aria-labelledby="ch-h">
+  <div class="panel-head"><h2 id="ch-h">{{ c.name }}</h2><span class="small muted">{% if challenge.b.days_left %}{{ challenge.b.days_left }} day{{ 's' if challenge.b.days_left != 1 }} left{% else %}finished{% endif %}</span></div>
+  <div class="facts">
+    <div><span class="k">Your miles</span><span class="big">{{ me.miles }}</span><span class="small muted">#{{ me.rank }} of {{ challenge.b.rows|length }}</span></div>
+    <div><span class="k">Streak</span><span class="big">{% if me.now >= 7 %}🔥 {% endif %}{{ me.now }}</span><span class="small muted">days in a row · best {{ me.best }}</span></div>
+  </div>
+  {% if c.goal_miles %}<div><div class="small">{{ me.miles }} of {{ '%g' % c.goal_miles }} miles{% if me.pct >= 100 %} <span class="pill good">✓ Goal reached</span>{% endif %}</div>
+    <div class="goal-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ [me.pct, 100]|min }}"><span style="width:{{ [me.pct, 100]|min }}%"></span></div></div>{% endif %}
+  <ol class="small challenge-top">{% for r in challenge.top %}<li value="{{ r.rank }}"{% if r.athlete.id == a.id %} class="me"{% endif %}><span>{{ r.name }}</span><b>{{ r.miles }} mi</b></li>{% endfor %}</ol>
+  {% if challenge.squads %}<p class="small muted" style="margin:0">Squads (avg miles): {% for s in challenge.squads %}{{ s.squad.name }} {{ s.avg }}{{ ', ' if not loop.last }}{% endfor %}</p>{% endif %}
+</section>
+{% endif %}

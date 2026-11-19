@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Attendance · {{ team_name }}{% endblock %}
+{% block content %}
+<h1>Practice attendance</h1>
+<form method="get" action="/attendance" class="form-row" style="align-items:flex-end; margin-bottom:12px">
+  <label>Day<input type="date" name="date" value="{{ day.isoformat() }}" max="{{ today.isoformat() }}" onchange="this.form.submit()"></label>
+  <label>Team<select name="team" onchange="this.form.submit()">{% for t in ('All', 'Boys', 'Girls') %}<option{% if t == team %} selected{% endif %}>{{ t }}</option>{% endfor %}</select></label>
+  <noscript><button type="submit" class="secondary">Show</button></noscript>
+</form>
+<form method="post" action="/attendance" class="card attendance" id="mark">
+  <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="date" value="{{ day.isoformat() }}"><input type="hidden" name="team" value="{{ team }}">
+  <div class="form-row" style="justify-content:space-between; align-items:center">
+    <h2 style="margin:0">{{ day.strftime('%A %b %-d') }} <span class="small muted" style="font-weight:400">· {{ counts.there }} here, {{ counts.marked }} of {{ people|length }} marked</span></h2>
+    {% if can_mark %}<button type="button" class="secondary" id="all-here">Everyone else here</button>{% endif %}
+  </div>
+  <ul class="att-list">
+  {% for a in people %}{% set m = marks.get(a.id) %}{% set t = told.get(a.id) %}
+    <li data-athlete="{{ a.id }}"><input type="hidden" name="athletes" value="{{ a.id }}">
+      <span class="att-name">{{ a.name }}{% if t %}<br><span class="small muted">Told coaches: {{ t.reason|lower }}</span>{% endif %}</span>
+      <span class="chips att-chips" role="radiogroup" aria-label="{{ a.name }}">
+        {% for v, text in statuses %}<label class="chip att-{{ v }}"><input type="radio" name="s_{{ a.id }}" value="{{ v }}"{% if m and m.status == v %} checked{% endif %}{% if not can_mark %} disabled{% endif %}><span>{{ text }}</span></label>{% endfor %}
+      </span></li>
+  {% else %}<li class="muted">No athletes on this team.</li>{% endfor %}
+  </ul>
+  {% if can_mark and people %}<div class="att-save"><button type="submit">Save attendance</button></div>{% endif %}
+</form>
+<script>
+  (function () { var b = document.getElementById('all-here'); if (!b) return;
+    b.addEventListener('click', function () {
+      document.querySelectorAll('.att-list li[data-athlete]').forEach(function (li) {
+        if (!li.querySelector('input[type=radio]:checked')) { var r = li.querySelector('input[value=present]'); if (r) r.checked = true; }
+      });
+    });
+  })();
+</script>
+<details class="card fold-card" id="season"{% if request.query_params.get('summary') %} open{% endif %}>
+  <summary><h2>{{ period.name }} attendance</h2></summary>
+  <p class="small muted">{{ period.start.strftime('%b %-d') }} to {{ until.strftime('%b %-d') }}: {{ days|length }} practice{{ 's' if days|length != 1 }} marked. The rate leaves out excused days; late counts as there.</p>
+  <div class="scroll"><table class="list sortable"><thead><tr><th>Athlete</th><th class="num">Rate</th><th class="num">Here</th><th class="num">Late</th><th class="num">Excused</th><th class="num">Absent</th><th>Absent on</th></tr></thead><tbody>
+  {% for a in people %}{% set s = season.get(a.id) %}<tr><td><a href="/athletes/{{ a.id }}">{{ a.name }}</a></td>
+    <td class="num" data-sort="{{ s.rate if s.rate is not none else -1 }}">{% if s.rate is not none %}<span class="pill {{ 'good' if s.rate >= 90 else 'warn' if s.rate >= 75 else 'bad' }}">{{ s.rate }}%</span>{% endif %}</td>
+    <td class="num">{{ s.there }}</td><td class="num">{{ s.late or '' }}</td><td class="num">{{ s.excused or '' }}</td><td class="num">{{ s.absent or '' }}</td>
+    <td class="small">{% for d in s.missed %}{{ d.strftime('%b %-d') }}{{ ', ' if not loop.last }}{% endfor %}</td></tr>{% endfor %}
+  </tbody></table></div>
+</details>
+{% endblock %}

@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Mileage challenge · {{ team_name }}{% endblock %}
+{% block content %}
+<h1>{{ c.name if c else 'Mileage challenge' }}</h1>
+{% if challenges|length > 1 %}<p class="small">{% for x in challenges %}{% if x.id == c.id %}<b>{{ x.name }}</b>{% else %}<a href="/challenge?id={{ x.id }}">{{ x.name }}</a>{% endif %}{{ ' · ' if not loop.last }}{% endfor %}</p>{% endif %}
+{% if c %}
+<p class="muted">{{ c.start_date.strftime('%b %-d') }} to {{ c.end_date.strftime('%b %-d, %Y') }} · {{ c.team if c.team != 'All' else 'Boys and girls' }}{% if c.goal_miles %} · goal {{ '%g' % c.goal_miles }} mi each{% endif %}
+  · {% if not b.started %}starts {{ c.start_date.strftime('%a %b %-d') }}{% elif b.days_left %}{{ b.days_left }} day{{ 's' if b.days_left != 1 }} left{% else %}finished{% endif %}</p>
+<div class="facts" style="margin-bottom:12px">
+  <div><span class="k">Team miles</span><span class="big">{{ '{:,.0f}'.format(b.total) }}</span></div>
+  <div><span class="k">Running</span><span class="big">{{ b.rows|selectattr('miles')|list|length }}</span><span class="small muted">of {{ b.rows|length }} athletes</span></div>
+  {% if c.goal_miles %}<div><span class="k">At their goal</span><span class="big">{{ b.rows|selectattr('pct', 'ge', 100)|list|length }}</span></div>{% endif %}
+</div>
+{% if b.squads %}
+<div class="card"><h2>Squads</h2>
+  <table class="list compact"><thead><tr><th>Squad</th><th class="num">Avg miles</th><th class="num">Total</th><th class="num">Runners</th></tr></thead><tbody>
+  {% for s in b.squads %}<tr><td><span class="pill" style="background:{{ s.squad.color or '#eee' }}; color:{{ ink(s.squad.color or '#eeeeee') }}">{{ s.squad.name }}</span></td><td class="num"><b>{{ s.avg }}</b></td><td class="num">{{ s.miles }}</td><td class="num">{{ s.members }}</td></tr>{% endfor %}
+  </tbody></table><p class="small muted">Ranked by average miles per runner, so squad size doesn’t matter.</p></div>
+{% endif %}
+<div class="card scroll"><h2>Leaderboard</h2>
+  <table class="list sortable"><thead><tr><th class="num">#</th><th>Athlete</th><th class="num">Miles</th>{% if c.goal_miles %}<th class="num">Goal</th>{% endif %}<th class="num">Days run</th><th class="num">Longest streak</th><th class="num">Streak now</th></tr></thead><tbody>
+  {% for r in b.rows %}<tr><td class="num">{{ r.rank }}</td><td><a href="/athletes/{{ r.athlete.id }}">{{ r.athlete.name }}</a></td><td class="num"><b>{{ r.miles }}</b></td>
+    {% if c.goal_miles %}<td class="num" data-sort="{{ r.pct }}">{% if r.pct >= 100 %}<span class="pill good">✓ {{ r.pct }}%</span>{% else %}{{ r.pct }}%{% endif %}</td>{% endif %}
+    <td class="num">{{ r.days }}</td><td class="num">{{ r.best }}</td><td class="num">{% if r.now >= 7 %}🔥 {% endif %}{{ r.now }}</td></tr>{% endfor %}
+  </tbody></table>
+  <p class="small muted">Runs from Garmin, uploads and typed-in runs all count. Athletes see the board on their page, with teammates’ names only for those who allow their name to be shown.</p>
+</div>
+{% endif %}
+{% if can_edit %}
+<details class="card fold-card" id="setup"{% if not edit %} open{% endif %}><summary><h2>{{ 'Change this challenge' if edit else 'Set up a challenge' }}</h2></summary>
+  <form method="post" action="/challenge" class="stack" style="display:flex; flex-direction:column; gap:10px; max-width:60ch">
+    <input type="hidden" name="csrf" value="{{ csrf }}">{% if edit %}<input type="hidden" name="id" value="{{ edit.id }}">{% endif %}
+    <label>Name<input name="name" maxlength="80" value="{{ edit.name if edit else 'Summer mileage challenge' }}" required></label>
+    <div class="form-row">
+      <label>First day<input type="date" name="start_date" value="{{ (edit.start_date if edit else summer.start).isoformat() }}" required></label>
+      <label>Last day<input type="date" name="end_date" value="{{ (edit.end_date if edit else summer.end).isoformat() }}" required></label>
+      <label>Team<select name="team">{% for t in ('All', 'Boys', 'Girls') %}<option{% if edit and edit.team == t %} selected{% endif %}>{{ t }}</option>{% endfor %}</select></label>
+      <label>Goal miles each <span class="small muted">(optional)</span><input type="number" name="goal_miles" min="1" max="2000" step="any" value="{{ '%g' % edit.goal_miles if edit and edit.goal_miles else '' }}" style="width:7em"></label>
+    </div>
+    <label>Squad totals from <span class="small muted">(optional)</span><select name="squads_id"><option value="">No squads</option>{% for s in squads %}<option value="{{ s.id }}"{% if edit and edit.squads_id == s.id %} selected{% endif %}>{{ s.name }}</option>{% endfor %}</select></label>
+    <div class="form-row"><button type="submit">Save</button>{% if edit %}<button type="submit" name="action" value="delete" class="link" formnovalidate onclick="return confirm('Delete this challenge? Runs are not affected.')">Delete</button>{% endif %}</div>
+    <p class="small muted" style="margin:0">The dates start as this year’s summer base period. Runs already in the app between those dates count.</p>
+  </form>
+</details>
+{% if c %}<p><a class="button secondary" href="/challenge?new=1#setup">New challenge</a></p>{% endif %}
+{% endif %}
+{% endblock %}

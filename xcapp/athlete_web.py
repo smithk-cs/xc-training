@@ -30,6 +30,23 @@ from .models import (Activity, Announcement, CaptainPost, DeletionRequest, Misse
 from .web import BODY_AREAS, FEELS, get_db
 
 
+def challenge_bits(db: Session, a, today: dt.date) -> dict | None:
+    """The mileage challenge running now, for the athlete's page: their row, the top five (names only for those who
+    allow it) and the squads."""
+    from . import challenge as CH
+    c = CH.current(db, today, a.gender)
+    if c is None or today < c.start_date:
+        return None
+    b = CH.board(db, c, today)
+    me = next((r for r in b["rows"] if r["athlete"].id == a.id), None)
+    if me is None:
+        return None
+    top = [{**r, "name": CH.shown_name(r["athlete"], a.id)} for r in b["rows"][:5]]
+    if me["rank"] > 5:
+        top.append({**me, "name": a.name})
+    return {"c": c, "b": b, "me": me, "top": top, "squads": b["squads"]}
+
+
 def reflection_bits(db: Session, a, races, today: dt.date) -> dict:
     """The athlete's race reflections, and the recent race still to reflect on (reflections.py)."""
     from . import reflections as RF
@@ -108,7 +125,7 @@ def register(app, h: SimpleNamespace) -> None:
                       areas=BODY_AREAS, token=token, today=today.isoformat(), push_key=PU.public_key(db),
                       push_phones=len(PU.subscriptions(db, [a.id])), rtr=return_view(db, a, today),
                       checkin=next(iter(WL.for_athlete(db, a.id, today, days=1)), None), ws=WL, wl=WL.label,
-                      **reflection_bits(db, a, races, today))
+                      challenge=challenge_bits(db, a, today), **reflection_bits(db, a, races, today))
 
     @app.post("/a/{token}/connect")
     async def athlete_connect(request: Request, token: str, db: Session = Depends(get_db, scope="function")):

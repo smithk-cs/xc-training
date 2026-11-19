@@ -978,3 +978,12 @@ table.list td summary { padding-block: 3px; margin-block: -3px; }
 .att-chips .att-present input:checked + span { background: var(--color-ok); border-color: var(--color-ok); color: #fff; }
 .att-chips .att-absent input:checked + span { background: var(--color-bad); border-color: var(--color-bad); color: #fff; }
 .att-save { position: sticky; bottom: 0; padding: 10px 0; background: var(--color-panel); }
+
+/* Mileage challenge (challenge.py) */
+.goal-bar { height: 10px; border-radius: 999px; background: var(--color-soft); overflow: hidden; margin-top: 4px; }
+.goal-bar span { display: block; height: 100%; background: var(--color-ok); }
+.challenge-top { margin: 0; padding-left: 1.4em; }
+.challenge-top li span { margin-right: 8px; }
+.challenge-top li { display: list-item; }
+.challenge-top li b { float: right; }
+.challenge-top li.me { font-weight: 700; color: var(--brand-red); }

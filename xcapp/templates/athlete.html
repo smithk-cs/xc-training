@@ -123,6 +123,7 @@
   </div>{% endif %}
   {% include "_return_run.html" %}
   {% include "_checkin.html" %}
+  {% include "_challenge.html" %}
   {% if calendar_link %}<a class="button secondary calendar-btn" href="{{ calendar_link }}">📅 Team calendar</a>{% endif %}
   {% for n in notes %}<section class="announcement" role="note" aria-label="Announcement">
     <div class="ann-title">{{ n.title }}</div>{% if n.body %}<div class="ann-body">{{ n.body }}</div>{% endif %}

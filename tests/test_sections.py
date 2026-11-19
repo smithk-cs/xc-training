@@ -50,7 +50,7 @@ def test_admin_turns_sections_off_for_a_coach():
     assert coach.get("/races").status_code == 200
     assert admin.get("/week").status_code == 200 and '<a href="/week"' in admin.get("/").text     # admins see everything
     admin.post("/staff/sections", data={"csrf": re.search(r'name="csrf" value="([^"]+)"', admin.get("/staff").text).group(1),
-                                        "users": [str(cid)], f"show_{cid}": [k for k in keep if k != "dashboard"]})
+                                        "users": [str(cid)], f"show_{cid}": [k for k in keep if k not in ("dashboard", "attendance")]})
     home = coach.get("/").text
     assert 'aria-controls="nav-today"' not in home and 'aria-controls="nav-athletes"' in home    # a group with no links left is hidden
     admin.post("/staff/sections", data={"csrf": re.search(r'name="csrf" value="([^"]+)"', admin.get("/staff").text).group(1),
