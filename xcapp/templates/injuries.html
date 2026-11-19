@@ -17,6 +17,23 @@
     <p><button type="submit">Log injury</button></p>
   </form>
 </div>
+{% if plans %}
+<div class="card scroll" id="return">
+  <h2>Return to running</h2>
+  <p class="small muted" style="margin-top:0">A walk-run plan, one step every other day. After each step the athlete reports pain on their page: 0–2 moves on, 3–4 repeats the step, 5+ pauses the plan for you to restart.</p>
+  <table class="list"><thead><tr><th>Athlete</th><th>Step</th><th>Last report</th><th>Next</th><th></th></tr></thead><tbody>
+  {% for v in plans %}{% set p = v.plan %}<tr>
+    <td class="nowrap">{{ p.athlete.name }}</td>
+    <td>{{ v.n }} of {{ v.of }}: {{ v.title }}{% if p.status == 'paused' %} <span class="pill bad">Paused: pain</span>{% endif %}</td>
+    <td>{% if v.last %}{{ v.last.date.strftime('%b %-d') }}, step {{ v.last.step + 1 }}: <span class="pill {{ 'good' if v.last.pain <= 2 else 'warn' if v.last.pain <= 4 else 'bad' }}">pain {{ v.last.pain }}/10</span>{% if v.last.note %} <span class="small muted">{{ v.last.note }}</span>{% endif %}{% else %}<span class="muted">none yet</span>{% endif %}</td>
+    <td>{% if p.status == 'active' %}{{ 'today' if p.next_on <= today else p.next_on.strftime('%a %b %-d') }}{% endif %}</td>
+    <td><form method="post" action="/injuries/return/{{ p.id }}" class="form-row" style="margin:0"><input type="hidden" name="csrf" value="{{ csrf }}">
+      {% if p.status == 'paused' %}<button class="secondary" name="action" value="resume">Restart at step {{ v.n }}</button>{% endif %}
+      <button class="link" name="action" value="back">Step back</button><button class="link" name="action" value="forward">Step forward</button>
+      <button class="link" name="action" value="done">Finished</button><button class="link" name="action" value="stop" onclick="return confirm('Stop this plan?')">Stop</button></form></td>
+  </tr>{% endfor %}</tbody></table>
+</div>
+{% endif %}
 <div class="card scroll">
   <h2>Injury log</h2>
   <table class="list"><thead><tr><th>Athlete</th><th>Began</th><th>Injury</th><th>Area</th><th>Return</th><th>Status</th><th>Update</th></tr></thead><tbody>
@@ -33,6 +50,12 @@
         {% if show_notes %}<label>Notes<input type="text" name="notes" value="{{ i.notes }}" maxlength="2000"></label>{% endif %}
         <button class="secondary" type="submit">Save</button>
       </form>
+      {% if i.athlete_id not in on_plan %}<details class="small" style="margin:4px 0"><summary>Start return to running</summary>
+        <form method="post" action="/injuries/{{ i.id }}/return-run" class="form-row" style="margin-top:4px">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <label>Start at<select name="step">{% for t, _ in rtr_steps %}<option value="{{ loop.index0 }}">Step {{ loop.index }}: {{ t }}</option>{% endfor %}</select></label>
+          <button class="secondary" type="submit">Start</button>
+        </form></details>{% endif %}
       {% if user.role in ('admin', 'trainer') %}<form method="post" action="/injuries/{{ i.id }}/delete" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="link" type="submit">Delete</button></form>{% endif %}
     </td>
   </tr>

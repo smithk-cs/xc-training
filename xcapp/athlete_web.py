@@ -29,6 +29,15 @@ from .models import (Activity, Announcement, CaptainPost, DeletionRequest, Misse
 from .web import BODY_AREAS, FEELS, get_db
 
 
+def return_view(db: Session, a, today: dt.date):
+    """The athlete's return-to-run plan for their page: an active or paused one, or one finished in the last week."""
+    from . import return_run as RR
+    from .models import ReturnPlan
+    p = RR.active(db, a.id) or db.scalar(select(ReturnPlan).where(
+        ReturnPlan.athlete_id == a.id, ReturnPlan.status == "done", ReturnPlan.finished_on >= today - dt.timedelta(days=7)))
+    return RR.view(db, p, today) if p is not None else None
+
+
 def register(app, h: SimpleNamespace) -> None:
     render, flash, back, form_checked, s = h.render, h.flash, h.back, h.form_checked, h.settings
     athlete_by_token, photo_response, photo_versions, route_pdf = h.athlete_by_token, h.photo_response, h.photo_versions, h.route_pdf
@@ -89,7 +98,7 @@ def register(app, h: SimpleNamespace) -> None:
                                                    .order_by(Announcement.start_date.desc(), Announcement.id.desc())).all()
                              if n.for_athlete(a.gender, mine.get("group") or "")], paces_link=f"/a/{token}/paces" if show_group and mine.get("vdot") else None,
                       areas=BODY_AREAS, token=token, today=today.isoformat(), push_key=PU.public_key(db),
-                      push_phones=len(PU.subscriptions(db, [a.id])))
+                      push_phones=len(PU.subscriptions(db, [a.id])), rtr=return_view(db, a, today))
 
     @app.post("/a/{token}/connect")
     async def athlete_connect(request: Request, token: str, db: Session = Depends(get_db, scope="function")):

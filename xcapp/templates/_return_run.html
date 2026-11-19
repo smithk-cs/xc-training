@@ -1,0 +1,26 @@
+{# The athlete's return-to-run plan on their page (return_run.view): today's step and the pain report after it. #}
+{% if rtr %}{% set p = rtr.plan %}
+<section class="panel return-run" id="return-run" aria-labelledby="rr-h">
+  <h2 id="rr-h" style="margin:0">Return to running{% if p.status != 'done' %} <span class="small muted" style="font-weight:400">· step {{ rtr.n }} of {{ rtr.of }}</span>{% endif %}</h2>
+  <ol class="rr-steps" aria-label="Steps">{% for s in rtr.steps %}<li class="{{ s.state }}" title="{{ s.title }}">{{ '✓' if s.state == 'done' else s.n }}</li>{% endfor %}</ol>
+  {% if p.status == 'done' %}
+  <p style="margin:0"><b>Plan finished.</b> You’re back to easy running; your coaches will say when workouts come back.</p>
+  {% elif p.status == 'paused' %}
+  <p class="notice" style="margin:0"><span><b>Paused.</b> See the athletic trainer before running again; they’ll restart your plan.</span></p>
+  {% else %}
+  <div><b>{{ rtr.title }}</b><br>{{ rtr.how }}</div>
+  {% if rtr.open and not rtr.reported_today %}
+  <form method="post" action="/a/{{ token }}/return-run" style="display:flex; flex-direction:column; gap:8px">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <fieldset class="pick" style="margin:0"><legend class="small">After today’s session: how much did it hurt? (0 = not at all)</legend>
+      <div class="lvls">{% for n in range(0, 11) %}<label class="lvl"><input type="radio" name="pain" value="{{ n }}" required aria-label="Pain {{ n }} out of 10"><span>{{ n }}</span></label>{% endfor %}</div>
+    </fieldset>
+    <label class="small">Anything to tell the trainer? (optional)<input name="note" maxlength="300"></label>
+    <button type="submit" class="ghost-btn">Done with today’s step</button>
+  </form>
+  <p class="small muted" style="margin:0">0–2: on to the next step after a day off. 3–4: repeat this step. 5 or more: stop and see the trainer.</p>
+  {% elif rtr.open %}<p class="small muted" style="margin:0">Reported for today. Rest tomorrow.</p>
+  {% else %}<p class="small muted" style="margin:0">Opens {{ p.next_on.strftime('%A %b %-d') }}. Rest or cross-train until then, as the trainer says.</p>{% endif %}
+  {% endif %}
+</section>
+{% endif %}

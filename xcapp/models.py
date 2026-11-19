@@ -1048,3 +1048,45 @@ class SeasonWeek(Base):
     phase: Mapped[int] = mapped_column(Integer, default=1)                # 1-4: Daniels' phases I to IV
     miles_pct: Mapped[int] = mapped_column(Integer, default=100)          # share of each group's peak weekly miles
     note: Mapped[str] = mapped_column(String(200), default="")
+
+
+class ReturnPlan(Base):
+    """An athlete's return-to-running plan after an injury (return_run.py): the walk-run step they're on, and when the
+    next one opens. active | paused (pain: waiting for the trainer) | done | stopped."""
+    __tablename__ = "return_plans"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    athlete_id: Mapped[int] = mapped_column(ForeignKey("athletes.id", ondelete="CASCADE"), index=True)
+    injury_id: Mapped[int | None] = mapped_column(ForeignKey("injuries.id", ondelete="SET NULL"), nullable=True)
+    step: Mapped[int] = mapped_column(Integer, default=0)                 # index into return_run.STEPS
+    status: Mapped[str] = mapped_column(String(10), default="active")
+    started_on: Mapped[dt.date] = mapped_column(Date)
+    next_on: Mapped[dt.date] = mapped_column(Date)                        # the current step opens this day
+    finished_on: Mapped[dt.date | None] = mapped_column(Date, nullable=True)
+    created_by: Mapped[str] = mapped_column(String(80), default="")
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
+    athlete: Mapped[Athlete] = relationship()
+
+
+class ReturnCheck(Base):
+    """The athlete's report after a return-to-run step: how much it hurt (0-10)."""
+    __tablename__ = "return_checks"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    plan_id: Mapped[int] = mapped_column(ForeignKey("return_plans.id", ondelete="CASCADE"), index=True)
+    step: Mapped[int] = mapped_column(Integer)
+    date: Mapped[dt.date] = mapped_column(Date)
+    pain: Mapped[int] = mapped_column(Integer)
+    note: Mapped[str] = mapped_column(String(300), default="")
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class Wellness(Base):
+    """An athlete's morning check-in (wellness.py): hours of sleep, soreness 1-5, mood 1-5. Never sent to the AI."""
+    __tablename__ = "wellness"
+    __table_args__ = (UniqueConstraint("athlete_id", "date"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    athlete_id: Mapped[int] = mapped_column(ForeignKey("athletes.id", ondelete="CASCADE"), index=True)
+    date: Mapped[dt.date] = mapped_column(Date, index=True)
+    sleep_h: Mapped[int] = mapped_column(Integer)
+    soreness: Mapped[int] = mapped_column(Integer)
+    mood: Mapped[int] = mapped_column(Integer)
+    updated_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)

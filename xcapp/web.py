@@ -60,7 +60,7 @@ from .fitfile import (MAX_STREAM_FITS, MAX_STREAM_UNPACKED_BYTES, MAX_UPLOAD_BYT
 from .imports import (GROUPS, ImportErrors, clean_email, clean_phone, import_goals, import_races, import_results, import_roster,
                       import_vdots, parse_date, parse_distance, set_goal, sync_benchmark)
 from .ingest import ingest, log, rematch_day
-from .models import (Activity, AiRun, AppSetting, Athlete, RaceWeather, DeletionRequest, GarminConnection, Injury, MissedDay,
+from .models import (Activity, AiRun, AppSetting, Athlete, ReturnPlan, RaceWeather, DeletionRequest, GarminConnection, Injury, MissedDay,
                      OAuthState, PainReport, PlannedWorkout, PushSubscription, RaceResult, RestingHeartRate, Result, StaffUser, AthletePhoto,
                      MeetEntry, MeetDivision, MeetResponse, DivisionAthlete, SyncLog, TrainingGroup, VdotChange, Announcement, utcnow,
                      Course, MeetConditions, RaceTeamResult)
@@ -1927,7 +1927,12 @@ def create_app() -> FastAPI:
             if extra is not None and extra not in rows_:
                 rows_.append(extra)
                 rows_.sort(key=lambda x: x.date, reverse=True)
+        from . import return_run as RR
+        today = A.team_today()
+        plans = [RR.view(db, p, today) for p in db.scalars(select(ReturnPlan).options(selectinload(ReturnPlan.athlete))
+                                                            .where(ReturnPlan.status.in_(("active", "paused")))).all()]
         return render(request, "injuries.html", user, rows=rows, pains=pains, missed=missed, athletes=athletes_sorted(db),
+                      plans=plans, on_plan={v["plan"].athlete_id for v in plans}, rtr_steps=RR.STEPS,
                       types=INJURY_TYPES, areas=BODY_AREAS, today=A.team_today(), show_notes=user.role in ("admin", "trainer"))
 
     @app.post("/injuries")
@@ -2548,7 +2553,9 @@ def create_app() -> FastAPI:
     form_web.register(app, SimpleNamespace(render=render, flash=flash, back=back, form_checked=form_checked, any_staff=any_staff,
                                            coach_or_admin=coach_or_admin, get_db=get_db, get_athlete=get_athlete,
                                            athlete_by_token=athlete_by_token, logo_bytes=logo_bytes, team_name=s.team_name))
-    from . import push_web, pacing_web
+    from . import push_web, pacing_web, return_web
+    return_web.register(app, SimpleNamespace(flash=flash, back=back, get_db=get_db, form_checked=form_checked, medical=medical,
+                                             athlete_by_token=athlete_by_token))
     pacing_web.register(app, SimpleNamespace(render=render, get_db=get_db, any_staff=any_staff, athlete_by_token=athlete_by_token))
     push_web.register(app, SimpleNamespace(flash=flash, back=back, form_checked=form_checked, coach_or_admin=coach_or_admin,
                                            get_db=get_db, athlete_by_token=athlete_by_token))
