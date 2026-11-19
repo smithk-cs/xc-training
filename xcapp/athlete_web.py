@@ -30,6 +30,13 @@ from .models import (Activity, Announcement, CaptainPost, DeletionRequest, Misse
 from .web import BODY_AREAS, FEELS, get_db
 
 
+def reflection_bits(db: Session, a, races, today: dt.date) -> dict:
+    """The athlete's race reflections, and the recent race still to reflect on (reflections.py)."""
+    from . import reflections as RF
+    refs = RF.by_race(db, a.id)
+    return {"reflections": refs, "reflect_next": RF.to_ask(races, refs, today)}
+
+
 def return_view(db: Session, a, today: dt.date):
     """The athlete's return-to-run plan for their page: an active or paused one, or one finished in the last week."""
     from . import return_run as RR
@@ -100,7 +107,8 @@ def register(app, h: SimpleNamespace) -> None:
                              if n.for_athlete(a.gender, mine.get("group") or "")], paces_link=f"/a/{token}/paces" if show_group and mine.get("vdot") else None,
                       areas=BODY_AREAS, token=token, today=today.isoformat(), push_key=PU.public_key(db),
                       push_phones=len(PU.subscriptions(db, [a.id])), rtr=return_view(db, a, today),
-                      checkin=next(iter(WL.for_athlete(db, a.id, today, days=1)), None), ws=WL, wl=WL.label)
+                      checkin=next(iter(WL.for_athlete(db, a.id, today, days=1)), None), ws=WL, wl=WL.label,
+                      **reflection_bits(db, a, races, today))
 
     @app.post("/a/{token}/connect")
     async def athlete_connect(request: Request, token: str, db: Session = Depends(get_db, scope="function")):

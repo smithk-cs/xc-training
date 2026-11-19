@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Reflections · {{ meet }} · {{ team_name }}{% endblock %}
+{% block content %}
+<p class="small"><a href="/races">← Races</a></p>
+<div class="form-row" style="justify-content:space-between; align-items:center"><h1 style="margin:0">Reflections: {{ meet }}</h1><button type="button" class="secondary" onclick="window.print()">Print</button></div>
+<p class="muted">{{ day.strftime('%A %b %-d, %Y') }} · {{ refs|length }} of {{ races|length }} athletes reflected.</p>
+{% for race, rows in races|groupby('race') %}
+<div class="card">
+  <h2>{{ race or 'Race' }}</h2>
+  {% for r in rows %}{% set x = refs.get(r.id) %}
+  <div class="reflection" style="padding:8px 0; border-top:1px solid var(--color-border-line)">
+    <div><b><a href="/athletes/{{ r.athlete_id }}#reflections">{{ r.athlete.name }}</a></b> <span class="small muted">{{ fmt_time(r.time_s) }}{% if r.place %} · place {{ r.place }}{% endif %}</span>
+      {% if x %} <span class="pill {{ 'good' if x.happy >= 4 else 'warn' if x.happy <= 2 else '' }}">{{ happy_label(x.happy) }}</span>{% else %} <span class="small muted">no reflection yet</span>{% endif %}</div>
+    {% if x %}<dl class="small reflection-answers">
+      {% if x.went_well %}<dt>Went well</dt><dd>{{ x.went_well }}</dd>{% endif %}
+      {% if x.change %}<dt>Would change</dt><dd>{{ x.change }}</dd>{% endif %}
+      {% if x.next_focus %}<dt>Next focus</dt><dd>{{ x.next_focus }}</dd>{% endif %}
+    </dl>{% endif %}
+  </div>{% endfor %}
+</div>
+{% else %}<div class="card"><p class="muted">No results for this meet.</p></div>{% endfor %}
+{% endblock %}

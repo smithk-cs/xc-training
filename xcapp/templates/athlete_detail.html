@@ -70,6 +70,15 @@
   </tbody></table></div>{% else %}<p class="small muted">Film the athlete from the side for a few strides; the phone finds their joints and measures the stride. The video stays on the phone.</p>{% endif %}
 </div>
 {% include "_fatigue.html" %}
+{% if race_reflections %}
+<details class="card fold-card" id="reflections"><summary><h2>Race reflections <span class="small muted" style="font-weight:400">· {{ race_reflections|length }}</span></h2></summary>
+  {% for x in race_reflections %}<div style="padding:8px 0; border-top:1px solid var(--color-border-line)">
+    <b>{{ x.race.meet }}</b> <span class="small muted">{{ x.race.date.strftime('%b %-d, %Y') }} · {{ fmt_time(x.race.time_s) }}</span>
+    <span class="pill {{ 'good' if x.happy >= 4 else 'warn' if x.happy <= 2 else '' }}">{{ happy_label(x.happy) }}</span>
+    <dl class="small reflection-answers">{% if x.went_well %}<dt>Went well</dt><dd>{{ x.went_well }}</dd>{% endif %}{% if x.change %}<dt>Would change</dt><dd>{{ x.change }}</dd>{% endif %}{% if x.next_focus %}<dt>Next focus</dt><dd>{{ x.next_focus }}</dd>{% endif %}</dl>
+  </div>{% endfor %}
+</details>
+{% endif %}
 {% if races %}
 <div class="card wide-card">
   <h2>Races</h2>

@@ -52,8 +52,9 @@ Flat SAC Invitational,2026-10-24,Gibson Ranch Regional Park,Boys Varsity Large S
 <details class="card meet">
   <summary>
     <h2>{{ meet }}</h2>
-    <span class="muted">{{ date.strftime('%a, %b %-d, %Y') }}{% if course %} · {{ course }}{% endif %} · {{ races.values()|map('length')|sum }} results</span>
+    <span class="muted">{{ date.strftime('%a, %b %-d, %Y') }}{% if course %} · {{ course }}{% endif %} · {{ races.values()|map('length')|sum }} results{% if reflected.get((date, meet)) %} · {{ reflected[(date, meet)] }} reflection{{ 's' if reflected[(date, meet)] != 1 }}{% endif %}</span>
   </summary>
+  <p class="small" style="margin:4px 0 8px"><a href="/races/reflections?date={{ date.isoformat() }}&amp;meet={{ meet|urlencode }}">Athletes’ reflections{% if reflected.get((date, meet)) %} ({{ reflected[(date, meet)] }}){% endif %} ›</a></p>
   {% if user.role != 'trainer' %}
   <details class="edit-box"><summary class="small">Edit meet</summary>
     <form method="post" action="/races/edit-meet" class="form-row">

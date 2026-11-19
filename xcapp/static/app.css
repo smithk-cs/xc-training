@@ -968,3 +968,13 @@ table.list td summary { padding-block: 3px; margin-block: -3px; }
 .reflection-answers { display: grid; grid-template-columns: max-content 1fr; gap: 2px 12px; margin: 6px 0 0; }
 .reflection-answers dt { color: var(--color-fg-muted); font-weight: 600; }
 .reflection-answers dd { margin: 0; }
+
+/* Practice attendance (attendance.py) */
+.att-list { list-style: none; margin: 8px 0 0; padding: 0; }
+.att-list li { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; justify-content: space-between; padding: 8px 0; border-top: 1px solid var(--color-border-line); }
+.att-name { min-width: 10em; }
+.att-chips { gap: 4px; }
+.att-chips .chip span { padding: 6px 10px; }
+.att-chips .att-present input:checked + span { background: var(--color-ok); border-color: var(--color-ok); color: #fff; }
+.att-chips .att-absent input:checked + span { background: var(--color-bad); border-color: var(--color-bad); color: #fff; }
+.att-save { position: sticky; bottom: 0; padding: 10px 0; background: var(--color-panel); }

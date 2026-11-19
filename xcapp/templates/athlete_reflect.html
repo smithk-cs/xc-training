@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Race reflection · {{ r.meet }} · {{ team_name }}{% endblock %}
+{% block bodyclass %}athlete-page{% endblock %}
+{% block flashes %}{% endblock %}
+{% block content %}
+{% with hero_title="How did it go?", hero_text=r.meet ~ ", " ~ r.date.strftime('%b %-d') ~ " · " ~ fmt_time(r.time_s), back_url="/a/" ~ token, back_label="My page" %}{% include "_hero.html" %}{% endwith %}
+<div class="stack">
+  {% for level, text in messages %}<div class="flash {{ level }}" role="status">{{ text }}</div>{% endfor %}
+  <form method="post" action="/a/{{ token }}/races/{{ r.id }}/reflect" class="panel" style="gap:12px">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <fieldset class="pick" style="margin:0"><legend>How happy are you with this race?</legend>
+      <div class="chips">{% for v, text in happy %}<label class="chip"><input type="radio" name="happy" value="{{ v }}" required{% if ref and ref.happy == v %} checked{% endif %}><span>{{ text }}</span></label>{% endfor %}</div>
+    </fieldset>
+    <label>What went well?<textarea name="went_well" rows="3" maxlength="500" placeholder="Got out well, stayed with my pack on the hill…">{{ ref.went_well if ref else '' }}</textarea></label>
+    <label>What would you do differently?<textarea name="change" rows="3" maxlength="500" placeholder="Went out too fast; faded in mile 2…">{{ ref.change if ref else '' }}</textarea></label>
+    <label>Your focus for the next race<input name="next_focus" maxlength="300" value="{{ ref.next_focus if ref else '' }}" placeholder="Even first mile, move up after 2 miles"></label>
+    <button type="submit" class="big-btn">{{ 'Update' if ref else 'Save reflection' }}</button>
+    <p class="small muted" style="margin:0">Only your coaches see this. Thinking it through after each race is one of the best ways to race smarter next time.</p>
+  </form>
+</div>
+{% endblock %}

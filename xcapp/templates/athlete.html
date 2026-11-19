@@ -113,12 +113,13 @@
 {% with hero_title="Hi " ~ a.first_name, hero_text=None, hero_compact=True, back_url=None, hero_group=(ability if show_group else none), hero_vo2=vo2, hero_photo=('/a/' ~ token ~ '/photo?v=' ~ photo_v if photo_v else none), hero_name=a.name, hero_paces_link=paces_link, hero_medals=(medals.medals if medals else none), hero_move=(vdot_move if show_group else none) %}{% include "_hero.html" %}{% endwith %}
 <div class="stack">
   {% set rhr_n = rhr_cal.missing|length %}
-  {% if messages or (medals and medals.note) or need or rhr_n %}<div class="alerts">
+  {% if messages or (medals and medals.note) or need or rhr_n or reflect_next %}<div class="alerts">
   {% for level, text in messages %}<div class="flash {{ level }}" role="status">{{ text }}</div>{% endfor %}
   {% if medals and medals.note %}<div class="notice medal-note" role="status"><span class="medal-icon" aria-hidden="true">{{ medals.note.icon }}</span><span>{{ medals.note.text }}</span>
     <form method="post" action="/a/{{ token }}/medal-note"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="monday" value="{{ medals.note.monday.isoformat() }}"><button type="submit" class="close" aria-label="Close">×</button></form></div>{% endif %}
   {% if need %}<p class="notice"><span>{{ need }} recent run{{ '' if need == 1 else 's' }} need{{ 's' if need == 1 else '' }} your effort rating.</span><a href="/a/{{ token }}/runs/{{ first_unrated.id }}#effort">Add effort ›</a></p>{% endif %}
   {% if rhr_n %}<p class="notice rhr-reminder"><span>{{ rhr_n }} day{{ '' if rhr_n == 1 else 's' }} need{{ 's' if rhr_n == 1 else '' }} your resting heart rate.</span><a href="#rhr" onclick="var i=document.getElementById('rhr-bpm'); if (i) { setTimeout(function () { i.focus(); }, 300); }">Add it ›</a></p>{% endif %}
+  {% if reflect_next %}<p class="notice"><span>How did {{ reflect_next.meet }} go? Two minutes to look back helps you race smarter next time.</span><a href="/a/{{ token }}/races/{{ reflect_next.id }}/reflect">Reflect ›</a></p>{% endif %}
   </div>{% endif %}
   {% include "_return_run.html" %}
   {% include "_checkin.html" %}
@@ -284,7 +285,7 @@
           <span class="r"><span class="mi">{{ fmt_time(r.time_s) }}</span>
             <span class="small muted">{{ fmt_time((r.time_s / (r.distance_m / 1609.344))|round)[:-2] }}/mi</span>
             {% if adjusted.get(r.id) %}<span class="small adj" title="What this effort would be on a track at 55°F or cooler, at sea level, with a low dew point">Adj. {{ fmt_time(adjusted[r.id]) }}</span>{% endif %}
-            <span class="small muted">{% if x.pr %}<span class="pill good">PR</span> {% elif x.cpr %}<span class="pill good">Course PR</span> {% elif x.sb %}<span class="pill">SB</span> {% endif %}{% if r.place %}Place {{ r.place }}{% endif %}</span>{% set vid = videos.get((r.date, r.meet, r.race)) if videos is defined else none %}{% if vid %}<a class="small video-link" href="{{ vid }}" target="_blank" rel="noopener">▶ Watch</a>{% endif %}</span>
+            <span class="small muted">{% if x.pr %}<span class="pill good">PR</span> {% elif x.cpr %}<span class="pill good">Course PR</span> {% elif x.sb %}<span class="pill">SB</span> {% endif %}{% if r.place %}Place {{ r.place }}{% endif %}</span>{% set vid = videos.get((r.date, r.meet, r.race)) if videos is defined else none %}{% if vid %}<a class="small video-link" href="{{ vid }}" target="_blank" rel="noopener">▶ Watch</a>{% endif %}<a class="small" href="/a/{{ token }}/races/{{ r.id }}/reflect">{{ '✓ Reflection' if reflections is defined and reflections.get(r.id) else 'Reflect' }}</a></span>
         </div></li>
         {% endfor %}
       </ul>

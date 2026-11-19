@@ -46,6 +46,7 @@ from . import garmin_csv as GCSV
 from . import weather as WX
 from . import practice_alerts as PA
 from . import wellness as WL
+from . import reflections as RF
 from . import classyear as CY
 from . import data_check as DC
 from . import limits as LM
@@ -645,7 +646,9 @@ def create_app() -> FastAPI:
                       injuries=sorted(a.injuries, key=lambda i: i.onset_date, reverse=True) if hurt_ok else [],
                       pains=sorted(a.pain_reports, key=lambda p: p.date, reverse=True)[:10] if hurt_ok else [],
                       goals=sorted(a.goals, key=lambda g: (g.season, g.event)), show_notes=user.role in ("admin", "trainer"),
-                      checkins=WL.for_athlete(db, a.id, A.team_today()), ws=WL, wl=WL.label)
+                      checkins=WL.for_athlete(db, a.id, A.team_today()), ws=WL, wl=WL.label,
+                      race_reflections=sorted(RF.by_race(db, a.id).values(), key=lambda x: x.race.date, reverse=True)[:12],
+                      happy_label=lambda n: dict(RF.HAPPY).get(n, ""))
 
     @app.post("/athletes/{athlete_id}/edit")
     async def athlete_edit(request: Request, athlete_id: int, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
@@ -1112,7 +1115,9 @@ def create_app() -> FastAPI:
             row.setdefault(REG.result_column(t.race), []).append(t)
         both = len({g for _, _, g in grid}) > 1
         team_grid = [{"date": d, "meet": m, "gender": g if both else "", "cells": cells} for (d, m, g), cells in grid.items()]
+        from .reflections import counts as reflection_counts
         return render(request, "races.html", user, own=own, meets=meets, seasons=seasons, season=season, counts=counts,
+                      reflected=reflection_counts(db),
                       info=info, courses=courses, footings=[f for f in CS.FOOTING if f], teams=teams, suggested=suggested,
                       season_teams=season_teams, team_grid=team_grid, result_columns=REG.RESULT_COLUMNS, races_url=races_url,
                       videos=sorted((t for t in teams.values() if t.video_url), key=lambda t: (t.date, t.meet, t.race), reverse=True))
@@ -2556,7 +2561,9 @@ def create_app() -> FastAPI:
     form_web.register(app, SimpleNamespace(render=render, flash=flash, back=back, form_checked=form_checked, any_staff=any_staff,
                                            coach_or_admin=coach_or_admin, get_db=get_db, get_athlete=get_athlete,
                                            athlete_by_token=athlete_by_token, logo_bytes=logo_bytes, team_name=s.team_name))
-    from . import push_web, pacing_web, return_web, wellness_web
+    from . import push_web, pacing_web, return_web, wellness_web, reflections_web
+    reflections_web.register(app, SimpleNamespace(render=render, flash=flash, back=back, get_db=get_db, form_checked=form_checked,
+                                                  any_staff=any_staff, athlete_by_token=athlete_by_token))
     wellness_web.register(app, SimpleNamespace(flash=flash, back=back, get_db=get_db, form_checked=form_checked,
                                                athlete_by_token=athlete_by_token))
     return_web.register(app, SimpleNamespace(flash=flash, back=back, get_db=get_db, form_checked=form_checked, medical=medical,

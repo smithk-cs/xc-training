@@ -1106,3 +1106,29 @@ class RaceReflection(Base):
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
     updated_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
     race: Mapped[RaceResult] = relationship()
+
+
+class Attendance(Base):
+    """Whether an athlete was at practice on a day (attendance.py), as a coach marked it."""
+    __tablename__ = "attendance"
+    __table_args__ = (UniqueConstraint("athlete_id", "date"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    athlete_id: Mapped[int] = mapped_column(ForeignKey("athletes.id", ondelete="CASCADE"), index=True)
+    date: Mapped[dt.date] = mapped_column(Date, index=True)
+    status: Mapped[str] = mapped_column(String(10))                       # present | late | excused | absent
+    by: Mapped[str] = mapped_column(String(80), default="")
+    updated_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+
+
+class MileageChallenge(Base):
+    """A mileage challenge over a stretch of days (challenge.py), such as summer base: total miles and streaks on a
+    leaderboard, with an optional goal for each athlete and, if it's linked, squad totals."""
+    __tablename__ = "mileage_challenges"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(80))
+    start_date: Mapped[dt.date] = mapped_column(Date)
+    end_date: Mapped[dt.date] = mapped_column(Date)
+    team: Mapped[str] = mapped_column(String(10), default="All")          # All | Boys | Girls
+    goal_miles: Mapped[float | None] = mapped_column(Float, nullable=True)
+    squads_id: Mapped[int | None] = mapped_column(ForeignKey("squad_competitions.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
