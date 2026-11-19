@@ -162,8 +162,10 @@ Garmin the link. Edit `wrangler.jsonc` on GitHub (open the file, click the penci
      itself (`@`) and for `www` (copied from the registrar, often its "parked" page). Cloudflare won't attach the
      domain to the app while they exist, and the deploy would still switch `BASE_URL`, sending visitors to an
      address that isn't connected yet. Keep mail records (MX, TXT).
-  4. In `wrangler.jsonc`, list the domain under `routes` with `"custom_domain": true` (with `www.` too) and set
-     `BASE_URL` to it. The deploy makes the DNS records and certificates. The old workers.dev address stays on and
+  4. In `wrangler.jsonc`, list the domain under `routes` with `"custom_domain": true` (with `www.` too) and deploy,
+     keeping `BASE_URL` as it is. The app then answers at both addresses. Once the new address opens the app, set
+     `BASE_URL` to it and deploy again. (Doing both at once risks an outage: a deploy that fails partway can switch
+     `BASE_URL` without attaching the domain.) The deploy makes the DNS records and certificates. The old workers.dev address stays on and
      sends page views to the new one (cloudflare/app.js), so old athlete links keep working.
   5. After the deploy, in the Garmin Developer Portal set the redirect URL to `https://<domain>/garmin/callback`
      and the webhook addresses to the ones on the Sync log page; update any privacy-policy link you gave Garmin.
