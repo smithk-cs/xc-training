@@ -16,7 +16,7 @@
   <ul class="att-list">
   {% for a in people %}{% set m = marks.get(a.id) %}{% set t = told.get(a.id) %}
     <li data-athlete="{{ a.id }}"><input type="hidden" name="athletes" value="{{ a.id }}">
-      <span class="att-name">{{ a.name }}{% if t %}<br><span class="small muted">Told coaches: {{ t.reason|lower }}</span>{% endif %}</span>
+      <span class="att-name">{% if photos.get(a.id) %}<img class="avatar zoom" src="/athletes/{{ a.id }}/photo?v={{ photos[a.id] }}" alt="Photo of {{ a.name }}" loading="lazy" tabindex="0" role="button">{% else %}<span class="avatar blank" aria-hidden="true">{{ a.first_name[:1] }}{{ a.last_name[:1] }}</span>{% endif %}<span>{{ a.name }}{% if t %}<br><span class="small muted">Told coaches: {{ t.reason|lower }}</span>{% endif %}</span></span>
       <span class="chips att-chips" role="radiogroup" aria-label="{{ a.name }}">
         {% for v, text in statuses %}<label class="chip att-{{ v }}"><input type="radio" name="s_{{ a.id }}" value="{{ v }}"{% if m and m.status == v %} checked{% endif %}{% if not can_mark %} disabled{% endif %}><span>{{ text }}</span></label>{% endfor %}
       </span></li>

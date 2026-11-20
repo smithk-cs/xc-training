@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 from xcapp import analysis as A
 from xcapp import attendance as AT
 from xcapp.db import SessionLocal
-from xcapp.models import Athlete, Attendance, MissedDay, StaffUser
+from xcapp.models import Athlete, AthletePhoto, Attendance, MissedDay, StaffUser
 from xcapp.security import hash_password
 
 TODAY = A.team_today()
@@ -45,6 +45,7 @@ def test_page():
     db.add(StaffUser(username="trainer1", role="trainer", password_hash=hash_password("correct-horse-1")))
     sam, ben, ava = team(db)
     db.add(MissedDay(athlete_id=ben.id, date=TODAY, reason="Sick", description=""))
+    db.add(AthletePhoto(athlete_id=sam.id, data=b"\xff\xd8jpeg"))
     db.commit()
     ids = (sam.id, ben.id, ava.id)
     db.close()
@@ -56,6 +57,8 @@ def test_page():
     assert 'href="/attendance"' in c.get("/week").text                              # in the menu
     page = c.get("/attendance?team=Boys").text
     assert "Sam Lowry" in page and "Ava Lowry" not in page and "Told coaches: sick" in page and "Everyone else here" in page
+    assert re.search(rf'<img class="avatar zoom" src="/athletes/{ids[0]}/photo\?v=\d+" alt="Photo of Sam Lowry"', page)   # tap to enlarge
+    assert '<span class="avatar blank" aria-hidden="true">BL</span>' in page                                           # no photo: initials
     csrf = re.search(r'name="csrf" value="([^"]+)"', page).group(1)
     r = c.post("/attendance", data={"csrf": csrf, "date": TODAY.isoformat(), "team": "Boys", "athletes": [str(ids[0]), str(ids[1])],
                                     f"s_{ids[0]}": "present", f"s_{ids[1]}": "excused"})

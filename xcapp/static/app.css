@@ -972,7 +972,9 @@ table.list td summary { padding-block: 3px; margin-block: -3px; }
 /* Practice attendance (attendance.py) */
 .att-list { list-style: none; margin: 8px 0 0; padding: 0; }
 .att-list li { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; justify-content: space-between; padding: 8px 0; border-top: 1px solid var(--color-border-line); }
-.att-name { min-width: 10em; }
+.att-name { min-width: 10em; display: flex; align-items: center; }
+.att-name .avatar { width: 44px; height: 44px; margin-right: 10px; flex: none; cursor: zoom-in; }
+.att-name .avatar.blank { font-size: 14px; cursor: default; }
 .att-chips { gap: 4px; }
 .att-chips .chip span { padding: 6px 10px; }
 .att-chips .att-present input:checked + span { background: var(--color-ok); border-color: var(--color-ok); color: #fff; }

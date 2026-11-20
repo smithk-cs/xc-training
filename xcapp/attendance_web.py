@@ -15,7 +15,7 @@ from . import seasons as SE
 
 def register(app, h: SimpleNamespace) -> None:
     render, flash, back, get_db, form_checked = h.render, h.flash, h.back, h.get_db, h.form_checked
-    any_staff, coach_or_admin = h.any_staff, h.coach_or_admin
+    any_staff, coach_or_admin, photo_versions = h.any_staff, h.coach_or_admin, h.photo_versions
 
     def pick_day(text: str, today: dt.date) -> dt.date:
         try:
@@ -37,6 +37,7 @@ def register(app, h: SimpleNamespace) -> None:
         until = min(period["end"], today)
         return render(request, "attendance.html", user, day=d, today=today, team=team, people=people, marks=marks, told=told,
                       statuses=AT.STATUSES, can_mark=user.role in ("admin", "coach"), period=period, until=until,
+                      photos=photo_versions(db),
                       counts={"there": sum(1 for m in marks.values() if m.status in AT.THERE), "marked": len(marks)},
                       season=AT.summary(db, period["start"], until, ids), days=AT.marked_days(db, period["start"], until))
 

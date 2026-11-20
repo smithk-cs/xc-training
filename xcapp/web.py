@@ -2565,7 +2565,7 @@ def create_app() -> FastAPI:
     challenge_web.register(app, SimpleNamespace(render=render, flash=flash, back=back, get_db=get_db, form_checked=form_checked,
                                                 any_staff=any_staff, coach_or_admin=coach_or_admin))
     attendance_web.register(app, SimpleNamespace(render=render, flash=flash, back=back, get_db=get_db, form_checked=form_checked,
-                                                 any_staff=any_staff, coach_or_admin=coach_or_admin))
+                                                 any_staff=any_staff, coach_or_admin=coach_or_admin, photo_versions=photo_versions))
     reflections_web.register(app, SimpleNamespace(render=render, flash=flash, back=back, get_db=get_db, form_checked=form_checked,
                                                   any_staff=any_staff, athlete_by_token=athlete_by_token))
     wellness_web.register(app, SimpleNamespace(flash=flash, back=back, get_db=get_db, form_checked=form_checked,
