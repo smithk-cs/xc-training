@@ -11,6 +11,7 @@ SECTIONS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("athletes", "Athletes", ("/athletes", "/api/athletes")),
     ("charts", "Charts", ("/charts", "/api/charts")),
     ("races", "Races", ("/races",)),
+    ("trials", "Time trials", ("/time-trials",)),
     ("courses", "Courses", ("/courses",)),
     ("entries", "Entries", ("/registrations",)),
     ("goals", "Goals", ("/results", "/goals")),

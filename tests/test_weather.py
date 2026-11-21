@@ -56,7 +56,7 @@ def test_forecast_and_race_day_conditions():
     db.add(MeetConditions(meet="League Finals", date=past, wind_mph=12))          # entered by a coach: kept
     db.flush()
     out = WX.nightly(db, http)
-    assert out == {"forecasts": 1, "practice_forecasts": 0, "race_conditions": 1}   # 30 days out: too far ahead to forecast
+    assert out == {"forecasts": 1, "practice_forecasts": 0, "time_trials": 0, "race_conditions": 1}   # 30 days out: too far ahead to forecast
     f = soon.forecast
     assert f.at.endswith("T10:00") and f.temp_f == 60 and f.rain_pct == 20 and f.summary == "Partly cloudy"
     assert WX.describe(f) == "60°F, partly cloudy, 20% chance of rain, wind 6 mph, dew point 45°F"   # no pressure in forecasts

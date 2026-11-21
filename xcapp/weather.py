@@ -284,6 +284,8 @@ def nightly(db: Session, http: httpx.Client | None = None, days: int = FILL_DAYS
     try:
         out["forecasts"] = refresh_forecasts(db, client, today)
         out["practice_forecasts"] = refresh_practice_forecasts(db, client, today)
+        from .time_trials import refresh_weather as trial_weather
+        out["time_trials"] = trial_weather(db, client, today)
         out["race_conditions"] = fill_conditions(db, client, today, days)
         # older races still missing anything (such as pressure), a few each night
         out["race_conditions"] += fill_conditions(db, client, today, ALL_PAST_DAYS, limit=CATCH_UP_PER_NIGHT)

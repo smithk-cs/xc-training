@@ -1,0 +1,12 @@
+{# The fields for adding or changing a time trial. Needs `units`; optional `t` (the trial being changed). #}
+<div class="form-row" style="align-items:flex-end">
+  <label>Day<input type="date" name="date" value="{{ t.date.isoformat() if t else today.isoformat() }}" required></label>
+  <label>Start<input type="time" name="start_time" value="{{ t.start_time if t else '15:30' }}" required></label>
+  <label>Distance<input type="number" name="distance_value" step="any" min="0.1" inputmode="decimal" required value="{{ '%g' % t.distance_value if t else '' }}" placeholder="1600" style="width:7em"></label>
+  <label>Unit<select name="distance_unit">{% for k, (word, _) in units.items() %}<option value="{{ k }}"{% if t and t.distance_unit == k %} selected{% endif %}>{{ word }}</option>{% endfor %}</select></label>
+  <label>Team<select name="team">{% for x in ('All', 'Boys', 'Girls') %}<option{% if t and t.team == x %} selected{% endif %}>{{ x }}</option>{% endfor %}</select></label>
+</div>
+<div class="form-row" style="align-items:flex-end">
+  <label style="flex:1">Name <span class="small muted">(optional)</span><input name="name" maxlength="80" value="{{ t.name if t else '' }}" placeholder="Varsity 3K time trial"></label>
+  <label style="flex:1">Note <span class="small muted">(optional)</span><input name="note" maxlength="300" value="{{ t.note if t else '' }}" placeholder="Track, lanes 1-2"></label>
+</div>

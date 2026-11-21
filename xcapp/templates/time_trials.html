@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Time trials · {{ team_name }}{% endblock %}
+{% block content %}
+<h1>Time trials</h1>
+<p class="muted" style="max-width:80ch">Time trials at {{ place }}, at any distance, as many in a day as you like. Each gets the weather at its start time (a forecast before, what happened after), and each time shows its pace, the time adjusted for heat and humidity, and its VDOT. Trials from 1500 m to 10K count toward athletes’ VDOT like races.</p>
+{% if can_edit %}
+<details class="card fold-card" id="add"{% if not days %} open{% endif %}><summary><h2>Add a time trial</h2></summary>
+  <form method="post" action="/time-trials" style="display:flex; flex-direction:column; gap:10px">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    {% with t=none %}{% include "_trial_form.html" %}{% endwith %}
+    <div><button type="submit">Add time trial</button></div>
+  </form>
+</details>
+{% endif %}
+{% for d, trials in days.items() %}
+<div class="card">
+  <h2 style="margin-top:0">{{ d.strftime('%A, %B %-d, %Y') }}</h2>
+  {% for t in trials|sort(attribute='start_time') %}{% set rs = tt.rows(t) %}
+  <div class="trial-row" style="padding:8px 0; border-top:1px solid var(--color-border-line)">
+    <div class="form-row" style="justify-content:space-between; align-items:baseline">
+      <div><a href="/time-trials/{{ t.id }}"><b>{{ tt.title(t) }}</b></a> <span class="small muted">{{ fmt_clock(t.start_time) }}{% if t.team != 'All' %} · {{ t.team }}{% endif %} · {{ rs|length }} time{{ 's' if rs|length != 1 }}</span>
+        {% if t.temp_f is not none %}<div class="small">🌤 {{ describe_weather(t, dew=True) }}</div>{% elif d >= today %}<div class="small muted">Forecast when it’s within two weeks.</div>{% endif %}</div>
+      {% if can_edit %}<a class="button secondary" href="/time-trials/{{ t.id }}#times">{{ 'Enter times' if not rs else 'Edit times' }}</a>{% endif %}
+    </div>
+    {% if rs %}<p class="small" style="margin:4px 0 0">{% for x in rs[:3] %}{{ x.place }}. {{ x.r.athlete.name }} {{ fmt_time(x.time) }}{{ ' · ' if not loop.last }}{% endfor %}{% if rs|length > 3 %} …{% endif %}</p>{% endif %}
+  </div>{% endfor %}
+</div>
+{% else %}<div class="card"><p class="muted">No time trials yet.</p></div>{% endfor %}
+{% if not all %}<p class="small"><a href="/time-trials?all=1">Show older time trials</a></p>{% endif %}
+{% endblock %}

@@ -1,0 +1,12 @@
+{# An athlete's time trials (time_trials.for_athlete). `staff` for the coach's athlete page. #}
+{% if trials %}
+<section class="{{ 'card' if staff is defined and staff else 'panel' }}" id="time-trials" aria-labelledby="tt-h">
+  <h2 id="tt-h" style="margin:0">{{ 'Time trials' if staff is defined and staff else 'My time trials' }}</h2>
+  <div class="scroll"><table class="list compact"><thead><tr><th>Day</th><th>Distance</th><th class="num">Time</th><th class="num">Pace /mi</th><th class="num">Adjusted</th><th class="num">Place</th></tr></thead><tbody>
+  {% for x in trials[:12] %}<tr><td>{% if staff is defined and staff %}<a href="/time-trials/{{ x.trial.id }}">{{ x.trial.date.strftime('%b %-d') }}</a>{% else %}{{ x.trial.date.strftime('%b %-d') }}{% endif %}</td>
+    <td>{{ '%g' % x.trial.distance_value }} {{ x.trial.distance_unit }}</td><td class="num"><b>{{ fmt_time(x.time) }}</b></td>
+    <td class="num">{{ fmt_secs(x.pace) }}</td><td class="num">{{ fmt_time(x.adjusted) if x.adjusted else '' }}</td><td class="num">{{ x.place }} of {{ x.of }}</td></tr>{% endfor %}
+  </tbody></table></div>
+  <p class="small muted" style="margin:0">Adjusted: the time with the effect of that day’s heat and humidity taken out.</p>
+</section>
+{% endif %}

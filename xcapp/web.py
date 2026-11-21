@@ -47,6 +47,7 @@ from . import weather as WX
 from . import practice_alerts as PA
 from . import wellness as WL
 from . import reflections as RF
+from . import time_trials as TT
 from . import classyear as CY
 from . import data_check as DC
 from . import limits as LM
@@ -648,7 +649,7 @@ def create_app() -> FastAPI:
                       goals=sorted(a.goals, key=lambda g: (g.season, g.event)), show_notes=user.role in ("admin", "trainer"),
                       checkins=WL.for_athlete(db, a.id, A.team_today()), ws=WL, wl=WL.label,
                       race_reflections=sorted(RF.by_race(db, a.id).values(), key=lambda x: x.race.date, reverse=True)[:12],
-                      happy_label=lambda n: dict(RF.HAPPY).get(n, ""))
+                      happy_label=lambda n: dict(RF.HAPPY).get(n, ""), trials=TT.for_athlete(db, a.id))
 
     @app.post("/athletes/{athlete_id}/edit")
     async def athlete_edit(request: Request, athlete_id: int, user=Depends(coach_or_admin, scope="function"), db: Session = Depends(get_db, scope="function")):
@@ -2561,7 +2562,9 @@ def create_app() -> FastAPI:
     form_web.register(app, SimpleNamespace(render=render, flash=flash, back=back, form_checked=form_checked, any_staff=any_staff,
                                            coach_or_admin=coach_or_admin, get_db=get_db, get_athlete=get_athlete,
                                            athlete_by_token=athlete_by_token, logo_bytes=logo_bytes, team_name=s.team_name))
-    from . import push_web, pacing_web, return_web, wellness_web, reflections_web, attendance_web, challenge_web
+    from . import push_web, pacing_web, return_web, wellness_web, reflections_web, attendance_web, challenge_web, time_trials_web
+    time_trials_web.register(app, SimpleNamespace(render=render, flash=flash, back=back, get_db=get_db, form_checked=form_checked,
+                                                  any_staff=any_staff, coach_or_admin=coach_or_admin))
     challenge_web.register(app, SimpleNamespace(render=render, flash=flash, back=back, get_db=get_db, form_checked=form_checked,
                                                 any_staff=any_staff, coach_or_admin=coach_or_admin))
     attendance_web.register(app, SimpleNamespace(render=render, flash=flash, back=back, get_db=get_db, form_checked=form_checked,

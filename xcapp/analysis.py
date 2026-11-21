@@ -476,6 +476,12 @@ def latest_races(db: Session, since: dt.date, as_of: dt.date) -> dict[int, tuple
         if r.time_s and VDOT_MIN_M <= r.distance_m <= VDOT_MAX_M:
             offer(r.athlete_id, r.date, vdot(r.distance_m, r.time_s),
                   f"{r.meet}, {r.distance_label} {fmt_time(r.time_s)} on {r.date:%b %-d, %Y}")
+    from .models import TimeTrial, TimeTrialResult      # time trials at practice (time_trials.py), at any distance
+    for r, t in db.execute(select(TimeTrialResult, TimeTrial).join(TimeTrial, TimeTrial.id == TimeTrialResult.trial_id)
+                           .where(TimeTrial.date >= since, TimeTrial.date <= as_of)).all():
+        if r.time_s and VDOT_MIN_M <= t.distance_m <= VDOT_MAX_M:
+            offer(r.athlete_id, t.date, vdot(t.distance_m, r.time_s),
+                  f"{t.distance_value:g} {t.distance_unit} time trial {fmt_time(r.time_s)} on {t.date:%b %-d, %Y}")
     return {aid: (v, text, day) for aid, (day, v, text) in found.items()}
 
 

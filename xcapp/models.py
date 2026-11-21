@@ -1132,3 +1132,43 @@ class MileageChallenge(Base):
     goal_miles: Mapped[float | None] = mapped_column(Float, nullable=True)
     squads_id: Mapped[int | None] = mapped_column(ForeignKey("squad_competitions.id", ondelete="SET NULL"), nullable=True)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class TimeTrial(Base):
+    """A time trial at practice (time_trials.py): a distance in meters, miles or kilometers, a start time, and the
+    weather at that time at the practice place (Jesuit High School unless changed). Several can be on one day."""
+    __tablename__ = "time_trials"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    date: Mapped[dt.date] = mapped_column(Date, index=True)
+    start_time: Mapped[str] = mapped_column(String(5), default="15:30")      # "HH:MM", team time
+    name: Mapped[str] = mapped_column(String(80), default="")
+    distance_value: Mapped[float] = mapped_column(Float)
+    distance_unit: Mapped[str] = mapped_column(String(3), default="m")       # m | mi | km
+    distance_m: Mapped[float] = mapped_column(Float)
+    team: Mapped[str] = mapped_column(String(10), default="All")             # All | Boys | Girls
+    note: Mapped[str] = mapped_column(String(300), default="")
+    place: Mapped[str] = mapped_column(String(120), default="")
+    temp_f: Mapped[float | None] = mapped_column(Float, nullable=True)
+    dew_point_f: Mapped[float | None] = mapped_column(Float, nullable=True)
+    humidity_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
+    wind_mph: Mapped[float | None] = mapped_column(Float, nullable=True)
+    rain_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
+    pressure_inhg: Mapped[float | None] = mapped_column(Float, nullable=True)
+    summary: Mapped[str] = mapped_column(String(60), default="")
+    weather_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)
+    created_by: Mapped[str] = mapped_column(String(80), default="")
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)
+    results: Mapped[list["TimeTrialResult"]] = relationship(back_populates="trial", cascade="all, delete-orphan")
+
+
+class TimeTrialResult(Base):
+    """An athlete's time in a time trial."""
+    __tablename__ = "time_trial_results"
+    __table_args__ = (UniqueConstraint("trial_id", "athlete_id"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    trial_id: Mapped[int] = mapped_column(ForeignKey("time_trials.id", ondelete="CASCADE"), index=True)
+    athlete_id: Mapped[int] = mapped_column(ForeignKey("athletes.id", ondelete="CASCADE"), index=True)
+    time_s: Mapped[float] = mapped_column(Float)
+    note: Mapped[str] = mapped_column(String(200), default="")
+    trial: Mapped[TimeTrial] = relationship(back_populates="results")
+    athlete: Mapped[Athlete] = relationship()

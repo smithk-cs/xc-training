@@ -70,6 +70,7 @@
   </tbody></table></div>{% else %}<p class="small muted">Film the athlete from the side for a few strides; the phone finds their joints and measures the stride. The video stays on the phone.</p>{% endif %}
 </div>
 {% include "_fatigue.html" %}
+{% with staff=true %}{% include "_my_trials.html" %}{% endwith %}
 {% if race_reflections %}
 <details class="card fold-card" id="reflections"><summary><h2>Race reflections <span class="small muted" style="font-weight:400">· {{ race_reflections|length }}</span></h2></summary>
   {% for x in race_reflections %}<div style="padding:8px 0; border-top:1px solid var(--color-border-line)">

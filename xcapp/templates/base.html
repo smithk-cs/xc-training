@@ -38,6 +38,7 @@
         (user.sees("goals"), "/results", "Goals", p.startswith('/results'))]),
       ("Racing", [
         (user.sees("races"), "/races", "Races", p == '/races'),
+        (user.sees("trials"), "/time-trials", "Time trials", p.startswith('/time-trials')),
         (user.sees("entries"), "/registrations", "Entries", p.startswith('/registrations')),
         (user.sees("courses"), "/courses", "Courses", p == '/courses'),
         (user.sees("raceday"), "/race-day", "Race Day", p.startswith('/race-day'))]),

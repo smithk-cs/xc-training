@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}{{ tt.title(t) }} · {{ team_name }}{% endblock %}
+{% block content %}
+<p class="small"><a href="/time-trials">← Time trials</a></p>
+<h1 style="margin-bottom:4px">{{ tt.title(t) }}</h1>
+<p class="muted" style="margin-top:0">{{ t.date.strftime('%A, %B %-d, %Y') }} at {{ fmt_clock(t.start_time) }} · {{ t.place or 'Jesuit High School' }} · {{ tt.label(t) }} ({{ '{:,.0f}'.format(t.distance_m) }} m){% if t.team != 'All' %} · {{ t.team }}{% endif %}{% if t.note %} · {{ t.note }}{% endif %}</p>
+<div class="card">
+  <h2 style="margin-top:0">Weather</h2>
+  {% if weather %}<p style="margin:0">🌤 {{ weather }}</p><p class="small muted" style="margin:4px 0 0">{{ 'Forecast' if t.date >= now() else 'Conditions' }} for {{ fmt_clock(t.start_time) }}{% if t.weather_at %}, updated {{ (t.weather_at|local).strftime('%b %-d %-I:%M %p') }}{% endif %}. Adjusted times take out the effect of heat and humidity (as for races).</p>
+  {% else %}<p class="muted" style="margin:0">Not available yet: the forecast reaches two weeks ahead. It fills in nightly.</p>{% endif %}
+  {% if can_edit %}<form method="post" action="/time-trials/{{ t.id }}/edit" style="margin-top:8px"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="link" name="action" value="weather">Update the weather now</button></form>{% endif %}
+</div>
+{% if rows %}
+<div class="card scroll">
+  <h2 style="margin-top:0">Results</h2>
+  <table class="list sortable"><thead><tr><th class="num">#</th><th>Athlete</th><th class="num">Time</th><th class="num">Pace /mi</th><th class="num">Adjusted</th><th class="num">VDOT</th></tr></thead><tbody>
+  {% for x in rows %}<tr><td class="num">{{ x.place }}</td><td><a href="/athletes/{{ x.r.athlete_id }}">{{ x.r.athlete.name }}</a></td><td class="num"><b>{{ fmt_time(x.time) }}</b></td>
+    <td class="num">{{ fmt_secs(x.pace) }}</td><td class="num">{{ fmt_time(x.adjusted) if x.adjusted else '' }}</td><td class="num">{{ '%.1f' % x.vdot if x.vdot else '' }}</td></tr>{% endfor %}
+  </tbody></table>
+  {% if t.distance_m < 1500 or t.distance_m > 10000 %}<p class="small muted">VDOT is worked out for 1500 m to 10K, so this trial doesn’t change athletes’ VDOT.</p>{% endif %}
+</div>
+{% endif %}
+{% if can_edit %}
+<form method="post" action="/time-trials/{{ t.id }}/times" class="card" id="times">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <h2 style="margin-top:0">Enter times</h2>
+  <p class="small muted" style="margin-top:0">Minutes:seconds, such as 5:12.4 (or hours:minutes:seconds). Leave a box empty for athletes who didn’t run it; clear a box to remove a time.</p>
+  <ul class="att-list trial-times">
+  {% for a in people %}{% set r = have.get(a.id) %}
+    <li><input type="hidden" name="athletes" value="{{ a.id }}"><label for="t-{{ a.id }}" class="att-name">{{ a.name }}</label>
+      <input id="t-{{ a.id }}" name="t_{{ a.id }}" value="{{ fmt_time(r.time_s) if r else '' }}" inputmode="decimal" placeholder="m:ss" autocomplete="off" style="width:7em"></li>
+  {% endfor %}
+  </ul>
+  <div class="att-save"><button type="submit">Save times</button></div>
+</form>
+<details class="card fold-card" id="edit"><summary><h2>Change or delete this time trial</h2></summary>
+  <form method="post" action="/time-trials/{{ t.id }}/edit" style="display:flex; flex-direction:column; gap:10px">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    {% with today=t.date %}{% include "_trial_form.html" %}{% endwith %}
+    <div class="form-row"><button type="submit">Save</button><button type="submit" name="action" value="delete" class="danger" formnovalidate onclick="return confirm('Delete this time trial and all its times?')">Delete</button></div>
+  </form>
+</details>
+{% endif %}
+{% endblock %}

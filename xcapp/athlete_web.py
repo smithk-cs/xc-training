@@ -23,6 +23,7 @@ from . import registration as REG
 from . import team_calendar as TC
 from . import weather as WX
 from . import wellness as WL
+from . import time_trials as TT
 from . import workout_view as WV
 from .ingest import log, rematch_day
 from .models import (Activity, Announcement, CaptainPost, DeletionRequest, MissedDay, PainReport, PlannedWorkout, RaceResult,
@@ -56,10 +57,13 @@ def reflection_bits(db: Session, a, races, today: dt.date) -> dict:
 
 def return_view(db: Session, a, today: dt.date):
     """The athlete's return-to-run plan for their page: an active or paused one, or one finished in the last week."""
+    from sqlalchemy import and_, or_
     from . import return_run as RR
     from .models import ReturnPlan
-    p = RR.active(db, a.id) or db.scalar(select(ReturnPlan).where(
-        ReturnPlan.athlete_id == a.id, ReturnPlan.status == "done", ReturnPlan.finished_on >= today - dt.timedelta(days=7)))
+    p = db.scalar(select(ReturnPlan).where(ReturnPlan.athlete_id == a.id, or_(
+        ReturnPlan.status.in_(("active", "paused")),
+        and_(ReturnPlan.status == "done", ReturnPlan.finished_on >= today - dt.timedelta(days=7))))
+        .order_by(ReturnPlan.status.in_(("active", "paused")).desc(), ReturnPlan.id.desc()).limit(1))   # one look
     return RR.view(db, p, today) if p is not None else None
 
 
@@ -125,7 +129,7 @@ def register(app, h: SimpleNamespace) -> None:
                       areas=BODY_AREAS, token=token, today=today.isoformat(), push_key=PU.public_key(db),
                       push_phones=len(PU.subscriptions(db, [a.id])), rtr=return_view(db, a, today),
                       checkin=next(iter(WL.for_athlete(db, a.id, today, days=1)), None), ws=WL, wl=WL.label,
-                      challenge=challenge_bits(db, a, today), **reflection_bits(db, a, races, today))
+                      challenge=challenge_bits(db, a, today), trials=TT.for_athlete(db, a.id), **reflection_bits(db, a, races, today))
 
     @app.post("/a/{token}/connect")
     async def athlete_connect(request: Request, token: str, db: Session = Depends(get_db, scope="function")):
