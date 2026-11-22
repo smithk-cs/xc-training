@@ -24,11 +24,11 @@
 <form method="post" action="/time-trials/{{ t.id }}/times" class="card" id="times">
   <input type="hidden" name="csrf" value="{{ csrf }}">
   <h2 style="margin-top:0">Enter times</h2>
-  <p class="small muted" style="margin-top:0">Minutes:seconds, such as 5:12.4 (or hours:minutes:seconds). Leave a box empty for athletes who didn’t run it; clear a box to remove a time.</p>
+  <p class="small muted" style="margin-top:0">Minutes:seconds, such as 5:12.4: on a phone just type the digits (512.4) and the colon goes in by itself. Leave a box empty for athletes who didn’t run it; clear a box to remove a time.</p>
   <ul class="att-list trial-times">
   {% for a in people %}{% set r = have.get(a.id) %}
     <li><input type="hidden" name="athletes" value="{{ a.id }}"><label for="t-{{ a.id }}" class="att-name">{{ a.name }}</label>
-      <input id="t-{{ a.id }}" name="t_{{ a.id }}" value="{{ fmt_time(r.time_s) if r else '' }}" inputmode="decimal" placeholder="m:ss" autocomplete="off" style="width:7em"></li>
+      <input id="t-{{ a.id }}" name="t_{{ a.id }}" value="{{ fmt_time(r.time_s) if r else '' }}" inputmode="decimal" data-time placeholder="m:ss" autocomplete="off" style="width:7em"></li>
   {% endfor %}
   </ul>
   <div class="att-save"><button type="submit">Save times</button></div>

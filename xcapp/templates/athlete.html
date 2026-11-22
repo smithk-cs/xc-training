@@ -367,7 +367,7 @@
         <label>Day<input type="date" name="date" value="{{ today }}" max="{{ today }}" required></label>
         <label>Start <span class="small muted">(optional)</span><input type="time" name="start"></label>
         <label>Miles<input type="number" name="miles" step="0.01" min="0.1" max="40" inputmode="decimal" required style="width:6em"></label>
-        <label>Time <span class="small muted">(min:sec)</span><input type="text" name="duration" placeholder="42:30" inputmode="numeric" required style="width:7em"></label>
+        <label>Time <span class="small muted">(min:sec)</span><input type="text" name="duration" placeholder="42:30" inputmode="decimal" data-time autocomplete="off" required style="width:7em"></label>
         <label>Avg heart rate <span class="small muted">(optional)</span><input type="number" name="avg_hr" min="60" max="230" inputmode="numeric" style="width:6em"></label>
       </div>
       <button type="submit" class="ghost-btn">Add this run</button>

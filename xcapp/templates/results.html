@@ -12,7 +12,7 @@
     <div class="form-row">
       <label>Athlete<select name="athlete_id" required>{% for a in athletes %}<option value="{{ a.id }}"{% if request.query_params.get('athlete') == a.id|string %} selected{% endif %}>{{ a.name }}</option>{% endfor %}</select></label>
       <label>Event<select name="event">{% for e in EVENTS %}<option>{{ e }}</option>{% endfor %}</select></label>
-      <label>Goal time<input type="text" name="goal" placeholder="16:20.0" required pattern="[0-9:.]+"></label>
+      <label>Goal time<input type="text" name="goal" placeholder="16:20.0" required pattern="[0-9:.]+" inputmode="decimal" data-time autocomplete="off"></label>
       <label>Season<input type="text" name="season" value="{{ season }}" required></label>
       <button type="submit">Save goal</button>
     </div>

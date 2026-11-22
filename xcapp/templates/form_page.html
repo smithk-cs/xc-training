@@ -31,7 +31,7 @@
   <p class="small muted">Choose a video from the camera roll or files (slow-motion clips work), or film one now.</p>
   <video id="clip" playsinline muted controls hidden style="width:100%;max-height:60vh;margin-top:12px;border-radius:10px;background:#000"></video>
   <div class="form-row" style="margin-top:12px">
-    <label>Pace during the clip (optional)<input id="pace" placeholder="6:20" inputmode="numeric" style="width:6em"></label>
+    <label>Pace during the clip (optional)<input id="pace" placeholder="6:20" inputmode="decimal" data-time autocomplete="off" style="width:6em"></label>
     <label>Slow motion?<select id="slowmo"><option value="1">No</option><option value="2">½ speed</option><option value="4">¼ speed</option><option value="8">⅛ speed</option></select></label>
     <label>When filmed<select id="condition">{% for k, v in conditions.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select></label>
     <label>Start at (seconds)<input id="start" type="number" min="0" step="0.5" value="0" style="width:5em"></label>
