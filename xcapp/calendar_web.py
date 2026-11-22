@@ -28,7 +28,7 @@ def links(base_url: str, token: str) -> dict[str, dict]:
     return out
 
 
-def with_weather(db: Session, its: list[dict], team: str, today: dt.date) -> list[dict]:
+def with_weather(db: Session, its: list[dict], team: str, today: dt.date, air: bool = True) -> list[dict]:
     """Practices in the next two weeks get their saved forecast (temperature and sky only); meets get the forecast at
     their course for the start time (also humidity, chance of rain and wind)."""
     from . import weather as WX
@@ -39,8 +39,8 @@ def with_weather(db: Session, its: list[dict], team: str, today: dt.date) -> lis
             continue
         if x["kind"] == "Practice":
             fc = WX.practice_forecast(db, x["date"], x["team"] or team)
-            x["weather"] = WX.short(fc["forecast"]) if fc else None
-            x["alert"] = fc["alert"] if fc else None
+            x["weather"] = WX.short(fc["forecast"], air=air) if fc else None      # air quality: coaches only
+            x["alert"] = (fc["alert"] if air else fc["athlete_alert"]) if fc else None
         elif x["kind"] == "Meet":
             m = db.get(MeetEntry, x["meet_id"])
             sky = WX.short(m.forecast) if m and m.forecast else None
@@ -223,7 +223,7 @@ def register(app, h: SimpleNamespace) -> None:
         check_token(db, token)
         team = team if team in TC.TEAMS else "All"
         today = A.team_today()
-        its = with_weather(db, TC.items(db, today, today + dt.timedelta(days=120), team), team, today)
+        its = with_weather(db, TC.items(db, today, today + dt.timedelta(days=120), team), team, today, air=False)
         months: dict[str, list] = {}
         for x in its:
             months.setdefault(x["date"].strftime("%B %Y"), []).append(x)

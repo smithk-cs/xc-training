@@ -310,7 +310,7 @@ def air_words(aqi: float | None) -> str:
     return f"air quality {aqi:.0f} ({next(name for top, name in AQI_CATEGORIES if aqi <= top)})"
 
 
-def describe(f, dew: bool = True, humidity: bool = False) -> str:
+def describe(f, dew: bool = True, humidity: bool = False, air: bool = True) -> str:
     """'68°F, partly cloudy, 10% chance of rain, wind 6 mph, dew point 52°F' (athletes see humidity instead of dew point:
     '68°F, partly cloudy, 45% humidity, ...')"""
     if f is None or f.temp_f is None:
@@ -326,7 +326,7 @@ def describe(f, dew: bool = True, humidity: bool = False) -> str:
         bits.append(f"wind {f.wind_mph:.0f} mph")
     if dew and f.dew_point_f is not None:
         bits.append(f"dew point {f.dew_point_f:.0f}°F")
-    if getattr(f, "aqi", None) is not None:       # practice forecasts and time trials (practice_alerts.air_at)
+    if air and getattr(f, "aqi", None) is not None:   # practice forecasts and time trials; coaches only (air=False for athletes)
         bits.append(air_words(f.aqi))
     return ", ".join(bits)   # pressure is recorded for races already run, not shown in forecasts
 
@@ -343,14 +343,14 @@ SKY_ICONS = (("thunder", "⛈️"), ("snow", "❄️"), ("rain", "🌧️"), ("s
              ("overcast", "☁️"), ("cloud", "⛅"), ("clear", "☀️"), ("sun", "☀️"))
 
 
-def short(f) -> dict | None:
+def short(f, air: bool = True) -> dict | None:
     """Just the temperature and the sky, for the team calendar: {'icon': '⛅', 'text': '68°F, partly cloudy'}."""
     if f is None or f.temp_f is None:
         return None
     sky = (f.summary or "").lower()
     icon = next((i for k, i in SKY_ICONS if k in sky), "🌡️")
-    air = air_words(getattr(f, "aqi", None))
-    return {"icon": icon, "text": f"{f.temp_f:.0f}°F" + (f", {sky}" if sky else "") + (f", {air}" if air else "")}
+    aq = air_words(getattr(f, "aqi", None)) if air else ""
+    return {"icon": icon, "text": f"{f.temp_f:.0f}°F" + (f", {sky}" if sky else "") + (f", {aq}" if aq else "")}
 
 
 def practice_place(db: Session) -> tuple[float, float, str]:
@@ -390,7 +390,9 @@ def practice_forecast(db: Session, day: dt.date, team: str) -> dict | None:
     if f is None or f.temp_f is None:
         return None
     from .practice_alerts import assess
-    return {**s, "forecast": f, "text": describe(f), "athlete_text": describe(f, dew=False, humidity=True), "alert": assess(f)}
+    return {**s, "forecast": f, "text": describe(f), "alert": assess(f),
+            # athletes see the weather and heat, not the air quality (coaches only)
+            "athlete_text": describe(f, dew=False, humidity=True, air=False), "athlete_alert": assess(f, air=False)}
 
 
 def refresh_practice_forecasts(db: Session, http: httpx.Client, today: dt.date, only: dt.date | None = None) -> int:

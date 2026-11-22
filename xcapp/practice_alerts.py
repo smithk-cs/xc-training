@@ -4,6 +4,7 @@ to the team the evening before (and again early that morning if it got worse). T
 these levels are a prompt to check it.
 
 Levels: "caution" (adjust), "warning" (move indoors or cut back hard), "stop" (no outdoor practice).
+Air quality is for coaches only: athletes see and hear about heat, not smoke (assess(f, air=False)).
 """
 from __future__ import annotations
 
@@ -68,16 +69,16 @@ def _level(value, levels):
     return None
 
 
-def assess(f) -> dict | None:
+def assess(f, air: bool = True) -> dict | None:
     """The alert for a practice forecast (PracticeForecast), or None when the air and heat are fine:
     {"level", "label", "reasons": [{"level", "what", "advice", "value"}], "advice", "aqi", "heat_index"}."""
     if f is None:
         return None
     hi = heat_index(f.temp_f, f.humidity_pct)
     reasons = []
-    air = _level(f.aqi, AQI_LEVELS)
-    if air:
-        reasons.append({**air, "value": f"AQI {f.aqi:.0f}"})
+    smoke = _level(f.aqi, AQI_LEVELS) if air else None     # air=False: heat only (what athletes see)
+    if smoke:
+        reasons.append({**smoke, "value": f"AQI {f.aqi:.0f}"})
     heat = _level(hi, HEAT_LEVELS)
     if heat:
         reasons.append({**heat, "value": f"feels like {hi:.0f}°F"})
@@ -142,9 +143,10 @@ def for_day(db: Session, day: dt.date) -> dict[str, dict]:
 
 
 def notify(db: Session, day: dt.date, when: str, http: httpx.Client | None = None) -> dict:
-    """Refresh that day's practice forecast and tell each team whose practice has an alert: a phone notification to
-    the athletes who have them on, and an email to the coaches. "evening" (the day before) tells every alert;
-    "morning" (that day) only one that got worse than what was already sent. Returns what was sent."""
+    """Refresh that day's practice forecast and tell each team whose practice has an alert: an email to the coaches
+    (smoke and heat) and, for heat, a phone notification to the athletes who have them on (athletes don't see air
+    quality). "evening" (the day before) tells every alert; "morning" (that day) only one that got worse than what was
+    already sent. Returns what was sent: "teams" (coaches told), "pushed", "emailed"."""
     from . import push as PU
     from . import weather as WX
     from .models import Athlete, StaffUser
@@ -161,18 +163,20 @@ def notify(db: Session, day: dt.date, when: str, http: httpx.Client | None = Non
     s = settings()
     alerts = for_day(db, day)
     for team, al in alerts.items():
+        # Athletes hear about heat only (air quality is for coaches); each side is told once per level
+        heat = assess(al["slot"]["forecast"], air=False)
+        told = A.get_setting(db, _sent_key(day, team) + ":athletes", "")
+        if heat and RANK[heat["level"]] > RANK.get(told, 0):
+            A.set_setting(db, _sent_key(day, team) + ":athletes", heat["level"])
+            title = f"{heat['label']}: {team.lower()}' practice {'today' if when == 'morning' else 'tomorrow'}"
+            body = f"{heat['summary']}. Check with your coach before practice."
+            for a in db.scalars(select(Athlete).where(Athlete.active.is_(True), Athlete.is_test.is_(False), Athlete.gender == team)).all():
+                out["pushed"] += PU.send(db, [a.id], title, body, f"{s.base_url.rstrip('/')}/a/{a.link_token}")["sent"]
         before = A.get_setting(db, _sent_key(day, team), "")
-        if RANK[al["level"]] <= RANK.get(before, 0):      # already told (the evening before, or earlier)
+        if RANK[al["level"]] <= RANK.get(before, 0):      # coaches already told (the evening before, or earlier)
             continue
         A.set_setting(db, _sent_key(day, team), al["level"])
         out["teams"].append(team)
-        title = f"{al['label']}: {team.lower()}' practice {'today' if when == 'morning' else 'tomorrow'}"
-        body = f"{al['summary']}. Check with your coach before practice."
-        ids = [a.id for a in db.scalars(select(Athlete).where(Athlete.active.is_(True), Athlete.is_test.is_(False),
-                                                              Athlete.gender == team)).all()]
-        for aid in ids:
-            a = db.get(Athlete, aid)
-            out["pushed"] += PU.send(db, [aid], title, body, f"{s.base_url.rstrip('/')}/a/{a.link_token}")["sent"]
         if s.email_configured:
             from . import reminders as RM
             coaches = [u for u in db.scalars(select(StaffUser).where(StaffUser.role.in_(("admin", "coach")))).all() if u.email]

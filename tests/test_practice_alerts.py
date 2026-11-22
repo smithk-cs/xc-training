@@ -96,9 +96,9 @@ def test_evening_and_morning_notifications(session, monkeypatch):
     state = {"aqi": [130, 140, 135], "temp": 75, "rh": 40}
     with service(state) as http:
         out = PA.notify(session, TOMORROW, "evening", http=http)
-    assert out["teams"] == ["Boys", "Girls"] and out["pushed"] == 2 and out["emailed"] == 2
-    assert pushed[0][1] == "Caution: boys' practice tomorrow" and "AQI 140" in pushed[0][2]
-    assert "Suggested:" in emailed[0][2] and emailed[0][0] == "coach@example.org"
+    assert out["teams"] == ["Boys", "Girls"] and out["emailed"] == 2
+    assert out["pushed"] == 0 and pushed == []                     # smoke only: coaches are told, athletes aren't
+    assert "AQI 140" in emailed[0][2] and "Suggested:" in emailed[0][2] and emailed[0][0] == "coach@example.org"
     with service(state) as http:                                    # the same again: nothing new to say
         assert PA.notify(session, TOMORROW, "evening", http=http)["teams"] == []
     state["aqi"] = [150, 140, 140]
@@ -107,7 +107,12 @@ def test_evening_and_morning_notifications(session, monkeypatch):
     state["aqi"] = [180, 210, 190]
     with service(state) as http:                                    # worse overnight: tell them
         out = PA.notify(session, TOMORROW, "morning", http=http)
-    assert out["teams"] == ["Boys", "Girls"] and pushed[-1][1] == "No outdoor practice: girls' practice today"
+    assert out["teams"] == ["Boys", "Girls"] and pushed == [] and "no outdoor practice" in emailed[-1][1]
+    state.update(aqi=[20, 20, 20], temp=97, rh=35)                 # then the heat: athletes hear about that
+    with service(state) as http:
+        out = PA.notify(session, TOMORROW, "morning", http=http)
+    assert out["pushed"] == 2 and pushed[0][1] == "Warning: boys' practice today"
+    assert "feels like" in pushed[0][2] and "AQI" not in pushed[0][2]
     config.reload_settings()
 
 
@@ -129,4 +134,10 @@ def test_shown_on_pages(monkeypatch):
     workouts = c.get("/workouts").text
     assert "Move practice indoors" in workouts and "air quality 170 (unhealthy)" in workouts    # with the weather, every day
     athlete = TestClient(app).get("/a/t0").text
-    assert "practice-alert" in athlete and "AQI 170" in athlete
+    assert "practice-alert" in athlete and "feels like" in athlete                        # athletes: the heat ...
+    assert "AQI" not in athlete and "air quality" not in athlete                          # ... not the air quality
+    from xcapp import team_calendar as TC
+    db = SessionLocal()
+    cal = TestClient(app).get(f"/team-calendar/{TC.token(db)}").text
+    db.close()
+    assert "air quality" not in cal and "AQI" not in cal
