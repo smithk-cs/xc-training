@@ -56,6 +56,15 @@ def test_heat_index_and_levels():
     assert "water breaks" in hot["advice"] and "asthma" in hot["advice"]
 
 
+def test_air_quality_words():
+    assert WX.air_words(42) == "air quality 42 (good)" and WX.air_words(100) == "air quality 100 (moderate)"
+    assert WX.air_words(120) == "air quality 120 (unhealthy for sensitive groups)" and WX.air_words(350).endswith("(hazardous)")
+    assert WX.air_words(None) == ""
+    f = PracticeForecast(temp_f=70, summary="Clear", humidity_pct=40, wind_mph=5, rain_pct=0, dew_point_f=45, aqi=38)
+    assert WX.describe(f, dew=False, humidity=True).endswith("wind 5 mph, air quality 38 (good)")
+    assert WX.short(f)["text"] == "70°F, clear, air quality 38 (good)"
+
+
 def test_air_quality_is_the_worst_hour_of_practice():
     state = {"aqi": [80, 155, 120], "temp": 70, "rh": 40}
     with service(state) as http:
@@ -117,6 +126,7 @@ def test_shown_on_pages(monkeypatch):
     c.post("/login", data={"csrf": csrf, "username": "coach1", "password": "correct-horse-1"})
     home = c.get("/").text
     assert "Smoke and heat at practice" in home and "Tomorrow, Boys" in home and "AQI 170" in home
-    assert "Move practice indoors" in c.get("/workouts").text
+    workouts = c.get("/workouts").text
+    assert "Move practice indoors" in workouts and "air quality 170 (unhealthy)" in workouts    # with the weather, every day
     athlete = TestClient(app).get("/a/t0").text
     assert "practice-alert" in athlete and "AQI 170" in athlete

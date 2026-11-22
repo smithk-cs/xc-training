@@ -298,6 +298,18 @@ def nightly(db: Session, http: httpx.Client | None = None, days: int = FILL_DAYS
     return out
 
 
+# US AQI categories (EPA): (highest value, name)
+AQI_CATEGORIES = [(50, "good"), (100, "moderate"), (150, "unhealthy for sensitive groups"), (200, "unhealthy"),
+                  (300, "very unhealthy"), (10_000, "hazardous")]
+
+
+def air_words(aqi: float | None) -> str:
+    """'air quality 42 (good)'; '' when it isn't known."""
+    if aqi is None:
+        return ""
+    return f"air quality {aqi:.0f} ({next(name for top, name in AQI_CATEGORIES if aqi <= top)})"
+
+
 def describe(f, dew: bool = True, humidity: bool = False) -> str:
     """'68°F, partly cloudy, 10% chance of rain, wind 6 mph, dew point 52°F' (athletes see humidity instead of dew point:
     '68°F, partly cloudy, 45% humidity, ...')"""
@@ -314,6 +326,8 @@ def describe(f, dew: bool = True, humidity: bool = False) -> str:
         bits.append(f"wind {f.wind_mph:.0f} mph")
     if dew and f.dew_point_f is not None:
         bits.append(f"dew point {f.dew_point_f:.0f}°F")
+    if getattr(f, "aqi", None) is not None:       # practice forecasts and time trials (practice_alerts.air_at)
+        bits.append(air_words(f.aqi))
     return ", ".join(bits)   # pressure is recorded for races already run, not shown in forecasts
 
 
@@ -335,7 +349,8 @@ def short(f) -> dict | None:
         return None
     sky = (f.summary or "").lower()
     icon = next((i for k, i in SKY_ICONS if k in sky), "🌡️")
-    return {"icon": icon, "text": f"{f.temp_f:.0f}°F" + (f", {sky}" if sky else "")}
+    air = air_words(getattr(f, "aqi", None))
+    return {"icon": icon, "text": f"{f.temp_f:.0f}°F" + (f", {sky}" if sky else "") + (f", {air}" if air else "")}
 
 
 def practice_place(db: Session) -> tuple[float, float, str]:

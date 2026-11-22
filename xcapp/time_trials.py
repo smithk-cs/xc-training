@@ -122,6 +122,10 @@ def fetch_weather(db: Session, t: TimeTrial, http: httpx.Client, today: dt.date)
         return False
     for k in ("temp_f", "dew_point_f", "humidity_pct", "wind_mph", "rain_pct", "pressure_inhg", "summary"):
         setattr(t, k, w[k])
+    from .practice_alerts import air_at
+    air = air_at(http, lat, lon, t.date, int((t.start_time or "15:30").split(":")[0]), today)
+    if air is not None:
+        t.aqi, t.pm25 = air["aqi"], air["pm25"]
     t.weather_at = utcnow()
     return True
 

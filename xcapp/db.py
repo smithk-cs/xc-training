@@ -109,6 +109,7 @@ ADDED_COLUMNS = {
     "pain_reports": [("activity_id", "INTEGER"), ("saw_trainer", "BOOLEAN DEFAULT FALSE")],
     "form_analyses": [("condition", "VARCHAR(10) DEFAULT 'fresh'"), ("emailed_at", "TIMESTAMP")],
     "practice_forecasts": [("aqi", "FLOAT"), ("pm25", "FLOAT")],
+    "time_trials": [("aqi", "FLOAT"), ("pm25", "FLOAT")],
 }
 
 

@@ -1155,6 +1155,8 @@ class TimeTrial(Base):
     rain_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
     pressure_inhg: Mapped[float | None] = mapped_column(Float, nullable=True)
     summary: Mapped[str] = mapped_column(String(60), default="")
+    aqi: Mapped[float | None] = mapped_column(Float, nullable=True)       # US AQI, the trial's hour and after
+    pm25: Mapped[float | None] = mapped_column(Float, nullable=True)
     weather_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)
     created_by: Mapped[str] = mapped_column(String(80), default="")
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow)

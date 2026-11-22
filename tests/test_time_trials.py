@@ -22,6 +22,8 @@ def weather_service(calls, temp=82.0, dew=64.0):
         q = request.url.params
         day = q["start_date"]
         times = [f"{day}T{h:02d}:00" for h in range(24)]
+        if request.url.host.startswith("air-quality"):
+            return httpx.Response(200, json={"hourly": {"time": times, "us_aqi": [55] * 24, "pm2_5": [12.0] * 24}})
         return httpx.Response(200, json={"hourly": {"time": times, "temperature_2m": [temp - 15 + h for h in range(24)],
                                                     "dew_point_2m": [dew] * 24, "relative_humidity_2m": [50.0] * 24,
                                                     "wind_speed_10m": [5.0] * 24, "weather_code": [0] * 24,
@@ -54,7 +56,7 @@ def test_results_weather_and_vdot(session):
     calls = []
     with weather_service(calls) as http:
         assert TT.fetch_weather(session, t1, http, TODAY)
-    assert t1.temp_f == 82.0 and t1.place == "Jesuit High School, Carmichael"
+    assert t1.temp_f == 82.0 and t1.place == "Jesuit High School, Carmichael" and t1.aqi == 55
     assert calls[0].url.params["latitude"] == "38.6171"
     n, problems = TT.save_results(session, t1, {a.id: "10:00", b.id: "nonsense"})
     assert n == 1 and problems and "Ben Ortiz" in problems[0]
@@ -100,6 +102,7 @@ def test_pages(monkeypatch):
     t1, t2 = (int(r.headers["location"].rsplit("/", 1)[1]) for r in (r1, r2))
     trial = c.get(f"/time-trials/{t1}").text
     assert "Added the 1600 m time trial" in trial and "Weather" in trial and "dew point 64°F" in trial
+    assert "air quality 55 (moderate)" in trial
     assert "Ava Reed" in trial and "Sam Lowry" not in trial                       # the girls' trial lists the girls
     c.post(f"/time-trials/{t1}/times", data={"csrf": csrf, "athletes": ["1"], "t_1": "5:31.2"})
     trial = c.get(f"/time-trials/{t1}").text

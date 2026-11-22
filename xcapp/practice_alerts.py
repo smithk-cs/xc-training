@@ -19,6 +19,7 @@ from .ingest import log
 
 AIR_URL = "https://air-quality-api.open-meteo.com/v1/air-quality"
 AIR_DAYS = 4                     # how far ahead the air-quality forecast is worth fetching
+PAST_DAYS = 90                   # ... and how far back the service has what the air was (for time trials)
 PRACTICE_HOURS = 2               # the worst hour from the start of practice through this many hours
 RANK = {"": 0, "caution": 1, "warning": 2, "stop": 3}
 LABEL = {"caution": "Caution", "warning": "Warning", "stop": "No outdoor practice"}
@@ -93,7 +94,7 @@ def air_at(http: httpx.Client, lat: float, lon: float, day: dt.date, hour: int, 
     """The worst US AQI and PM2.5 from the start of practice through PRACTICE_HOURS: {"aqi", "pm25"}, or None when the
     forecast doesn't reach that day."""
     from .weather import WeatherError, _get
-    if not today <= day <= today + dt.timedelta(days=AIR_DAYS):
+    if not today - dt.timedelta(days=PAST_DAYS) <= day <= today + dt.timedelta(days=AIR_DAYS):
         return None
     try:
         data = _get(http, AIR_URL, {"latitude": round(lat, 4), "longitude": round(lon, 4), "hourly": "us_aqi,pm2_5",
