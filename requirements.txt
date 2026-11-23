@@ -1,15 +1,15 @@
-fastapi==0.161.1
-starlette==1.9.0
+fastapi==0.165.0
+starlette==1.10.0
 uvicorn[standard]==0.54.0
-SQLAlchemy==2.1.6
+SQLAlchemy==2.1.9
 Jinja2==3.1.6
-python-multipart==0.0.32
+python-multipart==0.0.34
 httpx==0.28.1
 itsdangerous==2.2.0
 cryptography==50.0.2
-anthropic==2.2.0
-garmin-fit-sdk==21.218.0
+anthropic==2.11.0
+garmin-fit-sdk==21.222.0
 # Postgres driver (Supabase). SQLite needs nothing extra.
-psycopg[binary]==3.3.6
+psycopg[binary]==3.3.9
 Pillow==13.0.0
-fpdf2==2.8.8
+fpdf2==2.9.0
