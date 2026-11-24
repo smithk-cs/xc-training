@@ -280,3 +280,67 @@ def test_rep_laps_that_were_run_fast_are_still_used(session):
         act.laps.append(Lap(idx=i, start_offset_s=r["t0"], elapsed_s=r["t1"] - r["t0"], timer_s=r["t1"] - r["t0"], distance_m=400, is_rep=True))
     session.flush()
     assert WV.build(session, act)["source"] == "laps"
+
+
+def short_reps_run(reps, meters, rest_s):
+    """10 min easy, then `reps` x `meters` at repetition pace with `rest_s` of easy jogging between (watch running,
+    no lap presses), then 5 min easy."""
+    easy = A.pace_at(V, A.EASY_PCT) / A.METERS_PER_MILE
+    fast = A.pace_at(V, A.REP_PCT) / A.METERS_PER_MILE
+    t, d, dist, hrs = 0.0, 0.0, [], []
+
+    import random
+    rng = random.Random(meters)
+    v_watch = 0.0                                          # the watch's smoothed speed (m/s): it lags a sprint
+    true_d = 0.0
+
+    def run(secs, target_v, hr, standing_start=False):
+        nonlocal t, d, v_watch, true_d
+        for k in range(int(round(secs))):
+            v = target_v * min(1.0, (k + 1) / 4) if standing_start else target_v      # about 4 s to get up to speed
+            true_d += v
+            v_watch += (v - v_watch) / 5                    # GPS speed smoothed over about 5 s
+            d += v_watch
+            dist.append((t, d + rng.gauss(0, 2))); hrs.append((t, hr)); t += 1
+    run(600, 1 / easy, 140)
+    for _ in range(reps):
+        run(meters * fast + 2, 1 / fast, 180, standing_start=True)
+        run(rest_s, 1 / (easy * 1.6), 150)                  # walk / slow jog back
+    run(300, 1 / easy, 145)
+    dist = [(tt, max(dd, dist[i - 1][1] if i else 0)) for i, (tt, dd) in enumerate(dist)]   # distance never goes back
+    return dist, hrs
+
+
+def test_short_reps_found_without_lap_presses(session):
+    """100 m and 200 m reps last only 15-35 s: the pace is looked at over a shorter window so each one is found."""
+    a = Athlete(first_name="Ann", last_name="Short", gender="Girls", grade=11, group="Varsity", link_token="t-short", vdot_override=V, hr_max=200)
+    session.add(a)
+    session.flush()
+    for meters, reps, rest in ((100, 8, 45), (200, 6, 60)):
+        pw = PlannedWorkout(date=DAY, title=f"{reps} x {meters}", rep_distance_m=meters, groups="All",
+                            parts=json.dumps([{"sets": 1, "reps": reps, "dist": meters, "zone": "Repetition", "rest": f"{rest} s jog"}]))
+        session.add(pw)
+        session.flush()
+        dist, hrs = short_reps_run(reps, meters, rest)
+        act = Activity(athlete_id=a.id, source="garmin_file", external_id=f"short{meters}", start_utc=dt.datetime(2026, 10, 20, 22),
+                       local_date=DAY, duration_s=dist[-1][0], distance_m=dist[-1][1], sport="running", planned_workout_id=pw.id,
+                       stream=WV.make_stream(dist, hrs), zone_vdot=V)
+        session.add(act)
+        session.flush()
+        wv = WV.build(session, act)
+        found = [r for r in wv["reps"] if r.get("found")]
+        assert len(found) == reps, (meters, len(found))
+        for r in found:                                       # each about the right length (GPS stream every 3 s)
+            assert abs(r["dist"] - meters) <= 0.35 * meters, (meters, r["dist"])
+
+
+def test_short_laps_count_as_reps():
+    """A 100 m rep the GPS measured short (85 m) is still a rep when the athlete pressed lap."""
+    from xcapp.fitfile import ParsedLap
+    from xcapp.reps import detect_reps
+    start = dt.datetime(2026, 10, 20, 22, tzinfo=dt.timezone.utc)
+    laps = []
+    for i in range(6):
+        laps.append(ParsedLap(start=start, elapsed_s=16, timer_s=16, distance_m=86 + i, intensity="active", trigger="manual"))
+        laps.append(ParsedLap(start=start, elapsed_s=45, timer_s=45, distance_m=90, intensity="active", trigger="manual"))
+    assert detect_reps(laps) == [0, 2, 4, 6, 8, 10]

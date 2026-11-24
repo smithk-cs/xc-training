@@ -17,7 +17,7 @@ from .fitfile import ParsedLap
 
 WORK = {"active", "interval"}
 EASY = {"rest", "recovery"}
-MIN_REP_M = 100.0
+MIN_REP_M = 60.0      # a 100 m rep the GPS measured short (80-95 m) still counts
 MIN_SPEED_GAP = 1.15  # reps must be at least 15% faster than the jog laps
 SAME_DISTANCE = 0.25  # reps are repeats: within 25% of the typical fast-lap distance
 RECOVERY_WINDOW_S = 60.0

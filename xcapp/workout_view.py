@@ -175,8 +175,8 @@ def plan_items(parts: list[dict], daily_miles: float | None) -> list[dict]:
 
 # ---------- the run ----------
 
-def moving_series(points):
-    """Per point: smoothed pace (s/mi) over SMOOTH_S of moving time, and pauses (watch stopped) as (start, end)."""
+def moving_series(points, smooth: float = SMOOTH_S):
+    """Per point: smoothed pace (s/mi) over `smooth` seconds of moving time, and pauses (watch stopped) as (start, end)."""
     pauses = [(points[k - 1][0], points[k][0]) for k in range(1, len(points)) if points[k][0] - points[k - 1][0] > PAUSE_S]
     paces = []
     for k, (t, d, _) in enumerate(points):
@@ -184,10 +184,10 @@ def moving_series(points):
             paces.append(None)
             continue
         j = k
-        while j > 0 and t - points[j - 1][0] <= SMOOTH_S and points[j][0] - points[j - 1][0] <= PAUSE_S and points[j - 1][1] is not None:
+        while j > 0 and t - points[j - 1][0] <= smooth and points[j][0] - points[j - 1][0] <= PAUSE_S and points[j - 1][1] is not None:
             j -= 1
         span, dist = t - points[j][0], d - points[j][1]
-        paces.append(span / dist * A.METERS_PER_MILE if span >= 6 and dist > 1 else None)
+        paces.append(span / dist * A.METERS_PER_MILE if span >= min(6, smooth) and dist > 1 else None)
     return paces, pauses
 
 
@@ -197,8 +197,13 @@ def efforts_from_laps(act: Activity) -> list[dict]:
              "secs": l.timer_s or l.elapsed_s, "from": "lap"} for l in reps]
 
 
-def efforts_from_stream(points, paces, threshold: float) -> list[dict]:
-    """Stretches at least MIN_EFFORT_S long faster than `threshold` (s/mi), joined across short dips but not pauses."""
+def efforts_from_stream(points, paces, threshold: float, smooth: float = SMOOTH_S, min_effort: float = MIN_EFFORT_S,
+                        edge: float | None = None) -> list[dict]:
+    """Stretches at least `min_effort` seconds long faster than `threshold` (s/mi), joined across short dips but not
+    pauses. `smooth` is the window the paces were smoothed over (window_for: shorter for short reps). `edge`, for short
+    reps, widens each one to where the running was still faster than that pace (the watch's speed lags a sprint, so
+    only its middle looks fast), up to `smooth` seconds each way."""
+    edge = edge or threshold
     runs, cur = [], None
     for k, (t, d, _) in enumerate(points):
         fast = paces[k] is not None and paces[k] <= threshold
@@ -223,15 +228,41 @@ def efforts_from_stream(points, paces, threshold: float) -> list[dict]:
         # The smoothed pace lags, so sharpen the edges with point-to-point pace: start where running got fast,
         # end where it last was fast.
         k0, k1 = r["k0"], r["k1"]
-        while k0 > 0 and (raw(k0) or 1e9) <= threshold and r["t0"] - points[k0 - 1][0] <= SMOOTH_S:
+        while k0 > 0 and (raw(k0) or 1e9) <= edge and r["t0"] - points[k0 - 1][0] <= smooth:
             k0 -= 1
-        while k1 > k0 and (raw(k1) or 1e9) > threshold:
+        while k1 > k0 and (raw(k1) or 1e9) > edge:
             k1 -= 1
+        if edge != threshold:      # short reps: carry on to where it slowed to the jog
+            while k1 + 1 < len(points) and (raw(k1 + 1) or 1e9) <= edge and points[k1 + 1][0] - r["t1"] <= smooth:
+                k1 += 1
         t0, d0, t1, d1 = points[k0][0], points[k0][1], points[k1][0], points[k1][1]
         secs = t1 - t0
-        if secs >= MIN_EFFORT_S and d1 is not None and d0 is not None:
+        if secs >= min_effort and d1 is not None and d0 is not None:
             out.append({"t0": t0, "t1": t1, "dist": d1 - d0, "secs": secs, "from": "pace"})
     return out
+
+
+SHORT_REP_S = 60     # reps this short or shorter (100s, 200s, strides) get a shorter pace window
+
+
+def expected_secs(item: dict, v: float | None) -> float | None:
+    """About how long a planned rep takes: its time, or its distance at its zone's pace."""
+    if item.get("secs"):
+        return item["secs"]
+    if item.get("dist") and v:
+        return item["dist"] / A.METERS_PER_MILE * A.pace_at(v, A.WORKOUT_ZONES.get(item["zone"], A.EASY_PCT))
+    return None
+
+
+def window_for(hard: list[dict], v: float | None) -> tuple[float, float]:
+    """(pace smoothing window, shortest effort that counts) for finding these reps in the pace. A 100 m rep lasts
+    about 15 s, shorter than the usual 20 s window, so it would never look fast: short reps get a window of about 40%
+    of their length (at least 6 s) and count from about half their length (at least 6 s)."""
+    sizes = [s for s in (expected_secs(x, v) for x in hard) if s]
+    shortest = min(sizes) if sizes else None
+    if shortest is None or shortest > SHORT_REP_S:
+        return SMOOTH_S, MIN_EFFORT_S
+    return max(6.0, min(SMOOTH_S, 0.4 * shortest)), max(6.0, min(MIN_EFFORT_S, 0.5 * shortest))
 
 
 def match(hard: list[dict], efforts: list[dict], v: float | None) -> list[dict | None]:
@@ -549,6 +580,9 @@ def build(db: Session, act: Activity) -> dict:
     if old_style:
         items = old_style_items(db, a, pw)
     hard = [x for x in items if x["hard"]]
+    smooth, min_effort = window_for(hard, v)
+    if points and smooth != SMOOTH_S:          # short reps: the pace over a shorter window, so each rep shows
+        paces, pauses = moving_series(points, smooth)
     efforts = efforts_from_laps(act)
     source = "laps"
     hard_paces = [pace_band(x["zone"], v)[1] for x in hard if pace_band(x["zone"], v)] if v else []
@@ -558,7 +592,8 @@ def build(db: Session, act: Activity) -> dict:
         # whose steps don't line up with what was run) make the jogs look like the reps: then the pace finds them.
         slow = [e for e in efforts if e.get("dist") and e.get("secs") and e["secs"] / e["dist"] * A.METERS_PER_MILE > threshold]
         if len(efforts) < max(1, len(hard) // 2) or slow:
-            from_pace = efforts_from_stream(points, paces, threshold)
+            from_pace = efforts_from_stream(points, paces, threshold, smooth, min_effort,
+                                            edge=A.pace_at(v, A.EASY_PCT) if smooth != SMOOTH_S else None)
             if len(efforts) < max(1, len(hard) // 2) or len(from_pace) >= max(1, len(hard) // 2):
                 efforts, source = from_pace, "pace"
             else:
